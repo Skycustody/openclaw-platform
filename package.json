@@ -1,0 +1,13 @@
+{
+  "name": "openclaw-platform",
+  "private": true,
+  "workspaces": ["api", "dashboard"],
+  "scripts": {
+    "dev:api": "npm run dev --workspace=api",
+    "dev:dashboard": "npm run dev --workspace=dashboard",
+    "build:api": "npm run build --workspace=api",
+    "build:dashboard": "npm run build --workspace=dashboard",
+    "migrate": "node migrations/run.js",
+    "lint": "npm run lint --workspaces"
+  }
+}
