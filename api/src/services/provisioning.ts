@@ -4,6 +4,7 @@ import { createUserBucket } from './s3';
 import { findBestServer, updateServerRam } from './serverRegistry';
 import { PLAN_LIMITS, Plan, User } from '../types';
 import { sendWelcomeEmail } from './email';
+import { cloudflareDNS } from './cloudflare';
 import { v4 as uuid } from 'uuid';
 
 interface ProvisionParams {
@@ -243,7 +244,10 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
     console.warn(`[provision] Container ${containerName} health check timed out but may still start`);
   }
 
-  // Step 7: Update status to active
+  // Step 7: Create DNS record pointing subdomain → worker IP
+  await cloudflareDNS.upsertRecord(subdomain, server.ip);
+
+  // Step 8: Update status to active
   await db.query(
     `UPDATE users SET status = 'active', last_active = NOW() WHERE id = $1`,
     [userId]
@@ -251,7 +255,7 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
 
   await updateServerRam(server.id);
 
-  // Step 8: Send welcome email
+  // Step 9: Send welcome email
   try {
     await sendWelcomeEmail(email, subdomain, domain);
   } catch (err) {
@@ -278,6 +282,10 @@ export async function deprovisionUser(userId: string): Promise<void> {
     await sshExec(server.ip, `rm -rf /opt/openclaw/instances/${userId}`);
   } catch (err) {
     console.error('Container cleanup failed:', err);
+  }
+
+  if (user.subdomain) {
+    await cloudflareDNS.deleteRecord(user.subdomain);
   }
 
   await db.query(
