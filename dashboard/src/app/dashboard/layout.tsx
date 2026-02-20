@@ -26,7 +26,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           status: data.status,
           subdomain: data.subdomain,
         });
-        const allowed = ['active', 'sleeping', 'grace_period'];
+        const allowed = ['active', 'sleeping', 'grace_period', 'provisioning'];
         if (!allowed.includes(data.status) && typeof window !== 'undefined') {
           window.location.href = '/pricing';
           return;
