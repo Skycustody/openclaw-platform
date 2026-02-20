@@ -41,14 +41,14 @@ class CloudflareDNS {
       if (records.length > 0) {
         const recordId = records[0].id;
         await this.client.put(`/zones/${this.zoneId}/dns_records/${recordId}`, {
-          type: 'A', name: fqdn, content: workerIp, ttl: 60, proxied: false,
+          type: 'A', name: fqdn, content: workerIp, ttl: 1, proxied: true,
         });
-        console.log(`[cloudflare] Updated DNS: ${fqdn} → ${workerIp}`);
+        console.log(`[cloudflare] Updated DNS: ${fqdn} → ${workerIp} (proxied)`);
         return recordId;
       }
 
       const res = await this.client.post(`/zones/${this.zoneId}/dns_records`, {
-        type: 'A', name: fqdn, content: workerIp, ttl: 60, proxied: false,
+        type: 'A', name: fqdn, content: workerIp, ttl: 1, proxied: true,
       });
       const recordId = res.data?.result?.id;
       console.log(`[cloudflare] Created DNS: ${fqdn} → ${workerIp}`);

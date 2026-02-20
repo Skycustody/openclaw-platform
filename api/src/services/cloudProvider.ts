@@ -57,43 +57,25 @@ ${sshPubKey ? `mkdir -p /root/.ssh && chmod 700 /root/.ssh && echo '${sshPubKey}
 # Docker network
 docker network create openclaw-net 2>/dev/null || true
 
-# Traefik config — HTTP auto-redirects to HTTPS, Let's Encrypt for certs
+# Traefik config — HTTP only; Cloudflare handles SSL termination
 cat > /opt/openclaw/config/traefik.yml <<'TEOF'
 api:
   dashboard: false
 entryPoints:
   web:
     address: ":80"
-    http:
-      redirections:
-        entryPoint:
-          to: websecure
-          scheme: https
-  websecure:
-    address: ":443"
 providers:
   docker:
     endpoint: "unix:///var/run/docker.sock"
     exposedByDefault: false
     network: openclaw-net
-certificatesResolvers:
-  letsencrypt:
-    acme:
-      email: ${adminEmail}
-      storage: /opt/openclaw/traefik/acme.json
-      httpChallenge:
-        entryPoint: web
 TEOF
-
-touch /opt/openclaw/traefik/acme.json
-chmod 600 /opt/openclaw/traefik/acme.json
 
 # Start Traefik
 docker run -d --name traefik --restart unless-stopped --network openclaw-net \\
-  -p 80:80 -p 443:443 \\
+  -p 80:80 \\
   -v /var/run/docker.sock:/var/run/docker.sock:ro \\
   -v /opt/openclaw/config/traefik.yml:/traefik.yml:ro \\
-  -v /opt/openclaw/traefik/acme.json:/opt/openclaw/traefik/acme.json \\
   traefik:v3.0
 
 echo "Traefik started"
