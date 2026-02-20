@@ -369,8 +369,7 @@ export default function SchedulePage() {
         open={showCreate}
         onClose={() => setShowCreate(false)}
         title="Create a Scheduled Task"
-        description="Describe what you want done and when — your agent will handle the rest"
-        size="lg"
+        className="max-w-2xl"
       >
         <div className="space-y-6">
           {/* Task description */}
