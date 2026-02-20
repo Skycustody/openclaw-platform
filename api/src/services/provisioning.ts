@@ -105,9 +105,9 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
     console.warn(`Container ${containerName} health check timed out but may still start`);
   }
 
-  // Step 7: Update status to active
+  // Step 7: Update status to active and refresh last_active (so sleep cycle doesn't immediately stop the container)
   await db.query(
-    `UPDATE users SET status = 'active' WHERE id = $1`,
+    `UPDATE users SET status = 'active', last_active = NOW() WHERE id = $1`,
     [userId]
   );
 
