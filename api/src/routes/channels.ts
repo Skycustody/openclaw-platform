@@ -91,8 +91,8 @@ router.post('/slack/disconnect', async (req: AuthRequest, res: Response, next: N
 // ── WhatsApp ──
 router.post('/whatsapp/pair', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const result = await initiateWhatsAppPairing(req.userId!);
-    res.json(result);
+    const { agentUrl, alreadyLinked } = await initiateWhatsAppPairing(req.userId!);
+    res.json({ agentUrl, alreadyLinked });
   } catch (err) {
     next(err);
   }
