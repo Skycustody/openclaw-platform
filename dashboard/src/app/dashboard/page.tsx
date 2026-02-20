@@ -122,17 +122,20 @@ export default function AgentControlCenter() {
         await new Promise(r => setTimeout(r, delay));
         elapsed += delay / 1000;
         try {
-          const check = await api.get<{ ready: boolean; httpCode?: string }>('/agent/ready');
+          const check = await api.get<{ ready: boolean; httpCode?: string; detail?: string }>('/agent/ready');
           if (check.ready) {
             ready = true;
             break;
           }
-        } catch {}
-        setProvisionMsg(`Waiting for agent to come online... (${Math.round(elapsed)}s)`);
+          const detail = check.detail || 'Starting up...';
+          setProvisionMsg(`${detail} (${Math.round(elapsed)}s)`);
+        } catch {
+          setProvisionMsg(`Connecting to agent... (${Math.round(elapsed)}s)`);
+        }
       }
 
       if (!ready) {
-        setProvisionMsg('Agent is still starting — opening anyway...');
+        setProvisionMsg('Opening agent...');
         await new Promise(r => setTimeout(r, 1000));
       }
 

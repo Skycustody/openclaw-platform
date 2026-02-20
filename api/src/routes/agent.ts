@@ -10,6 +10,51 @@ const router = Router();
 router.use(authenticate);
 
 /**
+ * Ensure Traefik on a worker has DOCKER_API_VERSION set.
+ * Without it, Traefik v3 can't talk to Docker and returns 404 for everything.
+ * Returns true if Traefik was recreated (caller should wait a moment).
+ */
+async function ensureTraefik(serverIp: string): Promise<boolean> {
+  try {
+    const envCheck = await sshExec(
+      serverIp,
+      `docker inspect traefik --format='{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null`
+    ).catch(() => null);
+
+    if (envCheck?.stdout?.includes('DOCKER_API_VERSION')) return false;
+
+    console.log(`[traefik] Fixing Traefik on ${serverIp} — missing DOCKER_API_VERSION`);
+    const traefikCfgB64 = Buffer.from([
+      'api:',
+      '  dashboard: false',
+      'entryPoints:',
+      '  web:',
+      '    address: ":80"',
+      '  websecure:',
+      '    address: ":443"',
+      'providers:',
+      '  docker:',
+      '    endpoint: "unix:///var/run/docker.sock"',
+      '    exposedByDefault: false',
+      '    network: openclaw-net',
+    ].join('\n')).toString('base64');
+
+    await sshExec(serverIp, [
+      `mkdir -p /opt/openclaw/config`,
+      `echo '${traefikCfgB64}' | base64 -d > /opt/openclaw/config/traefik.yml`,
+      `docker rm -f traefik 2>/dev/null || true`,
+      `docker run -d --name traefik --restart unless-stopped --network openclaw-net -e DOCKER_API_VERSION=1.44 -p 80:80 -p 443:443 -v /var/run/docker.sock:/var/run/docker.sock:ro -v /opt/openclaw/config/traefik.yml:/etc/traefik/traefik.yml:ro traefik:latest`,
+    ].join(' && '));
+
+    console.log(`[traefik] Traefik recreated on ${serverIp} with DOCKER_API_VERSION=1.44`);
+    return true;
+  } catch (err) {
+    console.error(`[traefik] Failed to fix Traefik on ${serverIp}:`, err);
+    return false;
+  }
+}
+
+/**
  * Build the agent URL with gateway auth token + gatewayUrl so the Control UI
  * auto-connects without requiring the user to paste a token manually.
  * The OpenClaw Control UI reads ?token= when ?gatewayUrl= is also present
@@ -137,6 +182,11 @@ router.post('/open', authenticate, async (req: AuthRequest, res: Response, next:
       ? await db.getOne<Server>('SELECT * FROM servers WHERE id = $1', [user.server_id])
       : null;
 
+    // Proactively fix Traefik on existing workers (don't await — runs in background)
+    if (server) {
+      ensureTraefik(server.ip).catch(() => {});
+    }
+
     // Case 2: sleeping — wake it up
     if (user.status === 'sleeping') {
       console.log(`[agent/open] Waking container for ${user.id}`);
@@ -254,16 +304,21 @@ router.get('/logs', requireActiveSubscription, async (req: AuthRequest, res: Res
 /**
  * Server-side readiness probe: SSH into the worker and curl the container
  * through Traefik to confirm routing works end-to-end.
+ * Auto-fixes broken Traefik (missing DOCKER_API_VERSION) when detected.
  */
 router.get('/ready', authenticate, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const user = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [req.userId]);
     if (!user?.server_id || !user?.subdomain) {
+      console.log(`[ready] User ${req.userId} not provisioned`);
       return res.json({ ready: false, reason: 'not_provisioned' });
     }
 
     const server = await db.getOne<Server>('SELECT * FROM servers WHERE id = $1', [user.server_id]);
-    if (!server) return res.json({ ready: false, reason: 'no_server' });
+    if (!server) {
+      console.log(`[ready] Server ${user.server_id} not found for user ${req.userId}`);
+      return res.json({ ready: false, reason: 'no_server' });
+    }
 
     const containerName = user.container_name || `openclaw-${user.id}`;
 
@@ -271,30 +326,57 @@ router.get('/ready', authenticate, async (req: AuthRequest, res: Response, next:
     const inspect = await sshExec(
       server.ip,
       `docker inspect ${containerName} --format='{{.State.Running}}' 2>/dev/null`
-    ).catch(() => null);
+    ).catch((err) => {
+      console.error(`[ready] SSH to ${server.ip} failed:`, err.message);
+      return null;
+    });
 
     if (!inspect || !inspect.stdout.includes('true')) {
-      // Grab last 15 lines of container logs for debugging
       const logs = await sshExec(server.ip, `docker logs --tail 15 ${containerName} 2>&1`).catch(() => null);
+      console.log(`[ready] Container ${containerName} not running on ${server.ip}. Logs: ${logs?.stdout?.slice(-200) || 'none'}`);
       return res.json({
         ready: false,
         reason: 'container_not_running',
-        logs: logs?.stdout?.slice(-500) || '',
+        detail: 'Container is starting up...',
       });
     }
 
-    // 2. Check Traefik can route to it (curl via localhost with Host header)
+    // 2. Check Traefik can route to it
     const domain = process.env.DOMAIN || 'yourdomain.com';
     const hostHeader = `${user.subdomain}.${domain}`;
     const probe = await sshExec(
       server.ip,
-      `curl -sf -o /dev/null -w '%{http_code}' -H 'Host: ${hostHeader}' --max-time 5 http://127.0.0.1/ 2>/dev/null || echo 000`
+      `curl -o /dev/null -w '%{http_code}' -H 'Host: ${hostHeader}' --max-time 5 http://127.0.0.1/ 2>/dev/null`
     ).catch(() => null);
 
-    const httpCode = probe?.stdout?.trim() || '000';
+    const httpCode = (probe?.stdout?.trim() || '000').slice(-3);
     const isReady = httpCode === '200' || httpCode === '101';
 
-    return res.json({ ready: isReady, httpCode });
+    if (isReady) {
+      return res.json({ ready: true, httpCode });
+    }
+
+    console.log(`[ready] Traefik probe for ${hostHeader} on ${server.ip} returned HTTP ${httpCode}`);
+
+    // 3. Auto-fix: if Traefik returns 404, it likely can't discover containers
+    if (httpCode === '404' || httpCode === '000') {
+      const wasFixed = await ensureTraefik(server.ip);
+      if (wasFixed) {
+        return res.json({
+          ready: false,
+          reason: 'traefik_fixed',
+          detail: 'Fixing routing, retrying shortly...',
+          httpCode,
+        });
+      }
+    }
+
+    return res.json({
+      ready: false,
+      reason: 'routing_not_ready',
+      detail: `Routing not ready (HTTP ${httpCode})`,
+      httpCode,
+    });
   } catch (err) {
     next(err);
   }
