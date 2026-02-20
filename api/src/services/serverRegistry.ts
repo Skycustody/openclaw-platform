@@ -100,7 +100,7 @@ export async function updateServerRam(serverId: string): Promise<void> {
   const result = await db.getOne<{ total: string }>(
     `SELECT COALESCE(SUM(
       CASE u.plan
-        WHEN 'starter' THEN 1024
+        WHEN 'starter' THEN 2048
         WHEN 'pro' THEN 2048
         WHEN 'business' THEN 4096
         ELSE 2048

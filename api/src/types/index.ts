@@ -141,8 +141,8 @@ export interface PlanLimits {
 
 export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
   starter: {
-    ramMb: 1024,
-    cpus: '0.25',
+    ramMb: 2048,
+    cpus: '0.5',
     maxSkills: 10,
     maxCronJobs: 3,
     storageGb: 1,
