@@ -152,8 +152,8 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     allChannels: false,
   },
   pro: {
-    ramMb: 2048,
-    cpus: '0.5',
+    ramMb: 4096,
+    cpus: '1.0',
     maxSkills: 53,
     maxCronJobs: 20,
     storageGb: 5,
@@ -163,8 +163,8 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     allChannels: true,
   },
   business: {
-    ramMb: 4096,
-    cpus: '1.0',
+    ramMb: 8192,
+    cpus: '2.0',
     maxSkills: 53,
     maxCronJobs: 100,
     storageGb: 20,

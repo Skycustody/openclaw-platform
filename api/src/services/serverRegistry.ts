@@ -101,8 +101,8 @@ export async function updateServerRam(serverId: string): Promise<void> {
     `SELECT COALESCE(SUM(
       CASE u.plan
         WHEN 'starter' THEN 2048
-        WHEN 'pro' THEN 2048
-        WHEN 'business' THEN 4096
+        WHEN 'pro' THEN 4096
+        WHEN 'business' THEN 8192
         ELSE 2048
       END
     ), 0) as total
