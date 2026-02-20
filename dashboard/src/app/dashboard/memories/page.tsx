@@ -151,7 +151,7 @@ export default function MemoryPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader2 className="h-8 w-8 animate-spin text-indigo-400" />
+        <Loader2 className="h-6 w-6 animate-spin text-white/40" />
       </div>
     );
   }
@@ -164,7 +164,7 @@ export default function MemoryPage() {
         <div className="flex items-start gap-3">
           <div className={cn(
             'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl',
-            memory.type === 'about_you' && 'bg-indigo-500/10 text-indigo-400',
+            memory.type === 'about_you' && 'bg-white/[0.06] text-white/40',
             memory.type === 'preference' && 'bg-blue-500/10 text-blue-400',
             memory.type === 'people' && 'bg-emerald-500/10 text-emerald-400',
             memory.type === 'work' && 'bg-amber-500/10 text-amber-400',
@@ -361,7 +361,7 @@ export default function MemoryPage() {
           {recentMemories.length > 0 && (
             <div>
               <div className="flex items-center gap-2 mb-3 px-1">
-                <Sparkles className="h-3.5 w-3.5 text-indigo-400/50" />
+                <Sparkles className="h-3.5 w-3.5 text-white/40" />
                 <p className="text-[13px] font-medium text-white/30 uppercase tracking-wider">Recently Learned</p>
               </div>
               <div className="space-y-2">

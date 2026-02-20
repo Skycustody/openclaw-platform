@@ -142,7 +142,7 @@ export default function BrowserPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
+        <Loader2 className="h-6 w-6 animate-spin text-white/40" />
       </div>
     );
   }
@@ -244,8 +244,8 @@ export default function BrowserPage() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 animate-fade-up">
         <GlassPanel>
           <div className="flex items-center gap-3">
-            <div className="rounded-xl bg-indigo-500/10 p-2.5">
-              <Globe className="h-5 w-5 text-indigo-400" />
+            <div className="rounded-xl bg-white/[0.06] p-2.5">
+              <Globe className="h-5 w-5 text-white/40" />
             </div>
             <div>
               <p className="text-[22px] font-bold text-white">{stats.sessionsToday}</p>

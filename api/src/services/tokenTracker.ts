@@ -28,6 +28,9 @@ export async function trackUsage(
   if (!result) throw new Error(`No token balance for user ${userId}`);
   const newBalance = result.balance;
 
+  // Invalidate cached balance immediately so reads see the updated value
+  await redis.del(`tokens:balance:${userId}`);
+
   // Log transaction
   await db.query(
     `INSERT INTO token_transactions (user_id, amount, type, model, task_id)
@@ -157,24 +160,26 @@ export async function estimateDaysRemaining(userId: string, currentBalance?: num
 }
 
 export async function getDailyUsage(userId: string, days = 30): Promise<Array<{ date: string; tokens: number }>> {
+  const safeDays = Math.max(1, Math.min(Math.floor(Number(days)), 365));
   return db.getMany(
     `SELECT DATE(created_at) as date, SUM(ABS(amount)) as tokens
      FROM token_transactions
-     WHERE user_id = $1 AND type = 'usage' AND created_at > NOW() - INTERVAL '${days} days'
+     WHERE user_id = $1 AND type = 'usage' AND created_at > NOW() - make_interval(days => $2)
      GROUP BY DATE(created_at)
      ORDER BY date`,
-    [userId]
+    [userId, safeDays]
   );
 }
 
 export async function getUsageByModel(userId: string, days = 30): Promise<Array<{ model: string; tokens: number }>> {
+  const safeDays = Math.max(1, Math.min(Math.floor(Number(days)), 365));
   return db.getMany(
     `SELECT model, SUM(ABS(amount)) as tokens
      FROM token_transactions
-     WHERE user_id = $1 AND type = 'usage' AND model IS NOT NULL AND created_at > NOW() - INTERVAL '${days} days'
+     WHERE user_id = $1 AND type = 'usage' AND model IS NOT NULL AND created_at > NOW() - make_interval(days => $2)
      GROUP BY model
      ORDER BY tokens DESC`,
-    [userId]
+    [userId, safeDays]
   );
 }
 

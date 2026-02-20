@@ -32,8 +32,13 @@ export async function invalidateCache(userId: string, taskKey: string): Promise<
 }
 
 export async function invalidateAllUserCache(userId: string): Promise<void> {
-  const keys = await redis.keys(`task:${userId}:*`);
-  if (keys.length) {
-    await redis.del(...keys);
-  }
+  const pattern = `task:${userId}:*`;
+  let cursor = '0';
+  do {
+    const [nextCursor, keys] = await redis.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
+    cursor = nextCursor;
+    if (keys.length) {
+      await redis.del(...keys);
+    }
+  } while (cursor !== '0');
 }

@@ -1,25 +1,11 @@
-# Dependencies
 node_modules/
-
-# Environment and secrets
+dist/
 .env
 .env.local
-.env.*.local
-*.pem
-
-# Build and cache
-.next/
-out/
-build/
-dist/
-.vercel/
-*.tsbuildinfo
-
-# OS and IDE
+.env.production
 .DS_Store
 *.log
-
-# Debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+.next/
+out/
+coverage/
+.turbo/

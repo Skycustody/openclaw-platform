@@ -176,7 +176,7 @@ export default function SecurityPage() {
   if (loading) {
     return (
       <div className="flex h-96 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-indigo-400" />
+        <Loader2 className="h-6 w-6 animate-spin text-white/40" />
       </div>
     );
   }
@@ -346,8 +346,8 @@ export default function SecurityPage() {
       <Card>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-400/10">
-              <Mail className="h-5 w-5 text-indigo-400" />
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/[0.06]">
+              <Mail className="h-5 w-5 text-white/40" />
             </div>
             <div>
               <CardTitle>Login Alerts</CardTitle>

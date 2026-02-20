@@ -1,12 +1,12 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 import { OAuth2Client } from 'google-auth-library';
 import db from '../lib/db';
-import { generateToken } from '../middleware/auth';
+import { generateToken, refreshToken as issueRefreshToken } from '../middleware/auth';
 import { rateLimitAuth } from '../middleware/rateLimit';
 import { BadRequestError, UnauthorizedError } from '../lib/errors';
-import { createCheckoutSession } from '../services/stripe';
-import { Plan } from '../types';
+import { v4 as uuid } from 'uuid';
 
 const router = Router();
 
@@ -15,29 +15,30 @@ const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 // ── Email + Password Signup ──
 router.post('/signup', rateLimitAuth, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { email, password, plan, referralCode } = req.body;
+    const { email, password } = req.body;
 
-    if (!email || !password || !plan) {
-      throw new BadRequestError('Email, password, and plan are required');
-    }
-
-    if (!['starter', 'pro', 'business'].includes(plan)) {
-      throw new BadRequestError('Invalid plan');
+    if (!email || !password) {
+      throw new BadRequestError('Email and password are required');
     }
 
     const existing = await db.getOne('SELECT id FROM users WHERE email = $1', [email]);
     if (existing) throw new BadRequestError('Email already registered');
 
     const passwordHash = await bcrypt.hash(password, 12);
-
-    const checkoutUrl = await createCheckoutSession(email, plan as Plan, referralCode);
+    const userId = uuid();
 
     await db.query(
-      `UPDATE users SET password_hash = $1 WHERE email = $2`,
-      [passwordHash, email]
+      `INSERT INTO users (id, email, plan, status, password_hash) VALUES ($1, $2, 'pro', 'provisioning', $3)`,
+      [userId, email, passwordHash]
     );
 
-    res.json({ checkoutUrl });
+    const token = generateToken(userId, 'pro');
+
+    res.json({
+      token,
+      user: { id: userId, email, plan: 'pro', status: 'provisioning' },
+      isNewUser: true,
+    });
   } catch (err) {
     next(err);
   }
@@ -78,7 +79,7 @@ router.post('/login', rateLimitAuth, async (req: Request, res: Response, next: N
 // ── Google Sign-In ──
 router.post('/google', rateLimitAuth, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { credential, plan, referralCode } = req.body;
+    const { credential } = req.body;
 
     if (!credential) {
       throw new BadRequestError('Google credential is required');
@@ -118,21 +119,20 @@ router.post('/google', rateLimitAuth, async (req: Request, res: Response, next: 
       });
     }
 
-    // New user — needs to pick a plan and pay
-    const selectedPlan = plan || 'pro';
-    if (!['starter', 'pro', 'business'].includes(selectedPlan)) {
-      throw new BadRequestError('Invalid plan');
-    }
-
-    const checkoutUrl = await createCheckoutSession(email!, selectedPlan as Plan, referralCode);
-
-    // Store the Google info so it's ready when payment completes
+    // New user — create account, then they pick plan on /pricing
+    const userId = uuid();
     await db.query(
-      `UPDATE users SET google_id = $1, avatar_url = $2, display_name = $3 WHERE email = $4`,
-      [googleId, picture, name, email]
+      `INSERT INTO users (id, email, plan, status, google_id, avatar_url, display_name)
+       VALUES ($1, $2, 'pro', 'provisioning', $3, $4, $5)`,
+      [userId, email, googleId, picture, name]
     );
 
-    res.json({ checkoutUrl, isNewUser: true });
+    const token = generateToken(userId, 'pro');
+    res.json({
+      token,
+      user: { id: userId, email, plan: 'pro', status: 'provisioning' },
+      isNewUser: true,
+    });
   } catch (err: any) {
     if (err.message?.includes('Token used too late') || err.message?.includes('Invalid token')) {
       return next(new UnauthorizedError('Google sign-in expired. Please try again.'));
@@ -141,14 +141,18 @@ router.post('/google', rateLimitAuth, async (req: Request, res: Response, next: 
   }
 });
 
-// ── Token Refresh ──
-router.post('/refresh', async (req: Request, res: Response, next: NextFunction) => {
+// ── Token Refresh (accepts current JWT in Authorization; works even if expired) ──
+router.post('/refresh', rateLimitAuth, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { refreshToken: userId } = req.body;
-    if (!userId) throw new BadRequestError('User ID required');
-
-    const { refreshToken } = await import('../middleware/auth');
-    const token = await refreshToken(userId);
+    const header = req.headers.authorization;
+    if (!header?.startsWith('Bearer ')) {
+      throw new UnauthorizedError('Missing authorization token');
+    }
+    const currentToken = header.slice(7);
+    const payload = jwt.verify(currentToken, process.env.JWT_SECRET!, {
+      ignoreExpiration: true,
+    }) as { userId: string };
+    const token = await issueRefreshToken(payload.userId);
     res.json({ token });
   } catch (err) {
     next(err);

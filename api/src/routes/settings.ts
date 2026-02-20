@@ -1,10 +1,11 @@
 import { Router, Response, NextFunction } from 'express';
-import { AuthRequest, authenticate } from '../middleware/auth';
+import { AuthRequest, authenticate, requireActiveSubscription } from '../middleware/auth';
 import db from '../lib/db';
 import { UserSettings } from '../types';
 
 const router = Router();
 router.use(authenticate);
+router.use(requireActiveSubscription);
 
 // Get all settings
 router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {

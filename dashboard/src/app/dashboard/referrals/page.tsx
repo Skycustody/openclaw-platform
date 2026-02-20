@@ -111,7 +111,7 @@ export default function ReferralsPage() {
   if (loading) {
     return (
       <div className="flex h-96 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-indigo-400" />
+        <Loader2 className="h-6 w-6 animate-spin text-white/40" />
       </div>
     );
   }
@@ -133,20 +133,19 @@ export default function ReferralsPage() {
       {/* Header */}
       <div className="animate-fade-up">
         <div className="flex items-center gap-3 mb-2">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400/20 to-orange-400/20">
-            <Gift className="h-5 w-5 text-amber-400" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/[0.06] border border-white/[0.08]">
+            <Gift className="h-5 w-5 text-white/50" />
           </div>
           <h1 className="text-[28px] font-bold text-white tracking-tight">Refer Friends & Earn</h1>
         </div>
         <p className="mt-2 text-[15px] text-white/50 leading-relaxed">
-          Earn <span className="text-emerald-400 font-semibold">$5 every month</span> for each friend who signs up. 
+          Earn <span className="text-green-400 font-semibold">$5 every month</span> for each friend who signs up. 
           The more friends you invite, the more you earn — it never expires.
         </p>
       </div>
 
       {/* Referral Link Card */}
       <Card glow className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 via-transparent to-violet-500/5 pointer-events-none" />
         <div className="relative">
           <div className="mb-4">
             <CardTitle>Your Referral Link</CardTitle>
@@ -154,7 +153,7 @@ export default function ReferralsPage() {
           </div>
 
           <div className="flex items-center gap-3 mb-5">
-            <div className="flex-1 truncate rounded-2xl glass-subtle px-5 py-3.5 font-mono text-[15px] text-indigo-300 border border-indigo-500/10">
+            <div className="flex-1 truncate rounded-2xl glass-subtle px-5 py-3.5 font-mono text-[15px] text-white/60 border border-white/[0.08]">
               {data?.referralLink || 'https://openclaw.ai/ref/...'}
             </div>
             <Button variant={copied ? 'glass' : 'primary'} onClick={copyLink}>
@@ -236,9 +235,9 @@ export default function ReferralsPage() {
             const StepIcon = step.icon;
             return (
               <GlassPanel key={i} className="text-center relative">
-                <div className="flex justify-center mb-3">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-400/10">
-                    <StepIcon className="h-5 w-5 text-indigo-400" />
+                  <div className="flex justify-center mb-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/[0.06]">
+                    <StepIcon className="h-5 w-5 text-white/40" />
                   </div>
                 </div>
                 <div className="flex h-6 w-6 items-center justify-center rounded-full bg-white/5 text-[12px] font-bold text-white/40 mx-auto mb-2">
@@ -269,8 +268,8 @@ export default function ReferralsPage() {
 
         {(!data?.referrals || data.referrals.length === 0) ? (
           <div className="flex flex-col items-center justify-center py-14 text-center">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-400/10 mb-4">
-              <Users className="h-6 w-6 text-indigo-400" />
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/[0.06] mb-4">
+              <Users className="h-6 w-6 text-white/40" />
             </div>
             <p className="text-[15px] font-medium text-white">No referrals yet</p>
             <p className="mt-2 text-[13px] text-white/40 max-w-sm">
@@ -282,7 +281,7 @@ export default function ReferralsPage() {
             {data.referrals.map((ref) => (
               <div key={ref.id} className="flex items-center justify-between px-6 py-4 hover:bg-white/[0.02] transition-colors">
                 <div className="flex items-center gap-4">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500/20 to-violet-500/20 text-[14px] font-semibold text-indigo-300">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/[0.06] text-[14px] font-semibold text-white/60">
                     {ref.email.charAt(0).toUpperCase()}
                   </div>
                   <div>

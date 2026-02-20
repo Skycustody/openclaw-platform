@@ -445,7 +445,7 @@ You have two options. **Option A is recommended** if your code is on GitHub. **O
 
 ```bash
 cd /opt
-git clone https://github.com/YOUR_USERNAME/openclaw-platform.git
+git clone https://github.com/Skycustody/openclaw-platform
 cd openclaw-platform
 ```
 
@@ -516,7 +516,7 @@ docker run -d \
   --restart unless-stopped \
   -e POSTGRES_DB=openclaw \
   -e POSTGRES_USER=openclaw \
-  -e POSTGRES_PASSWORD=PICK_A_STRONG_PASSWORD_HERE \
+  -e POSTGRES_PASSWORD=ICK_A_STRONG_PASSWORD_HERE \
   -p 5432:5432 \
   -v pgdata:/var/lib/postgresql/data \
   pgvector/pgvector:pg16
@@ -831,11 +831,11 @@ If Hostinger doesn't have a UI for scripts, you can create it via API call:
 
 ```bash
 curl -X POST "https://developers.hostinger.com/api/vps/v1/post-install-scripts" \
-  -H "Authorization: Bearer YOUR_HOSTINGER_API_KEY" \
+  -H "Authorization: Bearer rnEHbnDC8uI2GTiFu14OukiFiLtIy4btY3rbpa8uc34dbb16" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "openclaw-server-setup",
-    "content": "PASTE_BASE64_ENCODED_SCRIPT_HERE"
+    "content": "CiMhL2Jpbi9iYXNoCiMgT3BlbkNsYXcgU2VydmVyIFBvc3QtSW5zdGFsbCBTY3JpcHQKIyBSdW5zIGF1dG9tYXRpY2FsbHkgb24gZXZlcnkgbmV3IEhvc3RpbmdlciBWUFMgdmlhIHBvc3QtaW5zdGFsbCBob29rCnNldCAtZXVvIHBpcGVmYWlsCgplY2hvICI9PT0gT3BlbkNsYXcgU2VydmVyIFNldHVwID09PSIKZWNobyAiU3RhcnRpbmcgYXQgJChkYXRlKSIKCiMg4pSA4pSAIFN5c3RlbSBVcGRhdGVzIOKUgOKUgAphcHQgdXBkYXRlICYmIGFwdCB1cGdyYWRlIC15CgojIOKUgOKUgCBJbnN0YWxsIERvY2tlciDilIDilIAKaWYgISBjb21tYW5kIC12IGRvY2tlciAmPiAvZGV2L251bGw7IHRoZW4KICBjdXJsIC1mc1NMIGh0dHBzOi8vZ2V0LmRvY2tlci5jb20gfCBzaAogIHVzZXJtb2QgLWFHIGRvY2tlciByb290CiAgc3lzdGVtY3RsIGVuYWJsZSBkb2NrZXIKICBzeXN0ZW1jdGwgc3RhcnQgZG9ja2VyCiAgZWNobyAiRG9ja2VyIGluc3RhbGxlZCIKZmkKCiMg4pSA4pSAIEluc3RhbGwgRG9ja2VyIENvbXBvc2Ug4pSA4pSACmlmICEgY29tbWFuZCAtdiBkb2NrZXItY29tcG9zZSAmPiAvZGV2L251bGw7IHRoZW4KICBhcHQgaW5zdGFsbCAteSBkb2NrZXItY29tcG9zZQogIGVjaG8gIkRvY2tlciBDb21wb3NlIGluc3RhbGxlZCIKZmkKCiMg4pSA4pSAIEluc3RhbGwgTm9kZS5qcyAyMCDilIDilIAKaWYgISBjb21tYW5kIC12IG5vZGUgJj4gL2Rldi9udWxsOyB0aGVuCiAgY3VybCAtZnNTTCBodHRwczovL2RlYi5ub2Rlc291cmNlLmNvbS9zZXR1cF8yMC54IHwgYmFzaCAtCiAgYXB0IGluc3RhbGwgLXkgbm9kZWpzCiAgZWNobyAiTm9kZS5qcyBpbnN0YWxsZWQ6ICQobm9kZSAtdikiCmZpCgojIOKUgOKUgCBJbnN0YWxsIHN5c3RlbSBtb25pdG9yaW5nIOKUgOKUgAphcHQgaW5zdGFsbCAteSBodG9wIGlvdG9wIGN1cmwganEKCiMg4pSA4pSAIENyZWF0ZSBkaXJlY3Rvcnkgc3RydWN0dXJlIOKUgOKUgApta2RpciAtcCAvb3B0L29wZW5jbGF3L3tpbnN0YW5jZXMsc2NyaXB0cyxsb2dzLGNvbmZpZyx0cmFlZmlrfQoKIyDilIDilIAgQ29uZmlndXJlIFRyYWVmaWsg4pSA4pSACmNhdCA+IC9vcHQvb3BlbmNsYXcvY29uZmlnL3RyYWVmaWsueW1sIDw8J1RSQUVGSUsnCmFwaToKICBkYXNoYm9hcmQ6IGZhbHNlCgplbnRyeVBvaW50czoKICB3ZWI6CiAgICBhZGRyZXNzOiAiOjgwIgogICAgaHR0cDoKICAgICAgcmVkaXJlY3Rpb25zOgogICAgICAgIGVudHJ5UG9pbnQ6CiAgICAgICAgICB0bzogd2Vic2VjdXJlCiAgICAgICAgICBzY2hlbWU6IGh0dHBzCiAgd2Vic2VjdXJlOgogICAgYWRkcmVzczogIjo0NDMiCgpwcm92aWRlcnM6CiAgZG9ja2VyOgogICAgZW5kcG9pbnQ6ICJ1bml4Oi8vL3Zhci9ydW4vZG9ja2VyLnNvY2siCiAgICBleHBvc2VkQnlEZWZhdWx0OiBmYWxzZQogICAgbmV0d29yazogb3BlbmNsYXctbmV0CgpjZXJ0aWZpY2F0ZXNSZXNvbHZlcnM6CiAgbGV0c2VuY3J5cHQ6CiAgICBhY21lOgogICAgICBlbWFpbDogIiR7bmFuYW1hY2JyaWRlNTlAZ21haWwuY29tfSIKICAgICAgc3RvcmFnZTogL29wdC9vcGVuY2xhdy90cmFlZmlrL2FjbWUuanNvbgogICAgICBodHRwQ2hhbGxlbmdlOgogICAgICAgIGVudHJ5UG9pbnQ6IHdlYgpUUkFFRklLCgp0b3VjaCAvb3B0L29wZW5jbGF3L3RyYWVmaWsvYWNtZS5qc29uCmNobW9kIDYwMCAvb3B0L29wZW5jbGF3L3RyYWVmaWsvYWNtZS5qc29uCgojIOKUgOKUgCBDcmVhdGUgRG9ja2VyIG5ldHdvcmsg4pSA4pSACmRvY2tlciBuZXR3b3JrIGNyZWF0ZSBvcGVuY2xhdy1uZXQgMj4vZGV2L251bGwgfHwgdHJ1ZQoKIyDilIDilIAgU3RhcnQgVHJhZWZpayByZXZlcnNlIHByb3h5IOKUgOKUgApkb2NrZXIgcm0gLWYgdHJhZWZpayAyPi9kZXYvbnVsbCB8fCB0cnVlCmRvY2tlciBydW4gLWQgXAogIC0tbmFtZSB0cmFlZmlrIFwKICAtLXJlc3RhcnQgdW5sZXNzLXN0b3BwZWQgXAogIC0tbmV0d29yayBvcGVuY2xhdy1uZXQgXAogIC1wIDgwOjgwIC1wIDQ0Mzo0NDMgXAogIC12IC92YXIvcnVuL2RvY2tlci5zb2NrOi92YXIvcnVuL2RvY2tlci5zb2NrOnJvIFwKICAtdiAvb3B0L29wZW5jbGF3L2NvbmZpZy90cmFlZmlrLnltbDovdHJhZWZpay55bWw6cm8gXAogIC12IC9vcHQvb3BlbmNsYXcvdHJhZWZpay9hY21lLmpzb246L29wdC9vcGVuY2xhdy90cmFlZmlrL2FjbWUuanNvbiBcCiAgdHJhZWZpazp2My4wCgplY2hvICJUcmFlZmlrIHN0YXJ0ZWQiCgojIOKUgOKUgCBDb25maWd1cmUgc3lzdGVtIGxpbWl0cyDilIDilIAKY2F0ID4+IC9ldGMvc3lzY3RsLmNvbmYgPDwnU1lTQ1RMJwpuZXQuY29yZS5zb21heGNvbm49NjU1MzUKbmV0LmlwdjQudGNwX21heF9zeW5fYmFja2xvZz02NTUzNQp2bS5vdmVyY29tbWl0X21lbW9yeT0xClNZU0NUTApzeXNjdGwgLXAKCiMg4pSA4pSAIENvbmZpZ3VyZSBsb2dyb3RhdGUgZm9yIGNvbnRhaW5lciBsb2dzIOKUgOKUgApjYXQgPiAvZXRjL2xvZ3JvdGF0ZS5kL2RvY2tlci1jb250YWluZXJzIDw8J0xPR1JPVEFURScKL3Zhci9saWIvZG9ja2VyL2NvbnRhaW5lcnMvKi8qLmxvZyB7CiAgcm90YXRlIDcKICBkYWlseQogIGNvbXByZXNzCiAgc2l6ZT0xME0KICBtaXNzaW5nb2sKICBkZWxheWNvbXByZXNzCiAgY29weXRydW5jYXRlCn0KTE9HUk9UQVRFCgojIOKUgOKUgCBSZWdpc3RlciB3aXRoIGNvbnRyb2wgcGxhbmUg4pSA4pSAClNFUlZFUl9JUD0kKGN1cmwgLXNmIGlmY29uZmlnLm1lKQpUT1RBTF9SQU09JChmcmVlIC1tIHwgYXdrICcvXk1lbTove3ByaW50ICQyfScpCgplY2hvICJSZWdpc3RlcmluZyBzZXJ2ZXI6IElQPSRTRVJWRVJfSVAgUkFNPSR7VE9UQUxfUkFNfU1CIgoKY3VybCAtc2YgLVggUE9TVCAiJHtQTEFURk9STV9BUEk6LWh0dHBzOi8vYXBpLnZhbG5hYW4uY29tfS93ZWJob29rcy9zZXJ2ZXJzL3JlZ2lzdGVyIiBcCiAgLUggIkNvbnRlbnQtVHlwZTogYXBwbGljYXRpb24vanNvbiIgXAogIC1IICJ4LWludGVybmFsLXNlY3JldDogJHtJTlRFUk5BTF9TRUNSRVQ6LTdmYWYwYjM1ZDAzZTFmYWYyNmM5ZjhlYmFjZjcyYmRkMzBhMWY1Y2QxOWI0MGEzMzRjOThhMmM5ZGU4MzRiOGJ9IiBcCiAgLWQgInsKICAgIFwiaXBcIjogXCIkU0VSVkVSX0lQXCIsCiAgICBcInJhbVwiOiAkVE9UQUxfUkFNLAogICAgXCJob3N0bmFtZVwiOiBcIiQoaG9zdG5hbWUpXCIKICB9IiB8fCBlY2hvICJXQVJOSU5HOiBGYWlsZWQgdG8gcmVnaXN0ZXIgd2l0aCBjb250cm9sIHBsYW5lIgoKZWNobyAiPT09IFNlcnZlciBTZXR1cCBDb21wbGV0ZSA9PT0iCmVjaG8gIkZpbmlzaGVkIGF0ICQoZGF0ZSkiCg==root@srv1402"
   }'
 ```
 
@@ -1003,8 +1003,8 @@ ENCRYPTION_KEY=PASTE_64_CHAR_HEX_STRING_2
 INTERNAL_SECRET=PASTE_64_CHAR_HEX_STRING_3
 
 # ── Hostinger Auto-Scaling ──
-HOSTINGER_API_KEY=YOUR_HOSTINGER_API_KEY
-HOSTINGER_SCRIPT_ID=YOUR_SCRIPT_ID
+HOSTINGER_API_KEY=rnEHbnDC8uI2GTiFu14OukiFiLtIy4btY3rbpa8uc34dbb16
+HOSTINGER_SCRIPT_ID=2830
 
 # ── Server Config ──
 PORT=4000
@@ -1033,9 +1033,9 @@ nano dashboard/.env.local
 
 Put this in it:
 ```ini
-NEXT_PUBLIC_API_URL=https://api.yourdomain.com
-NEXT_PUBLIC_GOOGLE_CLIENT_ID=YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com
-NEXT_PUBLIC_PLATFORM_URL=https://yourdomain.com
+NEXT_PUBLIC_API_URL=https://api.valnaa.com
+NEXT_PUBLIC_GOOGLE_CLIENT_ID=383333552636-b4c6aaj148mfhskfnjpr2br6bqg4miam.apps.googleusercontent.com
+NEXT_PUBLIC_PLATFORM_URL=https://valnaa.com
 ```
 
 Save with `Ctrl + X`, `Y`, `Enter`.
@@ -1134,10 +1134,10 @@ nano /etc/nginx/sites-available/openclaw
 Paste this entire block (replace `yourdomain.com` with your actual domain):
 
 ```nginx
-# Dashboard — yourdomain.com
+# Dashboard — valnaa.com
 server {
     listen 80;
-    server_name yourdomain.com www.yourdomain.com;
+    server_name valnaa.com www.valnaa.com;
 
     location / {
         proxy_pass http://127.0.0.1:3000;
@@ -1152,10 +1152,10 @@ server {
     }
 }
 
-# API — api.yourdomain.com
+# API — api.valnaa.com
 server {
     listen 80;
-    server_name api.yourdomain.com;
+    server_name api.valnaa.com;
 
     client_max_body_size 50M;
 
@@ -1222,7 +1222,7 @@ If you don't want to deal with certbot at all, Cloudflare provides free SSL auto
 ### Run Certbot
 
 ```bash
-certbot --nginx -d yourdomain.com -d www.yourdomain.com -d api.yourdomain.com
+certbot --nginx -d valnaa.com -d www.valnaa.com -d api.valnaa.com
 ```
 
 Replace `yourdomain.com` with your actual domain.

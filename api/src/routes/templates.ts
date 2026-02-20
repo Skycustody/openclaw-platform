@@ -1,9 +1,10 @@
 import { Router, Response, NextFunction } from 'express';
-import { AuthRequest, authenticate } from '../middleware/auth';
+import { AuthRequest, authenticate, requireActiveSubscription } from '../middleware/auth';
 import db from '../lib/db';
 
 const router = Router();
 router.use(authenticate);
+router.use(requireActiveSubscription);
 
 // Browse templates
 router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
@@ -85,15 +86,19 @@ router.post('/:id/install', async (req: AuthRequest, res: Response, next: NextFu
       );
     }
 
-    // Create cron jobs
-    if (config.cronJobs) {
-      for (const job of config.cronJobs) {
-        await db.query(
-          `INSERT INTO cron_jobs (user_id, name, description, schedule, token_budget)
-           VALUES ($1, $2, $3, $4, $5)`,
-          [req.userId, job.name, job.description, job.schedule, job.token_budget || 3000]
-        );
-      }
+    // Create cron jobs (batch insert)
+    if (config.cronJobs && config.cronJobs.length > 0) {
+      const values: any[] = [];
+      const placeholders: string[] = [];
+      config.cronJobs.forEach((job: any, i: number) => {
+        const offset = i * 5;
+        placeholders.push(`($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5})`);
+        values.push(req.userId, job.name, job.description, job.schedule, job.token_budget || 3000);
+      });
+      await db.query(
+        `INSERT INTO cron_jobs (user_id, name, description, schedule, token_budget) VALUES ${placeholders.join(', ')}`,
+        values
+      );
     }
 
     // Add memories

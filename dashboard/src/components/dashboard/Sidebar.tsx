@@ -30,34 +30,31 @@ const navItems = [
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { sidebarOpen, toggleSidebar, user } = useStore();
+  const { sidebarOpen, toggleSidebar } = useStore();
 
   return (
     <aside
       className={cn(
-        'fixed left-0 top-0 z-40 flex h-screen flex-col glass-strong transition-all duration-300 border-r-0',
+        'fixed left-0 top-0 z-40 flex h-screen flex-col bg-black border-r border-white/[0.06] transition-all duration-300',
         sidebarOpen ? 'w-[220px]' : 'w-[68px]'
       )}
-      style={{ borderRadius: '0 20px 20px 0' }}
     >
-      {/* Logo */}
-      <div className="flex h-[60px] items-center gap-3 px-4 border-b border-white/5">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] bg-gradient-to-br from-indigo-500 to-purple-500 shadow-lg shadow-indigo-500/20">
-          <Zap className="h-4.5 w-4.5 text-white" />
+      <div className="flex h-[56px] items-center gap-3 px-4 border-b border-white/[0.06]">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg">
+          <Zap className="h-4 w-4 text-white" />
         </div>
         {sidebarOpen && (
-          <span className="text-[16px] font-bold text-white tracking-tight">OpenClaw</span>
+          <span className="text-[15px] font-semibold text-white tracking-tight">OpenClaw</span>
         )}
         <button
           onClick={toggleSidebar}
-          className="ml-auto rounded-lg p-1.5 text-white/20 hover:text-white/60 hover:bg-white/5 transition-all"
+          className="ml-auto rounded-md p-1.5 text-white/20 hover:text-white/60 hover:bg-white/5 transition-colors"
         >
           <ChevronLeft className={cn('h-4 w-4 transition-transform duration-300', !sidebarOpen && 'rotate-180')} />
         </button>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto py-3 px-2.5 space-y-0.5">
+      <nav className="flex-1 overflow-y-auto py-2 px-2 space-y-0.5">
         {navItems.map((item) => {
           const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
           return (
@@ -65,25 +62,24 @@ export function Sidebar() {
               key={item.href}
               href={item.href}
               className={cn(
-                'flex items-center gap-3 rounded-[12px] px-3 py-2.5 text-[13px] font-medium transition-all duration-200',
+                'flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition-colors border-l-2 border-transparent',
                 isActive
-                  ? 'bg-white/10 text-white shadow-sm'
-                  : 'text-white/40 hover:text-white/70 hover:bg-white/5'
+                  ? 'bg-white/10 text-white border-white'
+                  : 'text-white/40 hover:text-white/70 hover:bg-white/[0.04]'
               )}
               title={!sidebarOpen ? item.label : undefined}
             >
-              <item.icon className={cn('h-[18px] w-[18px] shrink-0', isActive && 'text-indigo-400')} />
+              <item.icon className={cn('h-[18px] w-[18px] shrink-0', isActive && 'text-white')} />
               {sidebarOpen && <span>{item.label}</span>}
             </Link>
           );
         })}
       </nav>
 
-      {/* Footer */}
-      <div className="border-t border-white/5 p-2.5 space-y-1">
+      <div className="border-t border-white/[0.06] p-2 space-y-0.5">
         <Link
           href="/help"
-          className="flex items-center gap-3 rounded-[12px] px-3 py-2 text-[13px] text-white/30 hover:text-white/60 hover:bg-white/5 transition-all"
+          className="flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] text-white/30 hover:text-white/60 hover:bg-white/[0.04] transition-colors"
         >
           <HelpCircle className="h-[18px] w-[18px] shrink-0" />
           {sidebarOpen && <span>Help</span>}
@@ -93,7 +89,7 @@ export function Sidebar() {
             localStorage.removeItem('token');
             window.location.href = '/auth/login';
           }}
-          className="flex w-full items-center gap-3 rounded-[12px] px-3 py-2 text-[13px] text-white/30 hover:text-red-400 hover:bg-red-400/5 transition-all"
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-[13px] text-white/30 hover:text-red-400 hover:bg-red-400/5 transition-colors"
         >
           <LogOut className="h-[18px] w-[18px] shrink-0" />
           {sidebarOpen && <span>Sign Out</span>}

@@ -1,4 +1,9 @@
-import 'dotenv/config';
+import path from 'path';
+import { config } from 'dotenv';
+
+// Load .env from project root (openclaw-platform/.env) when running from api/
+config({ path: path.join(__dirname, '..', '..', '.env') });
+
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -8,6 +13,7 @@ import { Server as SocketServer } from 'socket.io';
 
 import { errorHandler } from './middleware/errorHandler';
 import { rateLimitGeneral } from './middleware/rateLimit';
+import jwt from 'jsonwebtoken';
 
 import authRoutes from './routes/auth';
 import agentRoutes from './routes/agent';
@@ -37,12 +43,23 @@ const io = new SocketServer(httpServer, {
   cors: { origin: process.env.PLATFORM_URL || '*', methods: ['GET', 'POST'] },
 });
 
+io.use((socket, next) => {
+  const token = socket.handshake.auth?.token;
+  if (!token) return next(new Error('Authentication required'));
+  try {
+    const payload = jwt.verify(token, process.env.JWT_SECRET!) as { userId: string };
+    socket.data.userId = payload.userId;
+    next();
+  } catch {
+    next(new Error('Invalid or expired token'));
+  }
+});
+
 io.on('connection', (socket) => {
-  const userId = socket.handshake.auth?.userId;
+  const userId = socket.data.userId;
   if (userId) {
     socket.join(userId);
   }
-
   socket.on('disconnect', () => {});
 });
 

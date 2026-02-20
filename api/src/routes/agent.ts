@@ -1,5 +1,5 @@
 import { Router, Response, NextFunction } from 'express';
-import { AuthRequest, authenticate } from '../middleware/auth';
+import { AuthRequest, authenticate, requireActiveSubscription } from '../middleware/auth';
 import db from '../lib/db';
 import { wakeContainer, sleepContainer, getContainerStatus, touchActivity } from '../services/sleepWake';
 import { restartContainer } from '../services/provisioning';
@@ -37,6 +37,7 @@ router.get('/status', async (req: AuthRequest, res: Response, next: NextFunction
 
     res.json({
       status,
+      subscriptionStatus: user.status,
       subdomain: user.subdomain,
       plan: user.plan,
       lastActive: user.last_active,
@@ -53,7 +54,7 @@ router.get('/status', async (req: AuthRequest, res: Response, next: NextFunction
 });
 
 // Start/wake agent
-router.post('/start', async (req: AuthRequest, res: Response, next: NextFunction) => {
+router.post('/start', requireActiveSubscription, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     await wakeContainer(req.userId!);
     res.json({ status: 'active' });
@@ -63,7 +64,7 @@ router.post('/start', async (req: AuthRequest, res: Response, next: NextFunction
 });
 
 // Stop/sleep agent
-router.post('/stop', async (req: AuthRequest, res: Response, next: NextFunction) => {
+router.post('/stop', requireActiveSubscription, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const user = await db.getOne<User & { server_ip: string }>(
       `SELECT u.*, s.ip as server_ip FROM users u
@@ -79,7 +80,7 @@ router.post('/stop', async (req: AuthRequest, res: Response, next: NextFunction)
 });
 
 // Restart agent
-router.post('/restart', async (req: AuthRequest, res: Response, next: NextFunction) => {
+router.post('/restart', requireActiveSubscription, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     await restartContainer(req.userId!);
     res.json({ status: 'restarting' });
@@ -89,7 +90,7 @@ router.post('/restart', async (req: AuthRequest, res: Response, next: NextFuncti
 });
 
 // Get container logs
-router.get('/logs', async (req: AuthRequest, res: Response, next: NextFunction) => {
+router.get('/logs', requireActiveSubscription, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const user = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [req.userId]);
     if (!user?.server_id) return res.json({ logs: '' });
@@ -108,7 +109,7 @@ router.get('/logs', async (req: AuthRequest, res: Response, next: NextFunction) 
 });
 
 // Touch activity (called by frontend periodically)
-router.post('/heartbeat', async (req: AuthRequest, res: Response, next: NextFunction) => {
+router.post('/heartbeat', requireActiveSubscription, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     await touchActivity(req.userId!);
     res.json({ ok: true });

@@ -21,7 +21,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           ref={ref}
           id={id}
           className={cn(
-            'glass-input w-full px-4 py-3 text-[14px]',
+            'w-full bg-transparent border border-white/10 rounded-lg px-4 py-3 text-[14px] text-white placeholder:text-white/25 focus:border-white/30 focus:outline-none transition-colors',
             error && 'border-red-400/50 focus:border-red-400',
             className
           )}
@@ -62,7 +62,7 @@ export function Textarea({
         placeholder={placeholder}
         rows={rows}
         className={cn(
-          'glass-input w-full px-4 py-3 text-[14px] resize-none leading-relaxed',
+          'w-full bg-transparent border border-white/10 rounded-lg px-4 py-3 text-[14px] text-white placeholder:text-white/25 resize-none leading-relaxed focus:border-white/30 focus:outline-none transition-colors',
           className
         )}
       />

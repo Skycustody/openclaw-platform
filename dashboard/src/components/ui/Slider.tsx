@@ -30,7 +30,7 @@ export function Slider({
         <div className="flex items-center justify-between">
           {label && <span className="text-[14px] text-white/60">{label}</span>}
           {valueLabel && (
-            <span className="text-[14px] font-medium text-indigo-400 bg-indigo-400/10 px-2.5 py-0.5 rounded-full">
+            <span className="text-[14px] font-medium text-white bg-white/[0.08] px-2.5 py-0.5 rounded-full">
               {valueLabel}
             </span>
           )}
@@ -45,7 +45,7 @@ export function Slider({
         onChange={(e) => onChange(Number(e.target.value))}
         className="w-full h-1.5 cursor-pointer"
         style={{
-          background: `linear-gradient(to right, #6366f1 0%, #8b5cf6 ${pct}%, rgba(255,255,255,0.06) ${pct}%, rgba(255,255,255,0.06) 100%)`,
+          background: `linear-gradient(to right, #fff 0%, #fff ${pct}%, rgba(255,255,255,0.06) ${pct}%, rgba(255,255,255,0.06) 100%)`,
         }}
       />
       {hint && <p className="text-[12px] text-white/30">{hint}</p>}

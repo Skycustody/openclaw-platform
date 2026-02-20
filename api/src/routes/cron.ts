@@ -1,5 +1,5 @@
 import { Router, Response, NextFunction } from 'express';
-import { AuthRequest, authenticate } from '../middleware/auth';
+import { AuthRequest, authenticate, requireActiveSubscription } from '../middleware/auth';
 import {
   createCronJob,
   updateCronJob,
@@ -9,6 +9,7 @@ import {
 
 const router = Router();
 router.use(authenticate);
+router.use(requireActiveSubscription);
 
 // List cron jobs
 router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {

@@ -33,6 +33,36 @@ export function authenticate(req: AuthRequest, _res: Response, next: NextFunctio
   }
 }
 
+export async function requireActiveSubscription(req: AuthRequest, _res: Response, next: NextFunction) {
+  try {
+    if (!req.userId) {
+      throw new UnauthorizedError('Authentication required');
+    }
+
+    const user = await db.getOne<{ status: string }>(
+      'SELECT status FROM users WHERE id = $1',
+      [req.userId]
+    );
+
+    if (!user) {
+      throw new UnauthorizedError('User not found');
+    }
+
+    const allowed = ['active', 'grace_period'];
+    if (!allowed.includes(user.status)) {
+      const err: any = new Error('Active subscription required');
+      err.statusCode = 403;
+      err.code = 'SUBSCRIPTION_REQUIRED';
+      err.userStatus = user.status;
+      return next(err);
+    }
+
+    next();
+  } catch (err) {
+    next(err);
+  }
+}
+
 export function internalAuth(req: Request, _res: Response, next: NextFunction) {
   const secret = req.headers['x-internal-secret'];
   if (secret !== process.env.INTERNAL_SECRET) {
@@ -44,7 +74,7 @@ export function internalAuth(req: Request, _res: Response, next: NextFunction) {
 
 export function generateToken(userId: string, plan: string): string {
   return jwt.sign({ userId, plan }, process.env.JWT_SECRET!, {
-    expiresIn: '7d',
+    expiresIn: '30d',
   });
 }
 

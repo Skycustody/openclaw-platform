@@ -1,3 +1,4 @@
+
 import axios, { AxiosInstance } from 'axios';
 
 class HostingerManager {
@@ -17,7 +18,7 @@ class HostingerManager {
   async provisionNewServer(): Promise<string> {
     try {
       const res = await this.client.post('/virtual-machines', {
-        plan: 'KVM8',
+        plan: 'KVM1', // 4GB RAM for testing; change to KVM8 for production
         region: 'us-east',
         os_template: 'ubuntu-22-04',
         hostname: `openclaw-${Date.now()}`,

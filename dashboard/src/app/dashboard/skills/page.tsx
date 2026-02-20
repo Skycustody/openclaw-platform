@@ -97,7 +97,7 @@ export default function SkillsPage() {
               className={cn(
                 'inline-flex items-center rounded-full px-4 py-2 text-[13px] font-medium whitespace-nowrap transition-all',
                 category === cat
-                  ? 'bg-indigo-500/15 text-indigo-400 ring-1 ring-indigo-500/20'
+                  ? 'bg-white/[0.06] text-white ring-1 ring-white/20'
                   : 'text-white/40 hover:text-white/60 hover:bg-white/5'
               )}
             >

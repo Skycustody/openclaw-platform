@@ -62,7 +62,7 @@ providers:
 certificatesResolvers:
   letsencrypt:
     acme:
-      email: "${ADMIN_EMAIL:-admin@yourdomain.com}"
+      email: "${ADMIN_EMAIL:-nanamacbride59@gmail.com}"
       storage: /opt/openclaw/traefik/acme.json
       httpChallenge:
         entryPoint: web

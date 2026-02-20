@@ -14,8 +14,8 @@ const steps = [
 export default function WelcomePage() {
   return (
     <Suspense fallback={
-      <div className="flex min-h-screen items-center justify-center bg-mesh">
-        <Loader2 className="h-8 w-8 animate-spin text-indigo-400" />
+      <div className="flex min-h-screen items-center justify-center bg-black">
+        <Loader2 className="h-6 w-6 animate-spin text-white/40" />
       </div>
     }>
       <WelcomeContent />
@@ -45,11 +45,10 @@ function WelcomeContent() {
   }, []);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-mesh px-4">
-      <div className="fixed top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[300px] rounded-full bg-indigo-500/8 blur-[120px] pointer-events-none" />
+    <div className="flex min-h-screen items-center justify-center bg-black px-4">
 
       <div className="relative w-full max-w-[440px] text-center animate-fade-up">
-        <div className={`mx-auto mb-8 flex h-16 w-16 items-center justify-center rounded-[20px] bg-gradient-to-br from-indigo-500 to-purple-500 shadow-xl shadow-indigo-500/25 ${done ? 'animate-pulse-glow' : ''}`}>
+        <div className="mx-auto mb-8 flex h-16 w-16 items-center justify-center rounded-[20px] bg-white/[0.06] border border-white/[0.08]">
           {done ? <Sparkles className="h-8 w-8 text-white" /> : <Zap className="h-8 w-8 text-white" />}
         </div>
 
@@ -68,9 +67,9 @@ function WelcomeContent() {
               key={step.label}
               className={`flex items-center gap-4 rounded-[16px] px-5 py-3.5 transition-all duration-500 ${
                 i < currentStep
-                  ? 'glass border-emerald-500/20'
+                  ? 'glass border-green-500/20'
                   : i === currentStep
-                  ? 'glass-strong border-indigo-500/20'
+                  ? 'glass-strong border-white/[0.08]'
                   : 'opacity-30'
               }`}
             >
@@ -79,8 +78,8 @@ function WelcomeContent() {
                   <Check className="h-4 w-4 text-emerald-400" />
                 </div>
               ) : i === currentStep ? (
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-500/20">
-                  <Loader2 className="h-4 w-4 animate-spin text-indigo-400" />
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/[0.06]">
+                  <Loader2 className="h-4 w-4 animate-spin text-white/40" />
                 </div>
               ) : (
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/5 text-[14px]">

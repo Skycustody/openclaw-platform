@@ -2,6 +2,7 @@ import Stripe from 'stripe';
 import db from '../lib/db';
 import { provisionUser, deprovisionUser } from './provisioning';
 import { addTokens } from './tokenTracker';
+import { handlePaymentFailure } from './gracePeriod';
 import { Plan, User } from '../types';
 import { v4 as uuid } from 'uuid';
 
@@ -20,7 +21,8 @@ function initPriceMap() {
 export async function createCheckoutSession(
   email: string,
   plan: Plan,
-  referralCode?: string
+  referralCode?: string,
+  existingUserId?: string
 ): Promise<string> {
   initPriceMap();
 
@@ -30,12 +32,16 @@ export async function createCheckoutSession(
     business: process.env.STRIPE_BUSINESS_PRICE_ID!,
   };
 
-  // Create user record first (pending state)
-  const userId = uuid();
-  await db.query(
-    `INSERT INTO users (id, email, plan, status) VALUES ($1, $2, $3, 'provisioning')`,
-    [userId, email, plan]
-  );
+  let userId: string;
+  if (existingUserId) {
+    userId = existingUserId;
+  } else {
+    userId = uuid();
+    await db.query(
+      `INSERT INTO users (id, email, plan, status) VALUES ($1, $2, $3, 'provisioning')`,
+      [userId, email, plan]
+    );
+  }
 
   // Handle referral discount
   const discounts: Stripe.Checkout.SessionCreateParams.Discount[] = [];
@@ -224,6 +230,8 @@ async function handlePaymentFailed(invoice: Stripe.Invoice): Promise<void> {
   if (!user) return;
 
   console.warn(`Payment failed for user ${user.id} (${user.email})`);
+  // Start grace period: user stays active for a few days, then paused → cancelled
+  await handlePaymentFailure(user.id);
 }
 
 export async function getCustomerPortalUrl(stripeCustomerId: string): Promise<string> {

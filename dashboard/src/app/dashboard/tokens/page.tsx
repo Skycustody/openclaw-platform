@@ -59,8 +59,7 @@ const MODEL_NAMES: Record<string, string> = {
 };
 
 const CHART_TOOLTIP_STYLE = {
-  backgroundColor: 'rgba(15,15,25,0.9)',
-  backdropFilter: 'blur(12px)',
+  backgroundColor: 'rgba(0,0,0,0.9)',
   border: '1px solid rgba(255,255,255,0.08)',
   borderRadius: '12px',
   color: '#fff',
@@ -139,7 +138,7 @@ export default function TokensPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
+        <Loader2 className="h-6 w-6 animate-spin text-white/40" />
       </div>
     );
   }
@@ -191,8 +190,8 @@ export default function TokensPage() {
             </p>
             <p className="text-[14px] text-white/40 mt-1">tokens</p>
           </div>
-          <div className="rounded-2xl bg-indigo-500/10 p-4">
-            <Coins className="h-7 w-7 text-indigo-400" />
+          <div className="rounded-2xl bg-white/[0.06] p-4">
+            <Coins className="h-7 w-7 text-white/40" />
           </div>
         </div>
 
@@ -223,7 +222,7 @@ export default function TokensPage() {
             <Card
               key={pkg.id}
               className={`relative text-center cursor-pointer transition-all hover:scale-[1.02] ${
-                pkg.bestValue ? 'ring-1 ring-indigo-500/50' : ''
+                pkg.bestValue ? 'ring-1 ring-white/20' : ''
               }`}
               glow={pkg.bestValue}
             >
@@ -287,9 +286,9 @@ export default function TokensPage() {
               <Tooltip
                 contentStyle={CHART_TOOLTIP_STYLE}
                 formatter={(value: any) => [formatTokens(value ?? 0), 'Tokens']}
-                cursor={{ fill: 'rgba(99, 102, 241, 0.06)' }}
+                cursor={{ fill: 'rgba(255, 255, 255, 0.04)' }}
               />
-              <Bar dataKey="tokens" fill="#6366f1" radius={[8, 8, 0, 0]} />
+              <Bar dataKey="tokens" fill="rgba(255,255,255,0.3)" radius={[8, 8, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>

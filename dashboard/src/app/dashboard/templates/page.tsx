@@ -125,7 +125,7 @@ export default function TemplatesPage() {
   if (loading) {
     return (
       <div className="flex h-96 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-indigo-400" />
+        <Loader2 className="h-6 w-6 animate-spin text-white/40" />
       </div>
     );
   }
@@ -167,7 +167,7 @@ export default function TemplatesPage() {
                 onClick={() => setCategory(cat.value)}
                 className={`flex items-center gap-2 rounded-xl px-4 py-2 text-[13px] font-medium transition-all ${
                   category === cat.value
-                    ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+                    ? 'bg-white/[0.06] text-white border border-white/[0.08]'
                     : 'glass-subtle text-white/50 hover:text-white/70 hover:bg-white/[0.04]'
                 }`}
               >
@@ -194,11 +194,11 @@ export default function TemplatesPage() {
                 className="relative overflow-hidden"
               >
                 {i === 0 && (
-                  <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-amber-400 via-orange-400 to-red-400" />
+                  <div className="absolute inset-x-0 top-0 h-0.5 bg-white/20" />
                 )}
                 <div className="flex items-start justify-between mb-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-400/10">
-                    <Sparkles className="h-5 w-5 text-indigo-400" />
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/[0.06]">
+                    <Sparkles className="h-5 w-5 text-white/40" />
                   </div>
                   {i === 0 && <Badge variant="accent">Top Pick</Badge>}
                 </div>
@@ -218,8 +218,8 @@ export default function TemplatesPage() {
       {filtered.length === 0 ? (
         <Card className="py-16">
           <div className="flex flex-col items-center text-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-400/10 mb-5">
-              <Package className="h-7 w-7 text-indigo-400" />
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/[0.06] mb-5">
+              <Package className="h-7 w-7 text-white/40" />
             </div>
             <p className="text-[17px] font-semibold text-white">No templates found</p>
             <p className="mt-2 text-[14px] text-white/40 max-w-sm">
@@ -245,8 +245,8 @@ export default function TemplatesPage() {
               <Card key={template.id} className="flex flex-col justify-between group">
                 <div>
                   <div className="flex items-start justify-between mb-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-400/10 group-hover:bg-indigo-400/15 transition-colors">
-                      <Sparkles className="h-5 w-5 text-indigo-400" />
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/[0.06] group-hover:bg-white/[0.08] transition-colors">
+                      <Sparkles className="h-5 w-5 text-white/40" />
                     </div>
                     <Badge variant="default" dot={false}>{template.category}</Badge>
                   </div>
@@ -396,7 +396,7 @@ export default function TemplatesPage() {
                   onClick={() => setShareForm((f) => ({ ...f, category: cat.value }))}
                   className={`rounded-xl px-3.5 py-2 text-[13px] font-medium transition-all ${
                     shareForm.category === cat.value
-                      ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+                      ? 'bg-white/[0.06] text-white border border-white/[0.08]'
                       : 'glass-subtle text-white/50 hover:text-white/70'
                   }`}
                 >

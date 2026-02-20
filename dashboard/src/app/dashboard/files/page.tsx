@@ -45,7 +45,7 @@ function getFileIcon(mimeType: string) {
 }
 
 function getFileColor(mimeType: string) {
-  if (mimeType.startsWith('image/')) return 'text-pink-400 bg-pink-400/10';
+  if (mimeType.startsWith('image/')) return 'text-blue-400 bg-blue-400/10';
   if (mimeType.includes('spreadsheet') || mimeType.includes('csv')) return 'text-emerald-400 bg-emerald-400/10';
   if (mimeType.includes('pdf')) return 'text-red-400 bg-red-400/10';
   if (mimeType.includes('text') || mimeType.includes('document')) return 'text-blue-400 bg-blue-400/10';
@@ -160,7 +160,7 @@ export default function FilesPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
+        <Loader2 className="h-6 w-6 animate-spin text-white/40" />
       </div>
     );
   }
@@ -206,15 +206,15 @@ export default function FilesPage() {
       <div
         className={`border-2 border-dashed rounded-2xl p-8 text-center transition-all animate-fade-up ${
           dragOver
-            ? 'border-indigo-500/50 bg-indigo-500/5'
+            ? 'border-white/[0.08] bg-white/[0.06]'
             : 'border-white/8 hover:border-white/15'
         }`}
         onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
         onDrop={handleDrop}
       >
-        <CloudUpload className={`h-10 w-10 mx-auto mb-3 ${dragOver ? 'text-indigo-400' : 'text-white/15'}`} />
-        <p className={`text-[14px] ${dragOver ? 'text-indigo-400' : 'text-white/30'}`}>
+        <CloudUpload className={`h-10 w-10 mx-auto mb-3 ${dragOver ? 'text-white/40' : 'text-white/15'}`} />
+        <p className={`text-[14px] ${dragOver ? 'text-white/60' : 'text-white/30'}`}>
           {dragOver ? 'Drop your file here' : 'Drag a file here to upload, or use the button above'}
         </p>
       </div>

@@ -2,11 +2,13 @@
 import { Sidebar } from '@/components/dashboard/Sidebar';
 import { useStore } from '@/lib/store';
 import { cn } from '@/lib/utils';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import api from '@/lib/api';
+import { Loader2 } from 'lucide-react';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { sidebarOpen, setUser } = useStore();
+  const [checking, setChecking] = useState(true);
 
   useEffect(() => {
     const token = api.getToken();
@@ -24,12 +26,31 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           status: data.status,
           subdomain: data.subdomain,
         });
+        const allowed = ['active', 'sleeping', 'grace_period'];
+        if (!allowed.includes(data.status) && typeof window !== 'undefined') {
+          window.location.href = '/auth/signup';
+          return;
+        }
       })
-      .catch(() => {});
+      .catch(() => {
+        // 403 = no active subscription → send to payment page
+        if (typeof window !== 'undefined') {
+          window.location.href = '/auth/signup';
+        }
+      })
+      .finally(() => setChecking(false));
   }, [setUser]);
 
+  if (checking) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-black">
+        <Loader2 className="h-6 w-6 animate-spin text-white/40" />
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-mesh text-white">
+    <div className="min-h-screen bg-black text-white">
       <Sidebar />
       <main
         className={cn(

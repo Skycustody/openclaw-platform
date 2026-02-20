@@ -226,7 +226,7 @@ export default function SchedulePage() {
 
       {loading ? (
         <div className="flex items-center justify-center py-20">
-          <Loader2 className="h-8 w-8 animate-spin text-indigo-400" />
+          <Loader2 className="h-6 w-6 animate-spin text-white/40" />
         </div>
       ) : tasks.length === 0 ? (
         <Card className="flex flex-col items-center justify-center py-20 text-center">
@@ -263,7 +263,7 @@ export default function SchedulePage() {
                     </div>
                     <div className="flex items-center gap-1.5 text-white/35">
                       <Zap className="h-3.5 w-3.5" />
-                      <span>Budget: <span className="text-indigo-400">{formatTokens(task.tokenBudget)} tokens</span></span>
+                      <span>Budget: <span className="text-white">{formatTokens(task.tokenBudget)} tokens</span></span>
                     </div>
                     {task.enabled && (
                       <div className="flex items-center gap-1.5 text-white/35">
@@ -401,7 +401,7 @@ export default function SchedulePage() {
                   className={cn(
                     'rounded-xl px-4 py-3 text-[14px] text-left transition-all border',
                     newFrequency === opt.value
-                      ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400'
+                      ? 'bg-white/[0.06] border-white/[0.08] text-white'
                       : 'bg-white/[0.02] border-white/5 text-white/50 hover:border-white/10'
                   )}
                 >
@@ -447,20 +447,20 @@ export default function SchedulePage() {
                   className={cn(
                     'w-full rounded-xl px-4 py-3 text-left transition-all border flex items-start gap-3',
                     newBehavior === opt.value
-                      ? 'bg-indigo-500/10 border-indigo-500/30'
+                      ? 'bg-white/[0.06] border-white/[0.08]'
                       : 'bg-white/[0.02] border-white/5 hover:border-white/10'
                   )}
                 >
                   <div className={cn(
                     'mt-0.5 h-4 w-4 rounded-full border-2 shrink-0 flex items-center justify-center',
-                    newBehavior === opt.value ? 'border-indigo-400' : 'border-white/20'
+                    newBehavior === opt.value ? 'border-white' : 'border-white/20'
                   )}>
                     {newBehavior === opt.value && (
-                      <div className="h-2 w-2 rounded-full bg-indigo-400" />
+                      <div className="h-2 w-2 rounded-full bg-white" />
                     )}
                   </div>
                   <div>
-                    <p className={cn('text-[14px] font-medium', newBehavior === opt.value ? 'text-indigo-400' : 'text-white/60')}>
+                    <p className={cn('text-[14px] font-medium', newBehavior === opt.value ? 'text-white' : 'text-white/60')}>
                       {opt.label}
                     </p>
                     <p className="text-[12px] text-white/30 mt-0.5">{opt.description}</p>

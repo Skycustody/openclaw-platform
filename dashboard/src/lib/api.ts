@@ -25,7 +25,7 @@ class ApiClient {
     }
   }
 
-  async request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  async request<T>(method: string, path: string, body?: unknown, isRetry = false): Promise<T> {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     const token = this.getToken();
     if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -37,6 +37,22 @@ class ApiClient {
     });
 
     if (res.status === 401) {
+      // Try refresh once (except when we're already calling refresh)
+      if (!isRetry && path !== '/auth/refresh' && token && typeof window !== 'undefined') {
+        try {
+          const refreshRes = await fetch(`${API_BASE}/auth/refresh`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          });
+          const refreshData = await refreshRes.json().catch(() => ({}));
+          if (refreshRes.ok && refreshData.token) {
+            this.setToken(refreshData.token);
+            return this.request<T>(method, path, body, true);
+          }
+        } catch {
+          // fall through to clear and redirect
+        }
+      }
       this.clearToken();
       if (typeof window !== 'undefined') {
         window.location.href = '/auth/login';

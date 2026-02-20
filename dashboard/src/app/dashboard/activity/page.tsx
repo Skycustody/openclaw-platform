@@ -39,10 +39,10 @@ const typeIcons: Record<string, typeof MessageSquare> = {
 
 const typeColors: Record<string, string> = {
   message: 'text-blue-400 bg-blue-500/10',
-  browsing: 'text-purple-400 bg-purple-500/10',
+  browsing: 'text-blue-400 bg-blue-500/10',
   email: 'text-amber-400 bg-amber-500/10',
   task: 'text-emerald-400 bg-emerald-500/10',
-  shopping: 'text-pink-400 bg-pink-500/10',
+  shopping: 'text-blue-400 bg-blue-500/10',
 };
 
 const statusIcons: Record<string, typeof CheckCircle2> = {
@@ -145,7 +145,7 @@ export default function ActivityFeed() {
             className={cn(
               'inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-[13px] font-medium whitespace-nowrap transition-all',
               filter === f.key
-                ? 'bg-indigo-500/15 text-indigo-400 ring-1 ring-indigo-500/20'
+                ? 'bg-white/[0.06] text-white ring-1 ring-white/20'
                 : 'text-white/40 hover:text-white/60 hover:bg-white/5'
             )}
           >
@@ -172,7 +172,7 @@ export default function ActivityFeed() {
 
       {loading ? (
         <div className="flex items-center justify-center py-20">
-          <Loader2 className="h-8 w-8 animate-spin text-indigo-400" />
+          <Loader2 className="h-6 w-6 animate-spin text-white/40" />
         </div>
       ) : filtered.length === 0 ? (
         <Card className="flex flex-col items-center justify-center py-20 text-center">

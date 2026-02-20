@@ -2,11 +2,10 @@
 import { cn } from '@/lib/utils';
 import { ReactNode } from 'react';
 
-export function Card({ children, className, glow }: { children: ReactNode; className?: string; glow?: boolean }) {
+export function Card({ children, className }: { children: ReactNode; className?: string; glow?: boolean }) {
   return (
     <div className={cn(
-      'glass p-6 animate-fade-up',
-      glow && 'glow-accent',
+      'bg-white/[0.03] border border-white/[0.08] rounded-xl p-6 animate-fade-up',
       className
     )}>
       {children}
@@ -28,7 +27,7 @@ export function CardDescription({ children }: { children: ReactNode }) {
 
 export function GlassPanel({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <div className={cn('glass-subtle p-5', className)}>
+    <div className={cn('bg-white/[0.02] border border-white/[0.05] rounded-lg p-5', className)}>
       {children}
     </div>
   );

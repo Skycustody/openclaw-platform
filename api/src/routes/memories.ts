@@ -1,10 +1,11 @@
 import { Router, Response, NextFunction } from 'express';
-import { AuthRequest, authenticate } from '../middleware/auth';
+import { AuthRequest, authenticate, requireActiveSubscription } from '../middleware/auth';
 import { memorySystem } from '../services/memory';
 import { MemoryType } from '../types';
 
 const router = Router();
 router.use(authenticate);
+router.use(requireActiveSubscription);
 
 // List memories with search/filter
 router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {

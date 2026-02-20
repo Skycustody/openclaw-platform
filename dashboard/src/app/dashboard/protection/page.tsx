@@ -72,7 +72,7 @@ export default function ProtectionPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
+        <Loader2 className="h-6 w-6 animate-spin text-white/40" />
       </div>
     );
   }
@@ -87,8 +87,8 @@ export default function ProtectionPage() {
     <div className="space-y-8">
       <div className="animate-fade-up">
         <div className="flex items-center gap-3 mb-2">
-          <div className="rounded-2xl bg-indigo-500/10 p-3">
-            <Shield className="h-6 w-6 text-indigo-400" />
+          <div className="rounded-2xl bg-white/[0.06] p-3">
+            <Shield className="h-6 w-6 text-white/40" />
           </div>
           <h1 className="text-[28px] font-bold text-white tracking-tight">Protect Your Tokens</h1>
         </div>
@@ -150,12 +150,12 @@ export default function ProtectionPage() {
                 onClick={() => setSettings((s) => ({ ...s, limitBehavior: opt.id }))}
                 className={`w-full flex items-center gap-4 p-4 rounded-2xl border transition-all text-left ${
                   selected
-                    ? 'border-indigo-500/50 bg-indigo-500/5'
+                    ? 'border-white/[0.08] bg-white/[0.06]'
                     : 'border-white/5 hover:border-white/10 hover:bg-white/[0.02]'
                 }`}
               >
                 <div className={`h-5 w-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${
-                  selected ? 'border-indigo-500 bg-indigo-500' : 'border-white/15'
+                  selected ? 'border-white bg-white' : 'border-white/15'
                 }`}>
                   {selected && <div className="h-2 w-2 rounded-full bg-white" />}
                 </div>
@@ -173,7 +173,7 @@ export default function ProtectionPage() {
 
       <Card className="animate-fade-up">
         <div className="flex items-center gap-3 mb-4">
-          <Moon className="h-5 w-5 text-purple-400" />
+          <Moon className="h-5 w-5 text-blue-400" />
           <div>
             <CardTitle>Quiet Hours</CardTitle>
             <CardDescription>Pause your agent during certain hours — like overnight</CardDescription>
@@ -254,7 +254,7 @@ export default function ProtectionPage() {
                   onClick={() => setSettings((s) => ({ ...s, lowBalanceWarning: days }))}
                   className={`px-4 py-2.5 rounded-xl text-[14px] font-medium transition-all ${
                     settings.lowBalanceWarning === days
-                      ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/30'
+                      ? 'bg-white/[0.06] text-white border border-white/[0.08]'
                       : 'bg-white/5 text-white/40 border border-white/5 hover:border-white/10'
                   }`}
                 >
@@ -269,7 +269,7 @@ export default function ProtectionPage() {
       <GlassPanel className="animate-fade-up">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Zap className="h-5 w-5 text-indigo-400" />
+            <Zap className="h-5 w-5 text-white/40" />
             <div>
               <p className="text-[14px] text-white/70">Want tokens to refill automatically?</p>
               <p className="text-[13px] text-white/40">Set up Auto Top-Up in your token settings</p>
