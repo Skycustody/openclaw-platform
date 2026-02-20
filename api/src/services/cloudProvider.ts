@@ -169,7 +169,7 @@ RUN npm install -g openclaw@latest
 WORKDIR /data
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 CMD openclaw health || exit 1
 EXPOSE 18789
-CMD ["openclaw", "gateway", "--port", "18789", "--allow-unconfigured", "run"]
+CMD ["openclaw", "gateway", "--port", "18789", "--bind", "lan", "--allow-unconfigured", "run"]
 DEOF
 
 cat > /tmp/openclaw-build/openclaw.default.json <<'JEOF'
@@ -177,6 +177,11 @@ cat > /tmp/openclaw-build/openclaw.default.json <<'JEOF'
   "server": {
     "port": 18789,
     "host": "0.0.0.0"
+  },
+  "gateway": {
+    "bind": "lan",
+    "controlUi": { "enabled": true, "allowInsecureAuth": true },
+    "auth": { "mode": "token" }
   },
   "browser": {
     "enabled": true,

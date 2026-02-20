@@ -118,6 +118,11 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
   const internalSecret = process.env.INTERNAL_SECRET || 'changeme';
   const openclawConfig = {
     server: { port: 18789, host: '0.0.0.0' },
+    gateway: {
+      bind: 'lan',
+      controlUi: { enabled: true, allowInsecureAuth: true },
+      auth: { mode: 'token' },
+    },
     browser: {
       enabled: true,
       defaultProfile: 'browserless',

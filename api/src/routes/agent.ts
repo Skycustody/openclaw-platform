@@ -9,10 +9,17 @@ import { sshExec } from '../services/ssh';
 const router = Router();
 router.use(authenticate);
 
-/** Build the agent URL with the gateway auth token appended as a query param. */
+/**
+ * Build the agent URL with gateway auth token + gatewayUrl so the Control UI
+ * auto-connects without requiring the user to paste a token manually.
+ * The OpenClaw Control UI reads ?token= when ?gatewayUrl= is also present
+ * and stores both in localStorage for subsequent visits.
+ */
 async function agentUrl(subdomain: string, userId: string, server?: Server | null): Promise<string> {
   const domain = process.env.DOMAIN || 'yourdomain.com';
   const base = `https://${subdomain}.${domain}`;
+
+  let token: string | null = null;
 
   // Try DB first
   const row = await db.getOne<{ gateway_token: string }>(
@@ -20,10 +27,12 @@ async function agentUrl(subdomain: string, userId: string, server?: Server | nul
     [userId]
   ).catch(() => null);
 
-  if (row?.gateway_token) return `${base}?token=${row.gateway_token}`;
+  if (row?.gateway_token) {
+    token = row.gateway_token;
+  }
 
   // Fallback: retrieve from the running container via SSH
-  if (server) {
+  if (!token && server) {
     try {
       const containerName = (await db.getOne<User>('SELECT container_name FROM users WHERE id = $1', [userId]))
         ?.container_name || `openclaw-${userId.slice(0, 12)}`;
@@ -31,14 +40,19 @@ async function agentUrl(subdomain: string, userId: string, server?: Server | nul
         server.ip,
         `docker exec ${containerName} openclaw config get gateway.auth.token 2>/dev/null`
       );
-      const token = result.stdout.replace(/["\s]/g, '').trim();
-      if (token && token.length > 8) {
+      const fetched = result.stdout.replace(/["\s]/g, '').trim();
+      if (fetched && fetched.length > 8) {
+        token = fetched;
         await db.query('UPDATE users SET gateway_token = $1 WHERE id = $2', [token, userId]).catch(() => {});
-        return `${base}?token=${token}`;
       }
     } catch {
-      // SSH failed — return URL without token
+      // SSH failed
     }
+  }
+
+  if (token) {
+    const wsUrl = encodeURIComponent(`wss://${subdomain}.${domain}`);
+    return `${base}/?gatewayUrl=${wsUrl}&token=${token}`;
   }
 
   return base;
