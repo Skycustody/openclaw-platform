@@ -90,13 +90,17 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
     `-e BROWSERLESS_URL=wss://production-sfo.browserless.io?token=${browserlessToken}`,
     `-v /opt/openclaw/instances/${userId}:/data`,
     `--label traefik.enable=true`,
-    `--label "traefik.http.routers.${containerName}.rule=Host(\\\`${subdomain}.${domain}\\\`)"`,
+    `--label "traefik.http.routers.${containerName}.rule=Host(\\\"${subdomain}.${domain}\\\")"`,
     `--label "traefik.http.routers.${containerName}.entrypoints=web"`,
     `--label traefik.http.services.${containerName}.loadbalancer.server.port=18789`,
     `${process.env.DOCKER_REGISTRY || 'openclaw/openclaw'}:latest`,
   ].join(' ');
 
-  await sshExec(server.ip, createCmd);
+  const execResult = await sshExec(server.ip, createCmd);
+  if (execResult.code !== 0) {
+    console.error(`Container create failed for ${containerName}:`, execResult.stderr || execResult.stdout);
+    throw new Error(execResult.stderr || execResult.stdout || 'docker run failed');
+  }
 
   // Step 6: Wait for container to be ready
   try {
