@@ -174,7 +174,7 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
       'RUN npm install -g openclaw@latest',
       'WORKDIR /data',
       'EXPOSE 18789',
-      'CMD ["sh", "-c", "mkdir -p /root/.openclaw && cp /data/openclaw.json /root/.openclaw/openclaw.json 2>/dev/null; openclaw doctor --fix 2>/dev/null || true; exec openclaw gateway --port 18789 --bind lan --allow-unconfigured run"]',
+      'CMD ["sh", "-c", "openclaw doctor --fix 2>/dev/null || true; exec openclaw gateway --port 18789 --bind lan --allow-unconfigured run"]',
     ].join('\n');
     const dockerfileB64 = Buffer.from(dockerfile).toString('base64');
     const defaultCfgB64 = Buffer.from(JSON.stringify(openclawConfig, null, 2)).toString('base64');
@@ -196,8 +196,8 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
   // Give Node.js ~75% of the container memory for its heap
   const heapMb = Math.floor(limits.ramMb * 0.75);
 
-  // Run container — copy config, auto-fix invalid keys, then start gateway
-  const startScript = `sh -c 'mkdir -p /root/.openclaw && cp /data/openclaw.json /root/.openclaw/openclaw.json 2>/dev/null; openclaw doctor --fix 2>/dev/null || true; exec openclaw gateway --port 18789 --bind lan --allow-unconfigured run'`;
+  // Mount the instance directory at /root/.openclaw so config + credentials persist
+  const startScript = `sh -c 'openclaw doctor --fix 2>/dev/null || true; exec openclaw gateway --port 18789 --bind lan --allow-unconfigured run'`;
   const dockerRunCmd = [
     'docker run -d',
     `--name ${containerName}`,
@@ -214,7 +214,7 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
     `-e INTERNAL_SECRET=${internalSecret}`,
     `-e "BROWSERLESS_URL=wss://production-sfo.browserless.io?token=${browserlessToken}"`,
     `-e OPENCLAW_GATEWAY_TOKEN=${gatewayToken}`,
-    `-v /opt/openclaw/instances/${userId}:/data`,
+    `-v /opt/openclaw/instances/${userId}:/root/.openclaw`,
     `--label traefik.enable=true`,
     `--label 'traefik.http.routers.${containerName}.rule=Host(\`${hostRule}\`)'`,
     `--label 'traefik.http.routers.${containerName}.entrypoints=web'`,

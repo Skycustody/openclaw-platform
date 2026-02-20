@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { Card, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -10,7 +10,7 @@ import api from '@/lib/api';
 import { useStore } from '@/lib/store';
 import {
   Check, Lock, Loader2, QrCode, MessageSquare,
-  ArrowRight, Link2Off, AlertCircle,
+  ArrowRight, Link2Off, AlertCircle, RefreshCw,
 } from 'lucide-react';
 
 interface ChannelStatuses {
@@ -63,15 +63,26 @@ export default function ConnectApps() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [connecting, setConnecting] = useState<string | null>(null);
+
+  // Telegram modal
   const [showTelegramModal, setShowTelegramModal] = useState(false);
+  const [telegramToken, setTelegramToken] = useState('');
+  const [tokenError, setTokenError] = useState('');
+
+  // Discord modal
+  const [showDiscordModal, setShowDiscordModal] = useState(false);
+  const [discordToken, setDiscordToken] = useState('');
+  const [discordError, setDiscordError] = useState('');
+
+  // WhatsApp modal
   const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
   const [whatsAppLoading, setWhatsAppLoading] = useState(false);
   const [whatsAppQr, setWhatsAppQr] = useState('');
   const [whatsAppError, setWhatsAppError] = useState('');
-  const [telegramToken, setTelegramToken] = useState('');
-  const [tokenError, setTokenError] = useState('');
-  const { user } = useStore();
+  const [whatsAppPaired, setWhatsAppPaired] = useState(false);
+  const statusPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const { user } = useStore();
   const isStarterPlan = user?.plan === 'starter';
 
   const fetchChannels = useCallback(async () => {
@@ -105,6 +116,15 @@ export default function ConnectApps() {
 
   useEffect(() => { fetchChannels(); }, [fetchChannels]);
 
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (statusPollRef.current) clearInterval(statusPollRef.current);
+    };
+  }, []);
+
+  // ── Telegram ──
+
   const connectTelegram = async () => {
     if (!telegramToken.trim()) {
       setTokenError('Please paste your bot token');
@@ -124,22 +144,105 @@ export default function ConnectApps() {
     }
   };
 
+  // ── Discord ──
+
+  const connectDiscord = async () => {
+    if (!discordToken.trim()) {
+      setDiscordError('Please paste your bot token');
+      return;
+    }
+    setDiscordError('');
+    setConnecting('discord');
+    try {
+      await api.post('/channels/discord/connect', { botToken: discordToken.trim() });
+      setDiscordToken('');
+      setShowDiscordModal(false);
+      await fetchChannels();
+    } catch (err: any) {
+      setDiscordError(err?.message || 'Could not connect. Double-check your token and try again.');
+    } finally {
+      setConnecting(null);
+    }
+  };
+
+  // ── WhatsApp ──
+
   const startWhatsAppPairing = async () => {
     setWhatsAppLoading(true);
     setWhatsAppError('');
     setWhatsAppQr('');
+    setWhatsAppPaired(false);
+
+    // Stop any existing status polling
+    if (statusPollRef.current) {
+      clearInterval(statusPollRef.current);
+      statusPollRef.current = null;
+    }
+
     try {
-      const data = await api.post<{ qrData: string }>('/whatsapp/pair');
-      setWhatsAppQr(data.qrData || '');
-      if (!data.qrData) {
-        setWhatsAppError('No QR data received. Your agent container may not be running.');
+      const data = await api.post<{ qrData: string }>('/channels/whatsapp/pair');
+      const qr = data.qrData || '';
+      setWhatsAppQr(qr);
+
+      if (!qr) {
+        setWhatsAppError('No QR data received. Ensure your agent is online, then click Generate QR Code again.');
+        return;
       }
+
+      // Start polling for pairing status
+      statusPollRef.current = setInterval(async () => {
+        try {
+          const status = await api.get<{ paired: boolean }>('/channels/whatsapp/status');
+          if (status.paired) {
+            setWhatsAppPaired(true);
+            setWhatsAppQr('');
+            if (statusPollRef.current) {
+              clearInterval(statusPollRef.current);
+              statusPollRef.current = null;
+            }
+            await fetchChannels();
+          }
+        } catch {
+          // ignore polling errors
+        }
+      }, 5000);
     } catch (err: any) {
-      setWhatsAppError(err?.message || 'Could not start WhatsApp pairing. Make sure your agent is running.');
+      setWhatsAppError(err?.message || 'Could not start WhatsApp pairing. Open Agent first, wait until online, then retry.');
     } finally {
       setWhatsAppLoading(false);
     }
   };
+
+  const closeWhatsAppModal = () => {
+    setShowWhatsAppModal(false);
+    setWhatsAppQr('');
+    setWhatsAppError('');
+    setWhatsAppPaired(false);
+    if (statusPollRef.current) {
+      clearInterval(statusPollRef.current);
+      statusPollRef.current = null;
+    }
+  };
+
+  // ── Extract QR block from output ──
+
+  function extractQrBlock(raw: string): string {
+    const lines = raw.split('\n');
+    let firstQr = -1;
+    let lastQr = -1;
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].includes('\u2588') || lines[i].includes('\u2584') || lines[i].includes('\u2580')) {
+        if (firstQr === -1) firstQr = i;
+        lastQr = i;
+      }
+    }
+    if (firstQr >= 0 && lastQr > firstQr) {
+      return lines.slice(firstQr, lastQr + 1).join('\n');
+    }
+    return raw;
+  }
+
+  // ── Disconnect ──
 
   const disconnect = async (platform: string) => {
     setConnecting(platform);
@@ -150,6 +253,15 @@ export default function ConnectApps() {
       setChannels((prev) => prev.map((c) => c.platform === platform ? { ...c, connected: false } : c));
     } finally {
       setConnecting(null);
+    }
+  };
+
+  const openConnect = (platform: string) => {
+    if (platform === 'telegram') setShowTelegramModal(true);
+    else if (platform === 'discord') setShowDiscordModal(true);
+    else if (platform === 'whatsapp') {
+      setShowWhatsAppModal(true);
+      startWhatsAppPairing();
     }
   };
 
@@ -245,13 +357,7 @@ export default function ConnectApps() {
                 <Button
                   variant="primary"
                   size="sm"
-                  onClick={() => {
-                    if (ch.platform === 'telegram') setShowTelegramModal(true);
-                    else if (ch.platform === 'whatsapp') {
-                      setShowWhatsAppModal(true);
-                      startWhatsAppPairing();
-                    }
-                  }}
+                  onClick={() => openConnect(ch.platform)}
                 >
                   <ArrowRight className="h-3.5 w-3.5" />
                   Connect
@@ -262,7 +368,7 @@ export default function ConnectApps() {
         })}
       </div>
 
-      {/* Telegram Modal */}
+      {/* ── Telegram Modal ── */}
       <Modal
         open={showTelegramModal}
         onClose={() => { setShowTelegramModal(false); setTelegramToken(''); setTokenError(''); }}
@@ -301,26 +407,96 @@ export default function ConnectApps() {
         </div>
       </Modal>
 
-      {/* WhatsApp Modal */}
+      {/* ── Discord Modal ── */}
+      <Modal
+        open={showDiscordModal}
+        onClose={() => { setShowDiscordModal(false); setDiscordToken(''); setDiscordError(''); }}
+        title="Connect Discord"
+      >
+        <div className="space-y-5">
+          <div className="space-y-3">
+            {[
+              ['1', 'Go to discord.com/developers/applications and create a New Application'],
+              ['2', 'Click "Bot" in the sidebar, then click "Reset Token" to get your bot token'],
+              ['3', 'Enable "Message Content Intent" under Privileged Gateway Intents'],
+              ['4', 'Go to OAuth2 URL Generator, select "bot" + "applications.commands", add permissions (Send Messages, Read Message History, View Channels), and invite the bot to your server'],
+              ['5', 'Paste the bot token below'],
+            ].map(([num, text]) => (
+              <div key={num} className="flex items-start gap-3 p-3 rounded-lg bg-white/[0.03] border border-white/[0.04]">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/[0.08] text-white/60 text-[12px] font-bold shrink-0">{num}</span>
+                <p className="text-[14px] text-white/70">{text}</p>
+              </div>
+            ))}
+          </div>
+
+          <Input
+            label="Bot Token"
+            placeholder="Paste your Discord bot token"
+            value={discordToken}
+            onChange={(e) => { setDiscordToken(e.target.value); setDiscordError(''); }}
+            error={discordError}
+          />
+
+          <div className="flex justify-end gap-2">
+            <Button variant="glass" size="md" onClick={() => { setShowDiscordModal(false); setDiscordToken(''); setDiscordError(''); }}>
+              Cancel
+            </Button>
+            <Button variant="primary" size="md" onClick={connectDiscord} loading={connecting === 'discord'} disabled={!discordToken.trim()}>
+              Connect Discord
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ── WhatsApp Modal ── */}
       <Modal
         open={showWhatsAppModal}
-        onClose={() => { setShowWhatsAppModal(false); setWhatsAppQr(''); setWhatsAppError(''); }}
+        onClose={closeWhatsAppModal}
         title="Connect WhatsApp"
       >
         <div className="space-y-5">
-          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-white/10 bg-white/[0.02] p-10">
-            {whatsAppLoading ? (
+          <div className="space-y-2 rounded-lg border border-white/10 bg-white/[0.02] p-3">
+            <p className="text-[13px] font-medium text-white/80">How to connect WhatsApp</p>
+            <ol className="list-decimal space-y-1 pl-5 text-[12px] text-white/55">
+              <li>Wait for the QR code to appear below (takes a few seconds).</li>
+              <li>On your phone: WhatsApp &rarr; Settings &rarr; Linked Devices &rarr; Link a Device.</li>
+              <li>Scan the QR code shown below within 20 seconds.</li>
+              <li>If the QR expires or fails, click Refresh QR Code to try again.</li>
+            </ol>
+          </div>
+
+          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-white/10 bg-white/[0.02] p-6">
+            {whatsAppPaired ? (
+              <>
+                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-500/20 mb-4">
+                  <Check className="h-8 w-8 text-green-400" />
+                </div>
+                <p className="text-[16px] font-semibold text-green-400 mb-1">WhatsApp Connected!</p>
+                <p className="text-[13px] text-white/40">Your agent can now send and receive WhatsApp messages.</p>
+              </>
+            ) : whatsAppLoading ? (
               <>
                 <Loader2 className="h-10 w-10 animate-spin text-white/20 mb-4" />
-                <p className="text-[14px] text-white/50">Generating QR code...</p>
+                <p className="text-[14px] text-white/50">Generating QR code from your agent...</p>
+                <p className="text-[12px] text-white/25 mt-1">This may take up to 15 seconds</p>
               </>
             ) : whatsAppQr ? (
               <>
-                <pre className="text-[10px] text-white/60 whitespace-pre-wrap break-all max-w-xs text-center mb-4 font-mono bg-white/5 p-4 rounded-lg">{whatsAppQr}</pre>
-                <p className="text-[14px] text-white/50 text-center">
-                  Open WhatsApp &rarr; Settings &rarr; Linked Devices &rarr; Link a Device
+                <div className="bg-white p-3 rounded-lg mb-4">
+                  <pre
+                    className="text-[5px] sm:text-[6px] md:text-[7px] leading-[1.05] text-black whitespace-pre font-mono select-none"
+                    style={{ letterSpacing: '-0.5px' }}
+                  >
+                    {extractQrBlock(whatsAppQr)}
+                  </pre>
+                </div>
+                <p className="text-[13px] text-white/50 text-center">
+                  Scan this QR code with your phone&apos;s WhatsApp
                 </p>
-                <p className="text-[12px] text-white/25 mt-2">Scan the QR code above with your phone</p>
+                <p className="text-[11px] text-white/25 mt-1 text-center">
+                  Checking for connection...
+                  <Loader2 className="inline h-3 w-3 animate-spin ml-1 align-text-bottom" />
+                </p>
               </>
             ) : (
               <>
@@ -331,20 +507,23 @@ export default function ConnectApps() {
               </>
             )}
           </div>
+
           {whatsAppError && (
             <div className="flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-[13px] text-red-400">
               <AlertCircle className="h-4 w-4 shrink-0" />
               {whatsAppError}
             </div>
           )}
+
           <div className="flex justify-end gap-2">
-            {!whatsAppQr && !whatsAppLoading && (
+            {!whatsAppPaired && !whatsAppLoading && (
               <Button variant="primary" size="md" onClick={startWhatsAppPairing}>
-                Generate QR Code
+                <RefreshCw className="h-3.5 w-3.5" />
+                {whatsAppQr ? 'Refresh QR Code' : 'Generate QR Code'}
               </Button>
             )}
-            <Button variant="glass" size="md" onClick={() => { setShowWhatsAppModal(false); setWhatsAppQr(''); setWhatsAppError(''); }}>
-              Close
+            <Button variant="glass" size="md" onClick={closeWhatsAppModal}>
+              {whatsAppPaired ? 'Done' : 'Close'}
             </Button>
           </div>
         </div>
