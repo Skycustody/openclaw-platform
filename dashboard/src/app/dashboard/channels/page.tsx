@@ -9,8 +9,8 @@ import { Modal } from '@/components/ui/Modal';
 import api from '@/lib/api';
 import { useStore } from '@/lib/store';
 import {
-  Check, Lock, Loader2, MessageSquare,
-  ArrowRight, Link2Off, AlertCircle, ExternalLink,
+  Check, Lock, Loader2, QrCode, MessageSquare,
+  ArrowRight, Link2Off, AlertCircle, RefreshCw,
 } from 'lucide-react';
 
 interface ChannelStatuses {
@@ -77,10 +77,9 @@ export default function ConnectApps() {
   // WhatsApp modal
   const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
   const [whatsAppLoading, setWhatsAppLoading] = useState(false);
-  const [whatsAppAgentUrl, setWhatsAppAgentUrl] = useState('');
+  const [whatsAppQr, setWhatsAppQr] = useState('');
   const [whatsAppError, setWhatsAppError] = useState('');
   const [whatsAppPaired, setWhatsAppPaired] = useState(false);
-  const [whatsAppStep, setWhatsAppStep] = useState<'idle' | 'setting-up' | 'ready' | 'paired'>('idle');
   const statusPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const { user } = useStore();
@@ -117,6 +116,7 @@ export default function ConnectApps() {
 
   useEffect(() => { fetchChannels(); }, [fetchChannels]);
 
+  // Cleanup polling on unmount
   useEffect(() => {
     return () => {
       if (statusPollRef.current) clearInterval(statusPollRef.current);
@@ -167,43 +167,51 @@ export default function ConnectApps() {
 
   // ── WhatsApp ──
 
+  // WhatsApp agent URL fallback
+  const [whatsAppAgentUrl, setWhatsAppAgentUrl] = useState('');
+
   const startWhatsAppPairing = async () => {
     setWhatsAppLoading(true);
     setWhatsAppError('');
-    setWhatsAppAgentUrl('');
+    setWhatsAppQr('');
     setWhatsAppPaired(false);
-    setWhatsAppStep('setting-up');
+    setWhatsAppAgentUrl('');
 
+    // Stop any existing status polling
     if (statusPollRef.current) {
       clearInterval(statusPollRef.current);
       statusPollRef.current = null;
     }
 
     try {
-      const data = await api.post<{ agentUrl: string; alreadyLinked: boolean }>('/channels/whatsapp/pair');
+      const data = await api.post<{ qrData: string; agentUrl: string }>('/channels/whatsapp/pair');
+      const qr = data.qrData || '';
+      const agentUrl = data.agentUrl || '';
+      setWhatsAppAgentUrl(agentUrl);
 
-      if (data.alreadyLinked) {
+      // Already linked
+      if (qr === '__ALREADY_LINKED__') {
         setWhatsAppPaired(true);
-        setWhatsAppStep('paired');
         await fetchChannels();
         return;
       }
 
-      setWhatsAppAgentUrl(data.agentUrl || '');
-      setWhatsAppStep('ready');
+      setWhatsAppQr(qr);
 
-      if (!data.agentUrl) {
-        setWhatsAppError('Could not get your agent URL. Please open your Agent from the dashboard first.');
+      if (!qr && agentUrl) {
+        setWhatsAppError(`QR code not found in logs. You can pair WhatsApp directly from your Agent Dashboard.`);
+      } else if (!qr) {
+        setWhatsAppError('Could not generate QR code. Ensure your agent is online, then try again.');
         return;
       }
 
-      // Poll for pairing status every 5 seconds
+      // Start polling for pairing status
       statusPollRef.current = setInterval(async () => {
         try {
           const status = await api.get<{ paired: boolean }>('/channels/whatsapp/status');
           if (status.paired) {
             setWhatsAppPaired(true);
-            setWhatsAppStep('paired');
+            setWhatsAppQr('');
             if (statusPollRef.current) {
               clearInterval(statusPollRef.current);
               statusPollRef.current = null;
@@ -215,8 +223,7 @@ export default function ConnectApps() {
         }
       }, 5000);
     } catch (err: any) {
-      setWhatsAppError(err?.message || 'Could not start WhatsApp setup. Open Agent first, then retry.');
-      setWhatsAppStep('idle');
+      setWhatsAppError(err?.message || 'Could not start WhatsApp pairing. Open Agent first, wait until online, then retry.');
     } finally {
       setWhatsAppLoading(false);
     }
@@ -224,15 +231,32 @@ export default function ConnectApps() {
 
   const closeWhatsAppModal = () => {
     setShowWhatsAppModal(false);
-    setWhatsAppAgentUrl('');
+    setWhatsAppQr('');
     setWhatsAppError('');
     setWhatsAppPaired(false);
-    setWhatsAppStep('idle');
     if (statusPollRef.current) {
       clearInterval(statusPollRef.current);
       statusPollRef.current = null;
     }
   };
+
+  // ── Extract QR block from output ──
+
+  function extractQrBlock(raw: string): string {
+    const lines = raw.split('\n');
+    let firstQr = -1;
+    let lastQr = -1;
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].includes('\u2588') || lines[i].includes('\u2584') || lines[i].includes('\u2580')) {
+        if (firstQr === -1) firstQr = i;
+        lastQr = i;
+      }
+    }
+    if (firstQr >= 0 && lastQr > firstQr) {
+      return lines.slice(firstQr, lastQr + 1).join('\n');
+    }
+    return raw;
+  }
 
   // ── Disconnect ──
 
@@ -447,71 +471,94 @@ export default function ConnectApps() {
         title="Connect WhatsApp"
       >
         <div className="space-y-5">
-          {whatsAppStep === 'paired' ? (
-            <div className="flex flex-col items-center justify-center py-6">
-              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-500/20 mb-4">
-                <Check className="h-8 w-8 text-green-400" />
-              </div>
-              <p className="text-[16px] font-semibold text-green-400 mb-1">WhatsApp Connected!</p>
-              <p className="text-[13px] text-white/40 text-center">Your agent can now send and receive WhatsApp messages.</p>
-            </div>
-          ) : whatsAppStep === 'setting-up' ? (
-            <div className="flex flex-col items-center justify-center py-8">
-              <Loader2 className="h-10 w-10 animate-spin text-white/20 mb-4" />
-              <p className="text-[14px] text-white/50">Setting up WhatsApp on your agent...</p>
-              <p className="text-[12px] text-white/25 mt-1">This may take a few seconds</p>
-            </div>
-          ) : whatsAppStep === 'ready' ? (
-            <>
-              <div className="space-y-3">
-                {[
-                  ['1', 'Click the button below to open your Agent Dashboard'],
-                  ['2', 'In the Agent Dashboard, you will see a WhatsApp QR code'],
-                  ['3', 'On your phone: WhatsApp \u2192 Settings \u2192 Linked Devices \u2192 Link a Device'],
-                  ['4', 'Scan the QR code shown in the Agent Dashboard'],
-                ].map(([num, text]) => (
-                  <div key={num} className="flex items-start gap-3 p-3 rounded-lg bg-white/[0.03] border border-white/[0.04]">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/[0.08] text-white/60 text-[12px] font-bold shrink-0">{num}</span>
-                    <p className="text-[14px] text-white/70">{text}</p>
-                  </div>
-                ))}
-              </div>
+          <div className="space-y-2 rounded-lg border border-white/10 bg-white/[0.02] p-3">
+            <p className="text-[13px] font-medium text-white/80">How to connect WhatsApp</p>
+            <ol className="list-decimal space-y-1 pl-5 text-[12px] text-white/55">
+              <li>Wait for the QR code to appear below (takes a few seconds).</li>
+              <li>On your phone: WhatsApp &rarr; Settings &rarr; Linked Devices &rarr; Link a Device.</li>
+              <li>Scan the QR code shown below within 20 seconds.</li>
+              <li>If the QR expires or fails, click Refresh QR Code to try again.</li>
+            </ol>
+          </div>
 
-              {whatsAppAgentUrl && (
-                <a href={whatsAppAgentUrl} target="_blank" rel="noopener noreferrer" className="block">
-                  <Button variant="primary" size="md" className="w-full">
-                    <ExternalLink className="h-4 w-4" />
-                    Open Agent Dashboard to Scan QR Code
-                  </Button>
-                </a>
-              )}
-
-              <div className="flex items-center gap-2 rounded-lg border border-blue-500/20 bg-blue-500/10 p-3 text-[13px] text-blue-400">
-                <Loader2 className="h-4 w-4 animate-spin shrink-0" />
-                Waiting for you to scan the QR code... This page will update automatically.
-              </div>
-            </>
-          ) : (
-            <div className="flex flex-col items-center justify-center py-8">
-              <p className="text-[14px] text-white/50">Click below to set up WhatsApp pairing</p>
-            </div>
-          )}
+          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-white/10 bg-white/[0.02] p-6">
+            {whatsAppPaired ? (
+              <>
+                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-500/20 mb-4">
+                  <Check className="h-8 w-8 text-green-400" />
+                </div>
+                <p className="text-[16px] font-semibold text-green-400 mb-1">WhatsApp Connected!</p>
+                <p className="text-[13px] text-white/40">Your agent can now send and receive WhatsApp messages.</p>
+              </>
+            ) : whatsAppLoading ? (
+              <>
+                <Loader2 className="h-10 w-10 animate-spin text-white/20 mb-4" />
+                <p className="text-[14px] text-white/50">Generating QR code from your agent...</p>
+                <p className="text-[12px] text-white/25 mt-1">This may take up to 15 seconds</p>
+              </>
+            ) : whatsAppQr ? (
+              <>
+                <div className="bg-white p-3 rounded-lg mb-4">
+                  <pre
+                    className="text-[5px] sm:text-[6px] md:text-[7px] leading-[1.05] text-black whitespace-pre font-mono select-none"
+                    style={{ letterSpacing: '-0.5px' }}
+                  >
+                    {extractQrBlock(whatsAppQr)}
+                  </pre>
+                </div>
+                <p className="text-[13px] text-white/50 text-center">
+                  Scan this QR code with your phone&apos;s WhatsApp
+                </p>
+                <p className="text-[11px] text-white/25 mt-1 text-center">
+                  Checking for connection...
+                  <Loader2 className="inline h-3 w-3 animate-spin ml-1 align-text-bottom" />
+                </p>
+              </>
+            ) : (
+              <>
+                <QrCode className="h-20 w-20 text-white/10 mb-4" />
+                <p className="text-[14px] text-white/50 text-center">
+                  {whatsAppError || 'Click below to generate a pairing QR code'}
+                </p>
+              </>
+            )}
+          </div>
 
           {whatsAppError && (
-            <div className="flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-[13px] text-red-400">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              {whatsAppError}
+            <div className="flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-[13px] text-red-400">
+              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+              <div>
+                <p>{whatsAppError}</p>
+                {whatsAppAgentUrl && !whatsAppQr && (
+                  <a
+                    href={whatsAppAgentUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2 inline-block text-blue-400 underline hover:text-blue-300"
+                  >
+                    Open Agent Dashboard to pair WhatsApp &rarr;
+                  </a>
+                )}
+              </div>
             </div>
           )}
 
           <div className="flex justify-end gap-2">
-            {whatsAppStep === 'idle' && (
-              <Button variant="primary" size="md" onClick={startWhatsAppPairing} loading={whatsAppLoading}>
-                Set Up WhatsApp
+            {!whatsAppPaired && !whatsAppLoading && (
+              <Button variant="primary" size="md" onClick={startWhatsAppPairing}>
+                <RefreshCw className="h-3.5 w-3.5" />
+                {whatsAppQr ? 'Refresh QR Code' : 'Generate QR Code'}
               </Button>
             )}
+            {whatsAppAgentUrl && !whatsAppPaired && (
+              <a href={whatsAppAgentUrl} target="_blank" rel="noopener noreferrer">
+                <Button variant="glass" size="md">
+                  Open Agent Dashboard
+                </Button>
+              </a>
+            )}
             <Button variant="glass" size="md" onClick={closeWhatsAppModal}>
-              {whatsAppStep === 'paired' ? 'Done' : 'Close'}
+              {whatsAppPaired ? 'Done' : 'Close'}
             </Button>
           </div>
         </div>
