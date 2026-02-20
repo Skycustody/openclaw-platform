@@ -44,7 +44,7 @@ export function Sidebar() {
           <Zap className="h-4 w-4 text-white" />
         </div>
         {sidebarOpen && (
-          <span className="text-[15px] font-semibold text-white tracking-tight">OpenClaw</span>
+          <span className="text-[15px] font-semibold text-white tracking-tight">Valnaa</span>
         )}
         <button
           onClick={toggleSidebar}

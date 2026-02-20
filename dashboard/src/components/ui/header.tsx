@@ -45,7 +45,7 @@ export function Header() {
           className="flex items-center gap-2.5 rounded-md p-2 hover:bg-accent"
         >
           <Zap className="h-4 w-4" />
-          <span className="text-sm font-semibold tracking-tight">OpenClaw</span>
+          <span className="text-sm font-semibold tracking-tight">Valnaa</span>
         </Link>
         <div className="hidden items-center gap-2 md:flex">
           {links.map((link) => (

@@ -76,10 +76,13 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
 
   const createCmd = [
     `mkdir -p /opt/openclaw/instances/${userId}`,
-    `docker run -d`,
+    `&& docker pull ${process.env.DOCKER_REGISTRY || 'openclaw/openclaw'}:latest`,
+    `&& docker run -d`,
     `--name ${containerName}`,
     `--restart unless-stopped`,
+    `--network openclaw-net`,
     `--memory ${limits.ramMb}m`,
+    `--memory-swap ${limits.ramMb}m`,
     `--cpus ${limits.cpus}`,
     `-e USER_ID=${userId}`,
     `-e S3_BUCKET=${s3Bucket}`,

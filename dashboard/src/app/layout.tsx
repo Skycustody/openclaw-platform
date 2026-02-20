@@ -5,7 +5,7 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
 export const metadata: Metadata = {
-  title: 'OpenClaw — Your Personal AI Agent',
+  title: 'Valnaa — Your Personal AI Agent',
   description:
     'The most powerful open-source AI agent, hosted for you. Zero setup. Ready in 60 seconds.',
 };

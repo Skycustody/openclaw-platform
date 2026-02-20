@@ -766,6 +766,8 @@ Your platform uses AI models from OpenAI and Anthropic. Users' messages go throu
 
 ## Step 13 — Set Up Hostinger API (Auto Server Creation)
 
+> **Quick reference:** For a short "where to find everything" checklist (API key, script ID, domain, SSH), see **[WORKER_SETUP.md](WORKER_SETUP.md)**.
+
 **This is the magic part.** Your platform can automatically create brand-new servers when it needs more capacity. No manual work from you. Here's the idea: when your existing worker servers start getting full (85% of their RAM is being used by user containers), your platform calls Hostinger's API and says "create a new server for me." Hostinger spins one up in about 2 minutes, runs a setup script on it, and the new server registers itself with your platform. You wake up in the morning with more servers and you didn't do a thing.
 
 **Do I need this right away?** No. If you're just starting out with a few users, you can skip this step and manually create worker servers as needed. But setting it up now means you'll never have to worry about running out of capacity.

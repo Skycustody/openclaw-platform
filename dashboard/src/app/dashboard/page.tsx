@@ -140,7 +140,7 @@ export default function AgentControlCenter() {
             <div>
               <div className="flex items-center gap-3 mb-1">
                 <h2 className="text-[18px] font-semibold text-white">
-                  {agent?.subdomain || user?.subdomain || 'your-agent'}.openclaw.ai
+                  {agent?.subdomain || user?.subdomain || 'your-agent'}.valnaa.com
                 </h2>
                 <StatusBadge status={agent?.status || 'active'} />
               </div>
@@ -165,7 +165,7 @@ export default function AgentControlCenter() {
               size="lg"
               onClick={() => {
                 const sub = agent?.subdomain || user?.subdomain || 'agent';
-                window.open(`https://${sub}.openclaw.ai`, '_blank');
+                window.open(`https://${sub}.valnaa.com`, '_blank');
               }}
             >
               <ExternalLink className="h-4 w-4" />

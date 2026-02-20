@@ -119,7 +119,7 @@ function PricingContent() {
           <Link href="/" className="flex items-center gap-2.5 rounded-md p-1">
             <Zap className="h-4 w-4" />
             <span className="text-sm font-semibold tracking-tight">
-              OpenClaw
+              Valnaa
             </span>
           </Link>
           <Link

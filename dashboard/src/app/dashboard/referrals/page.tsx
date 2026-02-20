@@ -103,7 +103,7 @@ export default function ReferralsPage() {
     if (!data) return;
     const subject = encodeURIComponent('You should try this AI assistant');
     const body = encodeURIComponent(
-      `Hi!\n\nI've been using OpenClaw — it's a personal AI assistant that handles all kinds of tasks for me. I thought you'd love it too.\n\nSign up with my link and get started: ${data.referralLink}\n\nWe both benefit when you join!`
+      `Hi!\n\nI've been using Valnaa — it's a personal AI assistant that handles all kinds of tasks for me. I thought you'd love it too.\n\nSign up with my link and get started: ${data.referralLink}\n\nWe both benefit when you join!`
     );
     window.open(`mailto:?subject=${subject}&body=${body}`, '_blank');
   }
@@ -154,7 +154,7 @@ export default function ReferralsPage() {
 
           <div className="flex items-center gap-3 mb-5">
             <div className="flex-1 truncate rounded-2xl glass-subtle px-5 py-3.5 font-mono text-[15px] text-white/60 border border-white/[0.08]">
-              {data?.referralLink || 'https://openclaw.ai/ref/...'}
+              {data?.referralLink || 'https://valnaa.com/ref/...'}
             </div>
             <Button variant={copied ? 'glass' : 'primary'} onClick={copyLink}>
               {copied ? (
