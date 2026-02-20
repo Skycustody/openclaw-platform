@@ -1,15 +1,17 @@
 import db from '../lib/db';
 import { Server } from '../types';
-import { sshExec } from './ssh';
 import { cloudProvider } from './cloudProvider';
 
 const controlPlaneIp = (): string | null =>
   process.env.CONTROL_PLANE_IP?.trim() || null;
 
+/** Single-flight: only one "provision new server" at a time to avoid duplicate VPS. */
+let provisionInProgress: Promise<Server> | null = null;
+
 /** Never run user containers on the control plane — only on dedicated worker servers. */
 export async function findBestServer(requiredRamMb = 2048): Promise<Server> {
   const cpIp = controlPlaneIp();
-  const server = await db.getOne<Server>(
+  let server = await db.getOne<Server>(
     `SELECT * FROM servers
      WHERE status = 'active'
        AND (ram_total - ram_used) >= $1
@@ -21,10 +23,37 @@ export async function findBestServer(requiredRamMb = 2048): Promise<Server> {
 
   if (server) return server;
 
-  console.log('No worker servers available — provisioning new worker');
-  await cloudProvider.provisionNewServer();
-  const newServer = await waitForNewServer();
-  return newServer;
+  if (provisionInProgress) {
+    console.log('Another request is already provisioning a worker — waiting');
+    server = await provisionInProgress;
+    const hasCapacity = server && (server.ram_total - server.ram_used) >= requiredRamMb;
+    if (hasCapacity) return server;
+    provisionInProgress = null;
+  }
+
+  provisionInProgress = (async () => {
+    try {
+      server = await db.getOne<Server>(
+        `SELECT * FROM servers
+         WHERE status = 'active'
+           AND (ram_total - ram_used) >= $1
+           AND ($2::text IS NULL OR ip != $2)
+         ORDER BY ram_used DESC
+         LIMIT 1`,
+        [requiredRamMb, cpIp]
+      );
+      if (server) return server;
+
+      console.log('No worker servers available — provisioning new worker');
+      await cloudProvider.provisionNewServer();
+      const newServer = await waitForNewServer();
+      return newServer;
+    } finally {
+      provisionInProgress = null;
+    }
+  })();
+
+  return provisionInProgress;
 }
 
 async function waitForNewServer(timeoutMs = 600000): Promise<Server> {
@@ -115,8 +144,8 @@ export async function checkCapacity(): Promise<void> {
   for (const server of servers) {
     const usedPercent = (server.ram_used / server.ram_total) * 100;
     if (usedPercent > 85) {
-      console.log(`Worker ${server.hostname} at ${usedPercent.toFixed(1)}% — provisioning new worker`);
-      await cloudProvider.provisionNewServer();
+      console.log(`Worker ${server.hostname} at ${usedPercent.toFixed(1)}% — ensuring extra capacity`);
+      await findBestServer(2048);
       return;
     }
   }
