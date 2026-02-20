@@ -84,14 +84,7 @@ export default function MemoryPage() {
       await api.post('/memories', { content: newContent.trim(), pinned: newPinned });
       await fetchMemories();
     } catch {
-      const fake: Memory = {
-        id: Date.now().toString(),
-        content: newContent.trim(),
-        type: 'about_you',
-        pinned: newPinned,
-        createdAt: new Date().toISOString(),
-      };
-      setMemories((prev) => [fake, ...prev]);
+      // memory creation failed
     } finally {
       setNewContent('');
       setNewPinned(false);

@@ -145,25 +145,16 @@ export default function SchedulePage() {
     if (!newDescription.trim()) return;
     setCreating(true);
     try {
-      const created = await api.post<CronTask>('/cron', {
+      const res = await api.post<{ job: CronTask }>('/cron', {
         description: newDescription.trim(),
         frequency: newFrequency,
         time: newTime,
         tokenBudget: newTokenBudget,
         behavior: newBehavior,
       });
-      setTasks((prev) => [...prev, created]);
+      if (res.job) setTasks((prev) => [...prev, res.job]);
     } catch {
-      const fakeTask: CronTask = {
-        id: Date.now().toString(),
-        name: newDescription.trim().slice(0, 50),
-        description: newDescription.trim(),
-        scheduleLabel: FREQ_OPTIONS.find((f) => f.value === newFrequency)?.label || 'Custom',
-        enabled: true,
-        nextRun: new Date(Date.now() + 3600000).toISOString(),
-        tokenBudget: newTokenBudget,
-      };
-      setTasks((prev) => [...prev, fakeTask]);
+      // task creation failed
     } finally {
       setCreating(false);
       setShowCreate(false);
