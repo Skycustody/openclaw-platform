@@ -7,8 +7,35 @@
 }
 
 .glow::after {
-  position: absolute;
   content: "";
+  position: absolute;
+  inset: calc(-1 * var(--glowingeffect-border-width));
+  border: var(--glowingeffect-border-width) solid transparent;
+  border-radius: inherit;
+  background: var(--gradient);
+  background-attachment: fixed;
+  opacity: var(--active, 0);
+  transition: opacity 300ms;
+  mask-clip: padding-box, border-box;
+  -webkit-mask-clip: padding-box, border-box;
+  mask-composite: intersect;
+  -webkit-mask-composite: source-in;
+  mask-image:
+    linear-gradient(#0000, #0000),
+    conic-gradient(
+      from calc((var(--start) - var(--spread)) * 1deg),
+      #00000000 0deg,
+      #fff,
+      #00000000 calc(var(--spread) * 2deg)
+    );
+  -webkit-mask-image:
+    linear-gradient(#0000, #0000),
+    conic-gradient(
+      from calc((var(--start) - var(--spread)) * 1deg),
+      #00000000 0deg,
+      #fff,
+      #00000000 calc(var(--spread) * 2deg)
+    );
 }
 
 @theme {
