@@ -152,6 +152,7 @@ TEOF
 
 # Start Traefik
 docker run -d --name traefik --restart unless-stopped --network openclaw-net \\
+  -e DOCKER_API_VERSION=1.44 \\
   -p 80:80 -p 443:443 \\
   -v /var/run/docker.sock:/var/run/docker.sock:ro \\
   -v /opt/openclaw/config/traefik.yml:/etc/traefik/traefik.yml:ro \\
@@ -169,7 +170,7 @@ RUN npm install -g openclaw@latest
 WORKDIR /data
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 CMD openclaw health || exit 1
 EXPOSE 18789
-CMD ["sh", "-c", "mkdir -p /root/.openclaw && cp /data/openclaw.json /root/.openclaw/openclaw.json 2>/dev/null; exec openclaw gateway --port 18789 --bind lan --allow-unconfigured run"]
+CMD ["sh", "-c", "mkdir -p /root/.openclaw && cp /data/openclaw.json /root/.openclaw/openclaw.json 2>/dev/null; exec openclaw gateway --port 18789 --bind lan run"]
 DEOF
 
 cat > /tmp/openclaw-build/openclaw.default.json <<'JEOF'

@@ -108,20 +108,29 @@ export default function AgentControlCenter() {
 
   const handleOpenAgent = async () => {
     setActionLoading('open');
-    setProvisionMsg('Requesting agent...');
+    setProvisionMsg('Setting up agent...');
     try {
       const data = await api.post<{ url: string; status: string }>('/agent/open');
       if (!data.url) throw new Error('No URL returned');
 
       setProvisionMsg('Waiting for agent to come online...');
-      const origin = new URL(data.url).origin;
-      for (let i = 0; i < 30; i++) {
-        try {
-          await fetch(origin, { method: 'HEAD', mode: 'no-cors' });
-          break;
-        } catch {}
+
+      let ready = false;
+      for (let i = 0; i < 40; i++) {
         await new Promise(r => setTimeout(r, 3000));
+        try {
+          const check = await api.get<{ ready: boolean; httpCode?: string }>('/agent/ready');
+          if (check.ready) {
+            ready = true;
+            break;
+          }
+        } catch {}
         setProvisionMsg(`Waiting for agent to come online... (${(i + 1) * 3}s)`);
+      }
+
+      if (!ready) {
+        setProvisionMsg('Agent is still starting — opening anyway...');
+        await new Promise(r => setTimeout(r, 1000));
       }
 
       window.open(data.url, '_blank');

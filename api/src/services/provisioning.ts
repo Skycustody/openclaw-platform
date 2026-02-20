@@ -82,8 +82,11 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
 
   // Ensure Docker network and Traefik reverse proxy are running on the worker
   await sshExec(server.ip, `docker network create openclaw-net 2>/dev/null || true`);
+  // Always verify Traefik has DOCKER_API_VERSION set; recreate if missing
   const traefikCheck = await sshExec(server.ip, `docker inspect traefik --format='{{.State.Running}}' 2>/dev/null`).catch(() => null);
-  if (!traefikCheck || !traefikCheck.stdout.includes('true')) {
+  const traefikEnvCheck = await sshExec(server.ip, `docker inspect traefik --format='{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null`).catch(() => null);
+  const hasApiVersion = traefikEnvCheck?.stdout?.includes('DOCKER_API_VERSION');
+  if (!traefikCheck || !traefikCheck.stdout.includes('true') || !hasApiVersion) {
     console.log(`[provision] Starting Traefik on ${server.ip}`);
     const adminEmail = process.env.EMAIL_FROM?.replace('noreply@', '') || 'admin@yourdomain.com';
     const traefikCfgB64 = Buffer.from([
@@ -104,7 +107,7 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
       `mkdir -p /opt/openclaw/config`,
       `echo '${traefikCfgB64}' | base64 -d > /opt/openclaw/config/traefik.yml`,
       `docker rm -f traefik 2>/dev/null || true`,
-      `docker run -d --name traefik --restart unless-stopped --network openclaw-net -p 80:80 -p 443:443 -v /var/run/docker.sock:/var/run/docker.sock:ro -v /opt/openclaw/config/traefik.yml:/etc/traefik/traefik.yml:ro traefik:latest`,
+      `docker run -d --name traefik --restart unless-stopped --network openclaw-net -e DOCKER_API_VERSION=1.44 -p 80:80 -p 443:443 -v /var/run/docker.sock:/var/run/docker.sock:ro -v /opt/openclaw/config/traefik.yml:/etc/traefik/traefik.yml:ro traefik:latest`,
     ].join(' && '));
   }
 
@@ -127,7 +130,6 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
   });
 
   const openclawConfig = {
-    server: { port: 18789, host: '0.0.0.0' },
     gateway: {
       bind: 'lan',
       controlUi: { enabled: true, allowInsecureAuth: true },
@@ -187,7 +189,7 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
       'WORKDIR /data',
       'HEALTHCHECK --interval=30s --timeout=10s --retries=3 CMD openclaw health || exit 1',
       'EXPOSE 18789',
-      'CMD ["sh", "-c", "mkdir -p /root/.openclaw && cp /data/openclaw.json /root/.openclaw/openclaw.json 2>/dev/null; exec openclaw gateway --port 18789 --bind lan --allow-unconfigured run"]',
+      'CMD ["sh", "-c", "mkdir -p /root/.openclaw && cp /data/openclaw.json /root/.openclaw/openclaw.json 2>/dev/null; exec openclaw gateway --port 18789 --bind lan run"]',
     ].join('\n');
     const dockerfileB64 = Buffer.from(dockerfile).toString('base64');
     const defaultCfgB64 = Buffer.from(JSON.stringify(openclawConfig, null, 2)).toString('base64');
@@ -210,7 +212,7 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
   const heapMb = Math.floor(limits.ramMb * 0.75);
 
   // Run container — copy config to ~/.openclaw/ (default lookup path) before starting gateway
-  const startScript = `sh -c 'mkdir -p /root/.openclaw && cp /data/openclaw.json /root/.openclaw/openclaw.json 2>/dev/null; exec openclaw gateway --port 18789 --bind lan --allow-unconfigured run'`;
+  const startScript = `sh -c 'mkdir -p /root/.openclaw && cp /data/openclaw.json /root/.openclaw/openclaw.json 2>/dev/null; exec openclaw gateway --port 18789 --bind lan run'`;
   const dockerRunCmd = [
     'docker run -d',
     `--name ${containerName}`,
