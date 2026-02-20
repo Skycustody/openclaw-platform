@@ -91,8 +91,7 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
     `-v /opt/openclaw/instances/${userId}:/data`,
     `--label traefik.enable=true`,
     `--label "traefik.http.routers.${containerName}.rule=Host(\\\`${subdomain}.${domain}\\\`)"`,
-    `--label traefik.http.routers.${containerName}.tls=true`,
-    `--label traefik.http.routers.${containerName}.tls.certresolver=letsencrypt`,
+    `--label "traefik.http.routers.${containerName}.entrypoints=web"`,
     `--label traefik.http.services.${containerName}.loadbalancer.server.port=18789`,
     `${process.env.DOCKER_REGISTRY || 'openclaw/openclaw'}:latest`,
   ].join(' ');
