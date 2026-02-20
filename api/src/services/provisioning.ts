@@ -135,20 +135,6 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
       controlUi: { enabled: true, allowInsecureAuth: true },
       auth: { mode: 'token', token: gatewayToken },
     },
-    browser: {
-      enabled: true,
-      defaultProfile: 'browserless',
-      profiles: {
-        browserless: { type: 'cdp', cdpUrl: `wss://production-sfo.browserless.io?token=${browserlessToken}` },
-      },
-    },
-    memory: { enabled: true, maxItems: 2000 },
-    hooks: {
-      onMessage: {
-        url: `${apiUrl}/webhooks/container/message`,
-        headers: { 'x-internal-secret': internalSecret },
-      },
-    },
   };
 
   const configJson = JSON.stringify(openclawConfig, null, 2);

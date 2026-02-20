@@ -175,36 +175,10 @@ DEOF
 
 cat > /tmp/openclaw-build/openclaw.default.json <<'JEOF'
 {
-  "server": {
-    "port": 18789,
-    "host": "0.0.0.0"
-  },
   "gateway": {
     "bind": "lan",
     "controlUi": { "enabled": true, "allowInsecureAuth": true },
     "auth": { "mode": "token" }
-  },
-  "browser": {
-    "enabled": true,
-    "defaultProfile": "browserless",
-    "profiles": {
-      "browserless": {
-        "type": "cdp",
-        "cdpUrl": "\${BROWSERLESS_URL}"
-      }
-    }
-  },
-  "memory": {
-    "enabled": true,
-    "maxItems": 2000
-  },
-  "hooks": {
-    "onMessage": {
-      "url": "\${PLATFORM_API}/webhooks/container/message",
-      "headers": {
-        "x-internal-secret": "\${INTERNAL_SECRET}"
-      }
-    }
   }
 }
 JEOF

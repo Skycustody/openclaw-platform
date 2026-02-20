@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { internalAuth } from '../middleware/auth';
 import db from '../lib/db';
-import { getServerLoad, checkCapacity } from '../services/serverRegistry';
+import { getServerLoad, checkCapacity, getAllWorkersStats } from '../services/serverRegistry';
 import { provisionUser } from '../services/provisioning';
 import { User } from '../types';
 
@@ -52,6 +52,16 @@ router.get('/servers', async (_req: Request, res: Response, next: NextFunction) 
   try {
     const servers = await getServerLoad();
     res.json({ servers });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Actual container RAM usage (runs docker stats on each worker via SSH)
+router.get('/worker-stats', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const stats = await getAllWorkersStats();
+    res.json({ workers: stats });
   } catch (err) {
     next(err);
   }

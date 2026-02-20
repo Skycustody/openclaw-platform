@@ -1,6 +1,7 @@
 import db from '../lib/db';
 import { Server } from '../types';
 import { cloudProvider } from './cloudProvider';
+import { sshExec } from './ssh';
 
 const controlPlaneIp = (): string | null =>
   process.env.CONTROL_PLANE_IP?.trim() || null;
@@ -149,4 +150,64 @@ export async function checkCapacity(): Promise<void> {
       return;
     }
   }
+}
+
+export interface ContainerMemStat {
+  name: string;
+  memUsage: string;
+  memPerc: string;
+}
+
+export interface WorkerStatsResult {
+  id: string;
+  hostname: string;
+  ip: string;
+  ramTotalMb: number;
+  ramUsedBookedMb: number;
+  containers: ContainerMemStat[];
+  error?: string;
+}
+
+/** Run `docker stats --no-stream` on a worker and return actual RAM usage per container. */
+export async function getWorkerContainerStats(server: Server): Promise<WorkerStatsResult> {
+  const out: WorkerStatsResult = {
+    id: server.id,
+    hostname: server.hostname || server.ip || 'unknown',
+    ip: server.ip,
+    ramTotalMb: server.ram_total,
+    ramUsedBookedMb: server.ram_used,
+    containers: [],
+  };
+
+  try {
+    const result = await sshExec(
+      server.ip,
+      `docker stats --no-stream --format '{{.Name}}\t{{.MemUsage}}\t{{.MemPerc}}' 2>/dev/null || true`
+    );
+    const lines = (result.stdout || '').trim().split('\n').filter(Boolean);
+    for (const line of lines) {
+      const parts = line.split(/\t/);
+      if (parts.length >= 3) {
+        out.containers.push({
+          name: parts[0],
+          memUsage: parts[1],
+          memPerc: parts[2],
+        });
+      }
+    }
+  } catch (err: any) {
+    out.error = err?.message || 'SSH failed';
+  }
+
+  return out;
+}
+
+/** Get actual container RAM usage for all workers. */
+export async function getAllWorkersStats(): Promise<WorkerStatsResult[]> {
+  const cpIp = controlPlaneIp();
+  const servers = await db.getMany<Server>(
+    `SELECT * FROM servers WHERE status = 'active' AND ($1::text IS NULL OR ip != $1) ORDER BY hostname`,
+    [cpIp]
+  );
+  return Promise.all(servers.map((s) => getWorkerContainerStats(s)));
 }
