@@ -8,6 +8,7 @@ import {
   CreditCard, Gift, Store, LogOut, ChevronLeft, Zap, HelpCircle,
 } from 'lucide-react';
 import { useStore } from '@/lib/store';
+import { GlowingEffect } from '@/components/ui/glowing-effect';
 
 const navItems = [
   { href: '/dashboard', label: 'Home', icon: LayoutDashboard },
@@ -62,13 +63,25 @@ export function Sidebar() {
               key={item.href}
               href={item.href}
               className={cn(
-                'flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition-colors border-l-2 border-transparent',
+                'relative flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition-colors border-l-2 border-transparent',
                 isActive
                   ? 'bg-white/10 text-white border-white'
                   : 'text-white/40 hover:text-white/70 hover:bg-white/[0.04]'
               )}
               title={!sidebarOpen ? item.label : undefined}
             >
+              {isActive && (
+                <GlowingEffect
+                  spread={40}
+                  glow={true}
+                  disabled={false}
+                  proximity={80}
+                  inactiveZone={0.01}
+                  borderWidth={2}
+                  blur={2}
+                  variant="white"
+                />
+              )}
               <item.icon className={cn('h-[18px] w-[18px] shrink-0', isActive && 'text-white')} />
               {sidebarOpen && <span>{item.label}</span>}
             </Link>
