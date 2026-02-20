@@ -104,7 +104,7 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
       `mkdir -p /opt/openclaw/config`,
       `echo '${traefikCfgB64}' | base64 -d > /opt/openclaw/config/traefik.yml`,
       `docker rm -f traefik 2>/dev/null || true`,
-      `docker run -d --name traefik --restart unless-stopped --network openclaw-net -p 80:80 -p 443:443 -v /var/run/docker.sock:/var/run/docker.sock:ro -v /opt/openclaw/config/traefik.yml:/traefik.yml:ro traefik:latest`,
+      `docker run -d --name traefik --restart unless-stopped --network openclaw-net -p 80:80 -p 443:443 -v /var/run/docker.sock:/var/run/docker.sock:ro -v /opt/openclaw/config/traefik.yml:/etc/traefik/traefik.yml:ro traefik:latest`,
     ].join(' && '));
   }
 
@@ -248,16 +248,60 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
 
   console.log(`[provision] Container ${containerName} started: ${runResult.stdout.slice(0, 20)}`);
 
-  // Step 6: Wait for container to be ready
+  // Step 6: Wait for container to be ready + verify routing
   try {
     await waitForReady(server.ip, containerName, 60000);
     console.log(`[provision] Container ${containerName} is healthy`);
   } catch {
-    console.warn(`[provision] Container ${containerName} health check timed out but may still start`);
+    console.warn(`[provision] Container ${containerName} health check timed out — checking if it's still running`);
+  }
+
+  // Verify container is still alive (didn't crash on startup)
+  const aliveCheck = await sshExec(
+    server.ip,
+    `docker inspect ${containerName} --format='{{.State.Running}}' 2>/dev/null`
+  ).catch(() => null);
+
+  if (!aliveCheck || !aliveCheck.stdout.includes('true')) {
+    const crashLogs = await sshExec(server.ip, `docker logs --tail 30 ${containerName} 2>&1`).catch(() => null);
+    console.error(`[provision] Container ${containerName} crashed! Logs:\n${crashLogs?.stdout || 'no logs'}`);
+    // Try restarting once
+    console.log(`[provision] Attempting restart of ${containerName}`);
+    await sshExec(server.ip, `docker start ${containerName} 2>/dev/null`).catch(() => null);
+    await new Promise(r => setTimeout(r, 5000));
+    const retry = await sshExec(
+      server.ip,
+      `docker inspect ${containerName} --format='{{.State.Running}}' 2>/dev/null`
+    ).catch(() => null);
+    if (!retry || !retry.stdout.includes('true')) {
+      console.error(`[provision] Container ${containerName} won't stay running`);
+    }
   }
 
   // Step 7: Create DNS record pointing subdomain → worker IP
   await cloudflareDNS.upsertRecord(subdomain, server.ip);
+
+  // Step 7b: Verify Traefik routes to the container (quick probe, non-blocking)
+  for (let i = 0; i < 5; i++) {
+    const probe = await sshExec(
+      server.ip,
+      `curl -sf -o /dev/null -w '%{http_code}' -H 'Host: ${hostRule}' --max-time 3 http://127.0.0.1/ 2>/dev/null || echo 000`
+    ).catch(() => null);
+    const code = probe?.stdout?.trim();
+    if (code === '200' || code === '101') {
+      console.log(`[provision] Traefik routing verified for ${hostRule} (HTTP ${code})`);
+      break;
+    }
+    if (i < 4) {
+      console.log(`[provision] Traefik not routing yet for ${hostRule} (HTTP ${code}), retrying in 3s...`);
+      await new Promise(r => setTimeout(r, 3000));
+    } else {
+      console.warn(`[provision] Traefik routing probe failed for ${hostRule} after retries (HTTP ${code})`);
+      // Check Traefik itself
+      const traefikStatus = await sshExec(server.ip, `docker logs --tail 10 traefik 2>&1`).catch(() => null);
+      console.warn(`[provision] Traefik logs:\n${traefikStatus?.stdout || 'unavailable'}`);
+    }
+  }
 
   // Step 8: Update status to active
   await db.query(

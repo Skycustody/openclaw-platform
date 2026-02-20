@@ -154,7 +154,7 @@ TEOF
 docker run -d --name traefik --restart unless-stopped --network openclaw-net \\
   -p 80:80 -p 443:443 \\
   -v /var/run/docker.sock:/var/run/docker.sock:ro \\
-  -v /opt/openclaw/config/traefik.yml:/traefik.yml:ro \\
+  -v /opt/openclaw/config/traefik.yml:/etc/traefik/traefik.yml:ro \\
   traefik:latest
 
 echo "Traefik started"

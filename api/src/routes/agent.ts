@@ -251,6 +251,55 @@ router.get('/logs', requireActiveSubscription, async (req: AuthRequest, res: Res
   }
 });
 
+/**
+ * Server-side readiness probe: SSH into the worker and curl the container
+ * through Traefik to confirm routing works end-to-end.
+ */
+router.get('/ready', authenticate, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const user = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [req.userId]);
+    if (!user?.server_id || !user?.subdomain) {
+      return res.json({ ready: false, reason: 'not_provisioned' });
+    }
+
+    const server = await db.getOne<Server>('SELECT * FROM servers WHERE id = $1', [user.server_id]);
+    if (!server) return res.json({ ready: false, reason: 'no_server' });
+
+    const containerName = user.container_name || `openclaw-${user.id}`;
+
+    // 1. Check if container is running
+    const inspect = await sshExec(
+      server.ip,
+      `docker inspect ${containerName} --format='{{.State.Running}}' 2>/dev/null`
+    ).catch(() => null);
+
+    if (!inspect || !inspect.stdout.includes('true')) {
+      // Grab last 15 lines of container logs for debugging
+      const logs = await sshExec(server.ip, `docker logs --tail 15 ${containerName} 2>&1`).catch(() => null);
+      return res.json({
+        ready: false,
+        reason: 'container_not_running',
+        logs: logs?.stdout?.slice(-500) || '',
+      });
+    }
+
+    // 2. Check Traefik can route to it (curl via localhost with Host header)
+    const domain = process.env.DOMAIN || 'yourdomain.com';
+    const hostHeader = `${user.subdomain}.${domain}`;
+    const probe = await sshExec(
+      server.ip,
+      `curl -sf -o /dev/null -w '%{http_code}' -H 'Host: ${hostHeader}' --max-time 5 http://127.0.0.1/ 2>/dev/null || echo 000`
+    ).catch(() => null);
+
+    const httpCode = probe?.stdout?.trim() || '000';
+    const isReady = httpCode === '200' || httpCode === '101';
+
+    return res.json({ ready: isReady, httpCode });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Touch activity (called by frontend periodically)
 router.post('/heartbeat', requireActiveSubscription, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {

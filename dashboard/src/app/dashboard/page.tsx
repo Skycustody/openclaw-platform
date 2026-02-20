@@ -5,91 +5,106 @@ import { Card, CardTitle, CardDescription } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { StatusBadge } from '@/components/ui/Badge';
 import api from '@/lib/api';
-import { formatTokens, formatTokensWithDays, formatDollars, timeAgo, getStatusMessage } from '@/lib/utils';
+import { formatTokens, timeAgo } from '@/lib/utils';
 import { useStore } from '@/lib/store';
 import {
-  ExternalLink, RotateCcw, Square, MessageSquare, DollarSign,
-  CheckCircle2, Zap, Moon, AlertTriangle, Loader2, ArrowUpRight,
-  Check, X,
+  ExternalLink, RotateCcw, Square, MessageSquare,
+  Zap, Moon, AlertTriangle, Loader2, ArrowUpRight,
+  Check, X, Coins, ListChecks,
 } from 'lucide-react';
 
-interface AgentStatus {
-  status: 'active' | 'online' | 'sleeping' | 'paused' | 'provisioning' | 'cancelled' | 'offline' | 'grace_period';
-  uptime: number;
-  lastActive: string;
-  messagesHandled: number;
-  totalSpentCents: number;
-  tasksDone: number;
-  tokenBalance: number;
-  dailyTokenRate: number;
-  tokenCap: number;
+interface ApiStatus {
+  status: string;
+  subscriptionStatus: string;
   subdomain: string;
-  channels: { name: string; connected: boolean }[];
+  plan: string;
+  lastActive: string;
+  createdAt: string;
+  stats: {
+    messagesToday: number;
+    tokensToday: number;
+    activeSkills: number;
+  };
 }
 
-function formatUptime(seconds: number): string {
-  const d = Math.floor(seconds / 86400);
-  const h = Math.floor((seconds % 86400) / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  if (d > 0) return `Running for ${d} day${d !== 1 ? 's' : ''}, ${h} hour${h !== 1 ? 's' : ''}`;
-  if (h > 0) return `Running for ${h} hour${h !== 1 ? 's' : ''}, ${m} minute${m !== 1 ? 's' : ''}`;
-  return `Running for ${m} minute${m !== 1 ? 's' : ''}`;
+interface ChannelStatuses {
+  telegram: boolean;
+  discord: boolean;
+  slack: boolean;
+  whatsapp: boolean;
+  signal: boolean;
 }
+
+interface TokenBalance {
+  balance: number;
+}
+
+type AgentDisplayStatus = 'active' | 'online' | 'sleeping' | 'paused' | 'provisioning' | 'cancelled' | 'offline' | 'grace_period';
+
+const STATUS_MESSAGES: Record<string, string> = {
+  active: 'Your agent is running and ready to handle tasks',
+  online: 'Your agent is running and ready to handle tasks',
+  sleeping: 'Your agent is sleeping to save resources',
+  paused: 'Your agent is paused — top up tokens to continue',
+  provisioning: 'Your agent is being set up...',
+  cancelled: 'Subscription cancelled',
+  offline: 'Your agent is offline',
+  grace_period: 'Your subscription is in grace period',
+};
+
+const CHANNEL_LABELS: Record<string, string> = {
+  telegram: 'Telegram',
+  whatsapp: 'WhatsApp',
+  discord: 'Discord',
+  slack: 'Slack',
+  signal: 'Signal',
+};
 
 export default function AgentControlCenter() {
-  const [agent, setAgent] = useState<AgentStatus | null>(null);
+  const [apiData, setApiData] = useState<ApiStatus | null>(null);
+  const [channels, setChannels] = useState<ChannelStatuses | null>(null);
+  const [tokenBalance, setTokenBalance] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [provisionMsg, setProvisionMsg] = useState<string | null>(null);
   const { user } = useStore();
 
-  const fetchStatus = useCallback(async () => {
+  const fetchAll = useCallback(async () => {
     try {
-      const data = await api.get<AgentStatus>('/agent/status');
-      setAgent(data);
+      const [statusRes, channelsRes, tokensRes] = await Promise.allSettled([
+        api.get<any>('/agent/status'),
+        api.get<any>('/channels'),
+        api.get<any>('/tokens/balance'),
+      ]);
+
+      if (statusRes.status === 'fulfilled') setApiData(statusRes.value);
+      if (channelsRes.status === 'fulfilled') setChannels(channelsRes.value.channels || null);
+      if (tokensRes.status === 'fulfilled') setTokenBalance(tokensRes.value.balance ?? 0);
     } catch {
-      setAgent({
-        status: 'active',
-        uptime: 273600,
-        lastActive: new Date(Date.now() - 120000).toISOString(),
-        messagesHandled: 47,
-        totalSpentCents: 23,
-        tasksDone: 8,
-        tokenBalance: 245000,
-        dailyTokenRate: 13600,
-        tokenCap: 500000,
-        subdomain: user?.subdomain || 'my-agent',
-        channels: [
-          { name: 'Telegram', connected: true },
-          { name: 'WhatsApp', connected: true },
-          { name: 'Discord', connected: false },
-          { name: 'Slack', connected: false },
-          { name: 'Signal', connected: false },
-        ],
-      });
+      // all settled, individual failures handled
     } finally {
       setLoading(false);
     }
-  }, [user?.subdomain]);
+  }, []);
 
   useEffect(() => {
-    fetchStatus();
-    const interval = setInterval(fetchStatus, 15000);
+    fetchAll();
+    const interval = setInterval(fetchAll, 30000);
     return () => clearInterval(interval);
-  }, [fetchStatus]);
+  }, [fetchAll]);
+
+  const displayStatus: AgentDisplayStatus = (apiData?.subscriptionStatus || apiData?.status || 'offline') as AgentDisplayStatus;
+  const statusMessage = STATUS_MESSAGES[displayStatus] || 'Unknown status';
 
   const handleAction = async (action: 'stop' | 'restart') => {
     setActionLoading(action);
     try {
       await api.post(`/agent/${action}`);
-      await fetchStatus();
-    } catch {
-      // handled
-    } finally {
+      await fetchAll();
+    } catch {} finally {
       setActionLoading(null);
     }
   };
-
-  const [provisionMsg, setProvisionMsg] = useState<string | null>(null);
 
   const handleOpenAgent = async () => {
     setActionLoading('open');
@@ -99,28 +114,21 @@ export default function AgentControlCenter() {
       if (!data.url) throw new Error('No URL returned');
 
       setProvisionMsg('Waiting for agent to come online...');
-
-      // Poll the URL until it responds (max ~90 seconds)
       const origin = new URL(data.url).origin;
-      let ready = false;
       for (let i = 0; i < 30; i++) {
         try {
-          const r = await fetch(origin, { method: 'HEAD', mode: 'no-cors' });
-          // mode: no-cors returns opaque response (status 0) but confirms the server is reachable
-          ready = true;
+          await fetch(origin, { method: 'HEAD', mode: 'no-cors' });
           break;
-        } catch {
-          // not ready yet
-        }
+        } catch {}
         await new Promise(r => setTimeout(r, 3000));
         setProvisionMsg(`Waiting for agent to come online... (${(i + 1) * 3}s)`);
       }
 
       window.open(data.url, '_blank');
-      await fetchStatus();
+      await fetchAll();
     } catch (err: any) {
       console.error('Failed to open agent:', err);
-      const sub = agent?.subdomain || user?.subdomain;
+      const sub = apiData?.subdomain || user?.subdomain;
       if (sub) window.open(`https://${sub}.valnaa.com`, '_blank');
     } finally {
       setActionLoading(null);
@@ -136,9 +144,14 @@ export default function AgentControlCenter() {
     );
   }
 
-  const status = agent ? getStatusMessage(agent.status) : getStatusMessage('active');
-  const tokenPct = agent ? Math.round((agent.tokenBalance / agent.tokenCap) * 100) : 0;
-  const tokenProgressColor = tokenPct > 50 ? 'progress-fill-green' : tokenPct > 20 ? 'progress-fill-amber' : 'progress-fill-red';
+  const stats = apiData?.stats || { messagesToday: 0, tokensToday: 0, activeSkills: 0 };
+  const subdomain = apiData?.subdomain || user?.subdomain || 'your-agent';
+  const channelEntries = channels
+    ? Object.entries(channels).map(([key, connected]) => ({
+        name: CHANNEL_LABELS[key] || key,
+        connected: !!connected,
+      }))
+    : [];
 
   return (
     <div className="space-y-6">
@@ -147,7 +160,7 @@ export default function AgentControlCenter() {
         <p className="mt-1 text-[15px] text-white/40">Everything about your agent, at a glance</p>
       </div>
 
-      {agent?.status === 'paused' && (
+      {displayStatus === 'paused' && (
         <div className="border border-red-500/20 bg-red-500/5 rounded-xl p-5 animate-fade-up">
           <div className="flex items-center gap-4">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-red-500/10">
@@ -172,24 +185,24 @@ export default function AgentControlCenter() {
               <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-white/[0.06] border border-white/[0.08]">
                 <Zap className="h-6 w-6 text-white/70" />
               </div>
-              {agent?.status === 'active' && (
+              {displayStatus === 'active' && (
                 <span className="absolute -top-1 -right-1 h-3.5 w-3.5 rounded-full bg-green-400 ring-2 ring-black" />
               )}
             </div>
             <div>
               <div className="flex items-center gap-3 mb-1">
                 <h2 className="text-[18px] font-semibold text-white">
-                  {agent?.subdomain || user?.subdomain || 'your-agent'}.valnaa.com
+                  {subdomain}.valnaa.com
                 </h2>
-                <StatusBadge status={agent?.status || 'active'} />
+                <StatusBadge status={displayStatus} />
               </div>
-              <p className="text-[14px] text-white/50">{status.message}</p>
-              {agent?.status === 'active' && (
+              <p className="text-[14px] text-white/50">{statusMessage}</p>
+              {apiData?.lastActive && displayStatus === 'active' && (
                 <p className="text-[13px] text-white/30 mt-1">
-                  {formatUptime(agent.uptime)} · Last active {timeAgo(agent.lastActive)}
+                  Last active {timeAgo(apiData.lastActive)}
                 </p>
               )}
-              {agent?.status === 'sleeping' && (
+              {displayStatus === 'sleeping' && (
                 <p className="text-[13px] text-blue-400/60 mt-1 flex items-center gap-1.5">
                   <Moon className="h-3.5 w-3.5" />
                   Wakes up instantly when you send a message
@@ -223,7 +236,7 @@ export default function AgentControlCenter() {
               size="md"
               onClick={() => handleAction('stop')}
               loading={actionLoading === 'stop'}
-              disabled={agent?.status === 'paused' || actionLoading !== null}
+              disabled={displayStatus === 'paused' || actionLoading !== null}
             >
               <Square className="h-4 w-4" />
             </Button>
@@ -235,29 +248,29 @@ export default function AgentControlCenter() {
       <div className="grid gap-4 sm:grid-cols-3">
         <Card>
           <div className="flex items-center justify-between mb-3">
-            <span className="text-[13px] text-white/40">Messages handled</span>
+            <span className="text-[13px] text-white/40">Messages today</span>
             <MessageSquare className="h-4 w-4 text-white/20" />
           </div>
-          <p className="text-[28px] font-bold text-white tabular-nums">{agent?.messagesHandled ?? 0}</p>
+          <p className="text-[28px] font-bold text-white tabular-nums">{stats.messagesToday}</p>
           <p className="text-[12px] text-white/30 mt-1">across all connected apps</p>
         </Card>
 
         <Card>
           <div className="flex items-center justify-between mb-3">
-            <span className="text-[13px] text-white/40">Total spent</span>
-            <DollarSign className="h-4 w-4 text-white/20" />
+            <span className="text-[13px] text-white/40">Tokens used today</span>
+            <Coins className="h-4 w-4 text-white/20" />
           </div>
-          <p className="text-[28px] font-bold text-white tabular-nums">{formatDollars(agent?.totalSpentCents ?? 0)}</p>
-          <p className="text-[12px] text-white/30 mt-1">since your agent started</p>
+          <p className="text-[28px] font-bold text-white tabular-nums">{formatTokens(stats.tokensToday)}</p>
+          <p className="text-[12px] text-white/30 mt-1">AI model consumption</p>
         </Card>
 
         <Card>
           <div className="flex items-center justify-between mb-3">
-            <span className="text-[13px] text-white/40">Tasks completed</span>
-            <CheckCircle2 className="h-4 w-4 text-white/20" />
+            <span className="text-[13px] text-white/40">Active skills</span>
+            <ListChecks className="h-4 w-4 text-white/20" />
           </div>
-          <p className="text-[28px] font-bold text-white tabular-nums">{agent?.tasksDone ?? 0}</p>
-          <p className="text-[12px] text-white/30 mt-1">scheduled and on-demand tasks</p>
+          <p className="text-[28px] font-bold text-white tabular-nums">{stats.activeSkills}</p>
+          <p className="text-[12px] text-white/30 mt-1">scheduled automations</p>
         </Card>
       </div>
 
@@ -271,21 +284,21 @@ export default function AgentControlCenter() {
             </Button>
           </div>
           <p className="text-[32px] font-bold text-white tabular-nums">
-            {formatTokensWithDays(agent?.tokenBalance ?? 0, agent?.dailyTokenRate ?? 0)}
+            {formatTokens(tokenBalance)}
           </p>
-          <div className="mt-4 space-y-2">
-            <div className="flex items-center justify-between text-[12px]">
-              <span className="text-white/30">{tokenPct}% remaining</span>
-              <span className="text-white/30">{formatTokens(agent?.tokenCap ?? 0)} total</span>
-            </div>
-            <div className="progress-bar h-2">
-              <div className={`progress-fill ${tokenProgressColor} h-full`} style={{ width: `${tokenPct}%` }} />
-            </div>
-          </div>
-          {tokenPct <= 20 && (
+          <p className="text-[13px] text-white/40 mt-2">
+            Available tokens for AI operations
+          </p>
+          {tokenBalance <= 50000 && tokenBalance > 0 && (
             <p className="mt-3 text-[13px] text-amber-400 flex items-center gap-1.5">
               <AlertTriangle className="h-3.5 w-3.5" />
               Running low — consider topping up
+            </p>
+          )}
+          {tokenBalance === 0 && (
+            <p className="mt-3 text-[13px] text-red-400 flex items-center gap-1.5">
+              <AlertTriangle className="h-3.5 w-3.5" />
+              No tokens remaining
             </p>
           )}
         </Card>
@@ -299,7 +312,7 @@ export default function AgentControlCenter() {
           </div>
           <CardDescription>Your agent sends and receives messages through these apps</CardDescription>
           <div className="mt-4 space-y-2">
-            {(agent?.channels ?? []).map((ch) => (
+            {channelEntries.length > 0 ? channelEntries.map((ch) => (
               <div key={ch.name} className="flex items-center justify-between py-2 px-3 rounded-lg bg-white/[0.02] border border-white/[0.04]">
                 <span className="text-[14px] text-white/70">{ch.name}</span>
                 {ch.connected ? (
@@ -314,7 +327,9 @@ export default function AgentControlCenter() {
                   </span>
                 )}
               </div>
-            ))}
+            )) : (
+              <p className="text-[13px] text-white/30 py-4 text-center">No channels configured yet</p>
+            )}
           </div>
         </Card>
       </div>
