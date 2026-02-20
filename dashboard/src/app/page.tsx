@@ -1,155 +1,420 @@
+'use client';
+
 import Link from 'next/link';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/Button';
+import { Header } from '@/components/ui/header';
+import { LogoCloud } from '@/components/ui/logo-cloud';
 import {
-  Zap, MessageSquare, Globe, Shield, Clock, Coins,
-  ArrowRight, Check,
+  Zap,
+  MessageSquare,
+  Globe,
+  Shield,
+  Clock,
+  Coins,
+  ArrowRight,
+  Check,
+  RocketIcon,
+  PhoneCallIcon,
+  Sparkles,
+  Bot,
+  BrainCircuit,
 } from 'lucide-react';
 
 const features = [
-  { icon: Zap, title: 'Ready in 60 Seconds', desc: 'Sign up, pay, and your personal AI agent is live — no setup needed.' },
-  { icon: MessageSquare, title: 'All Your Apps', desc: 'Connect to Telegram, WhatsApp, Discord, Slack and more.' },
-  { icon: Globe, title: 'Browses the Web', desc: 'Your agent searches, researches, checks prices, and extracts data.' },
-  { icon: Shield, title: 'Token Protection', desc: 'Smart budgets prevent surprise costs. You stay in control.' },
-  { icon: Clock, title: 'Works While You Sleep', desc: 'Schedule daily briefings, email summaries, price alerts — automated.' },
-  { icon: Coins, title: 'Saves You Money', desc: 'Smart routing picks the cheapest AI that can do the job.' },
+  {
+    icon: Zap,
+    title: 'Ready in 60 Seconds',
+    desc: 'Sign up, pay, and your personal AI agent is live — no setup needed.',
+  },
+  {
+    icon: MessageSquare,
+    title: 'All Your Apps',
+    desc: 'Connect to Telegram, WhatsApp, Discord, Slack and more.',
+  },
+  {
+    icon: Globe,
+    title: 'Browses the Web',
+    desc: 'Your agent searches, researches, checks prices, and extracts data.',
+  },
+  {
+    icon: Shield,
+    title: 'Token Protection',
+    desc: 'Smart budgets prevent surprise costs. You stay in control.',
+  },
+  {
+    icon: Clock,
+    title: 'Works While You Sleep',
+    desc: 'Schedule daily briefings, email summaries, price alerts — automated.',
+  },
+  {
+    icon: Coins,
+    title: 'Saves You Money',
+    desc: 'Smart routing picks the cheapest AI model that can do the job.',
+  },
 ];
 
 const plans = [
-  { name: 'Starter', price: 10, tokens: '500K', features: ['Personal AI agent', '500K tokens/month', '10 skills', 'Telegram only', 'Email support'] },
-  { name: 'Pro', price: 20, popular: true, tokens: '1.5M', features: ['Everything in Starter', '1.5M tokens/month', 'All 53 skills', 'All messaging apps', 'Browser access', 'Priority support'] },
-  { name: 'Business', price: 50, tokens: '5M', features: ['Everything in Pro', '5M tokens/month', 'Community templates', 'Maximum agent power', '100 scheduled tasks', 'Direct support line'] },
+  {
+    name: 'Starter',
+    price: 10,
+    tokens: '500K',
+    features: [
+      'Personal AI agent',
+      '500K tokens/month',
+      '10 skills',
+      'Telegram only',
+      'Email support',
+    ],
+  },
+  {
+    name: 'Pro',
+    price: 20,
+    popular: true,
+    tokens: '1.5M',
+    features: [
+      'Everything in Starter',
+      '1.5M tokens/month',
+      'All 53 skills',
+      'All messaging apps',
+      'Browser access',
+      'Priority support',
+    ],
+  },
+  {
+    name: 'Business',
+    price: 50,
+    tokens: '5M',
+    features: [
+      'Everything in Pro',
+      '5M tokens/month',
+      'Community templates',
+      'Maximum agent power',
+      '100 scheduled tasks',
+      'Direct support line',
+    ],
+  },
+];
+
+const logos = [
+  {
+    src: 'https://storage.efferd.com/logo/nvidia-wordmark.svg',
+    alt: 'Nvidia Logo',
+  },
+  {
+    src: 'https://storage.efferd.com/logo/supabase-wordmark.svg',
+    alt: 'Supabase Logo',
+  },
+  {
+    src: 'https://storage.efferd.com/logo/openai-wordmark.svg',
+    alt: 'OpenAI Logo',
+  },
+  {
+    src: 'https://storage.efferd.com/logo/turso-wordmark.svg',
+    alt: 'Turso Logo',
+  },
+  {
+    src: 'https://storage.efferd.com/logo/vercel-wordmark.svg',
+    alt: 'Vercel Logo',
+  },
+  {
+    src: 'https://storage.efferd.com/logo/github-wordmark.svg',
+    alt: 'GitHub Logo',
+  },
+  {
+    src: 'https://storage.efferd.com/logo/claude-wordmark.svg',
+    alt: 'Claude AI Logo',
+  },
+  {
+    src: 'https://storage.efferd.com/logo/clerk-wordmark.svg',
+    alt: 'Clerk Logo',
+  },
 ];
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-black text-white">
-      {/* Nav */}
-      <nav className="border-b border-white/[0.06]">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg">
-              <Zap className="h-4 w-4 text-white" />
-            </div>
-            <span className="text-[16px] font-semibold tracking-tight">OpenClaw</span>
-          </div>
-          <div className="flex items-center gap-4">
-            <Link href="/auth/login" className="text-[14px] text-white/50 hover:text-white transition-colors">
-              Sign In
-            </Link>
-            <Link href="/auth/signup" className="btn-primary px-5 py-2 text-[14px] inline-flex items-center rounded-lg">
-              Get Started
-            </Link>
-          </div>
-        </div>
-      </nav>
+    <div className="flex w-full flex-col">
+      <Header />
+      <main className="grow">
+        <HeroSection />
+        <LogosSection />
+        <FeaturesSection />
+        <PricingSection />
+        <CTASection />
+      </main>
+      <Footer />
+    </div>
+  );
+}
 
-      {/* Hero */}
-      <section className="mx-auto max-w-3xl px-6 pt-24 pb-28 text-center">
-        <h1 className="text-[48px] sm:text-[60px] font-bold leading-[1.05] tracking-tight">
+function HeroSection() {
+  return (
+    <section className="relative mx-auto w-full max-w-5xl">
+      {/* Radial glow */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 isolate hidden overflow-hidden lg:block"
+      >
+        <div className="absolute inset-0 -top-14 isolate -z-10 bg-[radial-gradient(35%_80%_at_49%_0%,rgba(250,250,250,0.08),transparent)]" />
+      </div>
+
+      {/* Vertical border lines */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 mx-auto hidden min-h-screen w-full max-w-5xl lg:block"
+      >
+        <div className="absolute inset-y-0 left-0 z-10 h-full w-px bg-foreground/15 [mask-image:linear-gradient(to_bottom,transparent,black_80%,transparent)]" />
+        <div className="absolute inset-y-0 right-0 z-10 h-full w-px bg-foreground/15 [mask-image:linear-gradient(to_bottom,transparent,black_80%,transparent)]" />
+      </div>
+
+      <div className="relative flex flex-col items-center justify-center gap-5 px-4 pt-32 pb-30">
+        {/* Inner decorative lines */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 -z-1 size-full overflow-hidden"
+        >
+          <div className="absolute inset-y-0 left-4 w-px bg-gradient-to-b from-transparent via-border to-border md:left-8" />
+          <div className="absolute inset-y-0 right-4 w-px bg-gradient-to-b from-transparent via-border to-border md:right-8" />
+          <div className="absolute inset-y-0 left-8 w-px bg-gradient-to-b from-transparent via-border/50 to-border/50 md:left-12" />
+          <div className="absolute inset-y-0 right-8 w-px bg-gradient-to-b from-transparent via-border/50 to-border/50 md:right-12" />
+        </div>
+
+        <a
+          className={cn(
+            'group mx-auto flex w-fit items-center gap-3 rounded-full border bg-card px-3 py-1 shadow',
+            'fade-in slide-in-from-bottom-10 animate-in fill-mode-backwards transition-all delay-500 duration-500 ease-out'
+          )}
+          href="#features"
+        >
+          <RocketIcon className="size-3 text-muted-foreground" />
+          <span className="text-xs">Open-source & self-hostable</span>
+          <span className="block h-5 border-l" />
+          <ArrowRight className="size-3 duration-150 ease-out group-hover:translate-x-1" />
+        </a>
+
+        <h1
+          className={cn(
+            'fade-in slide-in-from-bottom-10 animate-in text-balance fill-mode-backwards text-center text-4xl font-bold tracking-tight delay-100 duration-500 ease-out md:text-5xl lg:text-6xl'
+          )}
+        >
           Your Personal AI
           <br />
-          <span className="text-white/50">Ready in 60 Seconds</span>
+          <span className="text-muted-foreground">Ready in 60 Seconds</span>
         </h1>
-        <p className="mx-auto mt-6 max-w-xl text-[17px] leading-relaxed text-white/40">
-          The most powerful open-source AI agent, hosted for you. Zero setup.
-          Connect to WhatsApp, browse the web, automate your life.
+
+        <p className="fade-in slide-in-from-bottom-10 mx-auto max-w-md animate-in fill-mode-backwards text-center text-base tracking-wider text-foreground/70 delay-200 duration-500 ease-out sm:text-lg md:text-xl">
+          The most powerful open-source AI agent,
+          <br />
+          hosted for you. Zero setup.
         </p>
-        <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-3">
-          <Link
-            href="/auth/signup"
-            className="btn-primary inline-flex items-center gap-2 px-7 py-3.5 text-[15px] font-semibold rounded-lg"
-          >
-            Get Your AI Agent <ArrowRight className="h-4 w-4" />
+
+        <div className="fade-in slide-in-from-bottom-10 flex animate-in flex-row flex-wrap items-center justify-center gap-3 fill-mode-backwards pt-2 delay-300 duration-500 ease-out">
+          <Link href="#pricing">
+            <Button className="rounded-full" size="lg" variant="secondary">
+              <PhoneCallIcon className="mr-2 size-4" />
+              View Pricing
+            </Button>
           </Link>
-          <Link
-            href="#pricing"
-            className="btn-glass inline-flex items-center gap-2 px-7 py-3.5 text-[15px] rounded-lg"
-          >
-            View Pricing
+          <Link href="/auth/signup">
+            <Button className="rounded-full" size="lg">
+              Get Your AI Agent
+              <ArrowRight className="ms-2 size-4" />
+            </Button>
           </Link>
         </div>
-      </section>
+      </div>
+    </section>
+  );
+}
 
-      {/* Features */}
-      <section className="mx-auto max-w-5xl px-6 py-20 border-t border-white/[0.06]">
-        <h2 className="mb-3 text-center text-[28px] font-bold tracking-tight">Everything your agent can do</h2>
-        <p className="mb-14 text-center text-[15px] text-white/40">No coding. No technical knowledge needed.</p>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {features.map((f) => (
-            <div key={f.title} className="border border-white/[0.06] rounded-xl p-6 hover:border-white/[0.12] transition-colors">
-              <f.icon className="h-5 w-5 text-white/50 mb-4" />
-              <h3 className="mb-2 text-[15px] font-semibold">{f.title}</h3>
-              <p className="text-[14px] leading-relaxed text-white/40">{f.desc}</p>
+function LogosSection() {
+  return (
+    <section className="relative space-y-4 border-t border-border pt-6 pb-10">
+      <h2 className="text-center text-lg font-medium tracking-tight text-muted-foreground md:text-xl">
+        Powered by technology from{' '}
+        <span className="text-foreground">industry leaders</span>
+      </h2>
+      <div className="relative z-10 mx-auto max-w-4xl">
+        <LogoCloud logos={logos} />
+      </div>
+    </section>
+  );
+}
+
+function FeaturesSection() {
+  return (
+    <section
+      id="features"
+      className="relative mx-auto max-w-5xl border-t border-border px-6 py-24"
+    >
+      <div className="mx-auto max-w-2xl text-center">
+        <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs text-muted-foreground">
+          <Sparkles className="size-3" />
+          Capabilities
+        </div>
+        <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
+          Everything your agent can do
+        </h2>
+        <p className="mt-3 text-base text-muted-foreground">
+          No coding. No technical knowledge needed.
+        </p>
+      </div>
+
+      <div className="mt-16 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {features.map((f) => (
+          <div
+            key={f.title}
+            className="group rounded-xl border border-border bg-card/50 p-6 transition-all duration-300 hover:border-foreground/20 hover:bg-card"
+          >
+            <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-secondary">
+              <f.icon className="h-5 w-5 text-foreground/70" />
             </div>
-          ))}
-        </div>
-      </section>
+            <h3 className="mb-2 text-[15px] font-semibold">{f.title}</h3>
+            <p className="text-sm leading-relaxed text-muted-foreground">
+              {f.desc}
+            </p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
 
-      {/* Pricing */}
-      <section id="pricing" className="mx-auto max-w-5xl px-6 py-20 border-t border-white/[0.06]">
-        <h2 className="mb-3 text-center text-[28px] font-bold tracking-tight">Simple, transparent pricing</h2>
-        <p className="mb-14 text-center text-[15px] text-white/40">Start with what you need. Upgrade anytime. Cancel anytime.</p>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          {plans.map((plan) => (
-            <div
-              key={plan.name}
-              className={`relative border rounded-xl p-7 transition-colors ${
-                plan.popular
-                  ? 'border-white bg-white/[0.03]'
-                  : 'border-white/[0.06] hover:border-white/[0.12]'
-              }`}
-            >
-              {plan.popular && (
-                <span className="absolute -top-3 left-6 rounded-full bg-white text-black px-3 py-0.5 text-[11px] font-semibold">
-                  Most Popular
-                </span>
-              )}
-              <h3 className="text-[17px] font-semibold">{plan.name}</h3>
-              <p className="mt-3">
-                <span className="text-[36px] font-bold tracking-tight">${plan.price}</span>
-                <span className="text-[14px] text-white/40">/month</span>
-              </p>
-              <p className="mt-1 text-[13px] text-white/40">{plan.tokens} tokens included</p>
-              <ul className="mt-6 space-y-3">
-                {plan.features.map((f) => (
-                  <li key={f} className="flex items-start gap-2.5 text-[14px] text-white/60">
-                    <Check className="h-4 w-4 text-white/40 shrink-0 mt-0.5" />
-                    <span>{f}</span>
-                  </li>
-                ))}
-              </ul>
-              <Link
-                href="/auth/signup"
-                className={`mt-8 block w-full py-3 text-center text-[14px] font-medium rounded-lg transition-all ${
-                  plan.popular ? 'btn-primary' : 'btn-glass'
-                }`}
+function PricingSection() {
+  return (
+    <section
+      id="pricing"
+      className="relative mx-auto max-w-5xl border-t border-border px-6 py-24"
+    >
+      <div className="mx-auto max-w-2xl text-center">
+        <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs text-muted-foreground">
+          <Coins className="size-3" />
+          Pricing
+        </div>
+        <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
+          Simple, transparent pricing
+        </h2>
+        <p className="mt-3 text-base text-muted-foreground">
+          Start with what you need. Upgrade anytime. Cancel anytime.
+        </p>
+      </div>
+
+      <div className="mt-16 grid grid-cols-1 gap-5 sm:grid-cols-3">
+        {plans.map((plan) => (
+          <div
+            key={plan.name}
+            className={cn(
+              'relative flex flex-col rounded-xl border p-7 transition-all duration-300',
+              plan.popular
+                ? 'border-foreground bg-foreground/[0.03] shadow-[0_0_30px_rgba(250,250,250,0.04)]'
+                : 'border-border hover:border-foreground/20'
+            )}
+          >
+            {plan.popular && (
+              <span className="absolute -top-3 left-6 rounded-full bg-foreground px-3 py-0.5 text-[11px] font-semibold text-background">
+                Most Popular
+              </span>
+            )}
+            <h3 className="text-lg font-semibold">{plan.name}</h3>
+            <p className="mt-3">
+              <span className="text-4xl font-bold tracking-tight">
+                ${plan.price}
+              </span>
+              <span className="text-sm text-muted-foreground">/month</span>
+            </p>
+            <p className="mt-1 text-[13px] text-muted-foreground">
+              {plan.tokens} tokens included
+            </p>
+            <ul className="mt-6 flex-1 space-y-3">
+              {plan.features.map((f) => (
+                <li
+                  key={f}
+                  className="flex items-start gap-2.5 text-sm text-foreground/70"
+                >
+                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span>{f}</span>
+                </li>
+              ))}
+            </ul>
+            <Link href="/auth/signup" className="mt-8">
+              <Button
+                variant={plan.popular ? 'default' : 'outline'}
+                className="w-full"
+                size="lg"
               >
                 Get Started
-              </Link>
-            </div>
-          ))}
-        </div>
-      </section>
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </Link>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
 
-      {/* CTA */}
-      <section className="mx-auto max-w-3xl px-6 py-20 text-center">
-        <div className="border border-white/[0.08] rounded-xl p-12">
-          <h2 className="text-[24px] font-bold tracking-tight">Ready to meet your AI agent?</h2>
-          <p className="mt-3 text-[15px] text-white/40">From payment to working agent in under 60 seconds.</p>
-          <Link
-            href="/auth/signup"
-            className="btn-primary inline-flex items-center gap-2 mt-8 px-7 py-3.5 text-[15px] font-semibold rounded-lg"
-          >
-            Get Started Now <ArrowRight className="h-4 w-4" />
+function CTASection() {
+  return (
+    <section id="about" className="mx-auto max-w-3xl px-6 py-24">
+      <div className="relative overflow-hidden rounded-2xl border border-border bg-card p-12 text-center">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(250,250,250,0.04),transparent_70%)]"
+        />
+        <div className="relative">
+          <div className="mx-auto mb-6 flex h-12 w-12 items-center justify-center rounded-xl bg-secondary">
+            <Bot className="h-6 w-6" />
+          </div>
+          <h2 className="text-2xl font-bold tracking-tight md:text-3xl">
+            Ready to meet your AI agent?
+          </h2>
+          <p className="mt-3 text-base text-muted-foreground">
+            From payment to working agent in under 60 seconds. Open-source and
+            self-hostable.
+          </p>
+          <Link href="/auth/signup">
+            <Button size="lg" className="mt-8 rounded-full">
+              Get Started Now
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
           </Link>
         </div>
-      </section>
+      </div>
+    </section>
+  );
+}
 
-      {/* Footer */}
-      <footer className="border-t border-white/[0.06] py-8">
-        <div className="mx-auto max-w-6xl px-6 text-center text-[13px] text-white/25">
-          <p>OpenClaw — Powered by open-source AI</p>
+function Footer() {
+  return (
+    <footer className="border-t border-border">
+      <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-4 px-6 py-8 sm:flex-row">
+        <div className="flex items-center gap-2">
+          <Zap className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm text-muted-foreground">
+            OpenClaw — Powered by open-source AI
+          </span>
         </div>
-      </footer>
-    </div>
+        <div className="flex items-center gap-6">
+          <a
+            href="#features"
+            className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+          >
+            Features
+          </a>
+          <a
+            href="#pricing"
+            className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+          >
+            Pricing
+          </a>
+          <Link
+            href="/auth/login"
+            className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+          >
+            Sign In
+          </Link>
+        </div>
+      </div>
+    </footer>
   );
 }

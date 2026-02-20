@@ -3,7 +3,9 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
-import { Zap, ArrowRight } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
+import { cn } from '@/lib/utils';
+import { Zap, ArrowRight, Loader2 } from 'lucide-react';
 
 declare global {
   interface Window {
@@ -20,32 +22,38 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
-  const handleGoogleResponse = useCallback(async (response: any) => {
-    setGoogleLoading(true);
-    setError('');
-    try {
-      const data = await api.post<{ token: string; isNewUser: boolean }>('/auth/google', {
-        credential: response.credential,
-      });
+  const handleGoogleResponse = useCallback(
+    async (response: any) => {
+      setGoogleLoading(true);
+      setError('');
+      try {
+        const data = await api.post<{ token: string; isNewUser: boolean }>(
+          '/auth/google',
+          { credential: response.credential }
+        );
 
-      api.setToken(data.token);
-      if (data.isNewUser) {
-        router.push('/pricing');
-      } else {
-        try {
-          const billing = await api.get<{ status: string }>('/billing');
-          const active = ['active', 'sleeping', 'grace_period'];
-          router.push(active.includes(billing.status) ? '/dashboard' : '/pricing');
-        } catch {
+        api.setToken(data.token);
+        if (data.isNewUser) {
           router.push('/pricing');
+        } else {
+          try {
+            const billing = await api.get<{ status: string }>('/billing');
+            const active = ['active', 'sleeping', 'grace_period'];
+            router.push(
+              active.includes(billing.status) ? '/dashboard' : '/pricing'
+            );
+          } catch {
+            router.push('/pricing');
+          }
         }
+      } catch (err: any) {
+        setError(err.message || 'Google sign-in failed. Please try again.');
+      } finally {
+        setGoogleLoading(false);
       }
-    } catch (err: any) {
-      setError(err.message || 'Google sign-in failed. Please try again.');
-    } finally {
-      setGoogleLoading(false);
-    }
-  }, [router]);
+    },
+    [router]
+  );
 
   useEffect(() => {
     window.handleGoogleSignIn = handleGoogleResponse;
@@ -80,7 +88,9 @@ export default function LoginPage() {
     };
     document.head.appendChild(script);
 
-    return () => { window.handleGoogleSignIn = undefined; };
+    return () => {
+      window.handleGoogleSignIn = undefined;
+    };
   }, [handleGoogleResponse]);
 
   const handleEmailSubmit = async (e: React.FormEvent) => {
@@ -89,10 +99,15 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const data = await api.post<{ token: string; user: any }>('/auth/login', { email, password });
+      const data = await api.post<{ token: string; user: any }>(
+        '/auth/login',
+        { email, password }
+      );
       api.setToken(data.token);
       const activeStatuses = ['active', 'sleeping', 'grace_period'];
-      router.push(activeStatuses.includes(data.user?.status) ? '/dashboard' : '/pricing');
+      router.push(
+        activeStatuses.includes(data.user?.status) ? '/dashboard' : '/pricing'
+      );
     } catch (err: any) {
       setError(err.message || 'Something went wrong. Please try again.');
     } finally {
@@ -101,85 +116,112 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-black px-4">
-      <div className="w-full max-w-[400px] animate-fade-up">
+    <div className="relative flex min-h-screen items-center justify-center bg-background px-4">
+      {/* Background glow */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(250,250,250,0.04),transparent_50%)]"
+      />
+
+      <div className="relative w-full max-w-[420px] animate-fade-up">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-5 flex h-10 w-10 items-center justify-center rounded-xl">
-            <Zap className="h-5 w-5 text-white" />
-          </div>
-          <h1 className="text-[22px] font-bold text-white tracking-tight">Welcome back</h1>
-          <p className="mt-1.5 text-[14px] text-white/40">Sign in to your dashboard</p>
+          <Link
+            href="/"
+            className="mx-auto mb-5 inline-flex h-12 w-12 items-center justify-center rounded-xl border border-border bg-card"
+          >
+            <Zap className="h-5 w-5" />
+          </Link>
+          <h1 className="text-2xl font-bold tracking-tight">Welcome back</h1>
+          <p className="mt-1.5 text-sm text-muted-foreground">
+            Sign in to your dashboard
+          </p>
         </div>
 
-        <div className="border border-white/[0.08] rounded-xl p-6 space-y-5">
-          {error && (
-            <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-3 text-[13px] text-red-400">
-              {error}
-            </div>
-          )}
+        <div className="rounded-xl border border-border bg-card/50 p-6 shadow-lg shadow-black/20">
+          <div className="space-y-5">
+            {error && (
+              <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-[13px] text-red-400">
+                {error}
+              </div>
+            )}
 
-          {googleLoading && (
-            <div className="flex items-center justify-center gap-3 py-4">
-              <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white" />
-              <span className="text-[14px] text-white/50">Signing in with Google...</span>
-            </div>
-          )}
-
-          <div className="flex justify-center">
-            <div id="google-signin-button" className="flex justify-center" />
-          </div>
-
-          <div className="flex items-center gap-4">
-            <div className="flex-1 h-px bg-white/[0.06]" />
-            <span className="text-[12px] text-white/25 uppercase tracking-wider">or</span>
-            <div className="flex-1 h-px bg-white/[0.06]" />
-          </div>
-
-          <form onSubmit={handleEmailSubmit} className="space-y-4">
-            <div className="space-y-1.5">
-              <label className="block text-[13px] font-medium text-white/50">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-transparent border border-white/10 rounded-lg px-4 py-2.5 text-[14px] text-white placeholder:text-white/25 focus:border-white/30 focus:outline-none transition-colors"
-                placeholder="you@example.com"
-                required
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="block text-[13px] font-medium text-white/50">Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-transparent border border-white/10 rounded-lg px-4 py-2.5 text-[14px] text-white placeholder:text-white/25 focus:border-white/30 focus:outline-none transition-colors"
-                placeholder="Your password"
-                required
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="btn-primary w-full py-2.5 text-[14px] font-medium flex items-center justify-center gap-2 rounded-lg disabled:opacity-50"
-            >
-              {loading ? (
-                <span className="flex items-center gap-2">
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-black/30 border-t-black" />
-                  Signing in...
+            {googleLoading && (
+              <div className="flex items-center justify-center gap-3 py-4">
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">
+                  Signing in with Google...
                 </span>
-              ) : (
-                <>Sign In <ArrowRight className="h-4 w-4" /></>
-              )}
-            </button>
-          </form>
+              </div>
+            )}
+
+            <div className="flex justify-center">
+              <div id="google-signin-button" className="flex justify-center" />
+            </div>
+
+            <div className="flex items-center gap-4">
+              <div className="h-px flex-1 bg-border" />
+              <span className="text-[12px] uppercase tracking-wider text-muted-foreground">
+                or
+              </span>
+              <div className="h-px flex-1 bg-border" />
+            </div>
+
+            <form onSubmit={handleEmailSubmit} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="block text-[13px] font-medium text-muted-foreground">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full rounded-lg border border-input bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 transition-colors focus:border-foreground/30 focus:outline-none"
+                  placeholder="you@example.com"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-[13px] font-medium text-muted-foreground">
+                  Password
+                </label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full rounded-lg border border-input bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 transition-colors focus:border-foreground/30 focus:outline-none"
+                  placeholder="Your password"
+                  required
+                />
+              </div>
+
+              <Button
+                type="submit"
+                disabled={loading}
+                className="w-full"
+                size="lg"
+              >
+                {loading ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Signing in...
+                  </span>
+                ) : (
+                  <>
+                    Sign In <ArrowRight className="ml-2 h-4 w-4" />
+                  </>
+                )}
+              </Button>
+            </form>
+          </div>
         </div>
 
-        <p className="mt-6 text-center text-[14px] text-white/30">
+        <p className="mt-6 text-center text-sm text-muted-foreground">
           Don&apos;t have an account?{' '}
-          <Link href="/auth/signup" className="text-white hover:text-white/80 underline underline-offset-4 transition-colors">
+          <Link
+            href="/auth/signup"
+            className="text-foreground underline underline-offset-4 transition-colors hover:text-foreground/80"
+          >
             Sign up
           </Link>
         </p>
