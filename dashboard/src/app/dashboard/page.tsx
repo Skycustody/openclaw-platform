@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 
 interface AgentStatus {
-  status: string;
+  status: 'active' | 'online' | 'sleeping' | 'paused' | 'provisioning' | 'cancelled' | 'offline' | 'grace_period';
   uptime: number;
   lastActive: string;
   messagesHandled: number;
