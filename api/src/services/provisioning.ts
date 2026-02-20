@@ -173,7 +173,6 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
       'RUN apt-get update && apt-get install -y curl git && rm -rf /var/lib/apt/lists/*',
       'RUN npm install -g openclaw@latest',
       'WORKDIR /data',
-      'HEALTHCHECK --interval=30s --timeout=10s --retries=3 CMD openclaw health || exit 1',
       'EXPOSE 18789',
       'CMD ["sh", "-c", "mkdir -p /root/.openclaw && cp /data/openclaw.json /root/.openclaw/openclaw.json 2>/dev/null; openclaw doctor --fix 2>/dev/null || true; exec openclaw gateway --port 18789 --bind lan --allow-unconfigured run"]',
     ].join('\n');
@@ -203,6 +202,7 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
     'docker run -d',
     `--name ${containerName}`,
     '--restart unless-stopped',
+    '--no-healthcheck',
     '--network openclaw-net',
     `--memory ${limits.ramMb}m`,
     `--memory-swap ${limits.ramMb}m`,
