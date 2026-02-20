@@ -187,7 +187,7 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
       'WORKDIR /data',
       'HEALTHCHECK --interval=30s --timeout=10s --retries=3 CMD openclaw health || exit 1',
       'EXPOSE 18789',
-      'CMD ["openclaw", "gateway", "--port", "18789", "run"]',
+      'CMD ["sh", "-c", "mkdir -p /root/.openclaw && cp /data/openclaw.json /root/.openclaw/openclaw.json 2>/dev/null; exec openclaw gateway --port 18789 --bind lan --allow-unconfigured run"]',
     ].join('\n');
     const dockerfileB64 = Buffer.from(dockerfile).toString('base64');
     const defaultCfgB64 = Buffer.from(JSON.stringify(openclawConfig, null, 2)).toString('base64');
@@ -209,7 +209,8 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
   // Give Node.js ~75% of the container memory for its heap
   const heapMb = Math.floor(limits.ramMb * 0.75);
 
-  // Run container
+  // Run container — copy config to ~/.openclaw/ (default lookup path) before starting gateway
+  const startScript = `sh -c 'mkdir -p /root/.openclaw && cp /data/openclaw.json /root/.openclaw/openclaw.json 2>/dev/null; exec openclaw gateway --port 18789 --bind lan --allow-unconfigured run'`;
   const dockerRunCmd = [
     'docker run -d',
     `--name ${containerName}`,
@@ -224,7 +225,6 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
     `-e PLATFORM_API=${apiUrl}`,
     `-e INTERNAL_SECRET=${internalSecret}`,
     `-e "BROWSERLESS_URL=wss://production-sfo.browserless.io?token=${browserlessToken}"`,
-    `-e OPENCLAW_CONFIG=/data/openclaw.json`,
     `-e OPENCLAW_GATEWAY_TOKEN=${gatewayToken}`,
     `-v /opt/openclaw/instances/${userId}:/data`,
     `--label traefik.enable=true`,
@@ -235,7 +235,7 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
     `--label 'traefik.http.routers.${containerName}-secure.tls=true'`,
     `--label traefik.http.services.${containerName}.loadbalancer.server.port=18789`,
     image,
-    'openclaw gateway --port 18789 --bind lan --allow-unconfigured run',
+    startScript,
   ].join(' ');
 
   console.log(`[provision] Running docker on ${server.ip}: ${dockerRunCmd.slice(0, 200)}...`);
