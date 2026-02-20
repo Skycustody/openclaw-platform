@@ -251,7 +251,6 @@ export default function MemoryPage() {
         open={showAddModal}
         onClose={() => { setShowAddModal(false); setNewContent(''); setNewPinned(false); }}
         title="Add a Memory"
-        description="Tell your agent something it should always remember"
       >
         <div className="space-y-5">
           <Textarea
@@ -299,7 +298,6 @@ export default function MemoryPage() {
         open={showClearConfirm}
         onClose={() => setShowClearConfirm(false)}
         title="Clear all memories?"
-        size="sm"
       >
         <div className="space-y-4">
           <div className="flex items-start gap-3 p-4 rounded-xl bg-red-500/5 border border-red-500/10">

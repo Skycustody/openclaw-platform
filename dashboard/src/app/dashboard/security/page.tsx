@@ -418,7 +418,6 @@ export default function SecurityPage() {
         open={twoFaModal}
         onClose={() => setTwoFaModal(false)}
         title="Set Up Two-Factor Authentication"
-        description="Scan this QR code with your authenticator app (like Google Authenticator or Authy) to get started."
       >
         <div className="space-y-6">
           <div className="flex justify-center">

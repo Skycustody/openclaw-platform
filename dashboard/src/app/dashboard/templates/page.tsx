@@ -306,8 +306,6 @@ export default function TemplatesPage() {
         open={!!installModal}
         onClose={() => setInstallModal(null)}
         title={`Install "${installModal?.name}"`}
-        description={installModal?.description}
-        size="sm"
       >
         {installModal && (
           <div className="space-y-5">
@@ -370,8 +368,6 @@ export default function TemplatesPage() {
         open={shareModal}
         onClose={() => setShareModal(false)}
         title="Share Your Agent Setup"
-        description="Help others get started by sharing how you've set up your agent. Your name will appear as the author."
-        size="sm"
       >
         <div className="space-y-4">
           <Input

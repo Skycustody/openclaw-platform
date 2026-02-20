@@ -339,7 +339,6 @@ export default function TokensPage() {
         open={!!purchaseModal}
         onClose={() => setPurchaseModal(null)}
         title="Confirm Purchase"
-        size="sm"
       >
         {purchaseModal && (
           <div className="space-y-5">
