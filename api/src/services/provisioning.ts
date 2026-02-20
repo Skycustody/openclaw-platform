@@ -195,6 +195,9 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
     console.log(`[provision] Image ${image} built successfully`);
   }
 
+  // Give Node.js ~75% of the container memory for its heap
+  const heapMb = Math.floor(limits.ramMb * 0.75);
+
   // Run container
   const dockerRunCmd = [
     'docker run -d',
@@ -204,6 +207,7 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
     `--memory ${limits.ramMb}m`,
     `--memory-swap ${limits.ramMb}m`,
     `--cpus ${limits.cpus}`,
+    `-e "NODE_OPTIONS=--max-old-space-size=${heapMb}"`,
     `-e USER_ID=${userId}`,
     `-e S3_BUCKET=${s3Bucket}`,
     `-e PLATFORM_API=${apiUrl}`,

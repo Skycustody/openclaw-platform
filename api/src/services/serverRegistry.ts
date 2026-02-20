@@ -27,7 +27,7 @@ export async function findBestServer(requiredRamMb = 2048): Promise<Server> {
   return newServer;
 }
 
-async function waitForNewServer(timeoutMs = 300000): Promise<Server> {
+async function waitForNewServer(timeoutMs = 600000): Promise<Server> {
   const start = Date.now();
   const cpIp = controlPlaneIp();
   while (Date.now() - start < timeoutMs) {
