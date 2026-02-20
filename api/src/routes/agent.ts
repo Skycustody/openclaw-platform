@@ -9,6 +9,41 @@ import { sshExec } from '../services/ssh';
 const router = Router();
 router.use(authenticate);
 
+/** Build the agent URL with the gateway auth token appended as a query param. */
+async function agentUrl(subdomain: string, userId: string, server?: Server | null): Promise<string> {
+  const domain = process.env.DOMAIN || 'yourdomain.com';
+  const base = `https://${subdomain}.${domain}`;
+
+  // Try DB first
+  const row = await db.getOne<{ gateway_token: string }>(
+    'SELECT gateway_token FROM users WHERE id = $1',
+    [userId]
+  ).catch(() => null);
+
+  if (row?.gateway_token) return `${base}?token=${row.gateway_token}`;
+
+  // Fallback: retrieve from the running container via SSH
+  if (server) {
+    try {
+      const containerName = (await db.getOne<User>('SELECT container_name FROM users WHERE id = $1', [userId]))
+        ?.container_name || `openclaw-${userId.slice(0, 12)}`;
+      const result = await sshExec(
+        server.ip,
+        `docker exec ${containerName} openclaw config get gateway.auth.token 2>/dev/null`
+      );
+      const token = result.stdout.replace(/["\s]/g, '').trim();
+      if (token && token.length > 8) {
+        await db.query('UPDATE users SET gateway_token = $1 WHERE id = $2', [token, userId]).catch(() => {});
+        return `${base}?token=${token}`;
+      }
+    } catch {
+      // SSH failed — return URL without token
+    }
+  }
+
+  return base;
+}
+
 // Get agent status
 router.get('/status', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
@@ -70,8 +105,6 @@ router.post('/open', authenticate, async (req: AuthRequest, res: Response, next:
       return res.status(403).json({ error: 'Agent paused — you need more tokens.' });
     }
 
-    const domain = process.env.DOMAIN || 'yourdomain.com';
-
     // Case 1: never provisioned (no server assigned)
     if (!user.server_id || !user.subdomain) {
       console.log(`[agent/open] User ${user.id} not provisioned — starting provisioning`);
@@ -81,34 +114,34 @@ router.post('/open', authenticate, async (req: AuthRequest, res: Response, next:
         plan: user.plan,
         stripeCustomerId: user.stripe_customer_id || undefined,
       });
-      return res.json({
-        url: `https://${provisioned.subdomain}.${domain}`,
-        status: 'active',
-      });
+      const url = await agentUrl(provisioned.subdomain!, user.id);
+      return res.json({ url, status: 'active' });
     }
+
+    // Resolve the server once for token retrieval
+    const server = user.server_id
+      ? await db.getOne<Server>('SELECT * FROM servers WHERE id = $1', [user.server_id])
+      : null;
 
     // Case 2: sleeping — wake it up
     if (user.status === 'sleeping') {
       console.log(`[agent/open] Waking container for ${user.id}`);
       await wakeContainer(user.id);
-      return res.json({
-        url: `https://${user.subdomain}.${domain}`,
-        status: 'active',
-      });
+      const url = await agentUrl(user.subdomain!, user.id, server);
+      return res.json({ url, status: 'active' });
     }
 
     // Case 3: still provisioning from a previous attempt — verify the container actually exists
     if (user.status === 'provisioning') {
-      const server = await db.getOne<Server>('SELECT * FROM servers WHERE id = $1', [user.server_id]);
       if (server) {
         const containerName = user.container_name || `openclaw-${user.id}`;
         const check = await sshExec(server.ip, `docker inspect ${containerName} --format='{{.State.Running}}' 2>/dev/null`).catch(() => null);
         if (check && check.stdout.includes('true')) {
           await db.query(`UPDATE users SET status = 'active', last_active = NOW() WHERE id = $1`, [user.id]);
-          return res.json({ url: `https://${user.subdomain}.${domain}`, status: 'active' });
+          const url = await agentUrl(user.subdomain!, user.id, server);
+          return res.json({ url, status: 'active' });
         }
       }
-      // Container doesn't exist — re-provision
       console.log(`[agent/open] User ${user.id} stuck in provisioning — re-provisioning`);
       const provisioned = await provisionUser({
         userId: user.id,
@@ -116,40 +149,34 @@ router.post('/open', authenticate, async (req: AuthRequest, res: Response, next:
         plan: user.plan,
         stripeCustomerId: user.stripe_customer_id || undefined,
       });
-      return res.json({
-        url: `https://${provisioned.subdomain}.${domain}`,
-        status: 'active',
-      });
+      const url = await agentUrl(provisioned.subdomain!, user.id);
+      return res.json({ url, status: 'active' });
     }
 
     // Case 4: active or grace_period — verify the container is actually running
-    if (user.server_id) {
-      const server = await db.getOne<Server>('SELECT * FROM servers WHERE id = $1', [user.server_id]);
-      if (server) {
-        const containerName = user.container_name || `openclaw-${user.id}`;
-        const check = await sshExec(server.ip, `docker inspect ${containerName} --format='{{.State.Running}}' 2>/dev/null`).catch(() => null);
-        if (!check || !check.stdout.includes('true')) {
-          console.log(`[agent/open] Container for ${user.id} not running — restarting`);
-          const startResult = await sshExec(server.ip, `docker start ${containerName} 2>/dev/null`).catch(() => null);
-          if (!startResult || startResult.code !== 0) {
-            console.log(`[agent/open] Container missing — re-provisioning`);
-            const provisioned = await provisionUser({
-              userId: user.id,
-              email: user.email,
-              plan: user.plan,
-              stripeCustomerId: user.stripe_customer_id || undefined,
-            });
-            return res.json({ url: `https://${provisioned.subdomain}.${domain}`, status: 'active' });
-          }
+    if (server) {
+      const containerName = user.container_name || `openclaw-${user.id}`;
+      const check = await sshExec(server.ip, `docker inspect ${containerName} --format='{{.State.Running}}' 2>/dev/null`).catch(() => null);
+      if (!check || !check.stdout.includes('true')) {
+        console.log(`[agent/open] Container for ${user.id} not running — restarting`);
+        const startResult = await sshExec(server.ip, `docker start ${containerName} 2>/dev/null`).catch(() => null);
+        if (!startResult || startResult.code !== 0) {
+          console.log(`[agent/open] Container missing — re-provisioning`);
+          const provisioned = await provisionUser({
+            userId: user.id,
+            email: user.email,
+            plan: user.plan,
+            stripeCustomerId: user.stripe_customer_id || undefined,
+          });
+          const url = await agentUrl(provisioned.subdomain!, user.id);
+          return res.json({ url, status: 'active' });
         }
       }
     }
 
     await touchActivity(user.id);
-    return res.json({
-      url: `https://${user.subdomain}.${domain}`,
-      status: 'active',
-    });
+    const url = await agentUrl(user.subdomain!, user.id, server);
+    return res.json({ url, status: 'active' });
   } catch (err) {
     next(err);
   }

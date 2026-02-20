@@ -104,7 +104,7 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
       `mkdir -p /opt/openclaw/config`,
       `echo '${traefikCfgB64}' | base64 -d > /opt/openclaw/config/traefik.yml`,
       `docker rm -f traefik 2>/dev/null || true`,
-      `docker run -d --name traefik --restart unless-stopped --network openclaw-net -p 80:80 -p 443:443 -v /var/run/docker.sock:/var/run/docker.sock:ro -v /opt/openclaw/config/traefik.yml:/traefik.yml:ro traefik:v3.0`,
+      `docker run -d --name traefik --restart unless-stopped --network openclaw-net -p 80:80 -p 443:443 -v /var/run/docker.sock:/var/run/docker.sock:ro -v /opt/openclaw/config/traefik.yml:/traefik.yml:ro traefik:latest`,
     ].join(' && '));
   }
 
@@ -134,13 +134,21 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
     },
   };
 
-  const configBase64 = Buffer.from(JSON.stringify(openclawConfig, null, 2)).toString('base64');
+  const configJson = JSON.stringify(openclawConfig, null, 2);
+  const configBase64 = Buffer.from(configJson).toString('base64');
+  // Write config under all filenames openclaw may look for
   const writeConfigResult = await sshExec(
     server.ip,
-    `echo '${configBase64}' | base64 -d > /opt/openclaw/instances/${userId}/openclaw.json`
+    [
+      `echo '${configBase64}' | base64 -d > /opt/openclaw/instances/${userId}/openclaw.json`,
+      `cp /opt/openclaw/instances/${userId}/openclaw.json /opt/openclaw/instances/${userId}/openclaw.default.json`,
+      `cp /opt/openclaw/instances/${userId}/openclaw.json /opt/openclaw/instances/${userId}/config.json`,
+    ].join(' && ')
   );
   if (writeConfigResult.code !== 0) {
     console.warn(`[provision] config write warning:`, writeConfigResult.stderr);
+  } else {
+    console.log(`[provision] Config written to /opt/openclaw/instances/${userId}/`);
   }
 
   // Pull image only if using a remote registry
@@ -186,6 +194,18 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
   // Give Node.js ~75% of the container memory for its heap
   const heapMb = Math.floor(limits.ramMb * 0.75);
 
+  // Generate a gateway auth token for this user's container
+  const gatewayToken = uuid().replace(/-/g, '') + uuid().replace(/-/g, '').slice(0, 16);
+
+  // Store the gateway token so the dashboard can retrieve it later
+  await db.query(
+    `UPDATE users SET gateway_token = $1 WHERE id = $2`,
+    [gatewayToken, userId]
+  ).catch(() => {
+    // Column may not exist yet; non-critical
+    console.warn(`[provision] Could not store gateway_token (column may not exist)`);
+  });
+
   // Run container
   const dockerRunCmd = [
     'docker run -d',
@@ -201,6 +221,8 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
     `-e PLATFORM_API=${apiUrl}`,
     `-e INTERNAL_SECRET=${internalSecret}`,
     `-e "BROWSERLESS_URL=wss://production-sfo.browserless.io?token=${browserlessToken}"`,
+    `-e OPENCLAW_CONFIG=/data/openclaw.json`,
+    `-e OPENCLAW_GATEWAY_TOKEN=${gatewayToken}`,
     `-v /opt/openclaw/instances/${userId}:/data`,
     `--label traefik.enable=true`,
     `--label 'traefik.http.routers.${containerName}.rule=Host(\`${hostRule}\`)'`,
@@ -210,6 +232,7 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
     `--label 'traefik.http.routers.${containerName}-secure.tls=true'`,
     `--label traefik.http.services.${containerName}.loadbalancer.server.port=18789`,
     image,
+    'openclaw gateway --port 18789 --bind lan --allow-unconfigured run',
   ].join(' ');
 
   console.log(`[provision] Running docker on ${server.ip}: ${dockerRunCmd.slice(0, 200)}...`);

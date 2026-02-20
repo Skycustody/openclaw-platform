@@ -141,3 +141,11 @@ This is automatically baked into the cloud-init script that runs on new workers.
 | **Wildcard DNS** | Cloudflare → A record `*` → worker IP |
 
 For full deployment steps (main server, DB, Stripe, etc.), see **SETUP_GUIDE.md**.
+
+
+CLOUDFLARE_API_TOKEN=<your-cloudflare-token>curl "https://api.cloudflare.com/client/v4/user/tokens/verify" \
+-H "Authorization: Bearer 9f4M2vBERSikKWXgRqDTGiXtYZe5beFdjGcLyQ1k"
+CLOUDFLARE_ZONE_ID=your-zone-id>ee006c60cbb84510e7c6a2bbf1b39bfb
+
+CLOUDFLARE_API_TOKEN=9f4M2vBERSikKWXgRqDTGiXtYZe5beFdjGcLyQ1k
+CLOUDFLARE_ZONE_ID=ee006c60cbb84510e7c6a2bbf1b39bfb

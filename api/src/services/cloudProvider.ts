@@ -155,7 +155,7 @@ docker run -d --name traefik --restart unless-stopped --network openclaw-net \\
   -p 80:80 -p 443:443 \\
   -v /var/run/docker.sock:/var/run/docker.sock:ro \\
   -v /opt/openclaw/config/traefik.yml:/traefik.yml:ro \\
-  traefik:v3.0
+  traefik:latest
 
 echo "Traefik started"
 
@@ -169,7 +169,7 @@ RUN npm install -g openclaw@latest
 WORKDIR /data
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 CMD openclaw health || exit 1
 EXPOSE 18789
-CMD ["openclaw", "gateway", "--port", "18789", "run"]
+CMD ["openclaw", "gateway", "--port", "18789", "--allow-unconfigured", "run"]
 DEOF
 
 cat > /tmp/openclaw-build/openclaw.default.json <<'JEOF'

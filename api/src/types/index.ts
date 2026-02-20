@@ -19,6 +19,7 @@ export interface User {
   timezone: string;
   referral_code: string | null;
   referred_by: string | null;
+  gateway_token: string | null;
   grace_period_end: Date | null;
   created_at: Date;
   last_active: Date;
