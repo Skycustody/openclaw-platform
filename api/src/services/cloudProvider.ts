@@ -2,6 +2,7 @@ import axios, { AxiosInstance } from 'axios';
 
 class CloudProvider {
   private client: AxiosInstance;
+  private sshKeyId: number | null = null;
 
   constructor() {
     const token = process.env.HETZNER_API_TOKEN;
@@ -17,6 +18,47 @@ class CloudProvider {
       },
       timeout: 60000,
     });
+  }
+
+  /** Upload SSH key to Hetzner (idempotent) and return key ID. */
+  private async ensureSshKey(): Promise<number | null> {
+    if (this.sshKeyId) return this.sshKeyId;
+
+    const pubKey = process.env.WORKER_SSH_PUBLIC_KEY?.trim();
+    if (!pubKey) {
+      console.warn('[hetzner] WORKER_SSH_PUBLIC_KEY not set — workers won\'t have SSH access');
+      return null;
+    }
+
+    try {
+      const existing = await this.client.get('/ssh_keys');
+      const keys = existing.data?.ssh_keys || [];
+      const match = keys.find((k: any) => k.public_key.trim() === pubKey);
+      if (match) {
+        this.sshKeyId = match.id;
+        return this.sshKeyId;
+      }
+
+      const res = await this.client.post('/ssh_keys', {
+        name: `openclaw-api-${Date.now()}`,
+        public_key: pubKey,
+      });
+      this.sshKeyId = res.data?.ssh_key?.id;
+      console.log(`[hetzner] SSH key uploaded: id=${this.sshKeyId}`);
+      return this.sshKeyId;
+    } catch (err: any) {
+      if (err.response?.data?.error?.code === 'uniqueness_error') {
+        const existing = await this.client.get('/ssh_keys');
+        const keys = existing.data?.ssh_keys || [];
+        const match = keys.find((k: any) => k.public_key.trim() === pubKey);
+        if (match) {
+          this.sshKeyId = match.id;
+          return this.sshKeyId;
+        }
+      }
+      console.error('[hetzner] SSH key upload failed:', err.response?.data || err.message);
+      return null;
+    }
   }
 
   async provisionNewServer(): Promise<string> {
@@ -149,16 +191,22 @@ echo "=== Setup Complete at $(date) ==="
 `;
 
     try {
-      console.log(`[hetzner] Creating server: ${hostname} (${serverType} in ${location})`);
+      const sshKeyId = await this.ensureSshKey();
+      console.log(`[hetzner] Creating server: ${hostname} (${serverType} in ${location}), ssh_key=${sshKeyId}`);
 
-      const res = await this.client.post('/servers', {
+      const createPayload: Record<string, any> = {
         name: hostname,
         server_type: serverType,
         location,
         image: 'ubuntu-22.04',
         user_data: userData,
         labels: { managed: 'openclaw', role: 'worker' },
-      });
+      };
+      if (sshKeyId) {
+        createPayload.ssh_keys = [sshKeyId];
+      }
+
+      const res = await this.client.post('/servers', createPayload);
 
       const serverId = res.data?.server?.id;
       const serverIp = res.data?.server?.public_net?.ipv4?.ip;
