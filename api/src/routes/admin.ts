@@ -2,6 +2,8 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { internalAuth } from '../middleware/auth';
 import db from '../lib/db';
 import { getServerLoad, checkCapacity } from '../services/serverRegistry';
+import { provisionUser } from '../services/provisioning';
+import { User } from '../types';
 
 const router = Router();
 router.use(internalAuth);
@@ -82,6 +84,49 @@ router.post('/check-capacity', async (_req: Request, res: Response, next: NextFu
   try {
     await checkCapacity();
     res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Re-provision a stuck user (or all stuck users)
+router.post('/reprovision', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { userId } = req.body;
+    let users: User[];
+
+    if (userId) {
+      const user = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [userId]);
+      if (!user) return res.status(404).json({ error: 'User not found' });
+      users = [user];
+    } else {
+      users = await db.getMany<User>(
+        `SELECT * FROM users WHERE status = 'provisioning' AND server_id IS NULL`
+      );
+    }
+
+    if (users.length === 0) {
+      return res.json({ message: 'No stuck users to re-provision', results: [] });
+    }
+
+    const results = [];
+    for (const user of users) {
+      try {
+        console.log(`Re-provisioning user ${user.id} (${user.email})...`);
+        const result = await provisionUser({
+          userId: user.id,
+          email: user.email,
+          plan: user.plan as any,
+          stripeCustomerId: user.stripe_customer_id || undefined,
+        });
+        results.push({ userId: user.id, email: user.email, status: 'success', subdomain: result.subdomain });
+      } catch (err: any) {
+        console.error(`Re-provision failed for ${user.id}:`, err.message);
+        results.push({ userId: user.id, email: user.email, status: 'failed', error: err.message });
+      }
+    }
+
+    res.json({ results });
   } catch (err) {
     next(err);
   }
