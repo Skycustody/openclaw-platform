@@ -19,15 +19,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
     api.get<any>('/agent/status')
       .then((data) => {
+        const subStatus = data.subscriptionStatus || data.status;
         setUser({
-          id: '',
-          email: '',
-          plan: data.plan,
-          status: data.status,
-          subdomain: data.subdomain,
+          id: data.userId || '',
+          email: data.email || '',
+          plan: data.plan || 'starter',
+          status: subStatus,
+          subdomain: data.subdomain || null,
         });
         const allowed = ['active', 'sleeping', 'grace_period', 'provisioning'];
-        if (!allowed.includes(data.status) && typeof window !== 'undefined') {
+        if (!allowed.includes(subStatus) && typeof window !== 'undefined') {
           window.location.href = '/pricing';
           return;
         }

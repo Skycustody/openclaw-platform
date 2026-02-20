@@ -1,25 +1,31 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { Card, CardTitle, CardDescription } from '@/components/ui/Card';
+import { Card, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import api from '@/lib/api';
+import { useStore } from '@/lib/store';
 import {
-  Check, X, Lock, Loader2, QrCode, MessageSquare,
-  ArrowRight, Link2Off,
+  Check, Lock, Loader2, QrCode, MessageSquare,
+  ArrowRight, Link2Off, AlertCircle,
 } from 'lucide-react';
 
-interface Channel {
-  id: string;
+interface ChannelStatuses {
+  telegram: boolean;
+  discord: boolean;
+  slack: boolean;
+  whatsapp: boolean;
+  signal: boolean;
+}
+
+interface ChannelView {
   platform: string;
   connected: boolean;
-  botName?: string;
-  messagesToday: number;
   messagesThisMonth: number;
-  planLocked?: boolean;
+  planLocked: boolean;
 }
 
 const platformMeta: Record<string, { label: string; emoji: string; description: string }> = {
@@ -50,41 +56,58 @@ const platformMeta: Record<string, { label: string; emoji: string; description: 
   },
 };
 
-const MOCK_CHANNELS: Channel[] = [
-  { id: '1', platform: 'telegram', connected: true, botName: '@MyAgentBot', messagesToday: 12, messagesThisMonth: 340 },
-  { id: '2', platform: 'whatsapp', connected: true, botName: '+1 (555) 012-3456', messagesToday: 5, messagesThisMonth: 89 },
-  { id: '3', platform: 'discord', connected: false, messagesToday: 0, messagesThisMonth: 0 },
-  { id: '4', platform: 'slack', connected: false, messagesToday: 0, messagesThisMonth: 0, planLocked: true },
-  { id: '5', platform: 'signal', connected: false, messagesToday: 0, messagesThisMonth: 0, planLocked: true },
-];
+const PRO_ONLY = ['discord', 'slack', 'signal'];
 
 export default function ConnectApps() {
-  const [channels, setChannels] = useState<Channel[]>([]);
+  const [channels, setChannels] = useState<ChannelView[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [connecting, setConnecting] = useState<string | null>(null);
   const [showTelegramModal, setShowTelegramModal] = useState(false);
   const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
+  const [whatsAppLoading, setWhatsAppLoading] = useState(false);
+  const [whatsAppQr, setWhatsAppQr] = useState('');
+  const [whatsAppError, setWhatsAppError] = useState('');
   const [telegramToken, setTelegramToken] = useState('');
   const [tokenError, setTokenError] = useState('');
+  const { user } = useStore();
+
+  const isStarterPlan = user?.plan === 'starter';
 
   const fetchChannels = useCallback(async () => {
     try {
-      const data = await api.get<Channel[]>('/channels');
-      setChannels(data);
-    } catch {
-      setChannels(MOCK_CHANNELS);
+      const data = await api.get<{ channels: ChannelStatuses; messageCounts: Record<string, number> }>('/channels');
+      const statuses = data.channels || {};
+      const counts = data.messageCounts || {};
+
+      const list: ChannelView[] = Object.keys(platformMeta).map((platform) => ({
+        platform,
+        connected: !!(statuses as any)[platform],
+        messagesThisMonth: counts[platform] || 0,
+        planLocked: isStarterPlan && PRO_ONLY.includes(platform),
+      }));
+
+      setChannels(list);
+      setError('');
+    } catch (err: any) {
+      setError(err?.message || 'Could not load channels');
+      const list: ChannelView[] = Object.keys(platformMeta).map((platform) => ({
+        platform,
+        connected: false,
+        messagesThisMonth: 0,
+        planLocked: isStarterPlan && PRO_ONLY.includes(platform),
+      }));
+      setChannels(list);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isStarterPlan]);
 
   useEffect(() => { fetchChannels(); }, [fetchChannels]);
 
-  const findChannel = (platform: string) => channels.find((c) => c.platform === platform);
-
   const connectTelegram = async () => {
     if (!telegramToken.trim()) {
-      setTokenError('Please paste your connection key');
+      setTokenError('Please paste your bot token');
       return;
     }
     setTokenError('');
@@ -95,9 +118,26 @@ export default function ConnectApps() {
       setShowTelegramModal(false);
       await fetchChannels();
     } catch (err: any) {
-      setTokenError(err?.message || 'Could not connect. Double-check your key and try again.');
+      setTokenError(err?.message || 'Could not connect. Double-check your token and try again.');
     } finally {
       setConnecting(null);
+    }
+  };
+
+  const startWhatsAppPairing = async () => {
+    setWhatsAppLoading(true);
+    setWhatsAppError('');
+    setWhatsAppQr('');
+    try {
+      const data = await api.post<{ qrData: string }>('/whatsapp/pair');
+      setWhatsAppQr(data.qrData || '');
+      if (!data.qrData) {
+        setWhatsAppError('No QR data received. Your agent container may not be running.');
+      }
+    } catch (err: any) {
+      setWhatsAppError(err?.message || 'Could not start WhatsApp pairing. Make sure your agent is running.');
+    } finally {
+      setWhatsAppLoading(false);
     }
   };
 
@@ -114,6 +154,7 @@ export default function ConnectApps() {
   };
 
   const connectedCount = channels.filter((c) => c.connected).length;
+  const totalMessages = channels.reduce((a, c) => a + (c.messagesThisMonth || 0), 0);
 
   if (loading) {
     return (
@@ -123,72 +164,6 @@ export default function ConnectApps() {
     );
   }
 
-  const renderChannelCard = (platform: string) => {
-    const meta = platformMeta[platform];
-    const ch = findChannel(platform);
-    const isConnected = ch?.connected ?? false;
-    const isLocked = ch?.planLocked ?? false;
-
-    return (
-      <Card key={platform}>
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <span className="text-2xl">{meta.emoji}</span>
-            <div>
-              <CardTitle>{meta.label}</CardTitle>
-              <p className="mt-0.5 text-[13px] text-white/40">{meta.description}</p>
-            </div>
-          </div>
-          {isConnected && <Badge variant="green">Connected</Badge>}
-          {isLocked && !isConnected && (
-            <Badge><Lock className="h-3 w-3" /> Pro</Badge>
-          )}
-        </div>
-
-        {isConnected ? (
-          <div className="space-y-3">
-            <div className="flex items-center gap-4 text-[13px]">
-              <span className="flex items-center gap-1.5 text-green-400">
-                <Check className="h-3.5 w-3.5" />
-                {ch?.botName}
-              </span>
-              <span className="text-white/15">·</span>
-              <span className="text-white/40">{ch?.messagesToday} today</span>
-              <span className="text-white/15">·</span>
-              <span className="text-white/40">{ch?.messagesThisMonth} this month</span>
-            </div>
-            <Button
-              variant="danger"
-              size="sm"
-              onClick={() => disconnect(platform)}
-              loading={connecting === platform}
-            >
-              <Link2Off className="h-3.5 w-3.5" />
-              Disconnect
-            </Button>
-          </div>
-        ) : isLocked ? (
-          <Button variant="glass" size="sm" onClick={() => window.location.href = '/dashboard/billing'}>
-            <Lock className="h-3.5 w-3.5" />
-            Upgrade to Pro
-          </Button>
-        ) : (
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => {
-              if (platform === 'telegram') setShowTelegramModal(true);
-              else if (platform === 'whatsapp') setShowWhatsAppModal(true);
-            }}
-          >
-            <ArrowRight className="h-3.5 w-3.5" />
-            Connect
-          </Button>
-        )}
-      </Card>
-    );
-  };
-
   return (
     <div className="space-y-6">
       <div className="animate-fade-up">
@@ -197,6 +172,13 @@ export default function ConnectApps() {
           Connect messaging apps so your agent can communicate on your behalf
         </p>
       </div>
+
+      {error && (
+        <div className="flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-[13px] text-amber-400">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          {error}
+        </div>
+      )}
 
       <Card className="!p-4">
         <div className="flex items-center gap-4 text-[14px]">
@@ -208,15 +190,79 @@ export default function ConnectApps() {
           </div>
           <span className="text-white/10">|</span>
           <span className="text-white/40">
-            {channels.reduce((a, c) => a + (c.messagesThisMonth || 0), 0).toLocaleString()} messages this month
+            {totalMessages.toLocaleString()} messages this month
           </span>
         </div>
       </Card>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {['telegram', 'whatsapp', 'discord', 'slack', 'signal'].map(renderChannelCard)}
+        {channels.map((ch) => {
+          const meta = platformMeta[ch.platform];
+          if (!meta) return null;
+
+          return (
+            <Card key={ch.platform}>
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">{meta.emoji}</span>
+                  <div>
+                    <CardTitle>{meta.label}</CardTitle>
+                    <p className="mt-0.5 text-[13px] text-white/40">{meta.description}</p>
+                  </div>
+                </div>
+                {ch.connected && <Badge variant="green">Connected</Badge>}
+                {ch.planLocked && !ch.connected && (
+                  <Badge><Lock className="h-3 w-3" /> Pro</Badge>
+                )}
+              </div>
+
+              {ch.connected ? (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-4 text-[13px]">
+                    <span className="flex items-center gap-1.5 text-green-400">
+                      <Check className="h-3.5 w-3.5" />
+                      Active
+                    </span>
+                    <span className="text-white/15">&middot;</span>
+                    <span className="text-white/40">{ch.messagesThisMonth} this month</span>
+                  </div>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={() => disconnect(ch.platform)}
+                    loading={connecting === ch.platform}
+                  >
+                    <Link2Off className="h-3.5 w-3.5" />
+                    Disconnect
+                  </Button>
+                </div>
+              ) : ch.planLocked ? (
+                <Button variant="glass" size="sm" onClick={() => window.location.href = '/dashboard/billing'}>
+                  <Lock className="h-3.5 w-3.5" />
+                  Upgrade to Pro
+                </Button>
+              ) : (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => {
+                    if (ch.platform === 'telegram') setShowTelegramModal(true);
+                    else if (ch.platform === 'whatsapp') {
+                      setShowWhatsAppModal(true);
+                      startWhatsAppPairing();
+                    }
+                  }}
+                >
+                  <ArrowRight className="h-3.5 w-3.5" />
+                  Connect
+                </Button>
+              )}
+            </Card>
+          );
+        })}
       </div>
 
+      {/* Telegram Modal */}
       <Modal
         open={showTelegramModal}
         onClose={() => { setShowTelegramModal(false); setTelegramToken(''); setTokenError(''); }}
@@ -226,8 +272,8 @@ export default function ConnectApps() {
           <div className="space-y-3">
             {[
               ['1', 'Open Telegram and search for @BotFather'],
-              ['2', 'Send /newbot and follow the prompts'],
-              ['3', 'Copy the connection key and paste it below'],
+              ['2', 'Send /newbot and follow the prompts to create a bot'],
+              ['3', 'Copy the bot token and paste it below'],
             ].map(([num, text]) => (
               <div key={num} className="flex items-start gap-3 p-3 rounded-lg bg-white/[0.03] border border-white/[0.04]">
                 <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/[0.08] text-white/60 text-[12px] font-bold shrink-0">{num}</span>
@@ -237,8 +283,8 @@ export default function ConnectApps() {
           </div>
 
           <Input
-            label="Connection key"
-            placeholder="Paste your connection key from BotFather"
+            label="Bot Token"
+            placeholder="Paste your bot token from BotFather"
             value={telegramToken}
             onChange={(e) => { setTelegramToken(e.target.value); setTokenError(''); }}
             error={tokenError}
@@ -255,21 +301,51 @@ export default function ConnectApps() {
         </div>
       </Modal>
 
+      {/* WhatsApp Modal */}
       <Modal
         open={showWhatsAppModal}
-        onClose={() => setShowWhatsAppModal(false)}
+        onClose={() => { setShowWhatsAppModal(false); setWhatsAppQr(''); setWhatsAppError(''); }}
         title="Connect WhatsApp"
       >
         <div className="space-y-5">
           <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-white/10 bg-white/[0.02] p-10">
-            <QrCode className="h-20 w-20 text-white/10 mb-4" />
-            <p className="text-[14px] text-white/50 text-center">
-              Open WhatsApp → Settings → Linked Devices → Link a Device
-            </p>
-            <p className="text-[12px] text-white/25 mt-2">QR code will appear here when ready</p>
+            {whatsAppLoading ? (
+              <>
+                <Loader2 className="h-10 w-10 animate-spin text-white/20 mb-4" />
+                <p className="text-[14px] text-white/50">Generating QR code...</p>
+              </>
+            ) : whatsAppQr ? (
+              <>
+                <pre className="text-[10px] text-white/60 whitespace-pre-wrap break-all max-w-xs text-center mb-4 font-mono bg-white/5 p-4 rounded-lg">{whatsAppQr}</pre>
+                <p className="text-[14px] text-white/50 text-center">
+                  Open WhatsApp &rarr; Settings &rarr; Linked Devices &rarr; Link a Device
+                </p>
+                <p className="text-[12px] text-white/25 mt-2">Scan the QR code above with your phone</p>
+              </>
+            ) : (
+              <>
+                <QrCode className="h-20 w-20 text-white/10 mb-4" />
+                <p className="text-[14px] text-white/50 text-center">
+                  {whatsAppError || 'Click below to generate a pairing QR code'}
+                </p>
+              </>
+            )}
           </div>
-          <div className="flex justify-end">
-            <Button variant="glass" size="md" onClick={() => setShowWhatsAppModal(false)}>Close</Button>
+          {whatsAppError && (
+            <div className="flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-[13px] text-red-400">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              {whatsAppError}
+            </div>
+          )}
+          <div className="flex justify-end gap-2">
+            {!whatsAppQr && !whatsAppLoading && (
+              <Button variant="primary" size="md" onClick={startWhatsAppPairing}>
+                Generate QR Code
+              </Button>
+            )}
+            <Button variant="glass" size="md" onClick={() => { setShowWhatsAppModal(false); setWhatsAppQr(''); setWhatsAppError(''); }}>
+              Close
+            </Button>
           </div>
         </div>
       </Modal>

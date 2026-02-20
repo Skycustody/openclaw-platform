@@ -100,14 +100,15 @@ export default function ActivityFeed() {
     const setter = offset === 0 ? setLoading : setLoadingMore;
     setter(true);
     try {
-      const data = await api.get<ActivityEntry[]>(
+      const res = await api.get<{ activities: ActivityEntry[]; total: number }>(
         `/activity?filter=${filter}&limit=${LIMIT}&offset=${offset}`
       );
+      const data = res.activities || [];
       if (reset) setEntries(data);
       else setEntries((prev) => [...prev, ...data]);
       setHasMore(data.length === LIMIT);
     } catch {
-      if (reset) setEntries(MOCK_ENTRIES);
+      if (reset) setEntries([]);
       setHasMore(false);
     } finally {
       setter(false);

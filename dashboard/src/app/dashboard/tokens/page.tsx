@@ -84,39 +84,25 @@ export default function TokensPage() {
 
   async function fetchTokenData() {
     try {
-      const [bal, daily, models, packs] = await Promise.all([
-        api.get<TokenBalance>('/tokens/balance'),
-        api.get<DailyUsage[]>('/tokens/usage/daily'),
-        api.get<ModelUsage[]>('/tokens/usage/models'),
-        api.get<TokenPackage[]>('/tokens/packages'),
+      const [balRes, dailyRes, modelsRes, packsRes] = await Promise.all([
+        api.get<any>('/tokens/balance'),
+        api.get<any>('/tokens/usage/daily'),
+        api.get<any>('/tokens/usage/models'),
+        api.get<any>('/tokens/packages'),
       ]);
-      setBalance(bal);
-      setDailyUsage(daily);
-      setModelUsage(models);
-      setPackages(packs);
+      setBalance({ balance: balRes.balance ?? 0, dailyRate: balRes.dailyRate ?? balRes.daysRemaining ?? 0 });
+      setDailyUsage(dailyRes.usage || dailyRes || []);
+      setModelUsage(modelsRes.models || modelsRes || []);
+      setPackages((packsRes.packages || packsRes || []).map((p: any) => ({
+        id: p.id, price: p.price_cents ?? p.priceCents ?? p.price ?? 0,
+        tokens: p.tokens ?? 0, bestValue: p.bestValue ?? p.best_value,
+      })));
     } catch {
-      setBalance({ balance: 1245000, dailyRate: 70000 });
-      setDailyUsage([
-        { date: 'Mon', tokens: 82000 },
-        { date: 'Tue', tokens: 65000 },
-        { date: 'Wed', tokens: 91000 },
-        { date: 'Thu', tokens: 54000 },
-        { date: 'Fri', tokens: 73000 },
-        { date: 'Sat', tokens: 41000 },
-        { date: 'Sun', tokens: 58000 },
-      ]);
-      setModelUsage([
-        { model: 'gpt-4o-mini', friendlyName: 'Fast model', tokens: 810000, percentage: 65 },
-        { model: 'gpt-4o', friendlyName: 'Smart model', tokens: 349000, percentage: 28 },
-        { model: 'claude-3.5', friendlyName: 'Powerful', tokens: 86000, percentage: 7 },
-      ]);
-      setPackages([
-        { id: 'starter', price: 500, tokens: 500000 },
-        { id: 'popular', price: 1000, tokens: 1200000 },
-        { id: 'best', price: 2500, tokens: 3500000, bestValue: true },
-        { id: 'pro', price: 5000, tokens: 8000000 },
-      ]);
-      setTokensSaved(1200000);
+      setBalance({ balance: 0, dailyRate: 0 });
+      setDailyUsage([]);
+      setModelUsage([]);
+      setPackages([]);
+      setTokensSaved(0);
     } finally {
       setLoading(false);
     }

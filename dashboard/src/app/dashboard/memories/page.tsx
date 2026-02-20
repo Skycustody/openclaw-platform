@@ -56,10 +56,11 @@ export default function MemoryPage() {
 
   const fetchMemories = useCallback(async () => {
     try {
-      const data = await api.get<Memory[]>('/memories');
+      const res = await api.get<any>('/memories');
+      const data = Array.isArray(res) ? res : (res.memories || []);
       setMemories(data);
     } catch {
-      setMemories(MOCK_MEMORIES);
+      setMemories([]);
     } finally {
       setLoading(false);
     }

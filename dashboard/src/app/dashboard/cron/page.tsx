@@ -132,10 +132,10 @@ export default function SchedulePage() {
 
   async function fetchTasks() {
     try {
-      const data = await api.get<CronTask[]>('/cron');
-      setTasks(data);
+      const res = await api.get<{ jobs: CronTask[] }>('/cron');
+      setTasks(res.jobs || []);
     } catch {
-      setTasks(MOCK_TASKS);
+      setTasks([]);
     } finally {
       setLoading(false);
     }

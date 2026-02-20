@@ -30,7 +30,7 @@ interface ReferralData {
     total: number;
     active: number;
     monthlyEarnings: number;
-    totalEarned: number;
+    totalEarnings: number;
   };
   referrals: {
     id: string;
@@ -220,7 +220,7 @@ export default function ReferralsPage() {
             </div>
           </div>
           <p className="text-[24px] font-bold text-white tracking-tight">
-            {formatCents(data?.stats.totalEarned ?? 0)}
+            {formatCents(data?.stats.totalEarnings ?? 0)}
           </p>
           <p className="text-[13px] text-white/40 mt-1">Total earned</p>
           <p className="text-[12px] text-white/25 mt-0.5">Lifetime earnings</p>

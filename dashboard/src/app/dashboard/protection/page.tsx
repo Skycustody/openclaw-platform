@@ -50,8 +50,11 @@ export default function ProtectionPage() {
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    api.get<{ protection: ProtectionSettings }>('/settings')
-      .then((res) => { if (res.protection) setSettings(res.protection); })
+    api.get<any>('/settings')
+      .then((res) => {
+        const s = res.settings || res.protection || res;
+        if (s && typeof s === 'object' && 'dailyTokenLimit' in s) setSettings(s);
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);

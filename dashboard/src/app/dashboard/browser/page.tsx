@@ -70,70 +70,23 @@ export default function BrowserPage() {
 
   async function fetchBrowserData() {
     try {
-      const [actionsData, statsData] = await Promise.all([
-        api.get<BrowserAction[]>('/browser/actions'),
-        api.get<BrowserStats>('/browser/stats'),
+      const [actionsRes, statsRes] = await Promise.all([
+        api.get<any>('/browser/actions'),
+        api.get<any>('/browser/stats'),
       ]);
-      setActions(actionsData);
-      setStats(statsData);
+      setActions(actionsRes.actions || (Array.isArray(actionsRes) ? actionsRes : []));
+      setStats(statsRes.stats || statsRes || {
+        sessionsToday: 0, pagesVisited: 0, tokensUsed: 0, currentUrl: null, isActive: false,
+      });
     } catch {
       setStats({
-        sessionsToday: 7,
-        pagesVisited: 34,
-        tokensUsed: 42000,
-        currentUrl: 'https://amazon.com/dp/B0CDR...',
-        isActive: true,
+        sessionsToday: 0,
+        pagesVisited: 0,
+        tokensUsed: 0,
+        currentUrl: null,
+        isActive: false,
       });
-      setActions([
-        {
-          id: '1',
-          type: 'navigate',
-          description: 'Opened Amazon',
-          url: 'https://amazon.com',
-          timestamp: new Date(Date.now() - 60000).toISOString(),
-          status: 'success',
-        },
-        {
-          id: '2',
-          type: 'type',
-          description: 'Searched for "wireless noise-canceling headphones"',
-          url: 'https://amazon.com',
-          timestamp: new Date(Date.now() - 50000).toISOString(),
-          status: 'success',
-        },
-        {
-          id: '3',
-          type: 'click',
-          description: 'Applied filter: Price $50–$150',
-          url: 'https://amazon.com/s?k=headphones',
-          timestamp: new Date(Date.now() - 40000).toISOString(),
-          status: 'success',
-        },
-        {
-          id: '4',
-          type: 'click',
-          description: 'Clicked on "Sony WH-1000XM5" — top rated result',
-          url: 'https://amazon.com/s?k=headphones',
-          timestamp: new Date(Date.now() - 30000).toISOString(),
-          status: 'success',
-        },
-        {
-          id: '5',
-          type: 'extract',
-          description: 'Read price, reviews, and specs',
-          url: 'https://amazon.com/dp/B0CDR...',
-          timestamp: new Date(Date.now() - 20000).toISOString(),
-          status: 'success',
-        },
-        {
-          id: '6',
-          type: 'screenshot',
-          description: 'Saved screenshot of product page',
-          url: 'https://amazon.com/dp/B0CDR...',
-          timestamp: new Date(Date.now() - 10000).toISOString(),
-          status: 'success',
-        },
-      ]);
+      setActions([]);
     } finally {
       setLoading(false);
     }

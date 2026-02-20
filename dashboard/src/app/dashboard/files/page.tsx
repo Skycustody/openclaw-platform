@@ -66,21 +66,15 @@ export default function FilesPage() {
   useEffect(() => {
     Promise.all([
       api.get<{ files: FileItem[] }>('/files'),
-      api.get<StorageUsage>('/files/usage'),
+      api.get<any>('/files/usage'),
     ])
       .then(([filesRes, usageRes]) => {
         setFiles(filesRes.files || []);
-        setUsage(usageRes);
+        setUsage({ used: usageRes.usedBytes ?? usageRes.used ?? 0, total: usageRes.total ?? 5368709120 });
       })
       .catch(() => {
-        setFiles([
-          { id: '1', name: 'Q3 Financial Report.pdf', size: 2400000, createdAt: new Date(Date.now() - 86400000).toISOString(), mimeType: 'application/pdf' },
-          { id: '2', name: 'team-photo.jpg', size: 4800000, createdAt: new Date(Date.now() - 172800000).toISOString(), mimeType: 'image/jpeg' },
-          { id: '3', name: 'sales-data.csv', size: 156000, createdAt: new Date(Date.now() - 259200000).toISOString(), mimeType: 'text/csv' },
-          { id: '4', name: 'meeting-notes.txt', size: 8200, createdAt: new Date(Date.now() - 345600000).toISOString(), mimeType: 'text/plain' },
-          { id: '5', name: 'api-response.json', size: 42000, createdAt: new Date(Date.now() - 432000000).toISOString(), mimeType: 'application/json' },
-        ]);
-        setUsage({ used: 245366784, total: 5368709120 });
+        setFiles([]);
+        setUsage({ used: 0, total: 5368709120 });
       })
       .finally(() => setLoading(false));
   }, []);
@@ -108,8 +102,8 @@ export default function FilesPage() {
         { id: fileId, name: file.name, size: file.size, createdAt: new Date().toISOString(), mimeType: file.type || 'application/octet-stream' },
         ...prev,
       ]);
-      const usageRes = await api.get<StorageUsage>('/files/usage');
-      setUsage(usageRes);
+      const usageRes = await api.get<any>('/files/usage');
+      setUsage({ used: usageRes.usedBytes ?? usageRes.used ?? 0, total: usageRes.total ?? 5368709120 });
     } catch {}
     finally {
       setUploading(false);
@@ -146,8 +140,8 @@ export default function FilesPage() {
     try {
       await api.delete(`/files/${fileId}`);
       setFiles((prev) => prev.filter((f) => f.id !== fileId));
-      const usageRes = await api.get<StorageUsage>('/files/usage');
-      setUsage(usageRes);
+      const usageRes = await api.get<any>('/files/usage');
+      setUsage({ used: usageRes.usedBytes ?? usageRes.used ?? 0, total: usageRes.total ?? 5368709120 });
     } catch {}
     finally {
       setDeletingId(null);
