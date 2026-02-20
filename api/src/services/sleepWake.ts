@@ -19,6 +19,10 @@ export async function runSleepCycle(): Promise<{ slept: number }> {
 
   for (const user of users) {
     const idleMinutes = (Date.now() - new Date(user.last_active).getTime()) / 60000;
+    const ageMinutes = (Date.now() - new Date(user.created_at).getTime()) / 60000;
+
+    // Don't sleep containers less than 60 minutes old (just provisioned)
+    if (ageMinutes < 60) continue;
 
     if (idleMinutes >= SLEEP_AFTER_MINUTES) {
       try {

@@ -17,7 +17,6 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
   const { userId, email, plan, stripeCustomerId } = params;
   const limits = PLAN_LIMITS[plan];
 
-  // Generate a URL-safe subdomain from email
   const subdomain = email
     .split('@')[0]
     .replace(/[^a-z0-9]/gi, '')
@@ -27,8 +26,11 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
   const referralCode = uuid().slice(0, 8).toUpperCase();
   const containerName = `openclaw-${userId.slice(0, 12)}`;
 
+  console.log(`[provision] Starting for ${email} (${userId}), plan=${plan}`);
+
   // Step 1: Find best server
   const server = await findBestServer(limits.ramMb);
+  console.log(`[provision] Using server ${server.ip} (${server.id})`);
 
   // Step 2: Create S3 bucket
   const s3Bucket = await createUserBucket(userId);
@@ -73,43 +75,75 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
   const domain = process.env.DOMAIN || 'yourdomain.com';
   const apiUrl = process.env.API_URL || 'https://api.yourdomain.com';
   const browserlessToken = process.env.BROWSERLESS_TOKEN || '';
+  const image = `${process.env.DOCKER_REGISTRY || 'openclaw/openclaw'}:latest`;
+  const hostRule = `${subdomain}.${domain}`;
 
-  const createCmd = [
-    `mkdir -p /opt/openclaw/instances/${userId}`,
-    `&& docker pull ${process.env.DOCKER_REGISTRY || 'openclaw/openclaw'}:latest`,
-    `&& docker run -d`,
+  // Remove any existing container with same name first
+  await sshExec(server.ip, `docker rm -f ${containerName} 2>/dev/null || true`);
+
+  // Create data directory
+  const mkdirResult = await sshExec(server.ip, `mkdir -p /opt/openclaw/instances/${userId}`);
+  if (mkdirResult.code !== 0) {
+    console.error(`[provision] mkdir failed:`, mkdirResult.stderr);
+    throw new Error(`mkdir failed: ${mkdirResult.stderr}`);
+  }
+
+  // Pull image only if using a remote registry
+  if (process.env.DOCKER_REGISTRY) {
+    console.log(`[provision] Pulling image ${image}...`);
+    const pullResult = await sshExec(server.ip, `docker pull ${image}`);
+    if (pullResult.code !== 0) {
+      console.error(`[provision] docker pull failed:`, pullResult.stderr);
+      throw new Error(`docker pull failed: ${pullResult.stderr}`);
+    }
+  }
+
+  // Verify image exists locally
+  const imageCheck = await sshExec(server.ip, `docker image inspect ${image} > /dev/null 2>&1 && echo OK || echo MISSING`);
+  if (imageCheck.stdout.includes('MISSING')) {
+    throw new Error(`Docker image ${image} not found on server ${server.ip}. Build it first: cd /opt/openclaw-platform/docker && docker build -t ${image} -f Dockerfile.openclaw .`);
+  }
+
+  // Run container — each flag on its own line for clarity
+  const dockerRunCmd = [
+    'docker run -d',
     `--name ${containerName}`,
-    `--restart unless-stopped`,
-    `--network openclaw-net`,
+    '--restart unless-stopped',
+    '--network openclaw-net',
     `--memory ${limits.ramMb}m`,
     `--memory-swap ${limits.ramMb}m`,
     `--cpus ${limits.cpus}`,
     `-e USER_ID=${userId}`,
     `-e S3_BUCKET=${s3Bucket}`,
     `-e PLATFORM_API=${apiUrl}`,
-    `-e BROWSERLESS_URL=wss://production-sfo.browserless.io?token=${browserlessToken}`,
+    `-e "BROWSERLESS_URL=wss://production-sfo.browserless.io?token=${browserlessToken}"`,
     `-v /opt/openclaw/instances/${userId}:/data`,
     `--label traefik.enable=true`,
-    `--label "traefik.http.routers.${containerName}.rule=Host(\\\"${subdomain}.${domain}\\\")"`,
-    `--label "traefik.http.routers.${containerName}.entrypoints=web"`,
+    `--label 'traefik.http.routers.${containerName}.rule=Host(\`${hostRule}\`)'`,
+    `--label 'traefik.http.routers.${containerName}.entrypoints=web'`,
     `--label traefik.http.services.${containerName}.loadbalancer.server.port=18789`,
-    `${process.env.DOCKER_REGISTRY || 'openclaw/openclaw'}:latest`,
+    image,
   ].join(' ');
 
-  const execResult = await sshExec(server.ip, createCmd);
-  if (execResult.code !== 0) {
-    console.error(`Container create failed for ${containerName}:`, execResult.stderr || execResult.stdout);
-    throw new Error(execResult.stderr || execResult.stdout || 'docker run failed');
+  console.log(`[provision] Running docker on ${server.ip}: ${dockerRunCmd.slice(0, 200)}...`);
+  const runResult = await sshExec(server.ip, dockerRunCmd);
+
+  if (runResult.code !== 0) {
+    console.error(`[provision] docker run FAILED (code ${runResult.code}):`, runResult.stderr, runResult.stdout);
+    throw new Error(`docker run failed: ${runResult.stderr || runResult.stdout}`);
   }
+
+  console.log(`[provision] Container ${containerName} started: ${runResult.stdout.slice(0, 20)}`);
 
   // Step 6: Wait for container to be ready
   try {
     await waitForReady(server.ip, containerName, 60000);
+    console.log(`[provision] Container ${containerName} is healthy`);
   } catch {
-    console.warn(`Container ${containerName} health check timed out but may still start`);
+    console.warn(`[provision] Container ${containerName} health check timed out but may still start`);
   }
 
-  // Step 7: Update status to active and refresh last_active (so sleep cycle doesn't immediately stop the container)
+  // Step 7: Update status to active
   await db.query(
     `UPDATE users SET status = 'active', last_active = NOW() WHERE id = $1`,
     [userId]
@@ -123,6 +157,8 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
   } catch (err) {
     console.error('Welcome email failed:', err);
   }
+
+  console.log(`[provision] Complete for ${email}: https://${hostRule}`);
 
   const user = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [userId]);
   return user!;
