@@ -22,11 +22,11 @@ interface Memory {
   createdAt: string;
 }
 
-const typeConfig: Record<string, { label: string; variant: 'active' | 'sleeping' | 'provisioning' | 'accent'; icon: typeof User }> = {
+const typeConfig: Record<string, { label: string; variant: 'default' | 'green' | 'amber' | 'red' | 'blue' | 'accent'; icon: typeof User }> = {
   about_you: { label: 'About You', variant: 'accent', icon: User },
-  preference: { label: 'Preference', variant: 'sleeping', icon: Heart },
-  people: { label: 'People', variant: 'active', icon: Users },
-  work: { label: 'Work', variant: 'provisioning', icon: Briefcase },
+  preference: { label: 'Preference', variant: 'blue', icon: Heart },
+  people: { label: 'People', variant: 'green', icon: Users },
+  work: { label: 'Work', variant: 'amber', icon: Briefcase },
 };
 
 const MOCK_MEMORIES: Memory[] = [
