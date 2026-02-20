@@ -15,6 +15,6 @@ CREATE INDEX IF NOT EXISTS idx_cron_jobs_next_run ON cron_jobs (next_run) WHERE 
 
 CREATE INDEX IF NOT EXISTS idx_memories_user ON memories (user_id);
 
-CREATE INDEX IF NOT EXISTS idx_channels_user ON channels (user_id);
+CREATE INDEX IF NOT EXISTS idx_channels_user ON user_channels (user_id);
 
 CREATE INDEX IF NOT EXISTS idx_activity_log_user_created ON activity_log (user_id, created_at DESC);
