@@ -11,7 +11,7 @@ CREATE INDEX IF NOT EXISTS idx_token_transactions_user_type ON token_transaction
 CREATE INDEX IF NOT EXISTS idx_token_balances_user ON token_balances (user_id);
 
 CREATE INDEX IF NOT EXISTS idx_cron_jobs_user ON cron_jobs (user_id);
-CREATE INDEX IF NOT EXISTS idx_cron_jobs_next_run ON cron_jobs (next_run_at) WHERE enabled = true;
+CREATE INDEX IF NOT EXISTS idx_cron_jobs_next_run ON cron_jobs (next_run) WHERE enabled = true;
 
 CREATE INDEX IF NOT EXISTS idx_memories_user ON memories (user_id);
 
