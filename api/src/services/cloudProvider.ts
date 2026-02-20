@@ -26,7 +26,7 @@ class CloudProvider {
     }
 
     const serverType = process.env.HETZNER_SERVER_TYPE || 'cpx31';
-    const location = process.env.HETZNER_LOCATION || 'ash';
+    const location = process.env.HETZNER_LOCATION || 'fsn1';
     const hostname = `openclaw-worker-${Date.now()}`;
 
     const apiUrl = process.env.API_URL || 'https://api.yourdomain.com';
