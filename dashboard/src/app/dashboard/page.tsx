@@ -116,8 +116,11 @@ export default function AgentControlCenter() {
       setProvisionMsg('Waiting for agent to come online...');
 
       let ready = false;
-      for (let i = 0; i < 40; i++) {
-        await new Promise(r => setTimeout(r, 3000));
+      let elapsed = 0;
+      for (let i = 0; i < 30; i++) {
+        const delay = i < 3 ? 2000 : 4000;
+        await new Promise(r => setTimeout(r, delay));
+        elapsed += delay / 1000;
         try {
           const check = await api.get<{ ready: boolean; httpCode?: string }>('/agent/ready');
           if (check.ready) {
@@ -125,7 +128,7 @@ export default function AgentControlCenter() {
             break;
           }
         } catch {}
-        setProvisionMsg(`Waiting for agent to come online... (${(i + 1) * 3}s)`);
+        setProvisionMsg(`Waiting for agent to come online... (${Math.round(elapsed)}s)`);
       }
 
       if (!ready) {
