@@ -6,11 +6,11 @@ import { Button } from '@/components/ui/Button';
 import { Header } from '@/components/ui/header';
 import { LogoCloud } from '@/components/ui/logo-cloud';
 import {
-  Box,
-  Lock,
-  Search,
-  Settings,
   Zap,
+  MessageSquare,
+  Globe,
+  Shield,
+  Clock,
   Coins,
   ArrowRight,
   Check,
@@ -24,34 +24,40 @@ import { GlowingEffect } from '@/components/ui/glowing-effect';
 
 const features = [
   {
-    icon: Box,
-    title: 'Do things the right way',
-    desc: "Running out of copy so I'll write anything.",
+    icon: Zap,
+    title: 'Ready in 60 Seconds',
+    desc: 'Sign up, pay, and your personal AI agent is live — no setup needed.',
     area: 'md:[grid-area:1/1/2/7] xl:[grid-area:1/1/2/5]',
   },
   {
-    icon: Settings,
-    title: 'The best AI code editor ever.',
-    desc: "Yes, it's true. I'm not even kidding. Ask my mom if you don't believe me.",
+    icon: MessageSquare,
+    title: 'All Your Apps',
+    desc: 'Connect to Telegram, WhatsApp, Discord, Slack and more.',
     area: 'md:[grid-area:1/7/2/13] xl:[grid-area:2/1/3/5]',
   },
   {
-    icon: Lock,
-    title: 'You should buy Aceternity UI Pro',
-    desc: "It's the best money you'll ever spend",
+    icon: Globe,
+    title: 'Browses the Web',
+    desc: 'Your agent searches, researches, checks prices, and extracts data.',
     area: 'md:[grid-area:2/1/3/7] xl:[grid-area:1/5/3/8]',
   },
   {
-    icon: Sparkles,
-    title: 'This card is also built by Cursor',
-    desc: "I'm not even kidding. Ask my mom if you don't believe me.",
-    area: 'md:[grid-area:2/7/3/13] xl:[grid-area:1/8/2/13]',
+    icon: Shield,
+    title: 'Token Protection',
+    desc: 'Smart budgets prevent surprise costs. You stay in control.',
+    area: 'md:[grid-area:2/7/3/13] xl:[grid-area:1/8/2/10]',
   },
   {
-    icon: Search,
-    title: 'Coming soon on Aceternity UI',
-    desc: "I'm writing the code as I record this, no shit.",
-    area: 'md:[grid-area:3/1/4/13] xl:[grid-area:2/8/3/13]',
+    icon: Clock,
+    title: 'Works While You Sleep',
+    desc: 'Schedule daily briefings, email summaries, price alerts — automated.',
+    area: 'md:[grid-area:3/1/4/7] xl:[grid-area:1/10/2/13]',
+  },
+  {
+    icon: Coins,
+    title: 'Saves You Money',
+    desc: 'Smart routing picks the cheapest AI model that can do the job.',
+    area: 'md:[grid-area:3/7/4/13] xl:[grid-area:2/8/3/13]',
   },
 ];
 
@@ -287,12 +293,13 @@ function FeaturesSection() {
           >
             <div className="relative h-full rounded-[1.25rem] border-[0.75px] border-border p-2 md:rounded-[1.5rem] md:p-3">
               <GlowingEffect
-                spread={40}
+                spread={60}
                 glow={true}
                 disabled={false}
-                proximity={64}
+                proximity={200}
                 inactiveZone={0.01}
                 borderWidth={3}
+                blur={4}
               />
               <div className="relative flex h-full flex-col justify-between gap-6 overflow-hidden rounded-xl border-[0.75px] bg-background p-6 shadow-sm dark:shadow-[0px_0px_27px_0px_rgba(45,45,45,0.3)] md:p-6">
                 <div className="relative flex flex-1 flex-col justify-between gap-3">
