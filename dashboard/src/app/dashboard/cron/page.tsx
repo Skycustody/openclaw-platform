@@ -250,7 +250,7 @@ export default function SchedulePage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-3 mb-1.5">
                     <h3 className="text-[16px] font-semibold text-white truncate">{task.name}</h3>
-                    <Badge variant={task.enabled ? 'active' : 'offline'}>
+                    <Badge variant={task.enabled ? 'green' : 'red'}>
                       {task.enabled ? 'Active' : 'Paused'}
                     </Badge>
                   </div>
