@@ -107,7 +107,7 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
       `mkdir -p /opt/openclaw/config`,
       `echo '${traefikCfgB64}' | base64 -d > /opt/openclaw/config/traefik.yml`,
       `docker rm -f traefik 2>/dev/null || true`,
-      `docker run -d --name traefik --restart unless-stopped --network openclaw-net -e DOCKER_API_VERSION=1.44 -p 80:80 -p 443:443 -v /var/run/docker.sock:/var/run/docker.sock:ro -v /opt/openclaw/config/traefik.yml:/etc/traefik/traefik.yml:ro traefik:latest`,
+      `docker run -d --name traefik --restart unless-stopped --network openclaw-net -e DOCKER_API_VERSION=$(docker version --format '{{.Server.APIVersion}}' 2>/dev/null || echo 1.44) -p 80:80 -p 443:443 -v /var/run/docker.sock:/var/run/docker.sock:ro -v /opt/openclaw/config/traefik.yml:/etc/traefik/traefik.yml:ro traefik:latest`,
     ].join(' && '));
   }
 

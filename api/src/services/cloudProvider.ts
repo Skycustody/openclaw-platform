@@ -152,7 +152,7 @@ TEOF
 
 # Start Traefik
 docker run -d --name traefik --restart unless-stopped --network openclaw-net \\
-  -e DOCKER_API_VERSION=1.44 \\
+  -e DOCKER_API_VERSION=$(docker version --format '{{.Server.APIVersion}}' 2>/dev/null || echo 1.44) \\
   -p 80:80 -p 443:443 \\
   -v /var/run/docker.sock:/var/run/docker.sock:ro \\
   -v /opt/openclaw/config/traefik.yml:/etc/traefik/traefik.yml:ro \\
