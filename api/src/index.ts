@@ -4,6 +4,14 @@ import { config } from 'dotenv';
 // Load .env from project root (openclaw-platform/.env) when running from api/
 config({ path: path.join(__dirname, '..', '..', '.env') });
 
+const sshKey = process.env.SSH_PRIVATE_KEY;
+if (sshKey) {
+  const len = sshKey.replace(/\s/g, '').length;
+  console.log(`SSH key loaded: ${len} chars (for worker SSH)`);
+} else {
+  console.warn('SSH_PRIVATE_KEY not set — SSH to workers will fail');
+}
+
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';

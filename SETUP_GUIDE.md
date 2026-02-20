@@ -764,170 +764,73 @@ Your platform uses AI models from OpenAI and Anthropic. Users' messages go throu
 
 ---
 
-## Step 13 — Set Up Hostinger API (Auto Server Creation)
+## Step 13 — Set Up Hetzner Cloud (Auto Server Creation)
 
-> **Quick reference:** For a short "where to find everything" checklist (API key, script ID, domain, SSH), see **[WORKER_SETUP.md](WORKER_SETUP.md)**.
+> **Quick reference:** See **[WORKER_SETUP.md](WORKER_SETUP.md)** for a short checklist.
 
-**This is the magic part.** Your platform can automatically create brand-new servers when it needs more capacity. No manual work from you. Here's the idea: when your existing worker servers start getting full (85% of their RAM is being used by user containers), your platform calls Hostinger's API and says "create a new server for me." Hostinger spins one up in about 2 minutes, runs a setup script on it, and the new server registers itself with your platform. You wake up in the morning with more servers and you didn't do a thing.
+**This is the magic part.** Your platform automatically creates brand-new worker servers when capacity runs low. No manual work. When existing workers pass 85% RAM usage, your API calls Hetzner Cloud to spin up a new VPS. Hetzner creates it in ~60 seconds, a cloud-init script installs Docker + Traefik, and the new server registers itself with your platform. Fully automatic.
 
-**Do I need this right away?** No. If you're just starting out with a few users, you can skip this step and manually create worker servers as needed. But setting it up now means you'll never have to worry about running out of capacity.
+**Why Hetzner instead of Hostinger?** Hetzner Cloud has a fully functional API for creating servers programmatically — no limitations, no beta restrictions. Servers start at ~$4.35/month (2 vCPU, 4GB RAM) with hourly billing.
 
-### 13a. Get Your Hostinger API Key
+### 13a. Get Your Hetzner Cloud API Token
 
-The API key is what lets your code talk to Hostinger programmatically (create servers, delete servers, list servers — all through code instead of clicking buttons on a website).
+1. Sign up at **https://console.hetzner.cloud** (free account creation)
+2. Create a project (or use the default one)
+3. Go to **Security** → **API tokens** → **Generate API token**
+4. Select **Read & Write** permissions
+5. **Copy the token immediately** — this is your `HETZNER_API_TOKEN`
 
-1. Log into **Hostinger** (hostinger.com)
-2. Go to your **Hostinger Panel** (the main dashboard after login)
-3. In the left sidebar or account menu, look for one of these:
-   - **"API"** or **"API Access"**
-   - **"Developer"** or **"Integrations"**
-   - Or go directly to **https://developers.hostinger.com**
-4. If you don't see an API option, you may need to:
-   - Contact Hostinger support and ask them to enable API access on your account
-   - Or check if API access is only available on certain plans (usually available on all VPS plans)
-5. Once you find the API section, click **"Generate API Key"** or **"Create New Token"**
-6. Give it a name like `openclaw-auto-scaling`
-7. For permissions, select **all VPS-related permissions** (create, read, delete virtual machines)
-8. **Copy the API key and save it immediately** — this is your `HOSTINGER_API_KEY`
+> **Keep this token secret.** Anyone with it can create or delete servers on your account (which costs money).
 
-> **Keep this key secret.** Anyone with this key can create or delete servers on your Hostinger account (which costs money). Never share it or put it in public code.
-
-### 13b. Create a Post-Install Script on Hostinger
-
-**What is a post-install script?** When Hostinger creates a new server, it can automatically run a script right after the operating system is installed. This is like giving the server a to-do list: "install Docker, set up the traffic router, and call home to register yourself."
-
-Your project already has this script ready: `scripts/server-setup.sh`. But before uploading it to Hostinger, you need to customize it with your real values.
-
-**Step 1: Edit the script on your server:**
-
-```bash
-cd /opt/openclaw-platform
-nano scripts/server-setup.sh
-```
-
-Find and replace these placeholders:
-
-| Find this | Replace with |
-|-----------|-------------|
-| `admin@yourdomain.com` | Your real email address (for SSL certificate notifications) |
-| `https://api.yourdomain.com` | Your real API URL (e.g., `https://api.myaibots.com`) |
-| `changeme` | Your actual `INTERNAL_SECRET` value (the 64-character hex string you generated in Step 14) |
-
-Save the file (`Ctrl + X`, `Y`, `Enter`).
-
-**Step 2: Upload the script to Hostinger:**
-
-You have two options here depending on how Hostinger's API/dashboard handles post-install scripts:
-
-**Option A — Via the Hostinger Dashboard:**
-1. Log into Hostinger → go to your VPS section
-2. Look for **"Startup Scripts"**, **"Post-install Scripts"**, or similar
-3. Click **"Create New Script"** or **"Add Script"**
-4. Name it: `openclaw-server-setup`
-5. Paste the entire contents of your edited `scripts/server-setup.sh`
-6. Save it
-7. **Copy the Script ID** that Hostinger gives you — this is your `HOSTINGER_SCRIPT_ID`
-
-**Option B — Via the Hostinger API:**
-If Hostinger doesn't have a UI for scripts, you can create it via API call:
-
-```bash
-curl -X POST "https://developers.hostinger.com/api/vps/v1/post-install-scripts" \
-  -H "Authorization: Bearer rnEHbnDC8uI2GTiFu14OukiFiLtIy4btY3rbpa8uc34dbb16" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "openclaw-server-setup",
-    "content": "CiMhL2Jpbi9iYXNoCiMgT3BlbkNsYXcgU2VydmVyIFBvc3QtSW5zdGFsbCBTY3JpcHQKIyBSdW5zIGF1dG9tYXRpY2FsbHkgb24gZXZlcnkgbmV3IEhvc3RpbmdlciBWUFMgdmlhIHBvc3QtaW5zdGFsbCBob29rCnNldCAtZXVvIHBpcGVmYWlsCgplY2hvICI9PT0gT3BlbkNsYXcgU2VydmVyIFNldHVwID09PSIKZWNobyAiU3RhcnRpbmcgYXQgJChkYXRlKSIKCiMg4pSA4pSAIFN5c3RlbSBVcGRhdGVzIOKUgOKUgAphcHQgdXBkYXRlICYmIGFwdCB1cGdyYWRlIC15CgojIOKUgOKUgCBJbnN0YWxsIERvY2tlciDilIDilIAKaWYgISBjb21tYW5kIC12IGRvY2tlciAmPiAvZGV2L251bGw7IHRoZW4KICBjdXJsIC1mc1NMIGh0dHBzOi8vZ2V0LmRvY2tlci5jb20gfCBzaAogIHVzZXJtb2QgLWFHIGRvY2tlciByb290CiAgc3lzdGVtY3RsIGVuYWJsZSBkb2NrZXIKICBzeXN0ZW1jdGwgc3RhcnQgZG9ja2VyCiAgZWNobyAiRG9ja2VyIGluc3RhbGxlZCIKZmkKCiMg4pSA4pSAIEluc3RhbGwgRG9ja2VyIENvbXBvc2Ug4pSA4pSACmlmICEgY29tbWFuZCAtdiBkb2NrZXItY29tcG9zZSAmPiAvZGV2L251bGw7IHRoZW4KICBhcHQgaW5zdGFsbCAteSBkb2NrZXItY29tcG9zZQogIGVjaG8gIkRvY2tlciBDb21wb3NlIGluc3RhbGxlZCIKZmkKCiMg4pSA4pSAIEluc3RhbGwgTm9kZS5qcyAyMCDilIDilIAKaWYgISBjb21tYW5kIC12IG5vZGUgJj4gL2Rldi9udWxsOyB0aGVuCiAgY3VybCAtZnNTTCBodHRwczovL2RlYi5ub2Rlc291cmNlLmNvbS9zZXR1cF8yMC54IHwgYmFzaCAtCiAgYXB0IGluc3RhbGwgLXkgbm9kZWpzCiAgZWNobyAiTm9kZS5qcyBpbnN0YWxsZWQ6ICQobm9kZSAtdikiCmZpCgojIOKUgOKUgCBJbnN0YWxsIHN5c3RlbSBtb25pdG9yaW5nIOKUgOKUgAphcHQgaW5zdGFsbCAteSBodG9wIGlvdG9wIGN1cmwganEKCiMg4pSA4pSAIENyZWF0ZSBkaXJlY3Rvcnkgc3RydWN0dXJlIOKUgOKUgApta2RpciAtcCAvb3B0L29wZW5jbGF3L3tpbnN0YW5jZXMsc2NyaXB0cyxsb2dzLGNvbmZpZyx0cmFlZmlrfQoKIyDilIDilIAgQ29uZmlndXJlIFRyYWVmaWsg4pSA4pSACmNhdCA+IC9vcHQvb3BlbmNsYXcvY29uZmlnL3RyYWVmaWsueW1sIDw8J1RSQUVGSUsnCmFwaToKICBkYXNoYm9hcmQ6IGZhbHNlCgplbnRyeVBvaW50czoKICB3ZWI6CiAgICBhZGRyZXNzOiAiOjgwIgogICAgaHR0cDoKICAgICAgcmVkaXJlY3Rpb25zOgogICAgICAgIGVudHJ5UG9pbnQ6CiAgICAgICAgICB0bzogd2Vic2VjdXJlCiAgICAgICAgICBzY2hlbWU6IGh0dHBzCiAgd2Vic2VjdXJlOgogICAgYWRkcmVzczogIjo0NDMiCgpwcm92aWRlcnM6CiAgZG9ja2VyOgogICAgZW5kcG9pbnQ6ICJ1bml4Oi8vL3Zhci9ydW4vZG9ja2VyLnNvY2siCiAgICBleHBvc2VkQnlEZWZhdWx0OiBmYWxzZQogICAgbmV0d29yazogb3BlbmNsYXctbmV0CgpjZXJ0aWZpY2F0ZXNSZXNvbHZlcnM6CiAgbGV0c2VuY3J5cHQ6CiAgICBhY21lOgogICAgICBlbWFpbDogIiR7bmFuYW1hY2JyaWRlNTlAZ21haWwuY29tfSIKICAgICAgc3RvcmFnZTogL29wdC9vcGVuY2xhdy90cmFlZmlrL2FjbWUuanNvbgogICAgICBodHRwQ2hhbGxlbmdlOgogICAgICAgIGVudHJ5UG9pbnQ6IHdlYgpUUkFFRklLCgp0b3VjaCAvb3B0L29wZW5jbGF3L3RyYWVmaWsvYWNtZS5qc29uCmNobW9kIDYwMCAvb3B0L29wZW5jbGF3L3RyYWVmaWsvYWNtZS5qc29uCgojIOKUgOKUgCBDcmVhdGUgRG9ja2VyIG5ldHdvcmsg4pSA4pSACmRvY2tlciBuZXR3b3JrIGNyZWF0ZSBvcGVuY2xhdy1uZXQgMj4vZGV2L251bGwgfHwgdHJ1ZQoKIyDilIDilIAgU3RhcnQgVHJhZWZpayByZXZlcnNlIHByb3h5IOKUgOKUgApkb2NrZXIgcm0gLWYgdHJhZWZpayAyPi9kZXYvbnVsbCB8fCB0cnVlCmRvY2tlciBydW4gLWQgXAogIC0tbmFtZSB0cmFlZmlrIFwKICAtLXJlc3RhcnQgdW5sZXNzLXN0b3BwZWQgXAogIC0tbmV0d29yayBvcGVuY2xhdy1uZXQgXAogIC1wIDgwOjgwIC1wIDQ0Mzo0NDMgXAogIC12IC92YXIvcnVuL2RvY2tlci5zb2NrOi92YXIvcnVuL2RvY2tlci5zb2NrOnJvIFwKICAtdiAvb3B0L29wZW5jbGF3L2NvbmZpZy90cmFlZmlrLnltbDovdHJhZWZpay55bWw6cm8gXAogIC12IC9vcHQvb3BlbmNsYXcvdHJhZWZpay9hY21lLmpzb246L29wdC9vcGVuY2xhdy90cmFlZmlrL2FjbWUuanNvbiBcCiAgdHJhZWZpazp2My4wCgplY2hvICJUcmFlZmlrIHN0YXJ0ZWQiCgojIOKUgOKUgCBDb25maWd1cmUgc3lzdGVtIGxpbWl0cyDilIDilIAKY2F0ID4+IC9ldGMvc3lzY3RsLmNvbmYgPDwnU1lTQ1RMJwpuZXQuY29yZS5zb21heGNvbm49NjU1MzUKbmV0LmlwdjQudGNwX21heF9zeW5fYmFja2xvZz02NTUzNQp2bS5vdmVyY29tbWl0X21lbW9yeT0xClNZU0NUTApzeXNjdGwgLXAKCiMg4pSA4pSAIENvbmZpZ3VyZSBsb2dyb3RhdGUgZm9yIGNvbnRhaW5lciBsb2dzIOKUgOKUgApjYXQgPiAvZXRjL2xvZ3JvdGF0ZS5kL2RvY2tlci1jb250YWluZXJzIDw8J0xPR1JPVEFURScKL3Zhci9saWIvZG9ja2VyL2NvbnRhaW5lcnMvKi8qLmxvZyB7CiAgcm90YXRlIDcKICBkYWlseQogIGNvbXByZXNzCiAgc2l6ZT0xME0KICBtaXNzaW5nb2sKICBkZWxheWNvbXByZXNzCiAgY29weXRydW5jYXRlCn0KTE9HUk9UQVRFCgojIOKUgOKUgCBSZWdpc3RlciB3aXRoIGNvbnRyb2wgcGxhbmUg4pSA4pSAClNFUlZFUl9JUD0kKGN1cmwgLXNmIGlmY29uZmlnLm1lKQpUT1RBTF9SQU09JChmcmVlIC1tIHwgYXdrICcvXk1lbTove3ByaW50ICQyfScpCgplY2hvICJSZWdpc3RlcmluZyBzZXJ2ZXI6IElQPSRTRVJWRVJfSVAgUkFNPSR7VE9UQUxfUkFNfU1CIgoKY3VybCAtc2YgLVggUE9TVCAiJHtQTEFURk9STV9BUEk6LWh0dHBzOi8vYXBpLnZhbG5hYW4uY29tfS93ZWJob29rcy9zZXJ2ZXJzL3JlZ2lzdGVyIiBcCiAgLUggIkNvbnRlbnQtVHlwZTogYXBwbGljYXRpb24vanNvbiIgXAogIC1IICJ4LWludGVybmFsLXNlY3JldDogJHtJTlRFUk5BTF9TRUNSRVQ6LTdmYWYwYjM1ZDAzZTFmYWYyNmM5ZjhlYmFjZjcyYmRkMzBhMWY1Y2QxOWI0MGEzMzRjOThhMmM5ZGU4MzRiOGJ9IiBcCiAgLWQgInsKICAgIFwiaXBcIjogXCIkU0VSVkVSX0lQXCIsCiAgICBcInJhbVwiOiAkVE9UQUxfUkFNLAogICAgXCJob3N0bmFtZVwiOiBcIiQoaG9zdG5hbWUpXCIKICB9IiB8fCBlY2hvICJXQVJOSU5HOiBGYWlsZWQgdG8gcmVnaXN0ZXIgd2l0aCBjb250cm9sIHBsYW5lIgoKZWNobyAiPT09IFNlcnZlciBTZXR1cCBDb21wbGV0ZSA9PT0iCmVjaG8gIkZpbmlzaGVkIGF0ICQoZGF0ZSkiCg==root@srv1402"
-  }'
-```
-
-The response will include a script ID. Save it.
-
-### 13c. How Auto-Scaling Works — The Full Picture
-
-Here's the entire flow, explained like you're watching it happen in real time:
+### 13b. How Auto-Scaling Works — The Full Picture
 
 ```
-SITUATION: You have 25 users, all running on Worker Server #1.
-Server #1 has 32GB RAM, and 28GB is being used (87.5%). That's over 85%.
+SITUATION: You have 25 users on Worker Server #1.
+Server #1 has 8GB RAM, and 7GB is used (87.5%). That's over 85%.
 
 WHAT HAPPENS AUTOMATICALLY:
 
-1. Every 5 minutes, your API runs a background job that checks all worker servers
-2. It asks each server: "How much RAM are you using?"
-3. Server #1 reports: "I'm at 87.5%"
-4. Your API thinks: "That's over 85%. I need a new server."
+1. Every 5 minutes, your API checks all worker servers' RAM usage
+2. Server #1 reports 87.5% → over the 85% threshold
+3. Your API calls Hetzner: "Create a cx22 server in Ashburn"
 
-5. Your API sends this request to Hostinger:
-   POST https://developers.hostinger.com/api/vps/v1/virtual-machines
-   {
-     "plan": "KVM8",              ← 8 CPU, 32GB RAM server
-     "region": "us-east",          ← same region as your other servers
-     "os_template": "ubuntu-22-04", ← operating system
-     "hostname": "openclaw-1708234567", ← unique name based on timestamp
-     "post_install_script_id": "abc123"  ← your setup script
-   }
+4. Hetzner creates the VPS in ~60 seconds
+5. Cloud-init runs automatically:
+   a. Installs Docker
+   b. Sets up Traefik (the traffic router for subdomains)
+   c. Builds/pulls the openclaw container image
+   d. Calls YOUR API: "I'm a new server! IP=45.67.89.12, RAM=4096MB"
 
-6. Hostinger receives this and starts creating a new VPS
-   (This takes about 2 minutes)
-
-7. The VPS boots up with Ubuntu 22.04
-8. Hostinger sees there's a post-install script and runs it
-9. The post-install script does this:
-   a. Updates Ubuntu
-   b. Installs Docker
-   c. Installs Docker Compose
-   d. Installs Node.js
-   e. Creates the /opt/openclaw/ directory structure
-   f. Sets up Traefik (the traffic router that gives each user their own subdomain)
-   g. Starts Traefik as a Docker container
-   h. Gets its own IP address
-   i. Calls YOUR API: "Hey, I'm a new server! My IP is 45.67.89.12, I have 32768 MB of RAM"
-
-10. Your API receives this registration and adds the new server to its database
-11. The new server is now available for new users
-
-NEXT TIME SOMEONE SIGNS UP:
-Your API picks the server with the most free RAM → that's the new Server #2
-It creates a Docker container on Server #2 for the new user
-Done.
+6. Your API adds the new server to its database
+7. New users get placed on the new server automatically
 ```
 
-### 13d. What Server Plan Gets Created
+### 13c. What Server Type Gets Created
 
-The code currently creates **KVM8** servers (8 vCPU, 32GB RAM, ~$25/mo). This is the largest Hostinger VPS plan — you want big servers for workers because each one will host 15-30 user containers.
+Default: **cx22** (2 vCPU, 4GB RAM, ~€4.35/mo). Change in `.env`:
 
-**Want to change the plan?** Edit `api/src/services/hostinger.ts` and change `plan: 'KVM8'` to:
-- `'KVM1'` — 1 CPU, 4GB RAM (~$5/mo) — for testing
-- `'KVM2'` — 2 CPU, 8GB RAM (~$10/mo) — small scale
-- `'KVM4'` — 4 CPU, 16GB RAM (~$16/mo) — medium scale
-- `'KVM8'` — 8 CPU, 32GB RAM (~$25/mo) — production recommended
+```bash
+HETZNER_SERVER_TYPE=cx22   # cx22=4GB, cx32=8GB, cx42=16GB
+HETZNER_LOCATION=ash       # ash (US-East), hil (US-West), nbg/fsn/hel (EU), sin (SG)
+```
 
-### 13e. How DNS Works for Worker Server Users (Wildcard + Cloudflare)
+### 13d. How DNS Works for Worker Server Users
 
-Remember the wildcard DNS record (`*`) you added to Cloudflare in Step 3? That's the key to making user subdomains work.
-
-**How the routing chain works:**
+Remember the wildcard DNS record (`*`) from Step 3? That routes all subdomains:
 
 ```
 User types: john123.yourdomain.com
     ↓
-Cloudflare sees the * wildcard record → sends traffic to your main server IP
+Cloudflare sees * wildcard → sends to worker server IP
     ↓
-Your main server knows which worker server has john123's container
+Traefik on the worker sees john123.yourdomain.com → routes to john123's container
     ↓
-It routes the traffic to the right worker server
-    ↓
-Traefik on the worker server sees john123.yourdomain.com → routes to john123's container
-    ↓
-The user sees their AI agent dashboard
+User sees their AI agent dashboard
 ```
 
-**As you grow bigger:** You can update the wildcard DNS to point to a load balancer, or use Cloudflare's load balancing feature to distribute traffic across multiple worker servers directly. But for starting out, routing everything through the main server works fine.
+### 13e. What If I Don't Want Auto-Scaling Yet?
 
-### 13f. What If I Don't Want Auto-Scaling Yet?
-
-That's totally fine! You can manually create worker servers on Hostinger's website and set them up by SSHing in and running the setup script yourself:
+That's fine. You can manually create servers on Hetzner's dashboard and run the setup script yourself:
 
 ```bash
 ssh root@NEW_SERVER_IP
@@ -1004,9 +907,8 @@ JWT_SECRET=PASTE_64_CHAR_HEX_STRING_1
 ENCRYPTION_KEY=PASTE_64_CHAR_HEX_STRING_2
 INTERNAL_SECRET=PASTE_64_CHAR_HEX_STRING_3
 
-# ── Hostinger Auto-Scaling ──
-HOSTINGER_API_KEY=rnEHbnDC8uI2GTiFu14OukiFiLtIy4btY3rbpa8uc34dbb16
-HOSTINGER_SCRIPT_ID=2830
+# ── Hetzner Cloud Auto-Scaling ──
+HETZNER_API_TOKEN=PASTE_YOUR_HETZNER_API_TOKEN
 
 # ── Server Config ──
 PORT=4000
@@ -1406,8 +1308,8 @@ Here's a complete summary of what happens end-to-end:
 ```
 1. A background job checks server RAM usage every few minutes
 2. If any server passes 85% RAM usage...
-3. Your API calls Hostinger: "Create a new KVM8 VPS with Ubuntu 22.04"
-4. Hostinger creates the server (~2 minutes)
+3. Your API calls Hetzner: "Create a new cx22 VPS with Ubuntu 22.04"
+4. Hetzner creates the server (~60 seconds)
 5. The post-install script runs automatically on the new server:
    a. Installs Docker + Docker Compose + Node.js
    b. Sets up Traefik (handles SSL + routing)
@@ -1545,18 +1447,17 @@ These are Cloudflare-specific errors:
 - If using Cloudflare proxy, the origin might show a different URL — make sure you're using your domain, not the Cloudflare one
 - You may need to wait a few minutes after making changes in Google Cloud
 
-### "Hostinger auto-scaling isn't creating servers"
+### "Auto-scaling isn't creating servers"
 
-- Check your Hostinger API key is correct and hasn't expired
-- Make sure your Hostinger account has a valid payment method (it needs to charge you for new servers)
+- Check your `HETZNER_API_TOKEN` is correct in `.env`
+- Make sure your Hetzner account has a payment method added
 - Check the API logs for errors: `pm2 logs openclaw-api --lines 100`
-- Test the API key manually:
+- Test the API token manually:
   ```bash
-  curl -H "Authorization: Bearer YOUR_HOSTINGER_API_KEY" \
-    https://developers.hostinger.com/api/vps/v1/virtual-machines
+  curl -H "Authorization: Bearer YOUR_HETZNER_TOKEN" \
+    https://api.hetzner.cloud/v1/servers
   ```
-  If this returns a list (even empty), your key works. If it returns an error, the key is wrong.
-- Make sure `HOSTINGER_SCRIPT_ID` in your `.env` matches the actual script ID on Hostinger
+  If this returns a list (even empty), your token works. If it returns an error, the token is wrong.
 
 ### "New worker server didn't register with the platform"
 
@@ -1660,9 +1561,8 @@ STEP 12 — AI KEYS
 OpenAI API Key:           sk__________________
 Anthropic API Key:        sk-ant______________
 
-STEP 13 — HOSTINGER API
-Hostinger API Key:        ____________________
-Post-Install Script ID:   ____________________
+STEP 13 — HETZNER CLOUD
+Hetzner API Token:        ____________________
 
 STEP 14 — SECURITY SECRETS
 JWT Secret:               ____________________

@@ -1,173 +1,143 @@
-# Worker Server Setup — Where to Find Everything
+# Worker Server Setup — Hetzner Cloud Auto-Provisioning
 
-This guide tells you **how to set up** auto-provisioned worker servers and **where to find** each value. After setup, when a user pays, the platform can create new Hostinger VPSes, run a post-install script (Docker, Traefik, register with API), and then run their agent container so "Open Agent" works.
+**Architecture:** Your **control plane** (API, dashboard, database) runs on your **Hostinger** VPS. **Workers** (user agent containers) are **auto-created on Hetzner Cloud** when capacity runs low. You only use Hetzner for worker VPSes; Hostinger stays the main server.
+
+This guide explains how to set up **fully automatic** worker provisioning: when a user pays, the platform creates a Hetzner Cloud VPS, installs Docker + Traefik, registers it with your API, and deploys the user's agent container — all without manual intervention.
 
 ---
 
-## 1. HOSTINGER_API_KEY
+## Does Hetzner support auto-create VPS + run script?
 
-**What it is:** A token that lets your API create and manage VPSes on your Hostinger account.
+**Yes.** Hetzner Cloud API supports both:
 
-**Where to find it:**
+1. **Create server via API** — `POST https://api.hetzner.cloud/v1/servers` with `name`, `server_type`, `image`, `location`. The server is created in about 60 seconds and you get the server ID and public IP in the response.
 
-1. Log in at **https://hostinger.com**
-2. In the left sidebar or top search, look for **"API"** or **"API Access"**
-3. Click **Generate API Key** / **Create New Token**
-4. Name it (e.g. "OpenClaw platform"), set expiration if you want
-5. **Copy the key and save it** — this is `HOSTINGER_API_KEY`
+2. **Run a script on first boot** — Pass `user_data` in the same request. Hetzner uses **cloud-init** on Ubuntu images. You can send:
+   - A **bash script** (first line `#!/bin/bash`) — cloud-init runs it once on first boot.
+   - Or **cloud-config YAML** (first line `#cloud-config`) for package installs, users, etc.
 
-**Docs:** [Hostinger API](https://support.hostinger.com/en/articles/10840865-what-is-hostinger-api) · Developer portal: **https://developers.hostinger.com**
+Our code sends a single bash script in `user_data` that installs Docker, Traefik, and registers the new server with your API. No manual steps.
 
-**Put it in:** `.env`:
+**References:** [Hetzner Cloud API – Servers](https://docs.hetzner.cloud/reference/cloud#tag/Servers) · [Basic Cloud Config (Hetzner)](https://community.hetzner.com/tutorials/basic-cloud-config) · [Cloud-init formats](https://cloudinit.readthedocs.io/en/stable/explanation/format.html) (including shell scripts).
+
+---
+
+## 1. Create a Hetzner Cloud Account + API Token
+
+1. Sign up at **https://console.hetzner.cloud**
+2. Create a project (or use the default one)
+3. Go to **Security → API tokens → Generate API token**
+4. Select **Read & Write** permissions
+5. Copy the token
+
+In your `.env`:
 ```bash
-HOSTINGER_API_KEY=your_key_here
+HETZNER_API_TOKEN=your_token_here
+```
+
+**Cost:** Servers start at **~€4.35/month** (cx22 = 2 vCPU, 4GB RAM). Billing is hourly — you only pay for what you use.
+
+---
+
+## 2. Choose Server Type and Location (optional)
+
+Defaults are already set (`cx22` in `ash` = Ashburn, Virginia). Override if needed:
+
+```bash
+# In .env (optional)
+HETZNER_SERVER_TYPE=cx22    # cx22=4GB, cx32=8GB, cx42=16GB
+HETZNER_LOCATION=ash        # ash, hil (US), nbg1, fsn1, hel1 (EU), sin (SG)
+```
+
+To see all options:
+```bash
+# List server types
+curl -sS "https://api.hetzner.cloud/v1/server_types" \
+  -H "Authorization: Bearer YOUR_TOKEN" | jq '.server_types[] | {name, description, cores, memory, disk, prices}'
+
+# List locations
+curl -sS "https://api.hetzner.cloud/v1/locations" \
+  -H "Authorization: Bearer YOUR_TOKEN" | jq '.locations[] | {name, city, country}'
 ```
 
 ---
 
-## 2. HOSTINGER_ITEM_ID, HOSTINGER_TEMPLATE_ID, HOSTINGER_DATA_CENTER_ID (optional)
+## 3. SSH Keys (for API → worker access)
 
-**What they are:** The catalog item ID for the VPS plan, the OS template ID (e.g. Ubuntu 22.04), and the data center ID.
+The API server needs to SSH into workers to run `docker` commands.
 
-**You don’t have to set these.** If they’re missing from `.env`, the API will **auto-discover** them from Hostinger the first time it provisions a server (it picks the first VPS plan, first Ubuntu 22.04 template, and first data center). Check your API logs to see which IDs were used; you can then add them to `.env` to lock in specific plan/region.
-
-To **override** and choose a specific plan/OS/region, discover the IDs and set them:
+**On your API server (srv1402168):**
 
 ```bash
-# List VPS plans (copy a price id for HOSTINGER_ITEM_ID)
-curl -sS "https://developers.hostinger.com/api/billing/v1/catalog?category=vps" -H "Authorization: Bearer YOUR_KEY"
+# Generate key pair (skip if you already have one)
+ssh-keygen -t ed25519 -f ~/.ssh/openclaw_worker -N ""
 
-# List OS templates (copy id for Ubuntu 22.04 → HOSTINGER_TEMPLATE_ID)
-curl -sS "https://developers.hostinger.com/api/vps/v1/os-templates" -H "Authorization: Bearer YOUR_KEY"
-
-# List data centers (copy id → HOSTINGER_DATA_CENTER_ID)
-curl -sS "https://developers.hostinger.com/api/vps/v1/data-centers" -H "Authorization: Bearer YOUR_KEY"
+# Base64-encode the private key for .env
+base64 -w0 ~/.ssh/openclaw_worker
 ```
+
+In your `.env`:
+```bash
+SSH_PRIVATE_KEY=<paste the base64 output>
+WORKER_SSH_PUBLIC_KEY=<paste contents of ~/.ssh/openclaw_worker.pub>
+```
+
+The public key is automatically injected into new Hetzner servers via cloud-init, so SSH access works immediately.
 
 ---
 
-## 3. HOSTINGER_SCRIPT_ID (post-install script)
+## 4. Wildcard DNS
 
-**What it is:** The ID of a **post-install script** stored in Hostinger. When a new VPS is created, Hostinger runs this script on it (install Docker, Traefik, then call your API to register the server).
+In your DNS provider (Cloudflare):
 
-**If you already created it**, list your scripts and grab the ID:
+| Type | Name | Value | Proxy |
+|------|------|-------|-------|
+| A | `*` | Worker server IP (auto-assigned by Hetzner) | Orange cloud ON |
 
-```bash
-curl -sS "https://developers.hostinger.com/api/vps/v1/post-install-scripts" \
-  -H "Authorization: Bearer YOUR_KEY"
-```
-
-**If you need to create it:**
-
-**Step 1 — Customize the script.** Edit `scripts/server-setup.sh` and **bake in your real values** before uploading. Hostinger does NOT pass environment variables to post-install scripts — the defaults in the script (`https://api.yourdomain.com` and `changeme`) will be used as-is. You MUST replace them:
-
-- Replace `${PLATFORM_API:-https://api.yourdomain.com}` with your real API URL (e.g. `https://api.valnaa.com`)
-- Replace `${INTERNAL_SECRET:-changeme}` with your real `INTERNAL_SECRET` from `.env`
-- Replace `${ADMIN_EMAIL:-...}` with your email (for Let's Encrypt)
-
-**Step 2 — Upload to Hostinger and get the ID:**
-
-```bash
-curl -sS -X POST "https://developers.hostinger.com/api/vps/v1/post-install-scripts" \
-  -H "Authorization: Bearer YOUR_KEY" \
-  -H "Content-Type: application/json" \
-  -d "{\"name\": \"OpenClaw worker setup\", \"content\": $(jq -Rs . scripts/server-setup.sh)}"
-```
-
-The response contains `id` — that's **HOSTINGER_SCRIPT_ID**.
-
-**Put it in:** `.env`:
-```bash
-HOSTINGER_SCRIPT_ID=2830
-```
-
-> **Important:** If you already uploaded the script but left the placeholder values (`yourdomain.com`, `changeme`), you need to **update it** with the correct values. Use `PUT /api/vps/v1/post-install-scripts/{id}` with the corrected content.
+**Note:** When running on the main server, point `*` to `72.62.1.134`. When Hetzner workers are created, each new worker gets its own IP — you'll need to add A records for the user subdomains pointing to the worker IPs. The provisioning code handles subdomain assignment; you just need the wildcard DNS to route traffic.
 
 ---
 
-## 4. DOMAIN and wildcard DNS
+## 5. How It Works (fully automatic)
 
-- **DOMAIN** — Your main domain (e.g. `yourdomain.com`). In `.env`: `DOMAIN=yourdomain.com`
-- **Wildcard DNS** — In your DNS provider (e.g. Cloudflare):
-  - Type: **A**
-  - Name: **\***
-  - Value: IP of the worker server that runs Traefik
+1. User pays via Stripe
+2. `provisionUser()` calls `findBestServer()` in `serverRegistry.ts`
+3. If no server has capacity → `cloudProvider.provisionNewServer()` is called
+4. Hetzner creates a VPS with Ubuntu 22.04 + cloud-init user-data script
+5. Cloud-init installs Docker, Traefik, builds the openclaw image, and registers with your API
+6. Registration creates a row in `servers` table with status `active`
+7. `waitForNewServer()` polls until the new server appears (~3-5 minutes)
+8. User container is created on the new server via SSH
 
 ---
 
-## 5. INTERNAL_SECRET
+## 6. INTERNAL_SECRET
 
-A shared secret so workers can call internal endpoints like `/webhooks/servers/register`.
+A shared secret for worker → API communication (server registration).
 
 ```bash
 openssl rand -hex 32
 ```
 
-Set it in:
-- API `.env`: `INTERNAL_SECRET=that_hex_string`
-- Post-install script (baked in before upload — see step 5 above)
-
----
-
-## 6. SSH from API server to workers
-
-The API SSHs into workers as **root** using `SSH_PRIVATE_KEY` (base64-encoded).
-
-1. Generate a key:
-   ```bash
-   ssh-keygen -t ed25519 -f ~/.ssh/openclaw_worker -N ""
-   ```
-
-2. Base64-encode the private key for `.env`:
-   ```bash
-   base64 -w0 ~/.ssh/openclaw_worker    # Linux
-   base64 -i ~/.ssh/openclaw_worker | tr -d '\n'   # macOS
-   ```
-   In `.env`:
-   ```bash
-   SSH_PRIVATE_KEY=<paste_base64_output>
-   ```
-
-3. (Optional) Set `WORKER_SSH_PUBLIC_KEY` in `.env` to the contents of `~/.ssh/openclaw_worker.pub`. The Hostinger API will inject it into new VPSes automatically at creation time.
-
-4. Or, in the post-install script, append the public key to `/root/.ssh/authorized_keys`.
-
-5. Firewall: workers must allow **inbound SSH (port 22)** from the API server's IP.
-
----
-
-## 7. Docker image
-
-The worker containers use `openclaw/openclaw:latest` (or whatever `DOCKER_REGISTRY` is set to in `.env`). You need to build and push this image so workers can pull it:
-
+Set in `.env`:
 ```bash
-cd docker
-docker build -t openclaw/openclaw:latest -f Dockerfile.openclaw .
-docker push openclaw/openclaw:latest
+INTERNAL_SECRET=your_hex_here
 ```
 
-If you use a private registry, set `DOCKER_REGISTRY=your-registry.com/openclaw` in `.env`.
+This is automatically baked into the cloud-init script that runs on new workers.
 
 ---
 
-## Quick checklist
+## Quick Checklist
 
-| Item | Where to find / set |
-|------|----------------------|
-| **HOSTINGER_API_KEY** | Hostinger → API → Generate token |
-| **HOSTINGER_ITEM_ID** (optional) | Auto-discovered if unset; or set from catalog API |
-| **HOSTINGER_TEMPLATE_ID** (optional) | Auto-discovered if unset; or set from os-templates API |
-| **HOSTINGER_DATA_CENTER_ID** (optional) | Auto-discovered if unset; or set from data-centers API |
-| **HOSTINGER_SCRIPT_ID** | Create post-install script → use returned `id` |
-| **DOMAIN** | Your domain (e.g. `yourdomain.com`) → `.env` |
-| **Wildcard DNS** | DNS provider → A record `*` → worker/Traefik IP |
-| **INTERNAL_SECRET** | `openssl rand -hex 32` → `.env` + baked into post-install script |
-| **SSH_PRIVATE_KEY** | Base64-encoded private key → `.env` |
-| **WORKER_SSH_PUBLIC_KEY** | Public key contents → `.env` (optional, auto-injected at VPS creation) |
-| **Docker image** | Build + push `openclaw/openclaw:latest` |
+| Item | Where to get it |
+|------|-----------------|
+| **HETZNER_API_TOKEN** | Hetzner Console → Security → API tokens |
+| **HETZNER_SERVER_TYPE** (optional) | Default `cx22` (4GB). See server types API |
+| **HETZNER_LOCATION** (optional) | Default `ash` (US). See locations API |
+| **SSH_PRIVATE_KEY** | `ssh-keygen` → base64 encode → `.env` |
+| **WORKER_SSH_PUBLIC_KEY** | Contents of `.pub` file → `.env` |
+| **INTERNAL_SECRET** | `openssl rand -hex 32` → `.env` |
+| **Wildcard DNS** | Cloudflare → A record `*` → worker IP |
 
 For full deployment steps (main server, DB, Stripe, etc.), see **SETUP_GUIDE.md**.
-   curl -sS "https://developers.hostinger.com/api/billing/v1/catalog?category=vps" \
-     -H "Authorization: Bearer rnEHbnDC8uI2GTiFu14OukiFiLtIy4btY3rbpa8uc34dbb16"
-        curl -sS "https://developers.hostinger.com/api/vps/v1/os-templates" \
-     -H "Authorization: Bearer rnEHbnDC8uI2GTiFu14OukiFiLtIy4btY3rbpa8uc34dbb16"

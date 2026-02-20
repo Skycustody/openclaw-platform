@@ -89,6 +89,23 @@ export default function AgentControlCenter() {
     }
   };
 
+  const handleOpenAgent = async () => {
+    setActionLoading('open');
+    try {
+      const data = await api.post<{ url: string; status: string }>('/agent/open');
+      if (data.url) {
+        window.open(data.url, '_blank');
+      }
+      await fetchStatus();
+    } catch (err: any) {
+      console.error('Failed to open agent:', err);
+      const sub = agent?.subdomain || user?.subdomain;
+      if (sub) window.open(`https://${sub}.valnaa.com`, '_blank');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -163,13 +180,12 @@ export default function AgentControlCenter() {
             <Button
               variant="primary"
               size="lg"
-              onClick={() => {
-                const sub = agent?.subdomain || user?.subdomain || 'agent';
-                window.open(`https://${sub}.valnaa.com`, '_blank');
-              }}
+              onClick={handleOpenAgent}
+              loading={actionLoading === 'open'}
+              disabled={actionLoading !== null}
             >
               <ExternalLink className="h-4 w-4" />
-              Open Agent
+              {actionLoading === 'open' ? 'Starting...' : 'Open Agent'}
             </Button>
             <Button
               variant="glass"

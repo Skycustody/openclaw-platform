@@ -34,6 +34,13 @@ function execOnce(ip: string, command: string): Promise<SSHExecResult> {
       reject(new Error(`SSH timeout connecting to ${ip}`));
     }, SSH_TIMEOUT);
 
+    // When the target is the control plane (this host), SSH to 127.0.0.1 so auth works
+    const controlPlaneIp = process.env.CONTROL_PLANE_IP?.trim();
+    const host = controlPlaneIp && ip === controlPlaneIp ? '127.0.0.1' : ip;
+    if (host !== ip) {
+      console.log(`[SSH] Target ${ip} is control plane, using 127.0.0.1`);
+    }
+
     conn
       .on('ready', () => {
         conn.exec(command, (err, stream) => {
@@ -64,15 +71,25 @@ function execOnce(ip: string, command: string): Promise<SSHExecResult> {
       })
       .on('error', (err) => {
         clearTimeout(timeout);
+        console.error(`[SSH] ${host} error:`, err.message);
         reject(err);
       })
       .connect({
-        host: ip,
+        host,
         port: 22,
         username: 'root',
-        privateKey: process.env.SSH_PRIVATE_KEY
-          ? Buffer.from(process.env.SSH_PRIVATE_KEY, 'base64')
-          : undefined,
+        // Strip any newlines/spaces from base64 (e.g. from .env line wraps)
+        privateKey: (() => {
+          const raw = process.env.SSH_PRIVATE_KEY;
+          if (!raw) return undefined;
+          const b64 = raw.replace(/\s/g, '');
+          try {
+            return Buffer.from(b64, 'base64');
+          } catch (e) {
+            console.error('[SSH] Invalid SSH_PRIVATE_KEY base64:', (e as Error).message);
+            return undefined;
+          }
+        })(),
         readyTimeout: SSH_TIMEOUT,
       });
   });
@@ -87,8 +104,9 @@ export async function waitForReady(ip: string, containerName: string, timeoutMs 
   while (Date.now() - start < timeoutMs) {
     try {
       const result = await sshExec(ip, `docker inspect --format='{{.State.Health.Status}}' ${containerName}`);
-      if (result.stdout.includes('healthy') || result.code === 0) {
-        const portCheck = await sshExec(ip, `docker exec ${containerName} curl -sf http://localhost:18789/health 2>/dev/null`);
+      if (result.stdout.includes('healthy')) return;
+      if (result.code === 0 && !result.stdout.includes('unhealthy')) {
+        const portCheck = await sshExec(ip, `docker exec ${containerName} openclaw health 2>/dev/null`);
         if (portCheck.code === 0) return;
       }
     } catch {
