@@ -29,7 +29,17 @@ export default function LoginPage() {
       });
 
       api.setToken(data.token);
-      router.push(data.isNewUser ? '/pricing' : '/dashboard');
+      if (data.isNewUser) {
+        router.push('/pricing');
+      } else {
+        try {
+          const billing = await api.get<{ status: string }>('/billing');
+          const active = ['active', 'sleeping', 'grace_period'];
+          router.push(active.includes(billing.status) ? '/dashboard' : '/pricing');
+        } catch {
+          router.push('/pricing');
+        }
+      }
     } catch (err: any) {
       setError(err.message || 'Google sign-in failed. Please try again.');
     } finally {
@@ -81,7 +91,8 @@ export default function LoginPage() {
     try {
       const data = await api.post<{ token: string; user: any }>('/auth/login', { email, password });
       api.setToken(data.token);
-      router.push('/dashboard');
+      const activeStatuses = ['active', 'sleeping', 'grace_period'];
+      router.push(activeStatuses.includes(data.user?.status) ? '/dashboard' : '/pricing');
     } catch (err: any) {
       setError(err.message || 'Something went wrong. Please try again.');
     } finally {

@@ -13,9 +13,9 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 const PLAN_PRICE_MAP: Record<string, Plan> = {};
 
 function initPriceMap() {
-  if (process.env.STRIPE_STARTER_PRICE_ID) PLAN_PRICE_MAP[process.env.STRIPE_STARTER_PRICE_ID] = 'starter';
-  if (process.env.STRIPE_PRO_PRICE_ID) PLAN_PRICE_MAP[process.env.STRIPE_PRO_PRICE_ID] = 'pro';
-  if (process.env.STRIPE_BUSINESS_PRICE_ID) PLAN_PRICE_MAP[process.env.STRIPE_BUSINESS_PRICE_ID] = 'business';
+  if (process.env.STRIPE_PRICE_STARTER) PLAN_PRICE_MAP[process.env.STRIPE_PRICE_STARTER] = 'starter';
+  if (process.env.STRIPE_PRICE_PRO) PLAN_PRICE_MAP[process.env.STRIPE_PRICE_PRO] = 'pro';
+  if (process.env.STRIPE_PRICE_BUSINESS) PLAN_PRICE_MAP[process.env.STRIPE_PRICE_BUSINESS] = 'business';
 }
 
 export async function createCheckoutSession(
@@ -27,9 +27,9 @@ export async function createCheckoutSession(
   initPriceMap();
 
   const priceIds: Record<Plan, string> = {
-    starter: process.env.STRIPE_STARTER_PRICE_ID!,
-    pro: process.env.STRIPE_PRO_PRICE_ID!,
-    business: process.env.STRIPE_BUSINESS_PRICE_ID!,
+    starter: process.env.STRIPE_PRICE_STARTER!,
+    pro: process.env.STRIPE_PRICE_PRO!,
+    business: process.env.STRIPE_PRICE_BUSINESS!,
   };
 
   let userId: string;

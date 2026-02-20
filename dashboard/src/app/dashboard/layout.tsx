@@ -28,14 +28,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         });
         const allowed = ['active', 'sleeping', 'grace_period'];
         if (!allowed.includes(data.status) && typeof window !== 'undefined') {
-          window.location.href = '/auth/signup';
+          window.location.href = '/pricing';
           return;
         }
       })
       .catch(() => {
-        // 403 = no active subscription → send to payment page
         if (typeof window !== 'undefined') {
-          window.location.href = '/auth/signup';
+          window.location.href = '/pricing';
         }
       })
       .finally(() => setChecking(false));
