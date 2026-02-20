@@ -1,6 +1,29 @@
 import { Client } from 'ssh2';
+import fs from 'fs';
 
 const SSH_TIMEOUT = 30000;
+
+/** Resolve private key: SSH_PRIVATE_KEY (base64) or SSH_PRIVATE_KEY_PATH (file path). */
+function getPrivateKey(): Buffer | string | undefined {
+  const raw = process.env.SSH_PRIVATE_KEY;
+  if (raw) {
+    const b64 = raw.replace(/\s/g, '');
+    try {
+      return Buffer.from(b64, 'base64');
+    } catch {
+      // not valid base64, ignore
+    }
+  }
+  const keyPath = process.env.SSH_PRIVATE_KEY_PATH?.trim();
+  if (keyPath && fs.existsSync(keyPath)) {
+    try {
+      return fs.readFileSync(keyPath, 'utf8');
+    } catch (e) {
+      console.error('[SSH] Failed to read SSH_PRIVATE_KEY_PATH:', (e as Error).message);
+    }
+  }
+  return undefined;
+}
 const MAX_RETRIES = 3;
 
 interface SSHExecResult {
@@ -78,18 +101,7 @@ function execOnce(ip: string, command: string): Promise<SSHExecResult> {
         host,
         port: 22,
         username: 'root',
-        // Strip any newlines/spaces from base64 (e.g. from .env line wraps)
-        privateKey: (() => {
-          const raw = process.env.SSH_PRIVATE_KEY;
-          if (!raw) return undefined;
-          const b64 = raw.replace(/\s/g, '');
-          try {
-            return Buffer.from(b64, 'base64');
-          } catch (e) {
-            console.error('[SSH] Invalid SSH_PRIVATE_KEY base64:', (e as Error).message);
-            return undefined;
-          }
-        })(),
+        privateKey: getPrivateKey(),
         readyTimeout: SSH_TIMEOUT,
       });
   });

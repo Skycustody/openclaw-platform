@@ -20,7 +20,15 @@ class CloudProvider {
     });
   }
 
-  /** Upload SSH key to Hetzner (idempotent) and return key ID. */
+  /** Normalize SSH public key for comparison (type + key body, ignore comment and whitespace). */
+  private normalizePubKey(full: string): string {
+    const oneLine = (full || '').replace(/\s+/g, ' ').trim();
+    const parts = oneLine.split(' ');
+    const keyBody = parts.length >= 2 ? parts[1].replace(/\s/g, '') : '';
+    return parts.length >= 2 ? `${parts[0]} ${keyBody}` : oneLine;
+  }
+
+  /** Upload SSH key to Hetzner (idempotent) or use existing; return key ID. */
   private async ensureSshKey(): Promise<number | null> {
     if (this.sshKeyId) return this.sshKeyId;
 
@@ -30,12 +38,27 @@ class CloudProvider {
       return null;
     }
 
+    const pubKeyNorm = this.normalizePubKey(pubKey);
+    const ourKeyBody = pubKeyNorm.split(' ')[1] || '';
+
+    const findMatch = (keys: any[]) => {
+      const exact = keys.find((k: any) => this.normalizePubKey(k.public_key) === pubKeyNorm);
+      if (exact) return exact;
+      // Fallback: match by key body only (same key, different comment/format)
+      return keys.find((k: any) => {
+        const norm = this.normalizePubKey(k.public_key);
+        const body = norm.split(' ')[1] || '';
+        return body.length > 20 && body === ourKeyBody;
+      });
+    };
+
     try {
       const existing = await this.client.get('/ssh_keys');
       const keys = existing.data?.ssh_keys || [];
-      const match = keys.find((k: any) => k.public_key.trim() === pubKey);
+      const match = findMatch(keys);
       if (match) {
         this.sshKeyId = match.id;
+        console.log(`[hetzner] Using existing SSH key: id=${this.sshKeyId}`);
         return this.sshKeyId;
       }
 
@@ -50,9 +73,16 @@ class CloudProvider {
       if (err.response?.data?.error?.code === 'uniqueness_error') {
         const existing = await this.client.get('/ssh_keys');
         const keys = existing.data?.ssh_keys || [];
-        const match = keys.find((k: any) => k.public_key.trim() === pubKey);
+        const match = findMatch(keys);
         if (match) {
           this.sshKeyId = match.id;
+          console.log(`[hetzner] Key already in project, using: id=${this.sshKeyId}`);
+          return this.sshKeyId;
+        }
+        console.warn('[hetzner] Uniqueness_error but no matching key found by content — using first ed25519 key');
+        const fallback = keys.find((k: any) => (k.public_key || '').trim().startsWith('ssh-ed25519 '));
+        if (fallback) {
+          this.sshKeyId = fallback.id;
           return this.sshKeyId;
         }
       }
@@ -83,7 +113,12 @@ exec > /var/log/openclaw-setup.log 2>&1
 echo "=== OpenClaw Worker Setup ==="
 echo "Starting at $(date)"
 
+# Prevent "password expired" / "change on first login" blocking non-interactive SSH (do this first)
 export DEBIAN_FRONTEND=noninteractive
+chage -d -1 root 2>/dev/null || true
+# Remove root password so only key auth is used; avoids "change password" prompts
+passwd -d root 2>/dev/null || true
+
 apt-get update && apt-get upgrade -y
 
 # Docker

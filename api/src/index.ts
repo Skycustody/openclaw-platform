@@ -1,15 +1,20 @@
 import path from 'path';
 import { config } from 'dotenv';
 
-// Load .env from project root (openclaw-platform/.env) when running from api/
-config({ path: path.join(__dirname, '..', '..', '.env') });
+// Load .env: try project root (openclaw-platform/.env) then api/.env
+const rootEnv = path.join(__dirname, '..', '..', '.env');
+const apiEnv = path.join(__dirname, '..', '.env');
+config({ path: rootEnv });
+config({ path: apiEnv }); // api/.env can override (e.g. when only api is deployed)
 
 const sshKey = process.env.SSH_PRIVATE_KEY;
+const sshKeyPath = process.env.SSH_PRIVATE_KEY_PATH?.trim();
 if (sshKey) {
-  const len = sshKey.replace(/\s/g, '').length;
-  console.log(`SSH key loaded: ${len} chars (for worker SSH)`);
+  console.log(`SSH key loaded from env (${sshKey.replace(/\s/g, '').length} chars) for worker SSH`);
+} else if (sshKeyPath) {
+  console.log(`SSH key will be read from file: ${sshKeyPath}`);
 } else {
-  console.warn('SSH_PRIVATE_KEY not set — SSH to workers will fail');
+  console.warn('SSH_PRIVATE_KEY or SSH_PRIVATE_KEY_PATH not set — SSH to workers will fail');
 }
 
 import express from 'express';
