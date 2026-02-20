@@ -147,7 +147,7 @@ rm -rf /tmp/openclaw-build
 echo "Docker image built"
 
 # Register with control plane
-SERVER_IP=$(curl -sf ifconfig.me || curl -sf icanhazip.com)
+SERVER_IP=$(curl -4 -sf ifconfig.me || curl -4 -sf icanhazip.com)
 TOTAL_RAM=$(free -m | awk '/^Mem:/{print $2}')
 
 echo "Registering: IP=$SERVER_IP RAM=\${TOTAL_RAM}MB"
