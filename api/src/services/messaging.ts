@@ -54,12 +54,23 @@ export async function connectTelegram(userId: string, botToken: string): Promise
   const { serverIp, containerName } = await getUserContainer(userId);
   const b64 = tokenToBase64(botToken);
 
+  // Write Telegram config using Node.js inside the container (CLI-version-safe)
+  const script = `
+    const fs = require("fs");
+    const p = "/root/.openclaw/openclaw.json";
+    let cfg = {}; try { cfg = JSON.parse(fs.readFileSync(p,"utf8")); } catch {}
+    if (!cfg.channels) cfg.channels = {};
+    cfg.channels.telegram = { enabled: true, botToken: Buffer.from("${b64}","base64").toString() };
+    fs.writeFileSync(p, JSON.stringify(cfg,null,2));
+    console.log("OK");
+  `.replace(/\n/g, ' ');
+
   const result = await sshExec(
     serverIp,
-    `docker exec ${containerName} sh -c 'openclaw channels add --channel telegram --token "$(echo ${b64} | base64 -d)" 2>&1'`
+    `docker exec ${containerName} node -e '${script.replace(/'/g, "'\\''")}'`
   );
 
-  if (result.code !== 0 && !result.stdout.includes('already')) {
+  if (result.code !== 0) {
     throw new Error(`Failed to configure Telegram: ${result.stdout || result.stderr}`);
   }
 
@@ -76,9 +87,17 @@ export async function connectTelegram(userId: string, botToken: string): Promise
 export async function disconnectTelegram(userId: string): Promise<void> {
   try {
     const { serverIp, containerName } = await getUserContainer(userId);
+
+    // Remove telegram from config using Node.js (CLI-version-safe)
+    const removeScript = `
+      const fs = require("fs");
+      const p = "/root/.openclaw/openclaw.json";
+      try { const cfg = JSON.parse(fs.readFileSync(p,"utf8")); delete cfg.channels?.telegram; fs.writeFileSync(p, JSON.stringify(cfg,null,2)); } catch {}
+      console.log("REMOVED");
+    `.replace(/\n/g, ' ');
     await sshExec(
       serverIp,
-      `docker exec ${containerName} openclaw channels remove --channel telegram 2>&1`
+      `docker exec ${containerName} node -e '${removeScript.replace(/'/g, "'\\''")}'`
     ).catch(() => {});
     await sshExec(serverIp, `docker restart ${containerName}`);
   } catch {
@@ -104,16 +123,19 @@ export async function connectDiscord(userId: string, botToken: string, guildId?:
   const { serverIp, containerName } = await getUserContainer(userId);
   const b64 = tokenToBase64(botToken);
 
-  // Discord uses config set (per official OpenClaw docs)
+  const script = `
+    const fs = require("fs");
+    const p = "/root/.openclaw/openclaw.json";
+    let cfg = {}; try { cfg = JSON.parse(fs.readFileSync(p,"utf8")); } catch {}
+    if (!cfg.channels) cfg.channels = {};
+    cfg.channels.discord = { enabled: true, token: Buffer.from("${b64}","base64").toString() };
+    fs.writeFileSync(p, JSON.stringify(cfg,null,2));
+    console.log("OK");
+  `.replace(/\n/g, ' ');
+
   const result = await sshExec(
     serverIp,
-    [
-      `docker exec ${containerName} sh -c '`,
-      `TOKEN="$(echo ${b64} | base64 -d)" && `,
-      `openclaw config set channels.discord.token "\\"$TOKEN\\"" --json && `,
-      `openclaw config set channels.discord.enabled true --json`,
-      `' 2>&1`,
-    ].join('')
+    `docker exec ${containerName} node -e '${script.replace(/'/g, "'\\''")}'`
   );
 
   if (result.code !== 0) {
@@ -133,9 +155,16 @@ export async function connectDiscord(userId: string, botToken: string, guildId?:
 export async function disconnectDiscord(userId: string): Promise<void> {
   try {
     const { serverIp, containerName } = await getUserContainer(userId);
+
+    const removeScript = `
+      const fs = require("fs");
+      const p = "/root/.openclaw/openclaw.json";
+      try { const cfg = JSON.parse(fs.readFileSync(p,"utf8")); delete cfg.channels?.discord; fs.writeFileSync(p, JSON.stringify(cfg,null,2)); } catch {}
+      console.log("REMOVED");
+    `.replace(/\n/g, ' ');
     await sshExec(
       serverIp,
-      `docker exec ${containerName} openclaw channels remove --channel discord 2>&1`
+      `docker exec ${containerName} node -e '${removeScript.replace(/'/g, "'\\''")}'`
     ).catch(() => {});
     await sshExec(serverIp, `docker restart ${containerName}`);
   } catch {
@@ -156,9 +185,19 @@ export async function connectSlack(userId: string, accessToken: string, teamId: 
   const { serverIp, containerName } = await getUserContainer(userId);
   const b64 = tokenToBase64(accessToken);
 
+  const script = `
+    const fs = require("fs");
+    const p = "/root/.openclaw/openclaw.json";
+    let cfg = {}; try { cfg = JSON.parse(fs.readFileSync(p,"utf8")); } catch {}
+    if (!cfg.channels) cfg.channels = {};
+    cfg.channels.slack = { enabled: true, token: Buffer.from("${b64}","base64").toString() };
+    fs.writeFileSync(p, JSON.stringify(cfg,null,2));
+    console.log("OK");
+  `.replace(/\n/g, ' ');
+
   const result = await sshExec(
     serverIp,
-    `docker exec ${containerName} sh -c 'openclaw channels add --channel slack --token "$(echo ${b64} | base64 -d)" 2>&1'`
+    `docker exec ${containerName} node -e '${script.replace(/'/g, "'\\''")}'`
   );
 
   if (result.code !== 0 && !result.stdout.includes('already')) {
@@ -178,9 +217,16 @@ export async function connectSlack(userId: string, accessToken: string, teamId: 
 export async function disconnectSlack(userId: string): Promise<void> {
   try {
     const { serverIp, containerName } = await getUserContainer(userId);
+
+    const removeScript = `
+      const fs = require("fs");
+      const p = "/root/.openclaw/openclaw.json";
+      try { const cfg = JSON.parse(fs.readFileSync(p,"utf8")); delete cfg.channels?.slack; fs.writeFileSync(p, JSON.stringify(cfg,null,2)); } catch {}
+      console.log("REMOVED");
+    `.replace(/\n/g, ' ');
     await sshExec(
       serverIp,
-      `docker exec ${containerName} openclaw channels remove --channel slack 2>&1`
+      `docker exec ${containerName} node -e '${removeScript.replace(/'/g, "'\\''")}'`
     ).catch(() => {});
     await sshExec(serverIp, `docker restart ${containerName}`);
   } catch {
@@ -195,77 +241,113 @@ export async function disconnectSlack(userId: string): Promise<void> {
   );
 }
 
-// ── WhatsApp (QR code pairing via OpenClaw CLI) ──
+// ── WhatsApp (QR code pairing via gateway restart) ──
 
-export async function initiateWhatsAppPairing(userId: string): Promise<string> {
-  const { serverIp, containerName } = await getUserContainer(userId);
+export async function initiateWhatsAppPairing(userId: string): Promise<{ qrData: string; agentUrl: string }> {
+  const { serverIp, containerName, user } = await getUserContainer(userId);
 
-  // Kill any previous login process and clear old QR output
-  await sshExec(
+  const domain = process.env.DOMAIN || 'yourdomain.com';
+  const subdomain = user.subdomain || '';
+  const agentBase = subdomain ? `https://${subdomain}.${domain}` : '';
+
+  // Use Node.js inside the container to add WhatsApp to the config
+  // This is reliable regardless of which openclaw CLI version is installed
+  const addWhatsAppScript = `
+    const fs = require("fs");
+    const p = "/root/.openclaw/openclaw.json";
+    let cfg = {};
+    try { cfg = JSON.parse(fs.readFileSync(p, "utf8")); } catch {}
+    if (!cfg.channels) cfg.channels = {};
+    if (!cfg.channels.whatsapp) {
+      cfg.channels.whatsapp = { dmPolicy: "open", allowFrom: ["*"] };
+      fs.writeFileSync(p, JSON.stringify(cfg, null, 2));
+      console.log("ADDED");
+    } else {
+      console.log("EXISTS");
+    }
+  `.replace(/\n/g, ' ');
+
+  const addResult = await sshExec(
     serverIp,
-    `docker exec ${containerName} sh -c 'pkill -f "channels login" 2>/dev/null; rm -f /tmp/wa-qr.txt' || true`
-  ).catch(() => {});
-
-  // Ensure WhatsApp channel exists in config
-  await sshExec(
-    serverIp,
-    `docker exec ${containerName} openclaw channels add --channel whatsapp 2>/dev/null || true`
+    `docker exec ${containerName} node -e '${addWhatsAppScript.replace(/'/g, "'\\''")}'`
   );
 
-  // Start WhatsApp login in the background — this generates the QR code
-  await sshExec(
-    serverIp,
-    `docker exec ${containerName} sh -c 'nohup openclaw channels login --channel whatsapp > /tmp/wa-qr.txt 2>&1 & echo started'`
-  );
+  console.log(`[whatsapp] Config update: ${addResult.stdout}`);
 
-  // Poll for QR code output (typically appears within 3-10 seconds)
-  let output = '';
-  for (let attempt = 0; attempt < 8; attempt++) {
-    await new Promise(r => setTimeout(r, 2000));
-    const result = await sshExec(
+  // Restart the container so the gateway connects WhatsApp and generates a QR
+  await sshExec(serverIp, `docker restart ${containerName}`);
+
+  // Wait for gateway to boot and output the QR code to logs
+  let qrOutput = '';
+  for (let attempt = 0; attempt < 10; attempt++) {
+    await new Promise(r => setTimeout(r, 3000));
+
+    const logsResult = await sshExec(
       serverIp,
-      `docker exec ${containerName} cat /tmp/wa-qr.txt 2>/dev/null`
+      `docker logs --tail 80 ${containerName} 2>&1`
     ).catch(() => null);
 
-    output = (result?.stdout || '').trim();
+    const raw = (logsResult?.stdout || '') + '\n' + (logsResult?.stderr || '');
+    // Strip ANSI escape codes
+    const cleaned = raw.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '');
 
-    // QR codes rendered by qrcode-terminal contain Unicode block characters
-    const hasQr = output.includes('\u2588') || output.includes('\u2584') ||
-                  output.includes('\u2580') || output.length > 200;
+    // Look for QR code block characters in the logs
+    const lines = cleaned.split('\n');
+    let firstQr = -1;
+    let lastQr = -1;
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].includes('\u2588') || lines[i].includes('\u2584') || lines[i].includes('\u2580')) {
+        if (firstQr === -1) firstQr = i;
+        lastQr = i;
+      }
+    }
 
-    if (output && hasQr) break;
+    if (firstQr >= 0 && lastQr > firstQr) {
+      qrOutput = lines.slice(firstQr, lastQr + 1).join('\n');
+      break;
+    }
 
-    // Also check if the login returned an error or already-linked message
-    if (output && (output.includes('already') || output.includes('linked') || output.includes('error'))) break;
+    // Check if WhatsApp is already linked (no QR needed)
+    if (cleaned.toLowerCase().includes('whatsapp') &&
+        (cleaned.toLowerCase().includes('connected') || cleaned.toLowerCase().includes('linked'))) {
+      await db.query(
+        `UPDATE user_channels SET whatsapp_connected = true, updated_at = NOW() WHERE user_id = $1`,
+        [userId]
+      );
+      return { qrData: '__ALREADY_LINKED__', agentUrl: agentBase };
+    }
   }
 
-  if (!output) {
+  if (!qrOutput && agentBase) {
+    // QR not found in logs — direct user to their agent's Control UI
+    return { qrData: '', agentUrl: agentBase };
+  }
+
+  if (!qrOutput) {
     throw Object.assign(
       new Error('Could not generate WhatsApp QR code. Make sure your agent is online, then try again.'),
       { statusCode: 502 }
     );
   }
 
-  // Strip ANSI escape codes for clean display
-  output = output.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '');
-
-  return output;
+  return { qrData: qrOutput, agentUrl: agentBase };
 }
 
 export async function checkWhatsAppStatus(userId: string): Promise<{ paired: boolean; detail: string }> {
   try {
     const { serverIp, containerName } = await getUserContainer(userId);
 
-    // Check channel list for WhatsApp status
-    const result = await sshExec(
+    // Check container logs for WhatsApp connection status
+    const logsResult = await sshExec(
       serverIp,
-      `docker exec ${containerName} openclaw channels list 2>&1`
+      `docker logs --tail 40 ${containerName} 2>&1`
     ).catch(() => null);
 
-    const output = (result?.stdout || '').toLowerCase();
+    const output = (logsResult?.stdout || '').toLowerCase() + (logsResult?.stderr || '').toLowerCase();
     const isPaired = output.includes('whatsapp') && (
-      output.includes('linked') || output.includes('connected') ||
-      output.includes('authenticated') || output.includes('active')
+      output.includes('connected') || output.includes('linked') ||
+      output.includes('authenticated') || output.includes('active') ||
+      output.includes('ready')
     );
 
     if (isPaired) {
@@ -275,27 +357,7 @@ export async function checkWhatsAppStatus(userId: string): Promise<{ paired: boo
       );
     }
 
-    // Also check if the login process output indicates success
-    const loginResult = await sshExec(
-      serverIp,
-      `docker exec ${containerName} cat /tmp/wa-qr.txt 2>/dev/null`
-    ).catch(() => null);
-
-    const loginOutput = (loginResult?.stdout || '').toLowerCase();
-    const loginSuccess = loginOutput.includes('success') || loginOutput.includes('linked') ||
-                         loginOutput.includes('authenticated') || loginOutput.includes('connected');
-
-    if (loginSuccess && !isPaired) {
-      await db.query(
-        `UPDATE user_channels SET whatsapp_connected = true, updated_at = NOW() WHERE user_id = $1`,
-        [userId]
-      );
-    }
-
-    return {
-      paired: isPaired || loginSuccess,
-      detail: result?.stdout || loginResult?.stdout || '',
-    };
+    return { paired: isPaired, detail: logsResult?.stdout || '' };
   } catch (err: any) {
     return { paired: false, detail: err?.message || 'Could not check status' };
   }
@@ -311,16 +373,21 @@ export async function confirmWhatsAppConnected(userId: string): Promise<void> {
 export async function disconnectWhatsApp(userId: string): Promise<void> {
   try {
     const { serverIp, containerName } = await getUserContainer(userId);
-    // Logout clears WhatsApp auth credentials
+
+    // Remove WhatsApp from config and clear credentials using Node.js
+    const removeScript = `
+      const fs = require("fs"); const path = require("path");
+      const p = "/root/.openclaw/openclaw.json";
+      try { const cfg = JSON.parse(fs.readFileSync(p,"utf8")); delete cfg.channels?.whatsapp; fs.writeFileSync(p, JSON.stringify(cfg,null,2)); } catch {}
+      try { fs.rmSync("/root/.openclaw/credentials/whatsapp", { recursive: true, force: true }); } catch {}
+      console.log("REMOVED");
+    `.replace(/\n/g, ' ');
+
     await sshExec(
       serverIp,
-      `docker exec ${containerName} openclaw channels logout --channel whatsapp 2>&1`
+      `docker exec ${containerName} node -e '${removeScript.replace(/'/g, "'\\''")}'`
     ).catch(() => {});
-    // Remove channel from config
-    await sshExec(
-      serverIp,
-      `docker exec ${containerName} openclaw channels remove --channel whatsapp 2>&1`
-    ).catch(() => {});
+
     await sshExec(serverIp, `docker restart ${containerName}`);
   } catch {
     // agent might not be running

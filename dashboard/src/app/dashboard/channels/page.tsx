@@ -167,11 +167,15 @@ export default function ConnectApps() {
 
   // ── WhatsApp ──
 
+  // WhatsApp agent URL fallback
+  const [whatsAppAgentUrl, setWhatsAppAgentUrl] = useState('');
+
   const startWhatsAppPairing = async () => {
     setWhatsAppLoading(true);
     setWhatsAppError('');
     setWhatsAppQr('');
     setWhatsAppPaired(false);
+    setWhatsAppAgentUrl('');
 
     // Stop any existing status polling
     if (statusPollRef.current) {
@@ -180,12 +184,24 @@ export default function ConnectApps() {
     }
 
     try {
-      const data = await api.post<{ qrData: string }>('/channels/whatsapp/pair');
+      const data = await api.post<{ qrData: string; agentUrl: string }>('/channels/whatsapp/pair');
       const qr = data.qrData || '';
+      const agentUrl = data.agentUrl || '';
+      setWhatsAppAgentUrl(agentUrl);
+
+      // Already linked
+      if (qr === '__ALREADY_LINKED__') {
+        setWhatsAppPaired(true);
+        await fetchChannels();
+        return;
+      }
+
       setWhatsAppQr(qr);
 
-      if (!qr) {
-        setWhatsAppError('No QR data received. Ensure your agent is online, then click Generate QR Code again.');
+      if (!qr && agentUrl) {
+        setWhatsAppError(`QR code not found in logs. You can pair WhatsApp directly from your Agent Dashboard.`);
+      } else if (!qr) {
+        setWhatsAppError('Could not generate QR code. Ensure your agent is online, then try again.');
         return;
       }
 
@@ -509,9 +525,21 @@ export default function ConnectApps() {
           </div>
 
           {whatsAppError && (
-            <div className="flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-[13px] text-red-400">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              {whatsAppError}
+            <div className="flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-[13px] text-red-400">
+              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+              <div>
+                <p>{whatsAppError}</p>
+                {whatsAppAgentUrl && !whatsAppQr && (
+                  <a
+                    href={whatsAppAgentUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2 inline-block text-blue-400 underline hover:text-blue-300"
+                  >
+                    Open Agent Dashboard to pair WhatsApp &rarr;
+                  </a>
+                )}
+              </div>
             </div>
           )}
 
@@ -521,6 +549,13 @@ export default function ConnectApps() {
                 <RefreshCw className="h-3.5 w-3.5" />
                 {whatsAppQr ? 'Refresh QR Code' : 'Generate QR Code'}
               </Button>
+            )}
+            {whatsAppAgentUrl && !whatsAppPaired && (
+              <a href={whatsAppAgentUrl} target="_blank" rel="noopener noreferrer">
+                <Button variant="glass" size="md">
+                  Open Agent Dashboard
+                </Button>
+              </a>
             )}
             <Button variant="glass" size="md" onClick={closeWhatsAppModal}>
               {whatsAppPaired ? 'Done' : 'Close'}
