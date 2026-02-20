@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import api from '@/lib/api';
@@ -21,7 +21,7 @@ const PLANS: Array<{
   { id: 'business', name: 'Business', price: 50, tokens: '5M', features: ['Everything in Pro', '5M tokens/month', 'Community templates', 'Maximum agent power', '100 scheduled tasks', 'Direct support line'] },
 ];
 
-export default function PricingPage() {
+function PricingContent() {
   const searchParams = useSearchParams();
   const referralCode = useMemo(() => searchParams.get('ref') || '', [searchParams]);
 
@@ -80,7 +80,7 @@ export default function PricingPage() {
       <section className="mx-auto max-w-5xl px-6 py-20">
         <div className="text-center">
           <h1 className="text-[32px] sm:text-[40px] font-bold tracking-tight">Choose your plan</h1>
-          <p className="mt-3 text-[15px] text-white/40">You’ll be redirected to Stripe to complete payment.</p>
+          <p className="mt-3 text-[15px] text-white/40">You'll be redirected to Stripe to complete payment.</p>
           {referralCode && (
             <p className="mt-2 text-[13px] text-green-400">Referral applied — 50% off your first month</p>
           )}
@@ -148,3 +148,14 @@ export default function PricingPage() {
   );
 }
 
+export default function PricingPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-screen bg-black">
+        <Loader2 className="h-6 w-6 animate-spin text-white/40" />
+      </div>
+    }>
+      <PricingContent />
+    </Suspense>
+  );
+}
