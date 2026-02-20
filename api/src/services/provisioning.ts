@@ -92,6 +92,8 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
       'entryPoints:',
       '  web:',
       '    address: ":80"',
+      '  websecure:',
+      '    address: ":443"',
       'providers:',
       '  docker:',
       '    endpoint: "unix:///var/run/docker.sock"',
@@ -102,7 +104,7 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
       `mkdir -p /opt/openclaw/config`,
       `echo '${traefikCfgB64}' | base64 -d > /opt/openclaw/config/traefik.yml`,
       `docker rm -f traefik 2>/dev/null || true`,
-      `docker run -d --name traefik --restart unless-stopped --network openclaw-net -p 80:80 -v /var/run/docker.sock:/var/run/docker.sock:ro -v /opt/openclaw/config/traefik.yml:/traefik.yml:ro traefik:v3.0`,
+      `docker run -d --name traefik --restart unless-stopped --network openclaw-net -p 80:80 -p 443:443 -v /var/run/docker.sock:/var/run/docker.sock:ro -v /opt/openclaw/config/traefik.yml:/traefik.yml:ro traefik:v3.0`,
     ].join(' && '));
   }
 
@@ -203,6 +205,9 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
     `--label traefik.enable=true`,
     `--label 'traefik.http.routers.${containerName}.rule=Host(\`${hostRule}\`)'`,
     `--label 'traefik.http.routers.${containerName}.entrypoints=web'`,
+    `--label 'traefik.http.routers.${containerName}-secure.rule=Host(\`${hostRule}\`)'`,
+    `--label 'traefik.http.routers.${containerName}-secure.entrypoints=websecure'`,
+    `--label 'traefik.http.routers.${containerName}-secure.tls=true'`,
     `--label traefik.http.services.${containerName}.loadbalancer.server.port=18789`,
     image,
   ].join(' ');

@@ -57,13 +57,15 @@ ${sshPubKey ? `mkdir -p /root/.ssh && chmod 700 /root/.ssh && echo '${sshPubKey}
 # Docker network
 docker network create openclaw-net 2>/dev/null || true
 
-# Traefik config — HTTP only; Cloudflare handles SSL termination
+# Traefik config — HTTP + HTTPS (default self-signed cert); Cloudflare "Full" SSL connects on 443
 cat > /opt/openclaw/config/traefik.yml <<'TEOF'
 api:
   dashboard: false
 entryPoints:
   web:
     address: ":80"
+  websecure:
+    address: ":443"
 providers:
   docker:
     endpoint: "unix:///var/run/docker.sock"
@@ -73,7 +75,7 @@ TEOF
 
 # Start Traefik
 docker run -d --name traefik --restart unless-stopped --network openclaw-net \\
-  -p 80:80 \\
+  -p 80:80 -p 443:443 \\
   -v /var/run/docker.sock:/var/run/docker.sock:ro \\
   -v /opt/openclaw/config/traefik.yml:/traefik.yml:ro \\
   traefik:v3.0
