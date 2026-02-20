@@ -215,33 +215,15 @@ function HeroSection() {
           hosted for you. Zero setup.
         </p>
 
-        <div className="fade-in slide-in-from-bottom-10 flex animate-in flex-row flex-wrap items-center justify-center gap-5 fill-mode-backwards pt-2 delay-300 duration-500 ease-out">
-          <Link href="#pricing" className="relative rounded-full">
-            <GlowingEffect
-              spread={50}
-              glow={true}
-              disabled={false}
-              proximity={100}
-              inactiveZone={0.01}
-              borderWidth={2}
-              blur={3}
-            />
-            <Button className="relative rounded-full" size="lg" variant="secondary">
+        <div className="fade-in slide-in-from-bottom-10 flex animate-in flex-row flex-wrap items-center justify-center gap-3 fill-mode-backwards pt-2 delay-300 duration-500 ease-out">
+          <Link href="#pricing">
+            <Button className="rounded-full" size="lg" variant="secondary">
               <PhoneCallIcon className="mr-2 size-4" />
               View Pricing
             </Button>
           </Link>
-          <Link href="/auth/signup" className="relative rounded-full">
-            <GlowingEffect
-              spread={50}
-              glow={true}
-              disabled={false}
-              proximity={100}
-              inactiveZone={0.01}
-              borderWidth={2}
-              blur={3}
-            />
-            <Button className="relative rounded-full" size="lg">
+          <Link href="/auth/signup">
+            <Button className="rounded-full" size="lg">
               Get Your AI Agent
               <ArrowRight className="ms-2 size-4" />
             </Button>
@@ -293,13 +275,12 @@ function FeaturesSection() {
           >
             <div className="relative h-full rounded-[1.25rem] border-[0.75px] border-border p-2 md:rounded-[1.5rem] md:p-3">
               <GlowingEffect
-                spread={60}
+                spread={40}
                 glow={true}
                 disabled={false}
-                proximity={200}
+                proximity={64}
                 inactiveZone={0.01}
                 borderWidth={3}
-                blur={4}
               />
               <div className="relative flex h-full flex-col justify-between gap-6 overflow-hidden rounded-xl border-[0.75px] bg-background p-6 shadow-sm dark:shadow-[0px_0px_27px_0px_rgba(45,45,45,0.3)] md:p-6">
                 <div className="relative flex flex-1 flex-col justify-between gap-3">
@@ -380,19 +361,10 @@ function PricingSection() {
                 </li>
               ))}
             </ul>
-            <Link href="/auth/signup" className="relative mt-8 block rounded-md">
-              <GlowingEffect
-                spread={50}
-                glow={true}
-                disabled={false}
-                proximity={100}
-                inactiveZone={0.01}
-                borderWidth={2}
-                blur={3}
-              />
+            <Link href="/auth/signup" className="mt-8">
               <Button
                 variant={plan.popular ? 'default' : 'outline'}
-                className="relative w-full"
+                className="w-full"
                 size="lg"
               >
                 Get Started
@@ -425,17 +397,8 @@ function CTASection() {
             From payment to working agent in under 60 seconds. Open-source and
             self-hostable.
           </p>
-          <Link href="/auth/signup" className="relative mt-8 inline-block rounded-full">
-            <GlowingEffect
-              spread={50}
-              glow={true}
-              disabled={false}
-              proximity={100}
-              inactiveZone={0.01}
-              borderWidth={2}
-              blur={3}
-            />
-            <Button size="lg" className="relative rounded-full">
+          <Link href="/auth/signup">
+            <Button size="lg" className="mt-8 rounded-full">
               Get Started Now
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
