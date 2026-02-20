@@ -142,7 +142,7 @@ export interface PlanLimits {
 export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
   starter: {
     ramMb: 2048,
-    cpus: '0.5',
+    cpus: '1.0',
     maxSkills: 10,
     maxCronJobs: 3,
     storageGb: 1,
@@ -153,7 +153,7 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
   },
   pro: {
     ramMb: 4096,
-    cpus: '1.0',
+    cpus: '2.0',
     maxSkills: 53,
     maxCronJobs: 20,
     storageGb: 5,
@@ -164,7 +164,7 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
   },
   business: {
     ramMb: 8192,
-    cpus: '2.0',
+    cpus: '4.0',
     maxSkills: 53,
     maxCronJobs: 100,
     storageGb: 20,
