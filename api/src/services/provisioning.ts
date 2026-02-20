@@ -116,12 +116,22 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
   }
 
   const internalSecret = process.env.INTERNAL_SECRET || 'changeme';
+
+  // Generate gateway auth token early so it goes into the config JSON
+  const gatewayToken = uuid().replace(/-/g, '') + uuid().replace(/-/g, '').slice(0, 16);
+  await db.query(
+    `UPDATE users SET gateway_token = $1 WHERE id = $2`,
+    [gatewayToken, userId]
+  ).catch(() => {
+    console.warn(`[provision] Could not store gateway_token (column may not exist)`);
+  });
+
   const openclawConfig = {
     server: { port: 18789, host: '0.0.0.0' },
     gateway: {
       bind: 'lan',
       controlUi: { enabled: true, allowInsecureAuth: true },
-      auth: { mode: 'token' },
+      auth: { mode: 'token', token: gatewayToken },
     },
     browser: {
       enabled: true,
@@ -198,18 +208,6 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
 
   // Give Node.js ~75% of the container memory for its heap
   const heapMb = Math.floor(limits.ramMb * 0.75);
-
-  // Generate a gateway auth token for this user's container
-  const gatewayToken = uuid().replace(/-/g, '') + uuid().replace(/-/g, '').slice(0, 16);
-
-  // Store the gateway token so the dashboard can retrieve it later
-  await db.query(
-    `UPDATE users SET gateway_token = $1 WHERE id = $2`,
-    [gatewayToken, userId]
-  ).catch(() => {
-    // Column may not exist yet; non-critical
-    console.warn(`[provision] Could not store gateway_token (column may not exist)`);
-  });
 
   // Run container
   const dockerRunCmd = [

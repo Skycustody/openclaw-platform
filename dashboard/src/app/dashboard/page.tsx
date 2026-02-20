@@ -89,13 +89,34 @@ export default function AgentControlCenter() {
     }
   };
 
+  const [provisionMsg, setProvisionMsg] = useState<string | null>(null);
+
   const handleOpenAgent = async () => {
     setActionLoading('open');
+    setProvisionMsg('Requesting agent...');
     try {
       const data = await api.post<{ url: string; status: string }>('/agent/open');
-      if (data.url) {
-        window.open(data.url, '_blank');
+      if (!data.url) throw new Error('No URL returned');
+
+      setProvisionMsg('Waiting for agent to come online...');
+
+      // Poll the URL until it responds (max ~90 seconds)
+      const origin = new URL(data.url).origin;
+      let ready = false;
+      for (let i = 0; i < 30; i++) {
+        try {
+          const r = await fetch(origin, { method: 'HEAD', mode: 'no-cors' });
+          // mode: no-cors returns opaque response (status 0) but confirms the server is reachable
+          ready = true;
+          break;
+        } catch {
+          // not ready yet
+        }
+        await new Promise(r => setTimeout(r, 3000));
+        setProvisionMsg(`Waiting for agent to come online... (${(i + 1) * 3}s)`);
       }
+
+      window.open(data.url, '_blank');
       await fetchStatus();
     } catch (err: any) {
       console.error('Failed to open agent:', err);
@@ -103,6 +124,7 @@ export default function AgentControlCenter() {
       if (sub) window.open(`https://${sub}.valnaa.com`, '_blank');
     } finally {
       setActionLoading(null);
+      setProvisionMsg(null);
     }
   };
 
@@ -185,7 +207,7 @@ export default function AgentControlCenter() {
               disabled={actionLoading !== null}
             >
               <ExternalLink className="h-4 w-4" />
-              {actionLoading === 'open' ? 'Starting...' : 'Open Agent'}
+              {provisionMsg || 'Open Agent'}
             </Button>
             <Button
               variant="glass"
