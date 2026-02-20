@@ -116,10 +116,10 @@ export default function ReferralsPage() {
     );
   }
 
-  const statusMap: Record<string, 'active' | 'starting' | 'cancelled'> = {
-    active: 'active',
-    pending: 'starting',
-    churned: 'cancelled',
+  const statusMap: Record<string, 'green' | 'amber' | 'red'> = {
+    active: 'green',
+    pending: 'amber',
+    churned: 'red',
   };
 
   const statusLabels: Record<string, string> = {

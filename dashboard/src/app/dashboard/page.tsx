@@ -233,7 +233,7 @@ export default function AgentControlCenter() {
             </Button>
           </div>
           <p className="text-[32px] font-bold text-white tabular-nums">
-            {formatTokensWithDays(agent?.tokenBalance ?? 0, agent?.dailyTokenRate)}
+            {formatTokensWithDays(agent?.tokenBalance ?? 0, agent?.dailyTokenRate ?? 0)}
           </p>
           <div className="mt-4 space-y-2">
             <div className="flex items-center justify-between text-[12px]">

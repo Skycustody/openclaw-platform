@@ -135,7 +135,7 @@ export default function SkillsPage() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <h3 className="text-[15px] font-semibold text-white">{skill.name}</h3>
-                            <Badge variant="active" dot>Active</Badge>
+                            <Badge variant="green" dot>Active</Badge>
                           </div>
                           <span className="text-[12px] text-white/30">{skill.category}</span>
                         </div>

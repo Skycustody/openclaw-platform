@@ -216,7 +216,7 @@ export default function SecurityPage() {
         </div>
         {data.twoFactorEnabled && (
           <div className="mt-4 flex items-center gap-2">
-            <Badge variant="active">Protected</Badge>
+            <Badge variant="green">Protected</Badge>
             <span className="text-[13px] text-white/40">Authenticator app is set up</span>
           </div>
         )}
@@ -254,7 +254,7 @@ export default function SecurityPage() {
                       </span>
                     </div>
                     {session.current && (
-                      <Badge variant="active" className="mt-1">This device</Badge>
+                      <Badge variant="green" className="mt-1">This device</Badge>
                     )}
                   </div>
                 </div>

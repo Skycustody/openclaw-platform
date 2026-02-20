@@ -335,9 +335,9 @@ export default function TemplatesPage() {
                     <div key={skill.name} className="flex items-center justify-between">
                       <span className="text-[14px] text-white/70">{skill.name}</span>
                       {skill.hasIt ? (
-                        <Badge variant="active">You have this</Badge>
+                        <Badge variant="green">You have this</Badge>
                       ) : (
-                        <Badge variant="starting">Needs setup</Badge>
+                        <Badge variant="amber">Needs setup</Badge>
                       )}
                     </div>
                   ))}
