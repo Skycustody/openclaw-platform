@@ -54,6 +54,10 @@ import redis from './lib/redis';
 const app = express();
 const httpServer = createServer(app);
 
+const ALLOWED_ORIGINS = process.env.PLATFORM_URL
+  ? process.env.PLATFORM_URL.split(',').map(s => s.trim())
+  : ['http://localhost:3000'];
+
 // ── WebSocket ──
 const io = new SocketServer(httpServer, {
   cors: { origin: ALLOWED_ORIGINS, methods: ['GET', 'POST'] },
@@ -97,9 +101,6 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 app.use(express.json({ limit: '10mb' }));
-const ALLOWED_ORIGINS = process.env.PLATFORM_URL
-  ? process.env.PLATFORM_URL.split(',').map(s => s.trim())
-  : ['http://localhost:3000'];
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin || ALLOWED_ORIGINS.includes(origin)) {
