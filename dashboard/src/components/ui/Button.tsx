@@ -6,7 +6,7 @@ import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const buttonVariants = cva(
-  'inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50',
+  'inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-all duration-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50',
   {
     variants: {
       variant: {
@@ -39,6 +39,8 @@ const buttonVariants = cva(
   }
 );
 
+const noGlassVariants = new Set(['ghost', 'link']);
+
 export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> {
@@ -61,15 +63,45 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     ref
   ) => {
     const Comp = asChild ? Slot : 'button';
+    const showGlass = !asChild && !noGlassVariants.has(variant ?? 'default');
+
     return (
       <Comp
-        className={cn(buttonVariants({ variant, size, className }))}
+        className={cn(
+          buttonVariants({ variant, size, className }),
+          showGlass && 'relative overflow-hidden'
+        )}
         ref={ref}
         disabled={disabled || loading}
         {...props}
       >
-        {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-        {children}
+        {showGlass && (
+          <>
+            <span
+              className="pointer-events-none absolute inset-0 z-0 overflow-hidden rounded-[inherit]"
+              style={{
+                backdropFilter: 'blur(3px)',
+                filter: 'url(#glass-distortion)',
+                isolation: 'isolate',
+              }}
+            />
+            <span
+              className="pointer-events-none absolute inset-0 z-[1] rounded-[inherit]"
+              style={{ background: 'rgba(255, 255, 255, 0.06)' }}
+            />
+            <span
+              className="pointer-events-none absolute inset-0 z-[2] overflow-hidden rounded-[inherit]"
+              style={{
+                boxShadow:
+                  'inset 1px 1px 1px 0 rgba(255,255,255,0.12), inset -1px -1px 1px 0 rgba(255,255,255,0.12)',
+              }}
+            />
+          </>
+        )}
+        <span className={cn('inline-flex items-center gap-2', showGlass && 'relative z-[3]')}>
+          {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+          {children}
+        </span>
       </Comp>
     );
   }
