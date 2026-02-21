@@ -33,7 +33,7 @@ export async function trackUsage(
 
   // Log transaction
   await db.query(
-    `INSERT INTO token_transactions (user_id, amount, type, model, task_id)
+    `INSERT INTO token_transactions (user_id, amount, type, model, description)
      VALUES ($1, $2, 'usage', $3, $4)`,
     [userId, -tokensUsed, model, taskId || null]
   );
