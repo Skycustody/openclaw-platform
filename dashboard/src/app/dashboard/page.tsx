@@ -316,25 +316,29 @@ export default function MissionControl() {
           <p className="text-[10px] text-white/20">today</p>
         </Card>
 
-        <Card className="!p-3 cursor-pointer hover:!border-white/15 transition-colors" onClick={() => window.location.href = '/dashboard/tokens'}>
-          <div className="flex items-center gap-2 mb-1">
-            <Coins className="h-3.5 w-3.5 text-white/20" />
-            <span className="text-[11px] text-white/30">Balance</span>
-          </div>
-          <p className={`text-[22px] font-bold tabular-nums ${tokenBalance < 50000 ? 'text-amber-400' : 'text-white'}`}>
-            {formatTokens(tokenBalance)}
-          </p>
-          <p className="text-[10px] text-white/20">tokens</p>
-        </Card>
+        <button className="text-left w-full" onClick={() => window.location.href = '/dashboard/tokens'}>
+          <Card className="!p-3 hover:!border-white/20 transition-colors">
+            <div className="flex items-center gap-2 mb-1">
+              <Coins className="h-3.5 w-3.5 text-white/20" />
+              <span className="text-[11px] text-white/30">Balance</span>
+            </div>
+            <p className={`text-[22px] font-bold tabular-nums ${tokenBalance < 50000 ? 'text-amber-400' : 'text-white'}`}>
+              {formatTokens(tokenBalance)}
+            </p>
+            <p className="text-[10px] text-white/20">tokens</p>
+          </Card>
+        </button>
 
-        <Card className="!p-3 cursor-pointer hover:!border-white/15 transition-colors" onClick={() => window.location.href = '/dashboard/cron'}>
-          <div className="flex items-center gap-2 mb-1">
-            <ListChecks className="h-3.5 w-3.5 text-white/20" />
-            <span className="text-[11px] text-white/30">Skills</span>
-          </div>
-          <p className="text-[22px] font-bold text-white tabular-nums">{stats.activeSkills}</p>
-          <p className="text-[10px] text-white/20">active</p>
-        </Card>
+        <button className="text-left w-full" onClick={() => window.location.href = '/dashboard/cron'}>
+          <Card className="!p-3 hover:!border-white/20 transition-colors">
+            <div className="flex items-center gap-2 mb-1">
+              <ListChecks className="h-3.5 w-3.5 text-white/20" />
+              <span className="text-[11px] text-white/30">Skills</span>
+            </div>
+            <p className="text-[22px] font-bold text-white tabular-nums">{stats.activeSkills}</p>
+            <p className="text-[10px] text-white/20">active</p>
+          </Card>
+        </button>
       </div>
 
       {/* ── Quick Links ── */}
