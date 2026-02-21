@@ -141,6 +141,7 @@ export interface PlanLimits {
   priceCents: number;
   hasBrowser: boolean;
   allChannels: boolean;
+  maxAgents: number;
 }
 
 export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
@@ -154,6 +155,7 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     priceCents: 1000,
     hasBrowser: false,
     allChannels: false,
+    maxAgents: 1,
   },
   pro: {
     ramMb: 4096,
@@ -165,6 +167,7 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     priceCents: 2000,
     hasBrowser: true,
     allChannels: true,
+    maxAgents: 2,
   },
   business: {
     ramMb: 8192,
@@ -176,6 +179,7 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     priceCents: 5000,
     hasBrowser: true,
     allChannels: true,
+    maxAgents: 4,
   },
 };
 

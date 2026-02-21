@@ -12,6 +12,8 @@ import { GlowingEffect } from '@/components/ui/glowing-effect';
 
 const navItems = [
   { href: '/dashboard', label: 'Home', icon: LayoutDashboard },
+  { href: '/dashboard/mission-control', label: 'Control', icon: Zap },
+  { href: '/dashboard/agents', label: 'Agents', icon: Cpu },
   { href: '/dashboard/activity', label: 'Activity', icon: Activity },
   { href: '/dashboard/channels', label: 'Connect', icon: Smartphone },
   { href: '/dashboard/skills', label: 'Skills', icon: Puzzle },
@@ -19,7 +21,7 @@ const navItems = [
   { href: '/dashboard/cron', label: 'Schedule', icon: Clock },
   { href: '/dashboard/browser', label: 'Browser', icon: Globe },
   { href: '/dashboard/tokens', label: 'Tokens', icon: Coins },
-  { href: '/dashboard/router', label: 'Auto', icon: Cpu },
+  { href: '/dashboard/router', label: 'Auto', icon: LayoutDashboard },
   { href: '/dashboard/personality', label: 'Persona', icon: User },
   { href: '/dashboard/protection', label: 'Shield', icon: Shield },
   { href: '/dashboard/conversations', label: 'History', icon: MessageSquare },

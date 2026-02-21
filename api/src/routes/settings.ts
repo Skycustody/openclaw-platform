@@ -193,6 +193,47 @@ router.delete('/own-keys/:provider', async (req: AuthRequest, res: Response, nex
   }
 });
 
+// Save onboarding answers and push to agent
+router.post('/onboarding', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { answers } = req.body;
+    if (!answers) return res.status(400).json({ error: 'Missing answers' });
+
+    const toneMap: Record<string, string> = {
+      professional: 'professional',
+      casual: 'casual',
+      concise: 'professional',
+      detailed: 'friendly',
+    };
+
+    const agentTone = toneMap[answers.communicationStyle] || 'balanced';
+    const responseLength = answers.communicationStyle === 'concise' ? 'short' : answers.communicationStyle === 'detailed' ? 'long' : 'medium';
+
+    const contextParts: string[] = [];
+    if (answers.name) contextParts.push(`The user's name is ${answers.name}.`);
+    if (answers.primaryUse) contextParts.push(`Primary use case: ${answers.primaryUse}.`);
+    if (answers.industry) contextParts.push(`Industry: ${answers.industry}.`);
+    if (answers.topTasks?.length) contextParts.push(`Priority tasks: ${answers.topTasks.join(', ')}.`);
+    if (answers.additionalContext) contextParts.push(answers.additionalContext);
+
+    const customInstructions = contextParts.join(' ');
+
+    await db.query(
+      `UPDATE user_settings
+       SET agent_name = COALESCE($1, agent_name),
+           agent_tone = $2,
+           response_length = $3,
+           custom_instructions = $4
+       WHERE user_id = $5`,
+      [answers.name || null, agentTone, responseLength, customInstructions, req.userId]
+    );
+
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Internal-only: get decrypted own key for proxy (not exposed via auth middleware externally)
 export async function getUserOwnKey(userId: string, provider: 'openai' | 'anthropic'): Promise<string | null> {
   const col = provider === 'openai' ? 'own_openai_key' : 'own_anthropic_key';
