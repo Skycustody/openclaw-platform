@@ -23,22 +23,6 @@ export async function findBestServer(requiredRamMb = 2048): Promise<Server> {
 
   if (server) return server;
 
-  // Single-server fallback: if no dedicated workers exist, use any server (including control plane)
-  if (cpIp) {
-    server = await db.getOne<Server>(
-      `SELECT * FROM servers
-       WHERE status = 'active'
-         AND (ram_total - ram_used) >= $1
-       ORDER BY ram_used DESC
-       LIMIT 1`,
-      [requiredRamMb]
-    );
-    if (server) {
-      console.log('No dedicated worker servers — using control plane as fallback');
-      return server;
-    }
-  }
-
   if (provisionInProgress) {
     console.log('Another request is already provisioning a worker — waiting');
     server = await provisionInProgress;
@@ -53,9 +37,10 @@ export async function findBestServer(requiredRamMb = 2048): Promise<Server> {
         `SELECT * FROM servers
          WHERE status = 'active'
            AND (ram_total - ram_used) >= $1
+           AND ($2::text IS NULL OR ip != $2)
          ORDER BY ram_used DESC
          LIMIT 1`,
-        [requiredRamMb]
+        [requiredRamMb, cpIp]
       );
       if (server) return server;
 
