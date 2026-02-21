@@ -259,6 +259,11 @@ input[type='range']::-webkit-slider-thumb {
   border: 3px solid #000;
 }
 
+@keyframes moveBackground {
+  from { background-position: 0% 0%; }
+  to { background-position: 0% -1000%; }
+}
+
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }

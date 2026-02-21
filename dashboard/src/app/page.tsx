@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { GlowingEffect } from '@/components/ui/glowing-effect';
 import { LampContainer } from '@/components/ui/lamp';
+import { GlassButton, GlassFilter } from '@/components/ui/liquid-glass';
 import { motion } from 'framer-motion';
 
 const features = [
@@ -137,6 +138,7 @@ const logos = [
 export default function LandingPage() {
   return (
     <div className="flex w-full flex-col">
+      <GlassFilter />
       <Header />
       <main className="grow">
         <HeroSection />
@@ -186,18 +188,22 @@ function HeroSection() {
           hosted for you. Zero setup.
         </p>
 
-        <div className="flex flex-row flex-wrap items-center justify-center gap-3 pt-2">
+        <div className="flex flex-row flex-wrap items-center justify-center gap-4 pt-2">
           <Link href="#pricing">
-            <Button className="rounded-full" size="lg" variant="secondary">
-              <PhoneCallIcon className="mr-2 size-4" />
-              View Pricing
-            </Button>
+            <GlassButton>
+              <span className="flex items-center gap-2 text-sm text-foreground">
+                <PhoneCallIcon className="size-4" />
+                View Pricing
+              </span>
+            </GlassButton>
           </Link>
           <Link href="/auth/signup">
-            <Button className="rounded-full" size="lg">
-              Get Your AI Agent
-              <ArrowRight className="ms-2 size-4" />
-            </Button>
+            <GlassButton>
+              <span className="flex items-center gap-2 text-sm text-foreground">
+                Get Your AI Agent
+                <ArrowRight className="size-4" />
+              </span>
+            </GlassButton>
           </Link>
         </div>
       </motion.div>
@@ -338,15 +344,13 @@ function PricingSection() {
                     </li>
                   ))}
                 </ul>
-                <Link href="/auth/signup" className="mt-8">
-                  <Button
-                    variant={plan.popular ? 'default' : 'outline'}
-                    className="w-full"
-                    size="lg"
-                  >
-                    Get Started
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Button>
+                <Link href="/auth/signup" className="mt-8 block">
+                  <GlassButton className="w-full">
+                    <span className="flex items-center justify-center gap-2 text-sm text-foreground">
+                      Get Started
+                      <ArrowRight className="h-4 w-4" />
+                    </span>
+                  </GlassButton>
                 </Link>
               </div>
             </div>
@@ -385,11 +389,13 @@ function CTASection() {
               From payment to working agent in under 60 seconds. Open-source and
               self-hostable.
             </p>
-            <Link href="/auth/signup">
-              <Button size="lg" className="mt-8 rounded-full">
-                Get Started Now
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
+            <Link href="/auth/signup" className="mt-8 inline-block">
+              <GlassButton>
+                <span className="flex items-center gap-2 text-sm text-foreground">
+                  Get Started Now
+                  <ArrowRight className="h-4 w-4" />
+                </span>
+              </GlassButton>
             </Link>
           </div>
         </div>
