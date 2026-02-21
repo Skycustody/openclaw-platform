@@ -500,7 +500,7 @@ export async function getWhatsAppQr(userId: string): Promise<{
   return { status: 'waiting', message: 'Waiting for QR code from WhatsApp...' };
 }
 
-export async function checkWhatsAppStatus(userId: string): Promise<{ paired: boolean }> {
+export async function checkWhatsAppStatus(userId: string): Promise<{ paired: boolean; unlinked?: boolean }> {
   try {
     const user = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [userId]);
     if (!user?.server_id) return { paired: false };
@@ -508,15 +508,50 @@ export async function checkWhatsAppStatus(userId: string): Promise<{ paired: boo
     const server = await db.getOne<any>('SELECT ip FROM servers WHERE id = $1', [user.server_id]);
     if (!server) return { paired: false };
 
-    if (await hasWhatsAppCredentials(server.ip, userId)) {
+    // Check if credentials exist on disk
+    if (!(await hasWhatsAppCredentials(server.ip, userId))) {
       await db.query(
-        `UPDATE user_channels SET whatsapp_connected = true, updated_at = NOW() WHERE user_id = $1`,
+        `UPDATE user_channels SET whatsapp_connected = false, updated_at = NOW() WHERE user_id = $1`,
         [userId]
       );
-      return { paired: true };
+      return { paired: false };
     }
 
-    return { paired: false };
+    // Credentials exist — check recent logs for disconnect signals.
+    // When a user removes the device from WhatsApp's linked devices list,
+    // Baileys emits a disconnect event with statusCode 401 or 515 (logged out).
+    const containerName = user.container_name || `openclaw-${userId}`;
+    const logs = await sshExec(
+      server.ip,
+      `docker logs --tail 100 ${containerName} 2>&1`
+    ).catch(() => null);
+
+    if (logs?.stdout) {
+      const lower = logs.stdout.toLowerCase();
+      const loggedOut = lower.includes('logged out') ||
+        lower.includes('device removed') ||
+        lower.includes('statuscode: 401') ||
+        lower.includes('connection closed') && lower.includes('loggedout');
+
+      if (loggedOut) {
+        // Device was unlinked from the phone — clean up
+        await sshExec(
+          server.ip,
+          `rm -rf ${INSTANCE_DIR}/${userId}/credentials/whatsapp`
+        ).catch(() => {});
+        await db.query(
+          `UPDATE user_channels SET whatsapp_connected = false, updated_at = NOW() WHERE user_id = $1`,
+          [userId]
+        );
+        return { paired: false, unlinked: true };
+      }
+    }
+
+    await db.query(
+      `UPDATE user_channels SET whatsapp_connected = true, updated_at = NOW() WHERE user_id = $1`,
+      [userId]
+    );
+    return { paired: true };
   } catch {
     return { paired: false };
   }

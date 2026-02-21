@@ -85,14 +85,31 @@ router.post('/google', rateLimitAuth, async (req: Request, res: Response, next: 
       throw new BadRequestError('Google credential is required');
     }
 
-    const ticket = await googleClient.verifyIdToken({
-      idToken: credential,
-      audience: process.env.GOOGLE_CLIENT_ID,
-    });
+    if (!process.env.GOOGLE_CLIENT_ID) {
+      throw new BadRequestError('Google sign-in is not configured. Please contact support.');
+    }
 
-    const payload = ticket.getPayload();
+    let payload: any;
+    try {
+      const ticket = await googleClient.verifyIdToken({
+        idToken: credential,
+        audience: process.env.GOOGLE_CLIENT_ID,
+      });
+      payload = ticket.getPayload();
+    } catch (verifyErr: any) {
+      console.error('Google token verification failed:', verifyErr.message);
+      const msg = verifyErr.message || '';
+      if (msg.includes('Token used too late') || msg.includes('expired')) {
+        throw new BadRequestError('Google sign-in expired. Please try again.');
+      }
+      if (msg.includes('audience') || msg.includes('client_id')) {
+        throw new BadRequestError('Google sign-in configuration error. Please contact support.');
+      }
+      throw new BadRequestError('Google sign-in failed. Please try again.');
+    }
+
     if (!payload || !payload.email) {
-      throw new UnauthorizedError('Invalid Google token');
+      throw new UnauthorizedError('Could not get email from Google. Please try again.');
     }
 
     const { email, name, picture, sub: googleId } = payload;
@@ -103,8 +120,6 @@ router.post('/google', rateLimitAuth, async (req: Request, res: Response, next: 
     );
 
     if (existingUser) {
-      // Existing user — log them in
-      // Link Google account if not already linked
       await db.query(
         `UPDATE users SET google_id = COALESCE(google_id, $1), avatar_url = COALESCE(avatar_url, $2), display_name = COALESCE(display_name, $3), last_active = NOW() WHERE id = $4`,
         [googleId, picture, name, existingUser.id]
@@ -119,7 +134,6 @@ router.post('/google', rateLimitAuth, async (req: Request, res: Response, next: 
       });
     }
 
-    // New user — create account, then they pick plan on /pricing
     const userId = uuid();
     await db.query(
       `INSERT INTO users (id, email, plan, status, google_id, avatar_url, display_name)
@@ -134,9 +148,6 @@ router.post('/google', rateLimitAuth, async (req: Request, res: Response, next: 
       isNewUser: true,
     });
   } catch (err: any) {
-    if (err.message?.includes('Token used too late') || err.message?.includes('Invalid token')) {
-      return next(new UnauthorizedError('Google sign-in expired. Please try again.'));
-    }
     next(err);
   }
 });
