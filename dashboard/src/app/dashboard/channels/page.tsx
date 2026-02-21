@@ -382,13 +382,19 @@ export default function ConnectApps() {
                   <Button
                     variant="danger"
                     size="sm"
-                    onClick={() => disconnect(ch.platform)}
+                    onClick={() => {
+                      if (ch.platform === 'whatsapp') {
+                        if (confirm('Disconnect WhatsApp?\n\nYour agent will stop replying to WhatsApp messages.\n\nAfter disconnecting, open WhatsApp on your phone → Settings → Linked Devices → tap the OpenClaw device → Unlink, to fully remove it.')) {
+                          disconnect(ch.platform);
+                        }
+                      } else {
+                        disconnect(ch.platform);
+                      }
+                    }}
                     loading={connecting === ch.platform}
                   >
                     <Link2Off className="h-3.5 w-3.5" />
-                    {connecting === ch.platform && ch.platform === 'whatsapp'
-                      ? 'Unlinking from phone...'
-                      : 'Disconnect'}
+                    Disconnect
                   </Button>
                 </div>
               ) : ch.planLocked ? (
@@ -605,7 +611,7 @@ export default function ConnectApps() {
                 {[
                   ['Personality', 'Set your agent\'s name, tone, and custom instructions so it responds the way you want.'],
                   ['Skills', 'Enable or disable what your agent can do — web search, image generation, scheduling, and more.'],
-                  ['Disconnect', 'Click Disconnect on the WhatsApp card anytime. It will fully unlink from your phone too.'],
+                  ['Disconnect', 'Click Disconnect on the WhatsApp card anytime. Then open WhatsApp on your phone → Settings → Linked Devices → tap the device → Unlink.'],
                 ].map(([title, text]) => (
                   <div key={title} className="flex items-start gap-3 p-3 rounded-lg bg-white/[0.03] border border-white/[0.04]">
                     <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/[0.08] text-white/60 text-[11px] font-bold shrink-0">{(title as string)[0]}</span>

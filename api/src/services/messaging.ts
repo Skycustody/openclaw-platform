@@ -463,12 +463,25 @@ export async function getWhatsAppQr(userId: string): Promise<{
     return { status: 'waiting', message: 'Generating QR code...' };
   }
 
-  // Check for error patterns in output
-  if (combined.includes('Error') && combined.includes('whatsapp')) {
-    const errorLines = combined.split('\n').filter(l => l.includes('Error')).slice(-2);
+  // Check for WhatsApp-specific fatal errors only.
+  // Ignore unrelated errors like missing API keys, lane task errors, etc.
+  const whatsappErrorPatterns = [
+    'Connection Closed',
+    'QR refs attempts ended',
+    'Stream Errored',
+    'DisconnectReason',
+    'connection refused',
+    'ECONNREFUSED',
+  ];
+  const lowerCombined = combined.toLowerCase();
+  const hasWhatsAppError = whatsappErrorPatterns.some(p => lowerCombined.includes(p.toLowerCase()));
+  if (hasWhatsAppError) {
+    const errorLines = combined.split('\n')
+      .filter(l => whatsappErrorPatterns.some(p => l.toLowerCase().includes(p.toLowerCase())))
+      .slice(-2);
     return {
       status: 'error',
-      message: errorLines.join(' ').slice(0, 200) || 'WhatsApp encountered an error. Try refreshing.',
+      message: errorLines.join(' ').slice(0, 200) || 'WhatsApp connection failed. Click Retry to try again.',
     };
   }
 
@@ -513,69 +526,7 @@ export async function disconnectWhatsApp(userId: string): Promise<void> {
   try {
     const { serverIp, containerName } = await getUserContainer(userId);
 
-    // Use Baileys inside the container to send a proper logout to WhatsApp servers.
-    // This removes the linked device from the user's phone immediately.
-    // The script finds the Baileys module (bundled inside openclaw), loads creds,
-    // connects, calls sock.logout(), then exits.
-    const logoutScript = `
-      const fs = require("fs");
-      const path = require("path");
-      const credsDir = "/root/.openclaw/credentials/whatsapp";
-      if (!fs.existsSync(credsDir)) { console.log("NO_CREDS"); process.exit(0); }
-      const sessions = fs.readdirSync(credsDir).filter(d => fs.existsSync(path.join(credsDir, d, "creds.json")));
-      if (sessions.length === 0) { console.log("NO_CREDS"); process.exit(0); }
-
-      // Find Baileys — it's a dependency of openclaw
-      let baileys;
-      const searchPaths = [
-        "/usr/local/lib/node_modules/openclaw/node_modules/@whiskeysockets/baileys",
-        "/usr/local/lib/node_modules/@whiskeysockets/baileys",
-        "/usr/lib/node_modules/openclaw/node_modules/@whiskeysockets/baileys",
-      ];
-      for (const p of searchPaths) { try { baileys = require(p); break; } catch {} }
-      if (!baileys) {
-        try { baileys = require("@whiskeysockets/baileys"); } catch {}
-      }
-      if (!baileys) { console.log("NO_BAILEYS"); process.exit(0); }
-
-      const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = baileys;
-
-      (async () => {
-        for (const session of sessions) {
-          try {
-            const sessionPath = path.join(credsDir, session);
-            const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
-            const sock = makeWASocket({ auth: state, printQRInTerminal: false });
-            sock.ev.on("creds.update", saveCreds);
-            await new Promise(resolve => {
-              sock.ev.on("connection.update", async (update) => {
-                if (update.connection === "open") {
-                  try { await sock.logout(); } catch {}
-                  console.log("LOGGED_OUT");
-                  resolve(undefined);
-                } else if (update.connection === "close") {
-                  console.log("CLOSE_BEFORE_LOGOUT");
-                  resolve(undefined);
-                }
-              });
-              setTimeout(() => { console.log("TIMEOUT"); resolve(undefined); }, 15000);
-            });
-            try { sock.end(undefined); } catch {}
-          } catch (e) { console.log("ERR:" + e.message); }
-        }
-        process.exit(0);
-      })();
-    `.replace(/\n/g, ' ');
-
-    const logoutResult = await sshExec(
-      serverIp,
-      `docker exec ${containerName} node -e '${logoutScript.replace(/'/g, "'\\''")}'`,
-      1 // single attempt, 30s timeout is fine
-    ).catch(() => null);
-
-    console.log(`[whatsapp] Logout result for ${userId}: ${logoutResult?.stdout || 'no output'}`);
-
-    // Remove WhatsApp from config and clear credentials via host filesystem
+    // Remove WhatsApp from config and clear all credentials/session data
     const config = await readContainerConfig(serverIp, userId);
     delete config.channels?.whatsapp;
     await writeContainerConfig(serverIp, userId, config);
@@ -587,7 +538,7 @@ export async function disconnectWhatsApp(userId: string): Promise<void> {
 
     await sshExec(serverIp, `docker restart ${containerName}`);
   } catch {
-    // agent might not be running — still clean up what we can
+    // Agent might not be running — still clean up credentials if possible
     try {
       const user = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [userId]);
       if (user?.server_id) {
