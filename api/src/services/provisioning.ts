@@ -6,6 +6,7 @@ import { PLAN_LIMITS, Plan, User } from '../types';
 import { sendWelcomeEmail } from './email';
 import { cloudflareDNS } from './cloudflare';
 import { v4 as uuid } from 'uuid';
+import { buildOpenclawConfig, injectApiKeys } from './apiKeys';
 
 interface ProvisionParams {
   userId: string;
@@ -129,13 +130,7 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
     console.warn(`[provision] Could not store gateway_token (column may not exist)`);
   });
 
-  const openclawConfig = {
-    gateway: {
-      bind: 'lan',
-      controlUi: { enabled: true, allowInsecureAuth: true },
-      auth: { mode: 'token', token: gatewayToken },
-    },
-  };
+  const openclawConfig = buildOpenclawConfig(gatewayToken);
 
   const configJson = JSON.stringify(openclawConfig, null, 2);
   const configBase64 = Buffer.from(configJson).toString('base64');
@@ -196,6 +191,13 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
   // Give Node.js ~75% of the container memory for its heap
   const heapMb = Math.floor(limits.ramMb * 0.75);
 
+  // Escape for shell single-quoted value (so API keys with special chars are safe)
+  const shEsc = (s: string) => (s || '').replace(/'/g, "'\\''");
+
+  // API keys from control plane .env — passed into container so OpenClaw can call OpenAI/Anthropic
+  const openaiKey = process.env.OPENAI_API_KEY || '';
+  const anthropicKey = process.env.ANTHROPIC_API_KEY || '';
+
   // Mount the instance directory at /root/.openclaw so config + credentials persist
   const startScript = `sh -c 'openclaw doctor --fix 2>/dev/null || true; exec openclaw gateway --port 18789 --bind lan --allow-unconfigured run'`;
   const dockerRunCmd = [
@@ -214,6 +216,8 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
     `-e INTERNAL_SECRET=${internalSecret}`,
     `-e "BROWSERLESS_URL=wss://production-sfo.browserless.io?token=${browserlessToken}"`,
     `-e OPENCLAW_GATEWAY_TOKEN=${gatewayToken}`,
+    ...(openaiKey ? [`-e 'OPENAI_API_KEY=${shEsc(openaiKey)}'`] : []),
+    ...(anthropicKey ? [`-e 'ANTHROPIC_API_KEY=${shEsc(anthropicKey)}'`] : []),
     `-v /opt/openclaw/instances/${userId}:/root/.openclaw`,
     `--label traefik.enable=true`,
     `--label 'traefik.http.routers.${containerName}.rule=Host(\`${hostRule}\`)'`,
@@ -250,6 +254,9 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
     await sshExec(server.ip, `docker start ${containerName} 2>/dev/null`).catch(() => null);
     await new Promise(r => setTimeout(r, 3000));
   }
+
+  // Step 6b: Write auth-profiles.json so OpenClaw finds the API keys
+  await injectApiKeys(server.ip, userId, containerName);
 
   // Step 7: Create DNS record pointing subdomain → worker IP
   await cloudflareDNS.upsertRecord(subdomain, server.ip);

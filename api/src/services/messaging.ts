@@ -2,6 +2,7 @@ import db from '../lib/db';
 import { encrypt } from '../lib/encryption';
 import { sshExec } from './ssh';
 import { User } from '../types';
+import { injectApiKeys } from './apiKeys';
 
 // ── Helpers ──
 
@@ -97,6 +98,9 @@ export async function connectTelegram(userId: string, botToken: string): Promise
   const botInfo: any = await res.json();
 
   const { serverIp, containerName, user } = await getUserContainer(userId);
+
+  // Ensure API keys are injected before starting the channel
+  await injectApiKeys(serverIp, userId, containerName);
 
   const config = await readContainerConfig(serverIp, userId);
   if (!config.channels) config.channels = {};
@@ -342,6 +346,9 @@ export async function initiateWhatsAppPairing(userId: string): Promise<{
   const dashboardUrl = agentUrl && user.gateway_token
     ? `${agentUrl}/?token=${encodeURIComponent(user.gateway_token)}`
     : agentUrl;
+
+  // Ensure API keys are injected before starting the channel
+  await injectApiKeys(serverIp, userId, containerName);
 
   // Write WhatsApp config via host filesystem (no docker exec needed)
   const config = await readContainerConfig(serverIp, userId);

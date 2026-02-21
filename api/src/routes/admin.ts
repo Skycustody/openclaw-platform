@@ -4,6 +4,8 @@ import db from '../lib/db';
 import { getServerLoad, checkCapacity, getAllWorkersStats } from '../services/serverRegistry';
 import { provisionUser } from '../services/provisioning';
 import { User } from '../types';
+import { sshExec } from '../services/ssh';
+import { injectApiKeys } from '../services/apiKeys';
 
 const router = Router();
 router.use(internalAuth);
@@ -137,6 +139,58 @@ router.post('/reprovision', async (req: Request, res: Response, next: NextFuncti
     }
 
     res.json({ results });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Inject API keys into all active user containers.
+ * Fixes existing containers that were provisioned before key injection existed.
+ * Also restarts each container so it picks up the new keys.
+ */
+router.post('/inject-keys', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { userId } = req.body;
+    let users: any[];
+
+    if (userId) {
+      const user = await db.getOne<any>(
+        `SELECT u.*, s.ip as server_ip FROM users u
+         LEFT JOIN servers s ON s.id = u.server_id
+         WHERE u.id = $1`,
+        [userId]
+      );
+      if (!user) return res.status(404).json({ error: 'User not found' });
+      users = [user];
+    } else {
+      users = await db.getMany<any>(
+        `SELECT u.*, s.ip as server_ip FROM users u
+         LEFT JOIN servers s ON s.id = u.server_id
+         WHERE u.server_id IS NOT NULL AND u.status IN ('active', 'sleeping', 'provisioning')`
+      );
+    }
+
+    if (users.length === 0) {
+      return res.json({ message: 'No users with containers found', results: [] });
+    }
+
+    const results = [];
+    for (const user of users) {
+      try {
+        const cn = user.container_name || `openclaw-${user.id.slice(0, 12)}`;
+        await injectApiKeys(user.server_ip, user.id, cn);
+
+        await sshExec(user.server_ip, `docker restart ${cn} 2>/dev/null || true`);
+
+        results.push({ userId: user.id, email: user.email, status: 'success' });
+      } catch (err: any) {
+        console.error(`[inject-keys] Failed for ${user.id}:`, err.message);
+        results.push({ userId: user.id, email: user.email, status: 'failed', error: err.message });
+      }
+    }
+
+    res.json({ fixed: results.filter(r => r.status === 'success').length, total: users.length, results });
   } catch (err) {
     next(err);
   }

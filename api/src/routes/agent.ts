@@ -5,6 +5,7 @@ import { wakeContainer, sleepContainer, getContainerStatus, touchActivity } from
 import { restartContainer, provisionUser } from '../services/provisioning';
 import { User, Server } from '../types';
 import { sshExec } from '../services/ssh';
+import { injectApiKeys } from '../services/apiKeys';
 
 const router = Router();
 router.use(authenticate);
@@ -185,6 +186,14 @@ router.post('/open', authenticate, async (req: AuthRequest, res: Response, next:
     // Proactively fix Traefik on existing workers (don't await — runs in background)
     if (server) {
       ensureTraefik(server.ip).catch(() => {});
+    }
+
+    // Ensure API keys are injected into the container (fixes existing users)
+    if (server) {
+      const cn = user.container_name || `openclaw-${user.id.slice(0, 12)}`;
+      injectApiKeys(server.ip, user.id, cn).catch((err) =>
+        console.warn(`[agent/open] Key injection failed for ${user.id}:`, err.message)
+      );
     }
 
     // Case 2: sleeping — wake it up
