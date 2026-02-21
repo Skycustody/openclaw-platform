@@ -10,7 +10,7 @@ import api from '@/lib/api';
 import { useStore } from '@/lib/store';
 import {
   Check, Lock, Loader2, QrCode, MessageSquare,
-  ArrowRight, Link2Off, AlertCircle, RefreshCw,
+  ArrowRight, Link2Off, AlertCircle, RefreshCw, Info, ChevronDown,
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 
@@ -57,6 +57,90 @@ const platformMeta: Record<string, { label: string; emoji: string; description: 
   },
 };
 
+const platformInstructions: Record<string, { title: string; steps: string[]; tips?: string[] }> = {
+  telegram: {
+    title: 'How to set up Telegram',
+    steps: [
+      'Open Telegram on your phone or desktop.',
+      'Search for @BotFather and start a conversation.',
+      'Send the command /newbot to create a new bot.',
+      'Follow the prompts to choose a name and username for your bot.',
+      'BotFather will give you an API token — copy it.',
+      'Come back here, click "Connect" on the Telegram card, and paste your token.',
+      'Your AI agent will start responding to messages sent to your bot automatically.',
+    ],
+    tips: [
+      'You can customize your bot\'s profile photo and description through BotFather using /setuserpic and /setdescription.',
+      'Your bot can work in group chats too — just add it to a group and mention it with @yourbotname.',
+      'To stop your bot, click "Disconnect" here. You can reconnect anytime with the same token.',
+    ],
+  },
+  whatsapp: {
+    title: 'How to set up WhatsApp',
+    steps: [
+      'Click "Connect" on the WhatsApp card — a QR code will appear.',
+      'Open WhatsApp on your phone.',
+      'Go to Settings (or Menu) → Linked Devices → Link a Device.',
+      'Point your phone camera at the QR code shown here.',
+      'Wait a few seconds — the status will change to "Connected".',
+      'Your AI agent is now linked to your WhatsApp as a companion device.',
+      'When someone messages your number, the agent will reply automatically.',
+    ],
+    tips: [
+      'You do NOT need to keep your phone on after linking — WhatsApp Multi-Device works independently.',
+      'The agent only replies to incoming messages. It will not send unsolicited messages.',
+      'To disconnect, click "Disconnect" here, then go to WhatsApp → Settings → Linked Devices → tap the device → Unlink.',
+    ],
+  },
+  discord: {
+    title: 'How to set up Discord',
+    steps: [
+      'Go to discord.com/developers/applications and sign in.',
+      'Click "New Application", give it a name, and create it.',
+      'In the left sidebar, click "Bot".',
+      'Click "Reset Token" and copy the token.',
+      'Scroll down and enable "Message Content Intent" under Privileged Gateway Intents.',
+      'Go to "OAuth2" → "URL Generator". Select scopes: "bot" and "applications.commands".',
+      'Under Bot Permissions, select: Send Messages, Read Message History, View Channels.',
+      'Copy the generated URL, open it in a browser, and invite the bot to your server.',
+      'Come back here, click "Connect" on the Discord card, and paste your bot token.',
+    ],
+    tips: [
+      'Your bot will respond when mentioned with @botname in any channel it has access to.',
+      'You can restrict which channels the bot can see using Discord\'s channel permissions.',
+      'The bot token is sensitive — never share it publicly.',
+    ],
+  },
+  slack: {
+    title: 'How to set up Slack',
+    steps: [
+      'Go to api.slack.com/apps and click "Create New App".',
+      'Choose "From scratch", give it a name, and select your workspace.',
+      'Go to "OAuth & Permissions" and add these Bot Token Scopes: chat:write, channels:history, channels:read, app_mentions:read.',
+      'Click "Install to Workspace" and authorize the app.',
+      'Copy the "Bot User OAuth Token" (starts with xoxb-).',
+      'Go to "Event Subscriptions", enable events, and subscribe to: message.channels, app_mention.',
+      'Come back here, click "Connect" on the Slack card, and paste your bot token.',
+    ],
+    tips: [
+      'Invite your bot to channels with /invite @yourbot so it can see messages.',
+      'The bot will only respond in channels where it has been invited.',
+    ],
+  },
+  signal: {
+    title: 'How to set up Signal',
+    steps: [
+      'Signal integration requires a dedicated phone number registered with Signal.',
+      'You\'ll need to set up signal-cli on your server (this is an advanced setup).',
+      'Once configured, click "Connect" on the Signal card to link your agent.',
+    ],
+    tips: [
+      'Signal provides end-to-end encryption for all messages.',
+      'This is an advanced integration — contact support if you need help.',
+    ],
+  },
+};
+
 const PRO_ONLY = ['discord', 'slack', 'signal'];
 
 const WHATSAPP_TIMEOUT_MS = 120_000;
@@ -88,6 +172,9 @@ export default function ConnectApps() {
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pairingStartRef = useRef<number>(0);
   const qrShownRef = useRef(false);
+
+  // Info modal
+  const [infoChannel, setInfoChannel] = useState<string | null>(null);
 
   const { user } = useStore();
   const isStarterPlan = user?.plan === 'starter';
@@ -363,10 +450,19 @@ export default function ConnectApps() {
                     <p className="mt-0.5 text-[13px] text-white/40">{meta.description}</p>
                   </div>
                 </div>
-                {ch.connected && <Badge variant="green">Connected</Badge>}
-                {ch.planLocked && !ch.connected && (
-                  <Badge><Lock className="h-3 w-3" /> Pro</Badge>
-                )}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setInfoChannel(ch.platform)}
+                    className="flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/40 hover:text-white/70 hover:bg-white/[0.08] hover:border-white/20 transition-all"
+                    title={`How to set up ${meta.label}`}
+                  >
+                    <Info className="h-3.5 w-3.5" />
+                  </button>
+                  {ch.connected && <Badge variant="green">Connected</Badge>}
+                  {ch.planLocked && !ch.connected && (
+                    <Badge><Lock className="h-3 w-3" /> Pro</Badge>
+                  )}
+                </div>
               </div>
 
               {ch.connected ? (
@@ -497,6 +593,51 @@ export default function ConnectApps() {
         </div>
       </Modal>
 
+      {/* ── Channel Info Modal ── */}
+      {infoChannel && platformInstructions[infoChannel] && (
+        <Modal
+          open={true}
+          onClose={() => setInfoChannel(null)}
+          title={platformInstructions[infoChannel].title}
+        >
+          <div className="space-y-5 max-h-[60vh] overflow-y-auto pr-1 custom-scrollbar">
+            <p className="text-[13px] font-medium text-white/80">Step-by-step setup</p>
+            <div className="space-y-2">
+              {platformInstructions[infoChannel].steps.map((step, i) => (
+                <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-white/[0.03] border border-white/[0.04]">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-500/20 text-blue-400 text-[12px] font-bold shrink-0">
+                    {i + 1}
+                  </span>
+                  <p className="text-[13px] text-white/60">{step}</p>
+                </div>
+              ))}
+            </div>
+
+            {platformInstructions[infoChannel].tips && (
+              <>
+                <p className="text-[13px] font-medium text-white/80">Tips</p>
+                <div className="space-y-2">
+                  {platformInstructions[infoChannel].tips!.map((tip, i) => (
+                    <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-white/[0.03] border border-white/[0.04]">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-500/20 text-amber-400 text-[10px] shrink-0">
+                        *
+                      </span>
+                      <p className="text-[12px] text-white/50">{tip}</p>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            <div className="flex justify-end">
+              <Button variant="glass" size="md" onClick={() => setInfoChannel(null)}>
+                Got it
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
       {/* ── WhatsApp Modal ── */}
       <Modal
         open={showWhatsAppModal}
@@ -581,46 +722,51 @@ export default function ConnectApps() {
             )}
           </div>
 
-          {/* What to do next (shown after successful pairing) */}
+          {/* What to do next (shown after successful pairing) — scrollable */}
           {whatsAppPaired && (
-            <div className="space-y-4">
-              <div className="space-y-2 rounded-lg border border-green-500/20 bg-green-500/5 p-4">
-                <p className="text-[13px] font-semibold text-green-400">How to chat with your AI agent</p>
-                <p className="text-[13px] text-white/60">
-                  When someone sends a message to your WhatsApp number, your AI agent will automatically read and reply to them.
-                  The agent uses your personality settings, skills, and custom instructions to respond.
-                </p>
-              </div>
+            <div className="max-h-[320px] overflow-y-auto pr-1 custom-scrollbar">
+              <div className="space-y-4">
+                <div className="space-y-2 rounded-lg border border-green-500/20 bg-green-500/5 p-4">
+                  <p className="text-[13px] font-semibold text-green-400">How to chat with your AI agent</p>
+                  <p className="text-[13px] text-white/60">
+                    When someone sends a message to your WhatsApp number, your AI agent will automatically read and reply to them.
+                    The agent uses your personality settings, skills, and custom instructions to respond.
+                  </p>
+                </div>
 
-              <p className="text-[13px] font-medium text-white/80">Try it now</p>
-              <div className="space-y-2">
-                {[
-                  ['1', 'Open WhatsApp on another phone or ask a friend to message your number.'],
-                  ['2', 'Send any message — for example: "Hey, what can you help me with?"'],
-                  ['3', 'Your AI agent will reply within a few seconds automatically.'],
-                ].map(([num, text]) => (
-                  <div key={num} className="flex items-start gap-3 p-3 rounded-lg bg-white/[0.03] border border-white/[0.04]">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-green-500/20 text-green-400 text-[12px] font-bold shrink-0">{num}</span>
-                    <p className="text-[13px] text-white/60">{text}</p>
-                  </div>
-                ))}
-              </div>
-
-              <p className="text-[13px] font-medium text-white/80">Customize your agent</p>
-              <div className="space-y-2">
-                {[
-                  ['Personality', 'Set your agent\'s name, tone, and custom instructions so it responds the way you want.'],
-                  ['Skills', 'Enable or disable what your agent can do — web search, image generation, scheduling, and more.'],
-                  ['Disconnect', 'Click Disconnect on the WhatsApp card anytime. Then open WhatsApp on your phone → Settings → Linked Devices → tap the device → Unlink.'],
-                ].map(([title, text]) => (
-                  <div key={title} className="flex items-start gap-3 p-3 rounded-lg bg-white/[0.03] border border-white/[0.04]">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/[0.08] text-white/60 text-[11px] font-bold shrink-0">{(title as string)[0]}</span>
-                    <div>
-                      <p className="text-[13px] font-medium text-white/70">{title}</p>
-                      <p className="text-[12px] text-white/40 mt-0.5">{text}</p>
+                <p className="text-[13px] font-medium text-white/80">Try it now</p>
+                <div className="space-y-2">
+                  {[
+                    ['1', 'Open WhatsApp on another phone or ask a friend to message your number.'],
+                    ['2', 'Send any message — for example: "Hey, what can you help me with?"'],
+                    ['3', 'Your AI agent will reply within a few seconds automatically.'],
+                  ].map(([num, text]) => (
+                    <div key={num} className="flex items-start gap-3 p-3 rounded-lg bg-white/[0.03] border border-white/[0.04]">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-green-500/20 text-green-400 text-[12px] font-bold shrink-0">{num}</span>
+                      <p className="text-[13px] text-white/60">{text}</p>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
+
+                <p className="text-[13px] font-medium text-white/80">Customize your agent</p>
+                <div className="space-y-2">
+                  {[
+                    ['Personality', 'Set your agent\'s name, tone, and custom instructions so it responds the way you want.'],
+                    ['Skills', 'Enable or disable what your agent can do — web search, image generation, scheduling, and more.'],
+                    ['Disconnect', 'Click Disconnect on the WhatsApp card anytime. Then open WhatsApp on your phone → Settings → Linked Devices → tap the device → Unlink.'],
+                  ].map(([title, text]) => (
+                    <div key={title} className="flex items-start gap-3 p-3 rounded-lg bg-white/[0.03] border border-white/[0.04]">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/[0.08] text-white/60 text-[11px] font-bold shrink-0">{(title as string)[0]}</span>
+                      <div>
+                        <p className="text-[13px] font-medium text-white/70">{title}</p>
+                        <p className="text-[12px] text-white/40 mt-0.5">{text}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center justify-center pt-2 text-white/20">
+                <ChevronDown className="h-4 w-4 animate-bounce" />
               </div>
             </div>
           )}

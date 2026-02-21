@@ -3,15 +3,18 @@ import { sshExec } from './ssh';
 const INSTANCE_DIR = '/opt/openclaw/instances';
 
 /**
- * Inject platform API keys into a user's OpenClaw instance on the host volume.
+ * Inject platform API keys into a user's OpenClaw container securely.
  *
- * Writes to two places that OpenClaw checks:
- *   1. openclaw.json — `models.providers` section (runtime config)
- *   2. agents/main/agent/auth-profiles.json — credential store
+ * Keys are written ONLY to:
+ *   - auth-profiles.json (credential store, not visible in OpenClaw UI)
+ *   - Docker env vars (set at container creation, not readable via UI)
  *
- * Also passes keys as env vars via docker update (for processes that read env).
+ * Keys are intentionally NOT stored in openclaw.json — that file is
+ * readable through the OpenClaw Control UI settings page.
  *
- * This is idempotent — safe to call multiple times.
+ * File permissions are locked to owner-only (chmod 600).
+ *
+ * Idempotent — safe to call multiple times.
  */
 export async function injectApiKeys(
   serverIp: string,
@@ -26,7 +29,7 @@ export async function injectApiKeys(
     return;
   }
 
-  // 1. Read existing openclaw.json and merge in providers
+  // Strip any leftover keys from openclaw.json (may exist from previous version)
   const configResult = await sshExec(
     serverIp,
     `cat ${INSTANCE_DIR}/${userId}/openclaw.json 2>/dev/null || echo '{}'`
@@ -39,24 +42,33 @@ export async function injectApiKeys(
     config = {};
   }
 
-  if (!config.models) config.models = {};
-  if (!config.models.providers) config.models.providers = {};
-
-  if (openaiKey) {
-    config.models.providers.openai = { apiKey: openaiKey };
+  let configDirty = false;
+  if (config.models?.providers?.openai?.apiKey) {
+    delete config.models.providers.openai.apiKey;
+    if (Object.keys(config.models.providers.openai).length === 0) delete config.models.providers.openai;
+    configDirty = true;
   }
-  if (anthropicKey) {
-    config.models.providers.anthropic = { apiKey: anthropicKey };
+  if (config.models?.providers?.anthropic?.apiKey) {
+    delete config.models.providers.anthropic.apiKey;
+    if (Object.keys(config.models.providers.anthropic).length === 0) delete config.models.providers.anthropic;
+    configDirty = true;
+  }
+  if (config.models?.providers && Object.keys(config.models.providers).length === 0) {
+    delete config.models.providers;
+  }
+  if (config.models && Object.keys(config.models).length === 0) {
+    delete config.models;
   }
 
-  // Write merged config back
-  const configB64 = Buffer.from(JSON.stringify(config, null, 2)).toString('base64');
-  await sshExec(
-    serverIp,
-    `echo '${configB64}' | base64 -d > ${INSTANCE_DIR}/${userId}/openclaw.json`
-  );
+  if (configDirty) {
+    const configB64 = Buffer.from(JSON.stringify(config, null, 2)).toString('base64');
+    await sshExec(
+      serverIp,
+      `echo '${configB64}' | base64 -d > ${INSTANCE_DIR}/${userId}/openclaw.json`
+    );
+  }
 
-  // 2. Write auth-profiles.json (OpenClaw's credential store)
+  // Write auth-profiles.json — the secure credential store
   const authProfiles: Record<string, any> = {};
 
   if (openaiKey) {
@@ -74,43 +86,32 @@ export async function injectApiKeys(
     };
   }
 
-  const authProfilesJson = JSON.stringify(authProfiles, null, 2);
-  const authB64 = Buffer.from(authProfilesJson).toString('base64');
+  const authB64 = Buffer.from(JSON.stringify(authProfiles, null, 2)).toString('base64');
 
-  // Create directory structure and write file
+  // Create directory, write file, and lock permissions (owner-only read/write)
   await sshExec(
     serverIp,
     [
       `mkdir -p ${INSTANCE_DIR}/${userId}/agents/main/agent`,
       `echo '${authB64}' | base64 -d > ${INSTANCE_DIR}/${userId}/agents/main/agent/auth-profiles.json`,
+      `chmod 600 ${INSTANCE_DIR}/${userId}/agents/main/agent/auth-profiles.json`,
     ].join(' && ')
   );
 
-  console.log(`[apiKeys] Keys injected for user ${userId}`);
+  console.log(`[apiKeys] Keys injected securely for user ${userId}`);
 }
 
 /**
- * Build the initial openclaw.json config with gateway + provider keys.
+ * Build the initial openclaw.json config — gateway settings only.
+ * API keys are NOT included here; they go only into auth-profiles.json
+ * so they are never visible through the OpenClaw Control UI.
  */
 export function buildOpenclawConfig(gatewayToken: string): Record<string, any> {
-  const openaiKey = process.env.OPENAI_API_KEY || '';
-  const anthropicKey = process.env.ANTHROPIC_API_KEY || '';
-
-  const config: Record<string, any> = {
+  return {
     gateway: {
       bind: 'lan',
       controlUi: { enabled: true, allowInsecureAuth: true },
       auth: { mode: 'token', token: gatewayToken },
     },
   };
-
-  const providers: Record<string, any> = {};
-  if (openaiKey) providers.openai = { apiKey: openaiKey };
-  if (anthropicKey) providers.anthropic = { apiKey: anthropicKey };
-
-  if (Object.keys(providers).length > 0) {
-    config.models = { providers };
-  }
-
-  return config;
 }
