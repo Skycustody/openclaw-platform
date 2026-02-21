@@ -62,6 +62,8 @@ export interface UserSettings {
   approval_file_delete: boolean;
   approval_commands: boolean;
   approval_social: boolean;
+  own_openai_key: string | null;
+  own_anthropic_key: string | null;
 }
 
 export interface TokenBalance {

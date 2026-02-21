@@ -1,20 +1,63 @@
 import { Router, Response, NextFunction } from 'express';
 import { AuthRequest, authenticate, requireActiveSubscription } from '../middleware/auth';
+import crypto from 'crypto';
 import db from '../lib/db';
 import { UserSettings } from '../types';
+
+const ENC_KEY = process.env.ENCRYPTION_KEY || 'valnaa-default-encryption-key-32';
+const ENC_ALGO = 'aes-256-cbc';
+
+function encrypt(text: string): string {
+  const key = crypto.scryptSync(ENC_KEY, 'salt', 32);
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv(ENC_ALGO, key, iv);
+  let encrypted = cipher.update(text, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  return iv.toString('hex') + ':' + encrypted;
+}
+
+function decrypt(data: string): string {
+  const key = crypto.scryptSync(ENC_KEY, 'salt', 32);
+  const [ivHex, encrypted] = data.split(':');
+  const iv = Buffer.from(ivHex, 'hex');
+  const decipher = crypto.createDecipheriv(ENC_ALGO, key, iv);
+  let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+  decrypted += decipher.final('utf8');
+  return decrypted;
+}
+
+function maskKey(key: string): string {
+  if (key.length < 10) return '****';
+  return key.slice(0, 7) + '...' + key.slice(-4);
+}
 
 const router = Router();
 router.use(authenticate);
 router.use(requireActiveSubscription);
 
-// Get all settings
+// Get all settings — own API keys are returned masked
 router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const settings = await db.getOne<UserSettings>(
       'SELECT * FROM user_settings WHERE user_id = $1',
       [req.userId]
     );
-    res.json({ settings: settings || {} });
+    if (!settings) return res.json({ settings: {} });
+
+    const safeSettings: any = { ...settings };
+    // Never return raw keys, only masked versions
+    safeSettings.has_own_openai_key = !!settings.own_openai_key;
+    safeSettings.own_openai_key_masked = settings.own_openai_key
+      ? maskKey(decrypt(settings.own_openai_key))
+      : null;
+    safeSettings.has_own_anthropic_key = !!settings.own_anthropic_key;
+    safeSettings.own_anthropic_key_masked = settings.own_anthropic_key
+      ? maskKey(decrypt(settings.own_anthropic_key))
+      : null;
+    delete safeSettings.own_openai_key;
+    delete safeSettings.own_anthropic_key;
+
+    res.json({ settings: safeSettings });
   } catch (err) {
     next(err);
   }
@@ -98,5 +141,71 @@ router.put('/protection', async (req: AuthRequest, res: Response, next: NextFunc
     next(err);
   }
 });
+
+// Save user's own API keys (encrypted at rest)
+router.put('/own-keys', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { openaiKey, anthropicKey } = req.body;
+
+    // Validate key format before saving
+    if (openaiKey !== undefined) {
+      if (openaiKey && !openaiKey.startsWith('sk-')) {
+        return res.status(400).json({ error: 'Invalid OpenAI key format. Keys start with sk-' });
+      }
+      const encrypted = openaiKey ? encrypt(openaiKey) : null;
+      await db.query(
+        'UPDATE user_settings SET own_openai_key = $1 WHERE user_id = $2',
+        [encrypted, req.userId]
+      );
+    }
+
+    if (anthropicKey !== undefined) {
+      if (anthropicKey && !anthropicKey.startsWith('sk-ant-')) {
+        return res.status(400).json({ error: 'Invalid Anthropic key format. Keys start with sk-ant-' });
+      }
+      const encrypted = anthropicKey ? encrypt(anthropicKey) : null;
+      await db.query(
+        'UPDATE user_settings SET own_anthropic_key = $1 WHERE user_id = $2',
+        [encrypted, req.userId]
+      );
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Delete a specific own API key
+router.delete('/own-keys/:provider', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { provider } = req.params;
+    if (provider === 'openai') {
+      await db.query('UPDATE user_settings SET own_openai_key = NULL WHERE user_id = $1', [req.userId]);
+    } else if (provider === 'anthropic') {
+      await db.query('UPDATE user_settings SET own_anthropic_key = NULL WHERE user_id = $1', [req.userId]);
+    } else {
+      return res.status(400).json({ error: 'Invalid provider. Use openai or anthropic.' });
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Internal-only: get decrypted own key for proxy (not exposed via auth middleware externally)
+export async function getUserOwnKey(userId: string, provider: 'openai' | 'anthropic'): Promise<string | null> {
+  const col = provider === 'openai' ? 'own_openai_key' : 'own_anthropic_key';
+  const row = await db.getOne<{ key: string | null }>(
+    `SELECT ${col} as key FROM user_settings WHERE user_id = $1`,
+    [userId]
+  );
+  if (!row?.key) return null;
+  try {
+    return decrypt(row.key);
+  } catch {
+    return null;
+  }
+}
 
 export default router;

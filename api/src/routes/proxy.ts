@@ -4,21 +4,16 @@ import { URL } from 'url';
 import db from '../lib/db';
 import { checkBalance, trackUsage } from '../services/tokenTracker';
 import { classifyTask, RETAIL_PRICES } from '../services/smartRouter';
+import { getUserOwnKey } from './settings';
 
 const router = Router();
 
 const OPENAI_ORIGIN = 'https://api.openai.com';
 const ANTHROPIC_ORIGIN = 'https://api.anthropic.com';
 
-// Minimum tokens a user must have to make any AI call
 const MIN_TOKENS_REQUIRED = 100;
-
-// Rough token estimates when we can't parse the exact model from the request.
-// These are conservative (low) so we don't block legitimate small requests.
 const DEFAULT_ESTIMATE_TOKENS = 500;
 
-// Model-name to approximate cost-per-1K-tokens for estimation.
-// Used to give users a heads-up when their balance is too low for a request.
 const MODEL_COST_PER_1K: Record<string, number> = {
   'gpt-4o-mini': 0.5,
   'gpt-4o': 5,
@@ -32,26 +27,13 @@ const MODEL_COST_PER_1K: Record<string, number> = {
 };
 
 /**
- * Check if the request is using the user's own API key (not a platform proxy key).
- * If so, we pass it straight through -- no token checks, no balance deductions.
- * Users who bring their own keys are responsible for their own usage.
- */
-function isUserOwnKey(req: Request): boolean {
-  const auth = req.headers.authorization;
-  if (auth?.startsWith('Bearer ')) {
-    const key = auth.slice(7).trim();
-    // Real OpenAI keys start with sk-, real Anthropic keys start with sk-ant-
-    if (key.startsWith('sk-') && !key.startsWith('val_sk_')) return true;
-  }
-  const xApiKey = req.headers['x-api-key'];
-  if (typeof xApiKey === 'string' && xApiKey.startsWith('sk-ant-')) return true;
-  return false;
-}
-
-/**
  * Extract the proxy key from the request.
  * OpenAI SDK sends: Authorization: Bearer val_sk_xxx
  * Anthropic SDK sends: x-api-key: val_sk_xxx
+ *
+ * SECURITY: Every request MUST have a valid val_sk_ proxy key.
+ * Even users with their own API keys still authenticate via proxy key.
+ * We never allow raw sk-* keys to bypass authentication.
  */
 function extractProxyKey(req: Request): string | null {
   const auth = req.headers.authorization;
@@ -461,25 +443,27 @@ function extractTokenUsage(responseText: string, provider: string): number {
 // ── OpenAI proxy: /proxy/openai/* ──
 
 router.all('/openai/*', async (req: Request, res: Response) => {
-  // If user is using their own API key, pass through directly -- no token checks
-  if (isUserOwnKey(req)) {
-    const ownKey = req.headers.authorization!.slice(7).trim();
-    return forwardRequest(req, res, OPENAI_ORIGIN, ownKey, 'openai', 'self-key', 'self');
-  }
-
+  // SECURITY: Always require a valid proxy key for authentication
   const proxyKey = extractProxyKey(req);
   if (!proxyKey) {
     return res.status(401).json({ error: { message: 'Missing or invalid API key', code: 'INVALID_KEY' } });
   }
 
-  const realKey = process.env.OPENAI_API_KEY;
-  if (!realKey) {
-    return res.status(503).json({ error: { message: 'OpenAI provider not configured', code: 'PROVIDER_NOT_CONFIGURED' } });
-  }
-
   const user = await validateAndCheckUser(proxyKey);
   if (!user) {
     return res.status(403).json({ error: { message: 'Invalid or inactive API key', code: 'INVALID_KEY' } });
+  }
+
+  // Check if user has their own OpenAI key stored — if so, use it (no token deduction)
+  const ownKey = await getUserOwnKey(user.userId, 'openai');
+  if (ownKey) {
+    return forwardRequest(req, res, OPENAI_ORIGIN, ownKey, 'openai', 'self-key', 'self');
+  }
+
+  // Platform key — full token checks apply
+  const realKey = process.env.OPENAI_API_KEY;
+  if (!realKey) {
+    return res.status(503).json({ error: { message: 'OpenAI provider not configured', code: 'PROVIDER_NOT_CONFIGURED' } });
   }
 
   const blocked = await preFlightCheck(user, req.body, 'openai');
@@ -493,26 +477,27 @@ router.all('/openai/*', async (req: Request, res: Response) => {
 // ── Anthropic proxy: /proxy/anthropic/* ──
 
 router.all('/anthropic/*', async (req: Request, res: Response) => {
-  // If user is using their own API key, pass through directly -- no token checks
-  if (isUserOwnKey(req)) {
-    const ownKey = (req.headers['x-api-key'] as string) ||
-      req.headers.authorization!.slice(7).trim();
-    return forwardRequest(req, res, ANTHROPIC_ORIGIN, ownKey, 'anthropic', 'self-key', 'self');
-  }
-
+  // SECURITY: Always require a valid proxy key for authentication
   const proxyKey = extractProxyKey(req);
   if (!proxyKey) {
     return res.status(401).json({ error: { message: 'Missing or invalid API key', code: 'INVALID_KEY' } });
   }
 
-  const realKey = process.env.ANTHROPIC_API_KEY;
-  if (!realKey) {
-    return res.status(503).json({ error: { message: 'Anthropic provider not configured', code: 'PROVIDER_NOT_CONFIGURED' } });
-  }
-
   const user = await validateAndCheckUser(proxyKey);
   if (!user) {
     return res.status(403).json({ error: { message: 'Invalid or inactive API key', code: 'INVALID_KEY' } });
+  }
+
+  // Check if user has their own Anthropic key stored — if so, use it (no token deduction)
+  const ownKey = await getUserOwnKey(user.userId, 'anthropic');
+  if (ownKey) {
+    return forwardRequest(req, res, ANTHROPIC_ORIGIN, ownKey, 'anthropic', 'self-key', 'self');
+  }
+
+  // Platform key — full token checks apply
+  const realKey = process.env.ANTHROPIC_API_KEY;
+  if (!realKey) {
+    return res.status(503).json({ error: { message: 'Anthropic provider not configured', code: 'PROVIDER_NOT_CONFIGURED' } });
   }
 
   const blocked = await preFlightCheck(user, req.body, 'anthropic');
