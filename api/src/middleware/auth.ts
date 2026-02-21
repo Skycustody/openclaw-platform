@@ -59,12 +59,35 @@ export async function requireActiveSubscription(req: AuthRequest, _res: Response
       throw new UnauthorizedError('User not found');
     }
 
-    const allowed = ['active', 'grace_period'];
+    const allowed = ['active', 'grace_period', 'provisioning'];
     if (!allowed.includes(user.status)) {
       const err: any = new Error('Active subscription required');
       err.statusCode = 403;
       err.code = 'SUBSCRIPTION_REQUIRED';
       err.userStatus = user.status;
+      return next(err);
+    }
+
+    next();
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function requireAdmin(req: AuthRequest, _res: Response, next: NextFunction) {
+  try {
+    if (!req.userId) {
+      throw new UnauthorizedError('Authentication required');
+    }
+
+    const user = await db.getOne<{ is_admin: boolean }>(
+      'SELECT is_admin FROM users WHERE id = $1',
+      [req.userId]
+    );
+
+    if (!user || !user.is_admin) {
+      const err: any = new Error('Admin access required');
+      err.statusCode = 403;
       return next(err);
     }
 

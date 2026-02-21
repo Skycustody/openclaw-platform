@@ -22,6 +22,7 @@ export interface User {
   gateway_token: string | null;
   api_proxy_key: string | null;
   grace_period_end: Date | null;
+  is_admin: boolean;
   created_at: Date;
   last_active: Date;
 }

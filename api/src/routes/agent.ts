@@ -131,12 +131,15 @@ router.get('/status', async (req: AuthRequest, res: Response, next: NextFunction
     ]);
 
     res.json({
+      userId: user.id,
+      email: user.email,
       status,
       subscriptionStatus: user.status,
       subdomain: user.subdomain,
       plan: user.plan,
       lastActive: user.last_active,
       createdAt: user.created_at,
+      isAdmin: user.is_admin || false,
       stats: {
         messagesToday: parseInt(messagesResult?.count || '0'),
         tokensToday: parseInt(tokensResult?.total || '0'),

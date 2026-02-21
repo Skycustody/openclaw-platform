@@ -1,5 +1,5 @@
-import { Router, Request, Response, NextFunction } from 'express';
-import { internalAuth } from '../middleware/auth';
+import { Router, Response, NextFunction } from 'express';
+import { AuthRequest, authenticate, requireAdmin, internalAuth } from '../middleware/auth';
 import db from '../lib/db';
 import { getServerLoad, checkCapacity, getAllWorkersStats } from '../services/serverRegistry';
 import { provisionUser } from '../services/provisioning';
@@ -8,18 +8,25 @@ import { sshExec } from '../services/ssh';
 import { injectApiKeys, ensureProxyKey } from '../services/apiKeys';
 
 const router = Router();
-router.use(internalAuth);
 
-// Platform overview
-router.get('/overview', async (_req: Request, res: Response, next: NextFunction) => {
+// All admin routes require JWT auth + admin role
+router.use(authenticate);
+router.use(requireAdmin);
+
+// ── Platform Overview ──
+router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const [users, servers, revenue, tokens] = await Promise.all([
+    const [users, servers, revenue, tokens, recentSignups, plans] = await Promise.all([
       db.getOne<any>(`
         SELECT
           COUNT(*) as total,
           COUNT(*) FILTER (WHERE status = 'active') as active,
           COUNT(*) FILTER (WHERE status = 'sleeping') as sleeping,
           COUNT(*) FILTER (WHERE status = 'paused') as paused,
+          COUNT(*) FILTER (WHERE status = 'provisioning') as provisioning,
+          COUNT(*) FILTER (WHERE status = 'cancelled') as cancelled,
+          COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '24 hours') as new_24h,
+          COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days') as new_7d,
           COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '30 days') as new_30d
         FROM users
       `),
@@ -31,26 +38,205 @@ router.get('/overview', async (_req: Request, res: Response, next: NextFunction)
         FROM servers WHERE status = 'active'
       `),
       db.getOne<any>(`
-        SELECT COALESCE(SUM(amount), 0) as total
+        SELECT
+          COALESCE(SUM(CASE WHEN type = 'purchase' AND created_at > DATE_TRUNC('month', NOW()) THEN amount ELSE 0 END), 0) as month_token_purchases,
+          COALESCE(SUM(CASE WHEN type = 'purchase' THEN amount ELSE 0 END), 0) as total_token_purchases
         FROM token_transactions
-        WHERE type = 'purchase' AND created_at > DATE_TRUNC('month', NOW())
       `),
       db.getOne<any>(`
         SELECT
-          COALESCE(SUM(ABS(amount)), 0) as total_used,
-          COALESCE(SUM(balance), 0) as total_balance
+          COALESCE(SUM(total_used), 0) as total_used,
+          COALESCE(SUM(balance), 0) as total_balance,
+          COALESCE(SUM(total_purchased), 0) as total_purchased
         FROM token_balances
+      `),
+      db.getMany<any>(`
+        SELECT id, email, plan, status, created_at
+        FROM users ORDER BY created_at DESC LIMIT 10
+      `),
+      db.getOne<any>(`
+        SELECT
+          COUNT(*) FILTER (WHERE plan = 'starter') as starter,
+          COUNT(*) FILTER (WHERE plan = 'pro') as pro,
+          COUNT(*) FILTER (WHERE plan = 'business') as business
+        FROM users WHERE status != 'cancelled'
       `),
     ]);
 
-    res.json({ users, servers, revenue, tokens });
+    res.json({ users, servers, revenue, tokens, recentSignups, plans });
   } catch (err) {
     next(err);
   }
 });
 
-// Server load
-router.get('/servers', async (_req: Request, res: Response, next: NextFunction) => {
+// ── Revenue & Billing Stats ──
+router.get('/revenue', async (_req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const [monthlyRevenue, dailyRevenue, topSpenders] = await Promise.all([
+      db.getMany<any>(`
+        SELECT
+          DATE_TRUNC('month', created_at) as month,
+          SUM(amount) as total_tokens,
+          COUNT(*) as transaction_count
+        FROM token_transactions
+        WHERE type = 'purchase'
+        GROUP BY month
+        ORDER BY month DESC
+        LIMIT 12
+      `),
+      db.getMany<any>(`
+        SELECT
+          DATE(created_at) as day,
+          SUM(amount) as total_tokens,
+          COUNT(*) as transaction_count
+        FROM token_transactions
+        WHERE type = 'purchase' AND created_at > NOW() - INTERVAL '30 days'
+        GROUP BY day
+        ORDER BY day DESC
+      `),
+      db.getMany<any>(`
+        SELECT u.email, u.plan,
+          COALESCE(tb.total_purchased, 0) as total_purchased,
+          COALESCE(tb.total_used, 0) as total_used,
+          COALESCE(tb.balance, 0) as balance
+        FROM users u
+        LEFT JOIN token_balances tb ON tb.user_id = u.id
+        ORDER BY tb.total_purchased DESC NULLS LAST
+        LIMIT 20
+      `),
+    ]);
+
+    res.json({ monthlyRevenue, dailyRevenue, topSpenders });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── All Users (paginated, searchable) ──
+router.get('/users', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const limit = parseInt(req.query.limit as string) || 50;
+    const offset = parseInt(req.query.offset as string) || 0;
+    const search = (req.query.search as string || '').trim();
+    const status = req.query.status as string || '';
+    const plan = req.query.plan as string || '';
+
+    let where = 'WHERE 1=1';
+    const params: any[] = [];
+    let paramIdx = 1;
+
+    if (search) {
+      where += ` AND (u.email ILIKE $${paramIdx} OR u.display_name ILIKE $${paramIdx} OR u.subdomain ILIKE $${paramIdx})`;
+      params.push(`%${search}%`);
+      paramIdx++;
+    }
+    if (status) {
+      where += ` AND u.status = $${paramIdx}`;
+      params.push(status);
+      paramIdx++;
+    }
+    if (plan) {
+      where += ` AND u.plan = $${paramIdx}`;
+      params.push(plan);
+      paramIdx++;
+    }
+
+    const [users, countResult] = await Promise.all([
+      db.getMany<any>(
+        `SELECT u.id, u.email, u.display_name, u.plan, u.status, u.subdomain,
+                u.created_at, u.last_active, u.is_admin,
+                tb.balance as token_balance, tb.total_used, tb.total_purchased,
+                s.ip as server_ip, s.hostname as server_hostname
+         FROM users u
+         LEFT JOIN token_balances tb ON tb.user_id = u.id
+         LEFT JOIN servers s ON s.id = u.server_id
+         ${where}
+         ORDER BY u.created_at DESC
+         LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`,
+        [...params, limit, offset]
+      ),
+      db.getOne<any>(
+        `SELECT COUNT(*) as total FROM users u ${where}`,
+        params
+      ),
+    ]);
+
+    res.json({ users, total: parseInt(countResult?.total || '0') });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── Single User Detail ──
+router.get('/users/:userId', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { userId } = req.params;
+    const [user, tokens, activity, transactions] = await Promise.all([
+      db.getOne<any>(
+        `SELECT u.*, s.ip as server_ip, s.hostname as server_hostname
+         FROM users u
+         LEFT JOIN servers s ON s.id = u.server_id
+         WHERE u.id = $1`,
+        [userId]
+      ),
+      db.getOne<any>(
+        'SELECT * FROM token_balances WHERE user_id = $1',
+        [userId]
+      ),
+      db.getMany<any>(
+        'SELECT * FROM activity_log WHERE user_id = $1 ORDER BY created_at DESC LIMIT 20',
+        [userId]
+      ),
+      db.getMany<any>(
+        'SELECT * FROM token_transactions WHERE user_id = $1 ORDER BY created_at DESC LIMIT 20',
+        [userId]
+      ),
+    ]);
+
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json({ user, tokens, activity, transactions });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── Update User (change plan, status, admin flag) ──
+router.put('/users/:userId', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { userId } = req.params;
+    const { plan, status, is_admin, token_balance } = req.body;
+
+    if (plan) {
+      const validPlans = ['starter', 'pro', 'business'];
+      if (!validPlans.includes(plan)) return res.status(400).json({ error: 'Invalid plan' });
+      await db.query('UPDATE users SET plan = $1 WHERE id = $2', [plan, userId]);
+    }
+    if (status) {
+      const validStatuses = ['provisioning', 'active', 'sleeping', 'paused', 'cancelled', 'grace_period'];
+      if (!validStatuses.includes(status)) return res.status(400).json({ error: 'Invalid status' });
+      await db.query('UPDATE users SET status = $1 WHERE id = $2', [status, userId]);
+    }
+    if (typeof is_admin === 'boolean') {
+      await db.query('UPDATE users SET is_admin = $1 WHERE id = $2', [is_admin, userId]);
+    }
+    if (typeof token_balance === 'number' && token_balance >= 0) {
+      await db.query(
+        `INSERT INTO token_balances (user_id, balance, total_purchased)
+         VALUES ($1, $2, $2)
+         ON CONFLICT (user_id) DO UPDATE SET balance = $2`,
+        [userId, token_balance]
+      );
+    }
+
+    const user = await db.getOne<any>('SELECT id, email, plan, status, is_admin FROM users WHERE id = $1', [userId]);
+    res.json({ user });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── Server Management ──
+router.get('/servers', async (_req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const servers = await getServerLoad();
     res.json({ servers });
@@ -59,8 +245,7 @@ router.get('/servers', async (_req: Request, res: Response, next: NextFunction) 
   }
 });
 
-// Actual container RAM usage (runs docker stats on each worker via SSH)
-router.get('/worker-stats', async (_req: Request, res: Response, next: NextFunction) => {
+router.get('/worker-stats', async (_req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const stats = await getAllWorkersStats();
     res.json({ workers: stats });
@@ -69,30 +254,8 @@ router.get('/worker-stats', async (_req: Request, res: Response, next: NextFunct
   }
 });
 
-// All users
-router.get('/users', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const limit = parseInt(req.query.limit as string) || 50;
-    const offset = parseInt(req.query.offset as string) || 0;
-
-    const users = await db.getMany(
-      `SELECT u.*, tb.balance as token_balance, s.ip as server_ip
-       FROM users u
-       LEFT JOIN token_balances tb ON tb.user_id = u.id
-       LEFT JOIN servers s ON s.id = u.server_id
-       ORDER BY u.created_at DESC
-       LIMIT $1 OFFSET $2`,
-      [limit, offset]
-    );
-
-    res.json({ users });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// Trigger capacity check
-router.post('/check-capacity', async (_req: Request, res: Response, next: NextFunction) => {
+// ── Actions ──
+router.post('/check-capacity', async (_req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     await checkCapacity();
     res.json({ ok: true });
@@ -101,8 +264,7 @@ router.post('/check-capacity', async (_req: Request, res: Response, next: NextFu
   }
 });
 
-// Re-provision a stuck user (or all stuck users)
-router.post('/reprovision', async (req: Request, res: Response, next: NextFunction) => {
+router.post('/reprovision', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { userId } = req.body;
     let users: User[];
@@ -144,16 +306,7 @@ router.post('/reprovision', async (req: Request, res: Response, next: NextFuncti
   }
 });
 
-/**
- * Inject proxy keys into all active user containers.
- * For each user:
- *   1. Generates a proxy key if they don't have one
- *   2. Writes proxy key into auth-profiles.json + base URLs into openclaw.json
- *   3. Restarts the container so it picks up the changes
- *
- * Real API keys never touch the container — only the proxy key (val_sk_xxx).
- */
-router.post('/inject-keys', async (req: Request, res: Response, next: NextFunction) => {
+router.post('/inject-keys', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { userId } = req.body;
     let users: any[];
@@ -185,100 +338,9 @@ router.post('/inject-keys', async (req: Request, res: Response, next: NextFuncti
     for (const user of users) {
       try {
         const cn = user.container_name || `openclaw-${user.id.slice(0, 12)}`;
-
-        // Generate proxy key if missing
         const proxyKey = await ensureProxyKey(user.id);
-
-        // Write proxy config into filesystem
         await injectApiKeys(user.server_ip, user.id, cn);
-
-        // Recreate container with proxy env vars instead of real keys.
-        // We stop the old container, remove it, and re-run with updated env.
-        // The host volume (/opt/openclaw/instances/<id>) persists all data.
-        const inspectCmd = `docker inspect ${cn} --format='{{json .Config}}' 2>/dev/null`;
-        const inspectResult = await sshExec(user.server_ip, inspectCmd).catch(() => null);
-
-        if (inspectResult?.stdout) {
-          try {
-            const containerConfig = JSON.parse(inspectResult.stdout);
-            const existingEnv: string[] = containerConfig.Env || [];
-
-            // Filter out old real API key env vars and old base URL vars
-            const filteredEnv = existingEnv.filter((e: string) =>
-              !e.startsWith('OPENAI_API_KEY=') &&
-              !e.startsWith('ANTHROPIC_API_KEY=') &&
-              !e.startsWith('OPENAI_BASE_URL=') &&
-              !e.startsWith('ANTHROPIC_BASE_URL=')
-            );
-
-            // Add proxy env vars
-            filteredEnv.push(
-              `OPENAI_API_KEY=${proxyKey}`,
-              `OPENAI_BASE_URL=${apiUrl}/proxy/openai/v1`,
-              `ANTHROPIC_API_KEY=${proxyKey}`,
-              `ANTHROPIC_BASE_URL=${apiUrl}/proxy/anthropic`
-            );
-
-            // Get image from current container
-            const imageResult = await sshExec(
-              user.server_ip,
-              `docker inspect ${cn} --format='{{.Config.Image}}'`
-            );
-            const image = imageResult.stdout.trim();
-
-            // Get other container settings
-            const memResult = await sshExec(
-              user.server_ip,
-              `docker inspect ${cn} --format='{{.HostConfig.Memory}}'`
-            );
-            const memBytes = parseInt(memResult.stdout.trim()) || 0;
-            const memMb = memBytes > 0 ? Math.floor(memBytes / 1048576) : 2048;
-
-            const cpuResult = await sshExec(
-              user.server_ip,
-              `docker inspect ${cn} --format='{{.HostConfig.NanoCpus}}'`
-            );
-            const nanoCpus = parseInt(cpuResult.stdout.trim()) || 0;
-            const cpus = nanoCpus > 0 ? (nanoCpus / 1e9).toFixed(1) : '1.0';
-
-            // Get labels
-            const labelsResult = await sshExec(
-              user.server_ip,
-              `docker inspect ${cn} --format='{{json .Config.Labels}}'`
-            );
-            const labels: Record<string, string> = JSON.parse(labelsResult.stdout.trim() || '{}');
-
-            // Stop and remove old container
-            await sshExec(user.server_ip, `docker stop ${cn} 2>/dev/null; docker rm ${cn} 2>/dev/null`);
-
-            // Build docker run command
-            const envFlags = filteredEnv.map((e: string) => `-e '${e.replace(/'/g, "'\\''")}'`).join(' ');
-            const labelFlags = Object.entries(labels)
-              .map(([k, v]) => `--label '${k}=${v}'`)
-              .join(' ');
-
-            const startScript = `sh -c 'openclaw doctor --fix 2>/dev/null || true; exec openclaw gateway --port 18789 --bind lan --allow-unconfigured run'`;
-            const runCmd = [
-              `docker run -d --name ${cn}`,
-              `--restart unless-stopped --no-healthcheck --network openclaw-net`,
-              `--memory ${memMb}m --memory-swap ${memMb}m --cpus ${cpus}`,
-              envFlags,
-              `-v /opt/openclaw/instances/${user.id}:/root/.openclaw`,
-              labelFlags,
-              image,
-              `${startScript}`,
-            ].join(' ');
-
-            await sshExec(user.server_ip, runCmd);
-            console.log(`[inject-keys] Recreated container ${cn} with proxy key`);
-          } catch (recreateErr: any) {
-            console.warn(`[inject-keys] Container recreate failed for ${user.id}, falling back to restart:`, recreateErr.message);
-            await sshExec(user.server_ip, `docker start ${cn} 2>/dev/null; docker restart ${cn} 2>/dev/null`).catch(() => {});
-          }
-        } else {
-          await sshExec(user.server_ip, `docker restart ${cn} 2>/dev/null || true`);
-        }
-
+        await sshExec(user.server_ip, `docker restart ${cn} 2>/dev/null || true`);
         results.push({ userId: user.id, email: user.email, proxyKey: proxyKey.slice(0, 12) + '...', status: 'success' });
       } catch (err: any) {
         console.error(`[inject-keys] Failed for ${user.id}:`, err.message);

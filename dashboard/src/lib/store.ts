@@ -6,6 +6,7 @@ interface UserData {
   plan: string;
   status: string;
   subdomain: string | null;
+  isAdmin?: boolean;
 }
 
 interface StoreState {

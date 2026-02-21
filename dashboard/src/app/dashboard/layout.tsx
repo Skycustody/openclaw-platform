@@ -26,6 +26,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           plan: data.plan || 'starter',
           status: subStatus,
           subdomain: data.subdomain || null,
+          isAdmin: data.isAdmin || false,
         });
         const allowed = ['active', 'sleeping', 'grace_period', 'provisioning'];
         if (!allowed.includes(subStatus) && typeof window !== 'undefined') {
