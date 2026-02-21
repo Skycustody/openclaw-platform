@@ -60,7 +60,13 @@ export async function connectTelegram(userId: string, botToken: string): Promise
     const p = "/root/.openclaw/openclaw.json";
     let cfg = {}; try { cfg = JSON.parse(fs.readFileSync(p,"utf8")); } catch {}
     if (!cfg.channels) cfg.channels = {};
-    cfg.channels.telegram = { enabled: true, botToken: Buffer.from("${b64}","base64").toString() };
+    cfg.channels.telegram = {
+      enabled: true,
+      botToken: Buffer.from("${b64}","base64").toString(),
+      dmPolicy: "open",
+      allowFrom: ["*"],
+      groups: { "*": { requireMention: true } }
+    };
     fs.writeFileSync(p, JSON.stringify(cfg,null,2));
     console.log("OK");
   `.replace(/\n/g, ' ');
@@ -128,7 +134,12 @@ export async function connectDiscord(userId: string, botToken: string, guildId?:
     const p = "/root/.openclaw/openclaw.json";
     let cfg = {}; try { cfg = JSON.parse(fs.readFileSync(p,"utf8")); } catch {}
     if (!cfg.channels) cfg.channels = {};
-    cfg.channels.discord = { enabled: true, token: Buffer.from("${b64}","base64").toString() };
+    cfg.channels.discord = {
+      enabled: true,
+      token: Buffer.from("${b64}","base64").toString(),
+      dmPolicy: "open",
+      allowFrom: ["*"]
+    };
     fs.writeFileSync(p, JSON.stringify(cfg,null,2));
     console.log("OK");
   `.replace(/\n/g, ' ');
@@ -338,8 +349,16 @@ export async function initiateWhatsAppPairing(userId: string): Promise<{ agentUr
     return { agentUrl, alreadyLinked: true };
   }
 
-  // Restart so the gateway starts WhatsApp and generates a QR
+  // Restart so the gateway picks up the WhatsApp config
   await sshExec(serverIp, `docker restart ${containerName}`);
+
+  // Trigger QR generation in background after the container is back up.
+  // The gateway alone may not generate a QR — `channels login` is required.
+  // Fire-and-forget: runs on the server without blocking the API response.
+  void sshExec(
+    serverIp,
+    `sh -c 'sleep 10 && docker exec -d ${containerName} sh -c "openclaw channels login --channel whatsapp > /tmp/whatsapp-qr.log 2>&1"' &`
+  ).catch(() => {});
 
   return { agentUrl, alreadyLinked: false };
 }
@@ -352,7 +371,16 @@ export async function getWhatsAppQr(userId: string): Promise<{
   status: 'waiting' | 'qr' | 'paired';
   qrText?: string;
 }> {
-  const { serverIp, containerName } = await getUserContainer(userId);
+  let serverIp: string;
+  let containerName: string;
+
+  try {
+    const result = await getUserContainer(userId);
+    serverIp = result.serverIp;
+    containerName = result.containerName;
+  } catch {
+    return { status: 'waiting' };
+  }
 
   // Already paired?
   const credsCheck = await sshExec(
@@ -368,14 +396,22 @@ export async function getWhatsAppQr(userId: string): Promise<{
     return { status: 'paired' };
   }
 
-  const logs = await sshExec(
+  // Read QR from the explicit channels-login output file
+  const qrFile = await sshExec(
     serverIp,
-    `docker logs --tail 300 ${containerName} 2>&1`
+    `docker exec ${containerName} cat /tmp/whatsapp-qr.log 2>/dev/null`
   ).catch(() => null);
 
-  if (!logs?.stdout) return { status: 'waiting' };
+  // Also check docker logs as fallback
+  const logs = await sshExec(
+    serverIp,
+    `docker logs --tail 500 ${containerName} 2>&1`
+  ).catch(() => null);
 
-  const qrText = extractQrFromLogs(logs.stdout);
+  const combined = [qrFile?.stdout, logs?.stdout].filter(Boolean).join('\n');
+  if (!combined) return { status: 'waiting' };
+
+  const qrText = extractQrFromLogs(combined);
   return qrText ? { status: 'qr', qrText } : { status: 'waiting' };
 }
 

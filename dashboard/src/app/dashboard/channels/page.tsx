@@ -216,8 +216,8 @@ export default function ConnectApps() {
         }
       };
 
-      setTimeout(pollQr, 5000);
-      qrPollRef.current = setInterval(pollQr, 4000);
+      setTimeout(pollQr, 12000);
+      qrPollRef.current = setInterval(pollQr, 5000);
 
       statusPollRef.current = setInterval(async () => {
         try {
@@ -481,7 +481,7 @@ export default function ConnectApps() {
               <>
                 <Loader2 className="h-10 w-10 animate-spin text-white/20 mb-4" />
                 <p className="text-[14px] text-white/50">Generating QR code from your agent...</p>
-                <p className="text-[12px] text-white/25 mt-1">This may take up to 15 seconds</p>
+                <p className="text-[12px] text-white/25 mt-1">This may take up to 30 seconds while the agent restarts</p>
               </>
             ) : whatsAppQr ? (
               <>

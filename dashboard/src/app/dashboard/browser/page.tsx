@@ -154,7 +154,7 @@ export default function BrowserPage() {
 
           <div className="mt-5 space-y-0.5">
             {actions.map((action, idx) => {
-              const Icon = ACTION_ICONS[action.type] || Globe;
+              const Icon = (ACTION_ICONS[action.type] || Globe) as React.ComponentType<{ className?: string }>;
               const isError = action.status === 'error';
               return (
                 <div key={action.id} className="flex items-start gap-4 group">

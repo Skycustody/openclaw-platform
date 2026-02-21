@@ -18,11 +18,14 @@ import {
   PhoneCallIcon,
   Sparkles,
   Bot,
-  BrainCircuit,
 } from 'lucide-react';
 import { GlowingEffect } from '@/components/ui/glowing-effect';
-import { LampContainer } from '@/components/ui/lamp';
-import { motion } from 'framer-motion';
+import dynamic from 'next/dynamic';
+
+const DotScreenShader = dynamic(
+  () => import('@/components/ui/dot-shader-background').then((m) => m.DotScreenShader),
+  { ssr: false }
+);
 
 const features = [
   {
@@ -136,33 +139,33 @@ const logos = [
 
 export default function LandingPage() {
   return (
-    <div className="flex w-full flex-col">
-      <Header />
-      <main className="grow">
-        <HeroSection />
-        <LogosSection />
-        <FeaturesSection />
-        <PricingSection />
-        <CTASection />
-      </main>
-      <Footer />
+    <div className="relative flex w-full flex-col">
+      <div className="pointer-events-none fixed inset-0 z-0">
+        <DotScreenShader />
+      </div>
+      <div className="relative z-10">
+        <Header />
+        <main className="grow">
+          <HeroSection />
+          <LogosSection />
+          <FeaturesSection />
+          <PricingSection />
+          <CTASection />
+        </main>
+        <Footer />
+      </div>
     </div>
   );
 }
 
 function HeroSection() {
   return (
-    <LampContainer>
-      <motion.div
-        initial={{ opacity: 0.5, y: 100 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3, duration: 0.8, ease: 'easeInOut' }}
-        className="flex flex-col items-center gap-5"
-      >
+    <section className="relative mx-auto w-full max-w-5xl">
+      <div className="relative flex flex-col items-center justify-center gap-5 px-4 pt-32 pb-30">
         <a
           className={cn(
             'group mx-auto flex w-fit items-center gap-3 rounded-full border bg-card px-3 py-1 shadow',
-            'transition-all duration-500 ease-out'
+            'fade-in slide-in-from-bottom-10 animate-in fill-mode-backwards transition-all delay-500 duration-500 ease-out'
           )}
           href="#features"
         >
@@ -172,21 +175,23 @@ function HeroSection() {
           <ArrowRight className="size-3 duration-150 ease-out group-hover:translate-x-1" />
         </a>
 
-        <h1 className="text-balance text-center text-4xl font-bold tracking-tight md:text-5xl lg:text-6xl">
+        <h1
+          className={cn(
+            'fade-in slide-in-from-bottom-10 animate-in text-balance fill-mode-backwards text-center text-4xl font-bold tracking-tight delay-100 duration-500 ease-out md:text-5xl lg:text-6xl'
+          )}
+        >
           Your Personal AI
           <br />
-          <span className="bg-gradient-to-br from-slate-300 to-slate-500 bg-clip-text text-transparent">
-            Ready in 60 Seconds
-          </span>
+          <span className="text-muted-foreground">Ready in 60 Seconds</span>
         </h1>
 
-        <p className="mx-auto max-w-md text-center text-base tracking-wider text-foreground/70 sm:text-lg md:text-xl">
+        <p className="fade-in slide-in-from-bottom-10 mx-auto max-w-md animate-in fill-mode-backwards text-center text-base tracking-wider text-foreground/70 delay-200 duration-500 ease-out sm:text-lg md:text-xl">
           The most powerful open-source AI agent,
           <br />
           hosted for you. Zero setup.
         </p>
 
-        <div className="flex flex-row flex-wrap items-center justify-center gap-3 pt-2">
+        <div className="fade-in slide-in-from-bottom-10 flex animate-in flex-row flex-wrap items-center justify-center gap-3 fill-mode-backwards pt-2 delay-300 duration-500 ease-out">
           <Link href="#pricing">
             <Button className="rounded-full" size="lg" variant="secondary">
               <PhoneCallIcon className="size-4" />
@@ -200,8 +205,8 @@ function HeroSection() {
             </Button>
           </Link>
         </div>
-      </motion.div>
-    </LampContainer>
+      </div>
+    </section>
   );
 }
 
