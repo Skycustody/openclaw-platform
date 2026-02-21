@@ -214,10 +214,9 @@ export default function DashboardHome() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-48px)] animate-fade-up">
-      {/* Paused Alert */}
+    <div className="flex flex-col h-[calc(100vh-48px)]">
       {agentStatus === 'paused' && (
-        <div className="border border-red-500/20 bg-red-500/5 rounded-xl px-4 py-3 flex items-center gap-3 mb-4 shrink-0">
+        <div className="border border-red-500/20 bg-red-500/5 rounded-xl px-4 py-3 flex items-center gap-3 mb-3 shrink-0">
           <AlertTriangle className="h-4 w-4 text-red-400 shrink-0" />
           <p className="text-[13px] text-red-400 flex-1">Agent paused — you&apos;re out of tokens</p>
           <Button variant="danger" size="sm" onClick={() => window.location.href = '/dashboard/tokens'}>
@@ -226,61 +225,59 @@ export default function DashboardHome() {
         </div>
       )}
 
-      {/* Chat Container */}
-      <Card className="!p-0 overflow-hidden flex flex-col flex-1" glow={false}>
-        {/* Header */}
-        <div className="px-5 py-3.5 border-b border-white/[0.06] flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/[0.06] border border-white/[0.08]">
-                <Bot className="h-4.5 w-4.5 text-white/50" />
-              </div>
-              {(agentStatus === 'active' || agentStatus === 'online') && (
-                <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-green-400 ring-2 ring-black" />
-              )}
+      {/* Header bar */}
+      <div className="flex items-center justify-between px-1 pb-3 shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/[0.06]">
+              <Bot className="h-4.5 w-4.5 text-white/50" />
             </div>
-            <div>
-              <span className="text-[15px] font-semibold text-white">
-                {settings?.agent_name || 'Your AI'}
-              </span>
-              <div className="flex items-center gap-2 mt-0.5">
-                <StatusBadge status={agentStatus} className="!text-[10px] !py-0 !px-1.5" />
-              </div>
-            </div>
+            {(agentStatus === 'active' || agentStatus === 'online') && (
+              <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-green-400 ring-2 ring-[#0a0a0a]" />
+            )}
           </div>
-
-          <div className="flex items-center gap-3">
-            {/* Model / Mode Indicator */}
-            <button onClick={() => window.location.href = '/dashboard/router'}
-              className="flex items-center gap-2 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-1.5 hover:border-white/15 hover:bg-white/[0.04] transition-all"
-              title="Change model settings">
-              <mode.icon className="h-3.5 w-3.5 text-white/30" />
-              <div className="text-left">
-                <p className="text-[11px] font-medium text-white/50">{mode.label}</p>
-                <p className="text-[9px] text-white/20">{mode.desc}</p>
-              </div>
-            </button>
-
-            {/* Balance */}
-            <button onClick={() => window.location.href = '/dashboard/tokens'}
-              className="flex items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-1.5 hover:border-white/15 hover:bg-white/[0.04] transition-all"
-              title="Token balance">
-              <Sparkles className="h-3.5 w-3.5 text-white/20" />
-              <span className={`text-[12px] font-medium tabular-nums ${tokenBalance < 50000 ? 'text-amber-400' : 'text-white/50'}`}>
-                {formatTokens(tokenBalance)}
-              </span>
-            </button>
+          <div>
+            <span className="text-[15px] font-semibold text-white">
+              {settings?.agent_name || 'Your AI'}
+            </span>
+            <div className="flex items-center gap-2 mt-0.5">
+              <StatusBadge status={agentStatus} className="!text-[10px] !py-0 !px-1.5" />
+            </div>
           </div>
         </div>
 
+        <div className="flex items-center gap-3">
+          <button onClick={() => window.location.href = '/dashboard/router'}
+            className="flex items-center gap-2 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-1.5 hover:border-white/15 hover:bg-white/[0.04] transition-all"
+            title="Change model settings">
+            <mode.icon className="h-3.5 w-3.5 text-white/30" />
+            <div className="text-left">
+              <p className="text-[11px] font-medium text-white/50">{mode.label}</p>
+              <p className="text-[9px] text-white/20">{mode.desc}</p>
+            </div>
+          </button>
+
+          <button onClick={() => window.location.href = '/dashboard/tokens'}
+            className="flex items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-1.5 hover:border-white/15 hover:bg-white/[0.04] transition-all"
+            title="Token balance">
+            <Sparkles className="h-3.5 w-3.5 text-white/20" />
+            <span className={`text-[12px] font-medium tabular-nums ${tokenBalance < 50000 ? 'text-amber-400' : 'text-white/50'}`}>
+              {formatTokens(tokenBalance)}
+            </span>
+          </button>
+        </div>
+      </div>
+
+      {/* Chat area — full height, no Card wrapper to avoid double borders */}
+      <div className="flex-1 flex flex-col rounded-xl border border-white/[0.06] bg-white/[0.01] overflow-hidden">
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4 custom-scrollbar">
           {messages.length === 0 && !chatLoading && (
             <div className="flex flex-col items-center justify-center h-full text-center">
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/[0.04] border border-white/[0.06] mb-4">
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/[0.04] mb-4">
                 <Bot className="h-8 w-8 text-white/10" />
               </div>
-              <p className="text-[16px] font-medium text-white/30">What can I help you with?</p>
+              <p className="text-[17px] font-medium text-white/30">What can I help you with?</p>
               <p className="text-[13px] text-white/15 mt-1.5 max-w-md">
                 Ask anything — your AI uses{' '}
                 {settings?.brain_mode === 'manual'
@@ -297,7 +294,7 @@ export default function DashboardHome() {
                 ].map(suggestion => (
                   <button key={suggestion}
                     onClick={() => { setChatInput(suggestion); }}
-                    className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-4 py-2 text-[12px] text-white/30 hover:text-white/50 hover:border-white/15 transition-all">
+                    className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-4 py-2.5 text-[13px] text-white/30 hover:text-white/50 hover:border-white/15 transition-all">
                     {suggestion}
                   </button>
                 ))}
@@ -357,7 +354,7 @@ export default function DashboardHome() {
             </Button>
           </div>
         </div>
-      </Card>
+      </div>
     </div>
   );
 }

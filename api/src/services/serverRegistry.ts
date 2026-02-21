@@ -9,7 +9,6 @@ const controlPlaneIp = (): string | null =>
 /** Single-flight: only one "provision new server" at a time to avoid duplicate VPS. */
 let provisionInProgress: Promise<Server> | null = null;
 
-/** Never run user containers on the control plane — only on dedicated worker servers. */
 export async function findBestServer(requiredRamMb = 2048): Promise<Server> {
   const cpIp = controlPlaneIp();
   let server = await db.getOne<Server>(
@@ -23,6 +22,22 @@ export async function findBestServer(requiredRamMb = 2048): Promise<Server> {
   );
 
   if (server) return server;
+
+  // Single-server fallback: if no dedicated workers exist, use any server (including control plane)
+  if (cpIp) {
+    server = await db.getOne<Server>(
+      `SELECT * FROM servers
+       WHERE status = 'active'
+         AND (ram_total - ram_used) >= $1
+       ORDER BY ram_used DESC
+       LIMIT 1`,
+      [requiredRamMb]
+    );
+    if (server) {
+      console.log('No dedicated worker servers — using control plane as fallback');
+      return server;
+    }
+  }
 
   if (provisionInProgress) {
     console.log('Another request is already provisioning a worker — waiting');
@@ -38,12 +53,20 @@ export async function findBestServer(requiredRamMb = 2048): Promise<Server> {
         `SELECT * FROM servers
          WHERE status = 'active'
            AND (ram_total - ram_used) >= $1
-           AND ($2::text IS NULL OR ip != $2)
          ORDER BY ram_used DESC
          LIMIT 1`,
-        [requiredRamMb, cpIp]
+        [requiredRamMb]
       );
       if (server) return server;
+
+      if (!process.env.HETZNER_API_TOKEN) {
+        throw new Error(
+          'No worker servers registered and HETZNER_API_TOKEN is not set. ' +
+          'Register your server first: curl -X POST http://localhost:3001/webhooks/servers/register ' +
+          '-H "Content-Type: application/json" -H "x-internal-secret: YOUR_SECRET" ' +
+          '-d \'{"ip": "YOUR_SERVER_IP", "ram": SERVER_RAM_MB, "hostname": "srv1"}\''
+        );
+      }
 
       console.log('No worker servers available — provisioning new worker');
       await cloudProvider.provisionNewServer();

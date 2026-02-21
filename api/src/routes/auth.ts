@@ -7,10 +7,35 @@ import { generateToken, refreshToken as issueRefreshToken } from '../middleware/
 import { rateLimitAuth } from '../middleware/rateLimit';
 import { BadRequestError, UnauthorizedError } from '../lib/errors';
 import { v4 as uuid } from 'uuid';
+import { PLAN_LIMITS, Plan } from '../types';
 
 const router = Router();
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+async function grantInitialTokens(userId: string, plan: Plan): Promise<void> {
+  const limits = PLAN_LIMITS[plan];
+  await Promise.all([
+    db.query(
+      `INSERT INTO user_settings (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING`,
+      [userId]
+    ),
+    db.query(
+      `INSERT INTO user_channels (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING`,
+      [userId]
+    ),
+    db.query(
+      `INSERT INTO token_balances (user_id, balance, total_purchased)
+       VALUES ($1, $2, $2) ON CONFLICT (user_id) DO NOTHING`,
+      [userId, limits.includedTokens]
+    ),
+    db.query(
+      `INSERT INTO token_transactions (user_id, amount, type, description)
+       VALUES ($1, $2, 'subscription_grant', $3)`,
+      [userId, limits.includedTokens, `${plan} plan signup bonus`]
+    ),
+  ]);
+}
 
 // ── Email + Password Signup ──
 router.post('/signup', rateLimitAuth, async (req: Request, res: Response, next: NextFunction) => {
@@ -31,6 +56,8 @@ router.post('/signup', rateLimitAuth, async (req: Request, res: Response, next: 
       `INSERT INTO users (id, email, plan, status, password_hash) VALUES ($1, $2, 'pro', 'provisioning', $3)`,
       [userId, email, passwordHash]
     );
+
+    await grantInitialTokens(userId, 'pro');
 
     const token = generateToken(userId, 'pro');
 
@@ -98,12 +125,15 @@ router.post('/google', rateLimitAuth, async (req: Request, res: Response, next: 
       payload = ticket.getPayload();
     } catch (verifyErr: any) {
       console.error('Google token verification failed:', verifyErr.message);
+      console.error('Server GOOGLE_CLIENT_ID:', process.env.GOOGLE_CLIENT_ID?.slice(0, 20) + '...');
       const msg = verifyErr.message || '';
       if (msg.includes('Token used too late') || msg.includes('expired')) {
         throw new BadRequestError('Google sign-in expired. Please try again.');
       }
-      if (msg.includes('audience') || msg.includes('client_id')) {
-        throw new BadRequestError('Google sign-in configuration error. Please contact support.');
+      if (msg.includes('audience') || msg.includes('recipient') || msg.includes('client_id')) {
+        throw new BadRequestError(
+          'Google sign-in configuration mismatch. The server GOOGLE_CLIENT_ID does not match the dashboard. Please verify both are identical.'
+        );
       }
       throw new BadRequestError('Google sign-in failed. Please try again.');
     }
@@ -140,6 +170,8 @@ router.post('/google', rateLimitAuth, async (req: Request, res: Response, next: 
        VALUES ($1, $2, 'pro', 'provisioning', $3, $4, $5)`,
       [userId, email, googleId, picture, name]
     );
+
+    await grantInitialTokens(userId, 'pro');
 
     const token = generateToken(userId, 'pro');
     res.json({
