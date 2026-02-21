@@ -50,7 +50,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen bg-black text-white" style={{ backgroundImage: 'none' }}>
       <Sidebar />
       <main
         className={cn(
