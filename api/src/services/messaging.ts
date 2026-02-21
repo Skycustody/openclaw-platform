@@ -354,10 +354,10 @@ export async function initiateWhatsAppPairing(userId: string): Promise<{ agentUr
 
   // Trigger QR generation in background after the container is back up.
   // The gateway alone may not generate a QR — `channels login` is required.
-  // Fire-and-forget: runs on the server without blocking the API response.
+  // Fire-and-forget via nohup + &, so SSH returns immediately.
   void sshExec(
     serverIp,
-    `sh -c 'sleep 10 && docker exec -d ${containerName} sh -c "openclaw channels login --channel whatsapp > /tmp/whatsapp-qr.log 2>&1"' &`
+    `nohup sh -c "sleep 10 && docker exec -d ${containerName} sh -c 'openclaw channels login --channel whatsapp > /tmp/whatsapp-qr.log 2>&1'" > /dev/null 2>&1 &`
   ).catch(() => {});
 
   return { agentUrl, alreadyLinked: false };
