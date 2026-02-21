@@ -140,7 +140,7 @@ const logos = [
 export default function LandingPage() {
   return (
     <div className="relative flex w-full flex-col">
-      <div className="pointer-events-none fixed inset-0 z-0">
+      <div className="pointer-events-none fixed inset-0 z-0 h-screen w-full">
         <DotScreenShader />
       </div>
       <div className="relative z-10">

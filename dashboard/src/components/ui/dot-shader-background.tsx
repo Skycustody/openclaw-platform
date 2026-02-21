@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useEffect, useState } from 'react'
+import { useMemo, useEffect, useState, useRef } from 'react'
 import type {} from '@react-three/fiber'
 
 const vertexShader = `
@@ -11,7 +11,6 @@ const vertexShader = `
 
 const fragmentShader = `
   uniform float time;
-  uniform int render;
   uniform vec2 resolution;
   uniform vec3 dotColor;
   uniform vec3 bgColor;
@@ -28,7 +27,9 @@ const fragmentShader = `
   }
 
   vec2 coverUv(vec2 uv) {
-    vec2 s = resolution.xy / max(resolution.x, resolution.y);
+    float r = max(resolution.x, resolution.y);
+    if (r < 0.001) return uv;
+    vec2 s = resolution.xy / r;
     vec2 newUv = (uv - 0.5) * s + 0.5;
     return clamp(newUv, 0.0, 1.0);
   }
@@ -45,8 +46,6 @@ const fragmentShader = `
 
     vec2 gridUv = fract(rotatedUv * gridSize);
     vec2 gridUvCenterInScreenCoords = rotate((floor(rotatedUv * gridSize) + 0.5) / gridSize, -rotation);
-
-    float baseDot = sdfCircle(gridUv, 0.25);
 
     float screenMask = smoothstep(0.0, 1.0, 1.0 - uv.y);
     vec2 centerDisplace = vec2(0.7, 1.1);
@@ -102,14 +101,13 @@ function Scene() {
     const mat = new THREE.ShaderMaterial({
       uniforms: {
         time: { value: 0 },
-        resolution: { value: new THREE.Vector2() },
+        resolution: { value: new THREE.Vector2(1, 1) },
         dotColor: { value: new THREE.Color('#FFFFFF') },
         bgColor: { value: new THREE.Color('#09090b') },
         mouseTrail: { value: null },
-        render: { value: 0 },
         rotation: { value: rotation },
         gridSize: { value: gridSize },
-        dotOpacity: { value: 0.025 },
+        dotOpacity: { value: 0.08 },
       },
       vertexShader,
       fragmentShader,
@@ -118,7 +116,11 @@ function Scene() {
   }, [])
 
   useFrame((state: any) => {
+    const w = size.width * viewport.dpr
+    const h = size.height * viewport.dpr
     dotMaterial.uniforms.time.value = state.clock.elapsedTime
+    dotMaterial.uniforms.resolution.value.set(w, h)
+    dotMaterial.uniforms.mouseTrail.value = trail
   })
 
   const handlePointerMove = (e: any) => {
@@ -130,11 +132,7 @@ function Scene() {
   return (
     <mesh scale={[scale, scale, 1]} onPointerMove={handlePointerMove}>
       <planeGeometry args={[2, 2]} />
-      <primitive
-        object={dotMaterial}
-        uniforms-resolution-value={[size.width * viewport.dpr, size.height * viewport.dpr]}
-        uniforms-mouseTrail-value={trail}
-      />
+      <primitive object={dotMaterial} attach="material" />
     </mesh>
   )
 }
@@ -146,21 +144,45 @@ export const DotScreenShader = () => {
     setMounted(true)
   }, [])
 
-  if (!mounted) return null
+  if (!mounted) {
+    return (
+      <div
+        className="absolute inset-0 h-full w-full"
+        style={{
+          background: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.03) 1px, transparent 1px)',
+          backgroundSize: '24px 24px',
+          backgroundColor: '#09090b',
+        }}
+      />
+    )
+  }
 
   const THREE = require('three')
   const { Canvas } = require('@react-three/fiber')
 
   return (
-    <Canvas
-      gl={{
-        antialias: true,
-        powerPreference: 'high-performance',
-        outputColorSpace: THREE.SRGBColorSpace,
-        toneMapping: THREE.NoToneMapping,
-      }}
-    >
-      <Scene />
-    </Canvas>
+    <div className="absolute inset-0 h-full w-full min-h-screen">
+      {/* CSS fallback so dots are always visible if WebGL fails or is slow */}
+      <div
+        className="absolute inset-0 h-full w-full"
+        style={{
+          background: 'radial-gradient(circle at center, rgba(255,255,255,0.08) 1px, transparent 1px)',
+          backgroundSize: '28px 28px',
+          backgroundColor: '#09090b',
+        }}
+      />
+      <Canvas
+        className="absolute inset-0 h-full w-full"
+        style={{ display: 'block', width: '100%', height: '100%' }}
+        gl={{
+          antialias: true,
+          powerPreference: 'high-performance',
+          outputColorSpace: THREE.SRGBColorSpace,
+          toneMapping: THREE.NoToneMapping,
+        }}
+      >
+        <Scene />
+      </Canvas>
+    </div>
   )
 }

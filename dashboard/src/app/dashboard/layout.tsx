@@ -3,8 +3,14 @@ import { Sidebar } from '@/components/dashboard/Sidebar';
 import { useStore } from '@/lib/store';
 import { cn } from '@/lib/utils';
 import { useEffect, useState } from 'react';
+import dynamic from 'next/dynamic';
 import api from '@/lib/api';
 import { Loader2 } from 'lucide-react';
+
+const DotScreenShader = dynamic(
+  () => import('@/components/ui/dot-shader-background').then((m) => m.DotScreenShader),
+  { ssr: false }
+);
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { sidebarOpen, setUser } = useStore();
@@ -50,9 +56,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      <Sidebar />
-      <main
+    <div className="relative min-h-screen bg-black text-white">
+      <div className="pointer-events-none fixed inset-0 z-0">
+        <DotScreenShader />
+      </div>
+      <div className="relative z-10">
+        <Sidebar />
+        <main
         className={cn(
           'min-h-screen transition-all duration-300 p-5 pt-6',
           sidebarOpen ? 'ml-[220px]' : 'ml-[68px]'
@@ -60,6 +70,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       >
         <div className="mx-auto max-w-6xl">{children}</div>
       </main>
+      </div>
     </div>
   );
 }

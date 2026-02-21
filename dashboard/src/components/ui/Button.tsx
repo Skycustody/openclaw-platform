@@ -80,20 +80,20 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
             <span
               className="pointer-events-none absolute inset-0 z-0 overflow-hidden rounded-[inherit]"
               style={{
-                backdropFilter: 'blur(3px)',
+                backdropFilter: 'blur(4px)',
                 filter: 'url(#glass-distortion)',
                 isolation: 'isolate',
               }}
             />
             <span
               className="pointer-events-none absolute inset-0 z-[1] rounded-[inherit]"
-              style={{ background: 'rgba(255, 255, 255, 0.06)' }}
+              style={{ background: 'rgba(255, 255, 255, 0.12)' }}
             />
             <span
               className="pointer-events-none absolute inset-0 z-[2] overflow-hidden rounded-[inherit]"
               style={{
                 boxShadow:
-                  'inset 1px 1px 1px 0 rgba(255,255,255,0.12), inset -1px -1px 1px 0 rgba(255,255,255,0.12)',
+                  'inset 2px 2px 2px 0 rgba(255,255,255,0.2), inset -1px -1px 1px 0 rgba(255,255,255,0.15)',
               }}
             />
           </>
