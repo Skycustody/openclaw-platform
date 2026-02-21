@@ -20,6 +20,7 @@ import {
   Bot,
   BrainCircuit,
 } from 'lucide-react';
+import { GlowingEffect } from '@/components/ui/glowing-effect';
 
 const features = [
   {
@@ -262,17 +263,32 @@ function FeaturesSection() {
 
       <div className="mt-16 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {features.map((f) => (
-          <div
-            key={f.title}
-            className="group rounded-xl border border-border bg-card/50 p-6 transition-all duration-300 hover:border-foreground/20 hover:bg-card"
-          >
-            <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-secondary">
-              <f.icon className="h-5 w-5 text-foreground/70" />
+          <div key={f.title} className="min-h-[14rem] list-none">
+            <div className="relative h-full rounded-[1.25rem] border-[0.75px] border-border p-2 md:rounded-[1.5rem] md:p-3">
+              <GlowingEffect
+                spread={40}
+                glow={true}
+                disabled={false}
+                proximity={64}
+                inactiveZone={0.01}
+                borderWidth={3}
+              />
+              <div className="relative flex h-full flex-col justify-between gap-6 overflow-hidden rounded-xl border-[0.75px] bg-background p-6 shadow-sm dark:shadow-[0px_0px_27px_0px_rgba(45,45,45,0.3)]">
+                <div className="relative flex flex-1 flex-col justify-between gap-3">
+                  <div className="w-fit rounded-lg border-[0.75px] border-border bg-muted p-2">
+                    <f.icon className="h-4 w-4" />
+                  </div>
+                  <div className="space-y-3">
+                    <h3 className="pt-0.5 text-xl font-semibold leading-[1.375rem] tracking-[-0.04em] text-balance text-foreground md:text-2xl md:leading-[1.875rem]">
+                      {f.title}
+                    </h3>
+                    <p className="text-sm leading-[1.125rem] text-muted-foreground md:text-base md:leading-[1.375rem]">
+                      {f.desc}
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
-            <h3 className="mb-2 text-[15px] font-semibold">{f.title}</h3>
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              {f.desc}
-            </p>
           </div>
         ))}
       </div>
