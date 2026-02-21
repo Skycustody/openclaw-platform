@@ -4,15 +4,15 @@ import crypto from 'crypto';
 import db from '../lib/db';
 import { UnauthorizedError } from '../lib/errors';
 
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET || JWT_SECRET.length < 32) {
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
   throw new Error('JWT_SECRET environment variable is required and must be at least 32 characters. Generate with: openssl rand -hex 32');
 }
-
-const INTERNAL_SECRET = process.env.INTERNAL_SECRET;
-if (!INTERNAL_SECRET || INTERNAL_SECRET.length < 16) {
+if (!process.env.INTERNAL_SECRET || process.env.INTERNAL_SECRET.length < 16) {
   throw new Error('INTERNAL_SECRET environment variable is required and must be at least 16 characters. Generate with: openssl rand -hex 32');
 }
+
+const JWT_SECRET: string = process.env.JWT_SECRET;
+const INTERNAL_SECRET: string = process.env.INTERNAL_SECRET;
 
 export interface AuthRequest extends Request {
   userId?: string;

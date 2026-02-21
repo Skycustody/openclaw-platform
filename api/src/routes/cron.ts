@@ -64,7 +64,7 @@ router.post('/:id/toggle', async (req: AuthRequest, res: Response, next: NextFun
     );
     if (!job) return res.status(404).json({ error: 'Job not found' });
 
-    const updated = await updateCronJob(req.userId!, req.params.id, { enabled: !job.enabled });
+    const updated = await updateCronJob(req.userId!, req.params.id as string, { enabled: !job.enabled });
     res.json({ job: updated });
   } catch (err) {
     next(err);
@@ -75,7 +75,7 @@ router.post('/:id/toggle', async (req: AuthRequest, res: Response, next: NextFun
 router.post('/:id/run', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { runCronJobNow } = await import('../services/cronScheduler');
-    const result = await runCronJobNow(req.userId!, req.params.id);
+    const result = await runCronJobNow(req.userId!, req.params.id as string);
     res.json(result);
   } catch (err) {
     next(err);
