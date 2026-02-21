@@ -87,6 +87,7 @@ export default function ConnectApps() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pairingStartRef = useRef<number>(0);
+  const qrShownRef = useRef(false);
 
   const { user } = useStore();
   const isStarterPlan = user?.plan === 'starter';
@@ -189,6 +190,7 @@ export default function ConnectApps() {
     setWhatsAppDashboardUrl('');
     stopPolling();
     pairingStartRef.current = Date.now();
+    qrShownRef.current = false;
 
     try {
       const data = await api.post<{ agentUrl: string; dashboardUrl: string; alreadyLinked: boolean }>('/channels/whatsapp/pair');
@@ -204,9 +206,7 @@ export default function ConnectApps() {
 
       setWhatsAppStatus('Agent restarted. Generating QR code...');
 
-      // Single unified poll for both QR and status
       const pollQr = async () => {
-        // Timeout: if we've been trying too long, stop
         if (Date.now() - pairingStartRef.current > WHATSAPP_TIMEOUT_MS) {
           stopPolling();
           setWhatsAppLoading(false);
@@ -240,6 +240,14 @@ export default function ConnectApps() {
             setWhatsAppQr(qrData.qrText);
             setWhatsAppLoading(false);
             setWhatsAppStatus('');
+
+            // Once QR is shown, switch to faster polling (every 2s)
+            // so we detect the scan almost instantly
+            if (!qrShownRef.current) {
+              qrShownRef.current = true;
+              if (pollRef.current) clearInterval(pollRef.current);
+              pollRef.current = setInterval(pollQr, 2000);
+            }
           } else if (qrData.message) {
             setWhatsAppStatus(qrData.message);
           }
@@ -248,9 +256,8 @@ export default function ConnectApps() {
         }
       };
 
-      // First poll after 6s (container needs time to restart + generate QR)
+      // First poll after 6s, then every 4s until QR appears
       setTimeout(pollQr, 6000);
-      // Then poll every 4s
       pollRef.current = setInterval(pollQr, 4000);
 
     } catch (err: any) {
@@ -372,7 +379,9 @@ export default function ConnectApps() {
                     loading={connecting === ch.platform}
                   >
                     <Link2Off className="h-3.5 w-3.5" />
-                    Disconnect
+                    {connecting === ch.platform && ch.platform === 'whatsapp'
+                      ? 'Unlinking from phone...'
+                      : 'Disconnect'}
                   </Button>
                 </div>
               ) : ch.planLocked ? (
@@ -479,18 +488,21 @@ export default function ConnectApps() {
       <Modal
         open={showWhatsAppModal}
         onClose={closeWhatsAppModal}
-        title="Connect WhatsApp"
+        title={whatsAppPaired ? 'WhatsApp Connected' : 'Connect WhatsApp'}
       >
         <div className="space-y-5">
-          <div className="space-y-2 rounded-lg border border-white/10 bg-white/[0.02] p-3">
-            <p className="text-[13px] font-medium text-white/80">How to connect WhatsApp</p>
-            <ol className="list-decimal space-y-1 pl-5 text-[12px] text-white/55">
-              <li>Wait for the QR code to appear below (takes 10-30 seconds).</li>
-              <li>On your phone: WhatsApp &rarr; Settings &rarr; Linked Devices &rarr; Link a Device.</li>
-              <li>Scan the QR code shown below within 20 seconds.</li>
-              <li>If the QR expires or fails, click Refresh QR Code to try again.</li>
-            </ol>
-          </div>
+          {/* Instructions (only shown before pairing) */}
+          {!whatsAppPaired && (
+            <div className="space-y-2 rounded-lg border border-white/10 bg-white/[0.02] p-3">
+              <p className="text-[13px] font-medium text-white/80">How to connect WhatsApp</p>
+              <ol className="list-decimal space-y-1 pl-5 text-[12px] text-white/55">
+                <li>Wait for the QR code to appear below (takes 10-30 seconds).</li>
+                <li>On your phone: WhatsApp &rarr; Settings &rarr; Linked Devices &rarr; Link a Device.</li>
+                <li>Scan the QR code shown below within 20 seconds.</li>
+                <li>If the QR expires or fails, click Refresh QR Code to try again.</li>
+              </ol>
+            </div>
+          )}
 
           <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-white/10 bg-white/[0.02] p-6 min-h-[280px]">
             {whatsAppPaired ? (
@@ -498,8 +510,13 @@ export default function ConnectApps() {
                 <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-500/20 mb-4">
                   <Check className="h-8 w-8 text-green-400" />
                 </div>
-                <p className="text-[16px] font-semibold text-green-400 mb-1">WhatsApp Connected!</p>
-                <p className="text-[13px] text-white/40">Your agent can now send and receive WhatsApp messages.</p>
+                <p className="text-[16px] font-semibold text-green-400 mb-2">WhatsApp Connected!</p>
+                <p className="text-[13px] text-white/50 text-center mb-1">
+                  Your agent is now linked to your WhatsApp as a companion device.
+                </p>
+                <p className="text-[12px] text-white/30 text-center">
+                  You can safely close your phone &mdash; the connection will stay active.
+                </p>
               </>
             ) : whatsAppQr ? (
               <>
@@ -550,6 +567,26 @@ export default function ConnectApps() {
               </>
             )}
           </div>
+
+          {/* What to do next (shown after successful pairing) */}
+          {whatsAppPaired && (
+            <div className="space-y-3">
+              <p className="text-[13px] font-medium text-white/80">What to do next</p>
+              <div className="space-y-2">
+                {[
+                  ['1', 'Anyone who messages your WhatsApp number will get a response from your AI agent automatically.'],
+                  ['2', 'To test it, ask a friend to send you a WhatsApp message — your agent will reply.'],
+                  ['3', 'Configure how your agent responds in the Personality and Skills pages.'],
+                  ['4', 'To disconnect later, click Disconnect on the WhatsApp card. This will also remove the linked device from your phone.'],
+                ].map(([num, text]) => (
+                  <div key={num} className="flex items-start gap-3 p-3 rounded-lg bg-white/[0.03] border border-white/[0.04]">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-green-500/20 text-green-400 text-[12px] font-bold shrink-0">{num}</span>
+                    <p className="text-[13px] text-white/60">{text}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {whatsAppError && (
             <div className="flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-[13px] text-red-400">

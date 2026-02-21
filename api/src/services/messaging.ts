@@ -487,6 +487,16 @@ export async function disconnectWhatsApp(userId: string): Promise<void> {
   try {
     const { serverIp, containerName } = await getUserContainer(userId);
 
+    // Logout from WhatsApp first so the linked device disappears from the user's phone.
+    // This tells Baileys to send a proper disconnect to WhatsApp servers.
+    await sshExec(
+      serverIp,
+      `docker exec ${containerName} sh -c 'openclaw channels logout --channel whatsapp 2>/dev/null || true'`
+    ).catch(() => {});
+
+    // Give it a moment for the logout signal to reach WhatsApp servers
+    await new Promise(r => setTimeout(r, 3000));
+
     // Remove WhatsApp from config and clear credentials via host filesystem
     const config = await readContainerConfig(serverIp, userId);
     delete config.channels?.whatsapp;
@@ -499,7 +509,7 @@ export async function disconnectWhatsApp(userId: string): Promise<void> {
 
     await sshExec(serverIp, `docker restart ${containerName}`);
   } catch {
-    // agent might not be running
+    // agent might not be running — still update DB
   }
 
   await db.query(
