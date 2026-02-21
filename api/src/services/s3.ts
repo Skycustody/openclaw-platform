@@ -1,9 +1,22 @@
-import AWS from 'aws-sdk';
+import {
+  S3Client,
+  CreateBucketCommand,
+  PutBucketVersioningCommand,
+  PutBucketLifecycleConfigurationCommand,
+  ListObjectsV2Command,
+  GetObjectCommand,
+  DeleteObjectsCommand,
+  DeleteBucketCommand,
+  PutObjectCommand,
+} from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
-const s3 = new AWS.S3({
+const s3 = new S3Client({
   region: process.env.AWS_REGION || 'us-east-1',
-  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  credentials: process.env.AWS_ACCESS_KEY_ID ? {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+  } : undefined,
 });
 
 const BUCKET_PREFIX = process.env.S3_BUCKET_PREFIX || 'openclaw-users';
@@ -16,14 +29,13 @@ export async function createUserBucket(userId: string): Promise<string> {
   const bucket = getBucketName(userId);
 
   try {
-    await s3.createBucket({ Bucket: bucket }).promise();
-    await s3.putBucketVersioning({
+    await s3.send(new CreateBucketCommand({ Bucket: bucket }));
+    await s3.send(new PutBucketVersioningCommand({
       Bucket: bucket,
       VersioningConfiguration: { Status: 'Enabled' },
-    }).promise();
+    }));
 
-    // Lifecycle: delete old versions after 30 days
-    await s3.putBucketLifecycleConfiguration({
+    await s3.send(new PutBucketLifecycleConfigurationCommand({
       Bucket: bucket,
       LifecycleConfiguration: {
         Rules: [
@@ -35,11 +47,11 @@ export async function createUserBucket(userId: string): Promise<string> {
           },
         ],
       },
-    }).promise();
+    }));
 
     return bucket;
   } catch (err: any) {
-    if (err.code === 'BucketAlreadyOwnedByYou') return bucket;
+    if (err.name === 'BucketAlreadyOwnedByYou') return bucket;
     throw err;
   }
 }
@@ -54,11 +66,11 @@ export async function syncToS3(userId: string, localPath: string): Promise<void>
     const filePath = path.join(localPath, file);
     if (!fs.statSync(filePath).isFile()) continue;
 
-    await s3.upload({
+    await s3.send(new PutObjectCommand({
       Bucket: bucket,
       Key: file,
-      Body: fs.createReadStream(filePath),
-    }).promise();
+      Body: fs.readFileSync(filePath),
+    }));
   }
 }
 
@@ -67,7 +79,7 @@ export async function syncFromS3(userId: string, localPath: string): Promise<voi
   const fs = await import('fs');
   const path = await import('path');
 
-  const list = await s3.listObjectsV2({ Bucket: bucket }).promise();
+  const list = await s3.send(new ListObjectsV2Command({ Bucket: bucket }));
   if (!list.Contents) return;
 
   for (const obj of list.Contents) {
@@ -76,25 +88,25 @@ export async function syncFromS3(userId: string, localPath: string): Promise<voi
     const dir = path.dirname(filePath);
     fs.mkdirSync(dir, { recursive: true });
 
-    const data = await s3.getObject({ Bucket: bucket, Key: obj.Key }).promise();
-    fs.writeFileSync(filePath, data.Body as Buffer);
+    const data = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: obj.Key }));
+    const body = await data.Body?.transformToByteArray();
+    if (body) fs.writeFileSync(filePath, Buffer.from(body));
   }
 }
 
 export async function deleteUserBucket(userId: string): Promise<void> {
   const bucket = getBucketName(userId);
   try {
-    // Empty bucket first
-    const list = await s3.listObjectsV2({ Bucket: bucket }).promise();
+    const list = await s3.send(new ListObjectsV2Command({ Bucket: bucket }));
     if (list.Contents?.length) {
-      await s3.deleteObjects({
+      await s3.send(new DeleteObjectsCommand({
         Bucket: bucket,
         Delete: { Objects: list.Contents.map((o) => ({ Key: o.Key! })) },
-      }).promise();
+      }));
     }
-    await s3.deleteBucket({ Bucket: bucket }).promise();
+    await s3.send(new DeleteBucketCommand({ Bucket: bucket }));
   } catch (err: any) {
-    if (err.code === 'NoSuchBucket') return;
+    if (err.name === 'NoSuchBucket') return;
     throw err;
   }
 }
@@ -102,7 +114,7 @@ export async function deleteUserBucket(userId: string): Promise<void> {
 export async function listUserFiles(userId: string): Promise<Array<{ key: string; size: number; modified: Date }>> {
   const bucket = getBucketName(userId);
   try {
-    const list = await s3.listObjectsV2({ Bucket: bucket }).promise();
+    const list = await s3.send(new ListObjectsV2Command({ Bucket: bucket }));
     return (list.Contents || []).map((o) => ({
       key: o.Key!,
       size: o.Size || 0,
@@ -115,19 +127,17 @@ export async function listUserFiles(userId: string): Promise<Array<{ key: string
 
 export async function getPresignedUrl(userId: string, key: string): Promise<string> {
   const bucket = getBucketName(userId);
-  return s3.getSignedUrlPromise('getObject', {
+  return getSignedUrl(s3, new GetObjectCommand({
     Bucket: bucket,
     Key: key,
-    Expires: 3600,
-  });
+  }), { expiresIn: 3600 });
 }
 
 export async function getUploadUrl(userId: string, key: string, contentType: string): Promise<string> {
   const bucket = getBucketName(userId);
-  return s3.getSignedUrlPromise('putObject', {
+  return getSignedUrl(s3, new PutObjectCommand({
     Bucket: bucket,
     Key: key,
     ContentType: contentType,
-    Expires: 3600,
-  });
+  }), { expiresIn: 3600 });
 }
