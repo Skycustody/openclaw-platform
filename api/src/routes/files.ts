@@ -47,7 +47,11 @@ router.post('/upload', async (req: AuthRequest, res: Response, next: NextFunctio
     const { filename, contentType } = req.body;
     if (!filename) return res.status(400).json({ error: 'Filename required' });
 
-    const key = `uploads/${Date.now()}-${filename}`;
+    const sanitized = filename
+      .replace(/[^a-zA-Z0-9._-]/g, '_')
+      .replace(/\.{2,}/g, '.')
+      .slice(0, 200);
+    const key = `uploads/${Date.now()}-${sanitized}`;
     const url = await getUploadUrl(req.userId!, key, contentType || 'application/octet-stream');
 
     await db.query(

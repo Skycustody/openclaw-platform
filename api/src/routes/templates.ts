@@ -27,7 +27,12 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
       idx++;
     }
 
-    const orderBy = sort === 'rating' ? 'rating DESC' : sort === 'newest' ? 'created_at DESC' : 'install_count DESC';
+    const ALLOWED_SORTS: Record<string, string> = {
+      rating: 'rating DESC',
+      newest: 'created_at DESC',
+      popular: 'install_count DESC',
+    };
+    const orderBy = ALLOWED_SORTS[sort as string] || 'install_count DESC';
     const where = conditions.join(' AND ');
 
     const templates = await db.getMany(

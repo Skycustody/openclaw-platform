@@ -119,7 +119,8 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
     throw new Error(`mkdir failed: ${mkdirResult.stderr}`);
   }
 
-  const internalSecret = process.env.INTERNAL_SECRET || 'changeme';
+  const internalSecret = process.env.INTERNAL_SECRET;
+  if (!internalSecret) throw new Error('INTERNAL_SECRET env var is required');
 
   // Generate gateway auth token early so it goes into the config JSON
   const gatewayToken = uuid().replace(/-/g, '') + uuid().replace(/-/g, '').slice(0, 16);

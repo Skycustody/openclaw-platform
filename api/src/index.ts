@@ -56,7 +56,7 @@ const httpServer = createServer(app);
 
 // ── WebSocket ──
 const io = new SocketServer(httpServer, {
-  cors: { origin: process.env.PLATFORM_URL || '*', methods: ['GET', 'POST'] },
+  cors: { origin: ALLOWED_ORIGINS, methods: ['GET', 'POST'] },
 });
 
 io.use((socket, next) => {
@@ -86,8 +86,30 @@ app.set('io', io);
 // Raw body for Stripe webhooks
 app.use('/webhooks/stripe', express.raw({ type: 'application/json' }));
 
+// HTTPS redirect in production
+if (process.env.NODE_ENV === 'production') {
+  app.use((req, res, next) => {
+    if (req.headers['x-forwarded-proto'] !== 'https') {
+      return res.redirect(301, `https://${req.hostname}${req.url}`);
+    }
+    next();
+  });
+}
+
 app.use(express.json({ limit: '10mb' }));
-app.use(cors({ origin: process.env.PLATFORM_URL || '*', credentials: true }));
+const ALLOWED_ORIGINS = process.env.PLATFORM_URL
+  ? process.env.PLATFORM_URL.split(',').map(s => s.trim())
+  : ['http://localhost:3000'];
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+}));
 app.use(helmet());
 app.use(morgan('short'));
 app.use(rateLimitGeneral);

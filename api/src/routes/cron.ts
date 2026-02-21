@@ -6,6 +6,7 @@ import {
   deleteCronJob,
   getUserCronJobs,
 } from '../services/cronScheduler';
+import db from '../lib/db';
 
 const router = Router();
 router.use(authenticate);
@@ -49,6 +50,33 @@ router.put('/:id', async (req: AuthRequest, res: Response, next: NextFunction) =
   try {
     const job = await updateCronJob(req.userId!, req.params.id as string, req.body);
     res.json({ job });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Toggle enable/disable
+router.post('/:id/toggle', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const job = await db.getOne<any>(
+      'SELECT * FROM cron_jobs WHERE id = $1 AND user_id = $2',
+      [req.params.id, req.userId]
+    );
+    if (!job) return res.status(404).json({ error: 'Job not found' });
+
+    const updated = await updateCronJob(req.userId!, req.params.id, { enabled: !job.enabled });
+    res.json({ job: updated });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Run job immediately
+router.post('/:id/run', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { runCronJobNow } = await import('../services/cronScheduler');
+    const result = await runCronJobNow(req.userId!, req.params.id);
+    res.json(result);
   } catch (err) {
     next(err);
   }

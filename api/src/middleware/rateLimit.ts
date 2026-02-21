@@ -23,6 +23,20 @@ const webhookLimiter = new RateLimiterRedis({
   duration: 60,
 });
 
+const proxyLimiter = new RateLimiterRedis({
+  storeClient: redis,
+  keyPrefix: 'rl:proxy',
+  points: 60,
+  duration: 60,
+});
+
+const sensitiveLimiter = new RateLimiterRedis({
+  storeClient: redis,
+  keyPrefix: 'rl:sensitive',
+  points: 30,
+  duration: 60,
+});
+
 export function rateLimitGeneral(req: Request, res: Response, next: NextFunction) {
   const key = req.ip || 'unknown';
   generalLimiter
@@ -50,5 +64,25 @@ export function rateLimitWebhook(req: Request, res: Response, next: NextFunction
     .then(() => next())
     .catch(() => {
       res.status(429).json({ error: { code: 'RATE_LIMIT', message: 'Too many webhooks' } });
+    });
+}
+
+export function rateLimitProxy(req: Request, res: Response, next: NextFunction) {
+  const key = req.ip || 'unknown';
+  proxyLimiter
+    .consume(key)
+    .then(() => next())
+    .catch(() => {
+      res.status(429).json({ error: { code: 'RATE_LIMIT', message: 'Too many AI requests' } });
+    });
+}
+
+export function rateLimitSensitive(req: Request, res: Response, next: NextFunction) {
+  const key = req.ip || 'unknown';
+  sensitiveLimiter
+    .consume(key)
+    .then(() => next())
+    .catch(() => {
+      res.status(429).json({ error: { code: 'RATE_LIMIT', message: 'Too many requests' } });
     });
 }

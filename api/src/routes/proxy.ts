@@ -5,8 +5,10 @@ import db from '../lib/db';
 import { checkBalance, trackUsage } from '../services/tokenTracker';
 import { classifyTask, RETAIL_PRICES } from '../services/smartRouter';
 import { getUserOwnKey } from './settings';
+import { rateLimitProxy } from '../middleware/rateLimit';
 
 const router = Router();
+router.use(rateLimitProxy);
 
 const OPENAI_ORIGIN = 'https://api.openai.com';
 const ANTHROPIC_ORIGIN = 'https://api.anthropic.com';

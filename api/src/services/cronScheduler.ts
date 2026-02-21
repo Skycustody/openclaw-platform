@@ -2,10 +2,8 @@ import db from '../lib/db';
 import redis from '../lib/redis';
 import { CronJob } from '../types';
 import { autoWorkExecute } from './tokenBudget';
-import { loadTaskSpecificMemory } from './memory';
 import { v4 as uuid } from 'uuid';
 
-// Parse human-readable schedule to cron expression
 export function parseToCron(schedule: string): string {
   const lower = schedule.toLowerCase().trim();
 
@@ -13,19 +11,26 @@ export function parseToCron(schedule: string): string {
   if (lower === 'every day' || lower === 'daily') return '0 9 * * *';
   if (lower === 'every morning') return '0 8 * * *';
   if (lower === 'every evening') return '0 18 * * *';
+  if (lower === 'every night') return '0 22 * * *';
   if (lower === 'every week' || lower === 'weekly') return '0 9 * * 1';
   if (lower === 'every monday') return '0 9 * * 1';
+  if (lower === 'every tuesday') return '0 9 * * 2';
+  if (lower === 'every wednesday') return '0 9 * * 3';
+  if (lower === 'every thursday') return '0 9 * * 4';
   if (lower === 'every friday') return '0 9 * * 5';
-  if (lower.match(/every (\d+) minutes?/)) {
-    const mins = lower.match(/every (\d+) minutes?/)![1];
-    return `*/${mins} * * * *`;
-  }
-  if (lower.match(/every (\d+) hours?/)) {
-    const hrs = lower.match(/every (\d+) hours?/)![1];
-    return `0 */${hrs} * * *`;
-  }
+  if (lower === 'every saturday') return '0 9 * * 6';
+  if (lower === 'every sunday') return '0 9 * * 0';
+  if (lower === 'twice daily') return '0 9,18 * * *';
 
-  // Assume it's already a cron expression
+  const minMatch = lower.match(/every (\d+) minutes?/);
+  if (minMatch) return `*/${minMatch[1]} * * * *`;
+
+  const hrMatch = lower.match(/every (\d+) hours?/);
+  if (hrMatch) return `0 */${hrMatch[1]} * * *`;
+
+  const atMatch = lower.match(/(?:daily|every day) (?:at )?(\d{1,2}):(\d{2})/);
+  if (atMatch) return `${parseInt(atMatch[2])} ${parseInt(atMatch[1])} * * *`;
+
   return schedule;
 }
 
@@ -93,7 +98,27 @@ export async function getUserCronJobs(userId: string): Promise<CronJob[]> {
   );
 }
 
-// Run due cron jobs — called by the main scheduler every minute
+async function executeJobTask(job: CronJob, budget: number): Promise<{ response: string; tokensUsed: number; model: string }> {
+  try {
+    const { runAutoMode } = await import('./autoMode');
+    const result = await runAutoMode(
+      job.user_id,
+      job.description || job.name,
+    );
+    return {
+      response: result.finalAnswer || `Completed: ${job.name}`,
+      tokensUsed: result.totalTokens || 0,
+      model: result.steps?.[result.steps.length - 1]?.model || 'auto',
+    };
+  } catch (err: any) {
+    return {
+      response: `Error executing task: ${err.message}`,
+      tokensUsed: 0,
+      model: 'none',
+    };
+  }
+}
+
 export async function runDueCronJobs(): Promise<number> {
   const dueJobs = await db.getMany<CronJob>(
     `SELECT * FROM cron_jobs
@@ -105,7 +130,6 @@ export async function runDueCronJobs(): Promise<number> {
   let ran = 0;
 
   for (const job of dueJobs) {
-    // Lock to prevent double execution
     const lockKey = `cron:lock:${job.id}`;
     const locked = await redis.set(lockKey, '1', 'EX', job.timeout_secs, 'NX');
     if (!locked) continue;
@@ -120,13 +144,7 @@ export async function runDueCronJobs(): Promise<number> {
           type: inferTaskType(job.name),
           tokenBudget: job.token_budget,
         },
-        async (budget) => {
-          return {
-            response: `Executed: ${job.name}`,
-            tokensUsed: Math.min(budget, 500),
-            model: 'claude-haiku-4-5',
-          };
-        }
+        async (budget) => executeJobTask(job, budget)
       );
 
       const nextRun = getNextRun(job.schedule);
@@ -151,6 +169,41 @@ export async function runDueCronJobs(): Promise<number> {
   }
 
   return ran;
+}
+
+export async function runCronJobNow(userId: string, jobId: string): Promise<{ ok: boolean; result?: string; tokensUsed?: number }> {
+  const job = await db.getOne<CronJob>(
+    'SELECT * FROM cron_jobs WHERE id = $1 AND user_id = $2',
+    [jobId, userId]
+  );
+  if (!job) throw new Error('Job not found');
+
+  const lockKey = `cron:lock:${job.id}`;
+  const locked = await redis.set(lockKey, '1', 'EX', job.timeout_secs, 'NX');
+  if (!locked) return { ok: false, result: 'Job is already running' };
+
+  try {
+    const result = await autoWorkExecute(
+      userId,
+      {
+        description: job.description || job.name,
+        type: inferTaskType(job.name),
+        tokenBudget: job.token_budget,
+      },
+      async (budget) => executeJobTask(job, budget)
+    );
+
+    await db.query(
+      `UPDATE cron_jobs
+       SET last_run = NOW(), last_result = $1, last_tokens = $2
+       WHERE id = $3`,
+      [result.response, result.tokensUsed, job.id]
+    );
+
+    return { ok: true, result: result.response, tokensUsed: result.tokensUsed };
+  } finally {
+    await redis.del(lockKey);
+  }
 }
 
 function inferTaskType(name: string): string {
@@ -185,6 +238,6 @@ function getNextRun(cronExpr: string): Date {
     return next;
   }
 
-  // Default: run in 1 hour
-  return new Date(now.getTime() + 3600000);
+  const next = new Date(now.getTime() + 3600000);
+  return next;
 }

@@ -1,7 +1,18 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import db from '../lib/db';
 import { UnauthorizedError } from '../lib/errors';
+
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET || JWT_SECRET.length < 32) {
+  throw new Error('JWT_SECRET environment variable is required and must be at least 32 characters. Generate with: openssl rand -hex 32');
+}
+
+const INTERNAL_SECRET = process.env.INTERNAL_SECRET;
+if (!INTERNAL_SECRET || INTERNAL_SECRET.length < 16) {
+  throw new Error('INTERNAL_SECRET environment variable is required and must be at least 16 characters. Generate with: openssl rand -hex 32');
+}
 
 export interface AuthRequest extends Request {
   userId?: string;
@@ -16,7 +27,7 @@ export function authenticate(req: AuthRequest, _res: Response, next: NextFunctio
     }
 
     const token = header.slice(7);
-    const payload = jwt.verify(token, process.env.JWT_SECRET!) as {
+    const payload = jwt.verify(token, JWT_SECRET) as {
       userId: string;
       plan: string;
     };
@@ -65,7 +76,15 @@ export async function requireActiveSubscription(req: AuthRequest, _res: Response
 
 export function internalAuth(req: Request, _res: Response, next: NextFunction) {
   const secret = req.headers['x-internal-secret'];
-  if (secret !== process.env.INTERNAL_SECRET) {
+  if (typeof secret !== 'string' || secret.length !== INTERNAL_SECRET.length) {
+    next(new UnauthorizedError('Invalid internal secret'));
+    return;
+  }
+  const isValid = crypto.timingSafeEqual(
+    Buffer.from(secret),
+    Buffer.from(INTERNAL_SECRET)
+  );
+  if (!isValid) {
     next(new UnauthorizedError('Invalid internal secret'));
     return;
   }
@@ -73,8 +92,8 @@ export function internalAuth(req: Request, _res: Response, next: NextFunction) {
 }
 
 export function generateToken(userId: string, plan: string): string {
-  return jwt.sign({ userId, plan }, process.env.JWT_SECRET!, {
-    expiresIn: '30d',
+  return jwt.sign({ userId, plan }, JWT_SECRET, {
+    expiresIn: '7d',
   });
 }
 

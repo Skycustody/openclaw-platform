@@ -4,23 +4,40 @@ import crypto from 'crypto';
 import db from '../lib/db';
 import { UserSettings } from '../types';
 
-const ENC_KEY = process.env.ENCRYPTION_KEY || 'valnaa-default-encryption-key-32';
-const ENC_ALGO = 'aes-256-cbc';
+if (!process.env.ENCRYPTION_KEY) {
+  throw new Error('ENCRYPTION_KEY environment variable is required. Generate with: openssl rand -hex 32');
+}
+
+const ENC_KEY = process.env.ENCRYPTION_KEY;
+const ENC_ALGO = 'aes-256-gcm';
 
 function encrypt(text: string): string {
-  const key = crypto.scryptSync(ENC_KEY, 'salt', 32);
+  const key = crypto.scryptSync(ENC_KEY, crypto.randomBytes(16).toString('hex'), 32);
   const iv = crypto.randomBytes(16);
-  const cipher = crypto.createCipheriv(ENC_ALGO, key, iv);
+  const salt = crypto.randomBytes(16);
+  const derivedKey = crypto.scryptSync(ENC_KEY, salt, 32);
+  const cipher = crypto.createCipheriv(ENC_ALGO, derivedKey, iv);
   let encrypted = cipher.update(text, 'utf8', 'hex');
   encrypted += cipher.final('hex');
-  return iv.toString('hex') + ':' + encrypted;
+  const authTag = cipher.getAuthTag().toString('hex');
+  return salt.toString('hex') + ':' + iv.toString('hex') + ':' + authTag + ':' + encrypted;
 }
 
 function decrypt(data: string): string {
-  const key = crypto.scryptSync(ENC_KEY, 'salt', 32);
-  const [ivHex, encrypted] = data.split(':');
+  const parts = data.split(':');
+  if (parts.length === 2) {
+    const legacyKey = crypto.scryptSync(ENC_KEY, 'salt', 32);
+    const iv = Buffer.from(parts[0], 'hex');
+    const decipher = crypto.createDecipheriv('aes-256-cbc', legacyKey, iv);
+    let decrypted = decipher.update(parts[1], 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    return decrypted;
+  }
+  const [saltHex, ivHex, authTagHex, encrypted] = parts;
+  const derivedKey = crypto.scryptSync(ENC_KEY, Buffer.from(saltHex, 'hex'), 32);
   const iv = Buffer.from(ivHex, 'hex');
-  const decipher = crypto.createDecipheriv(ENC_ALGO, key, iv);
+  const decipher = crypto.createDecipheriv(ENC_ALGO, derivedKey, iv);
+  decipher.setAuthTag(Buffer.from(authTagHex, 'hex'));
   let decrypted = decipher.update(encrypted, 'hex', 'utf8');
   decrypted += decipher.final('utf8');
   return decrypted;
