@@ -44,6 +44,7 @@ import referralRoutes from './routes/referrals';
 import templateRoutes from './routes/templates';
 import webhookRoutes from './routes/webhooks';
 import adminRoutes from './routes/admin';
+import proxyRoutes from './routes/proxy';
 
 import { startScheduler } from './jobs/scheduler';
 import redis from './lib/redis';
@@ -106,6 +107,7 @@ app.use('/referrals', referralRoutes);
 app.use('/templates', templateRoutes);
 app.use('/webhooks', webhookRoutes);
 app.use('/admin', adminRoutes);
+app.use('/proxy', proxyRoutes);
 
 // Health check
 app.get('/health', (_req, res) => {

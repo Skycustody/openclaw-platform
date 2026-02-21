@@ -5,7 +5,7 @@ import { getServerLoad, checkCapacity, getAllWorkersStats } from '../services/se
 import { provisionUser } from '../services/provisioning';
 import { User } from '../types';
 import { sshExec } from '../services/ssh';
-import { injectApiKeys } from '../services/apiKeys';
+import { injectApiKeys, ensureProxyKey } from '../services/apiKeys';
 
 const router = Router();
 router.use(internalAuth);
@@ -145,9 +145,13 @@ router.post('/reprovision', async (req: Request, res: Response, next: NextFuncti
 });
 
 /**
- * Inject API keys into all active user containers.
- * Fixes existing containers that were provisioned before key injection existed.
- * Also restarts each container so it picks up the new keys.
+ * Inject proxy keys into all active user containers.
+ * For each user:
+ *   1. Generates a proxy key if they don't have one
+ *   2. Writes proxy key into auth-profiles.json + base URLs into openclaw.json
+ *   3. Restarts the container so it picks up the changes
+ *
+ * Real API keys never touch the container — only the proxy key (val_sk_xxx).
  */
 router.post('/inject-keys', async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -175,15 +179,107 @@ router.post('/inject-keys', async (req: Request, res: Response, next: NextFuncti
       return res.json({ message: 'No users with containers found', results: [] });
     }
 
+    const apiUrl = (process.env.API_URL || 'https://api.yourdomain.com').replace(/\/$/, '');
     const results = [];
+
     for (const user of users) {
       try {
         const cn = user.container_name || `openclaw-${user.id.slice(0, 12)}`;
+
+        // Generate proxy key if missing
+        const proxyKey = await ensureProxyKey(user.id);
+
+        // Write proxy config into filesystem
         await injectApiKeys(user.server_ip, user.id, cn);
 
-        await sshExec(user.server_ip, `docker restart ${cn} 2>/dev/null || true`);
+        // Recreate container with proxy env vars instead of real keys.
+        // We stop the old container, remove it, and re-run with updated env.
+        // The host volume (/opt/openclaw/instances/<id>) persists all data.
+        const inspectCmd = `docker inspect ${cn} --format='{{json .Config}}' 2>/dev/null`;
+        const inspectResult = await sshExec(user.server_ip, inspectCmd).catch(() => null);
 
-        results.push({ userId: user.id, email: user.email, status: 'success' });
+        if (inspectResult?.stdout) {
+          try {
+            const containerConfig = JSON.parse(inspectResult.stdout);
+            const existingEnv: string[] = containerConfig.Env || [];
+
+            // Filter out old real API key env vars and old base URL vars
+            const filteredEnv = existingEnv.filter((e: string) =>
+              !e.startsWith('OPENAI_API_KEY=') &&
+              !e.startsWith('ANTHROPIC_API_KEY=') &&
+              !e.startsWith('OPENAI_BASE_URL=') &&
+              !e.startsWith('ANTHROPIC_BASE_URL=')
+            );
+
+            // Add proxy env vars
+            filteredEnv.push(
+              `OPENAI_API_KEY=${proxyKey}`,
+              `OPENAI_BASE_URL=${apiUrl}/proxy/openai/v1`,
+              `ANTHROPIC_API_KEY=${proxyKey}`,
+              `ANTHROPIC_BASE_URL=${apiUrl}/proxy/anthropic`
+            );
+
+            // Get image from current container
+            const imageResult = await sshExec(
+              user.server_ip,
+              `docker inspect ${cn} --format='{{.Config.Image}}'`
+            );
+            const image = imageResult.stdout.trim();
+
+            // Get other container settings
+            const memResult = await sshExec(
+              user.server_ip,
+              `docker inspect ${cn} --format='{{.HostConfig.Memory}}'`
+            );
+            const memBytes = parseInt(memResult.stdout.trim()) || 0;
+            const memMb = memBytes > 0 ? Math.floor(memBytes / 1048576) : 2048;
+
+            const cpuResult = await sshExec(
+              user.server_ip,
+              `docker inspect ${cn} --format='{{.HostConfig.NanoCpus}}'`
+            );
+            const nanoCpus = parseInt(cpuResult.stdout.trim()) || 0;
+            const cpus = nanoCpus > 0 ? (nanoCpus / 1e9).toFixed(1) : '1.0';
+
+            // Get labels
+            const labelsResult = await sshExec(
+              user.server_ip,
+              `docker inspect ${cn} --format='{{json .Config.Labels}}'`
+            );
+            const labels: Record<string, string> = JSON.parse(labelsResult.stdout.trim() || '{}');
+
+            // Stop and remove old container
+            await sshExec(user.server_ip, `docker stop ${cn} 2>/dev/null; docker rm ${cn} 2>/dev/null`);
+
+            // Build docker run command
+            const envFlags = filteredEnv.map((e: string) => `-e '${e.replace(/'/g, "'\\''")}'`).join(' ');
+            const labelFlags = Object.entries(labels)
+              .map(([k, v]) => `--label '${k}=${v}'`)
+              .join(' ');
+
+            const startScript = `sh -c 'openclaw doctor --fix 2>/dev/null || true; exec openclaw gateway --port 18789 --bind lan --allow-unconfigured run'`;
+            const runCmd = [
+              `docker run -d --name ${cn}`,
+              `--restart unless-stopped --no-healthcheck --network openclaw-net`,
+              `--memory ${memMb}m --memory-swap ${memMb}m --cpus ${cpus}`,
+              envFlags,
+              `-v /opt/openclaw/instances/${user.id}:/root/.openclaw`,
+              labelFlags,
+              image,
+              `${startScript}`,
+            ].join(' ');
+
+            await sshExec(user.server_ip, runCmd);
+            console.log(`[inject-keys] Recreated container ${cn} with proxy key`);
+          } catch (recreateErr: any) {
+            console.warn(`[inject-keys] Container recreate failed for ${user.id}, falling back to restart:`, recreateErr.message);
+            await sshExec(user.server_ip, `docker start ${cn} 2>/dev/null; docker restart ${cn} 2>/dev/null`).catch(() => {});
+          }
+        } else {
+          await sshExec(user.server_ip, `docker restart ${cn} 2>/dev/null || true`);
+        }
+
+        results.push({ userId: user.id, email: user.email, proxyKey: proxyKey.slice(0, 12) + '...', status: 'success' });
       } catch (err: any) {
         console.error(`[inject-keys] Failed for ${user.id}:`, err.message);
         results.push({ userId: user.id, email: user.email, status: 'failed', error: err.message });

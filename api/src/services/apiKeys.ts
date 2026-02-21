@@ -1,18 +1,59 @@
+import crypto from 'crypto';
 import { sshExec } from './ssh';
+import db from '../lib/db';
 
 const INSTANCE_DIR = '/opt/openclaw/instances';
 
 /**
- * Inject platform API keys into a user's OpenClaw container securely.
+ * Generate a unique per-user proxy key.
+ * Format: val_sk_<32 hex chars> — looks like an API key but only works
+ * against the platform proxy. Useless outside the platform.
+ */
+export function generateProxyKey(): string {
+  return 'val_sk_' + crypto.randomBytes(16).toString('hex');
+}
+
+/**
+ * Ensure a user has a proxy key. Generates one if missing.
+ * Returns the proxy key.
+ */
+export async function ensureProxyKey(userId: string): Promise<string> {
+  const row = await db.getOne<{ api_proxy_key: string | null }>(
+    'SELECT api_proxy_key FROM users WHERE id = $1',
+    [userId]
+  );
+
+  if (row?.api_proxy_key) return row.api_proxy_key;
+
+  const key = generateProxyKey();
+  await db.query(
+    'UPDATE users SET api_proxy_key = $1 WHERE id = $2',
+    [key, userId]
+  );
+  return key;
+}
+
+/**
+ * Get the proxy base URLs derived from the platform API URL.
+ */
+function getProxyBaseUrls(): { openai: string; anthropic: string } {
+  const apiUrl = (process.env.API_URL || 'https://api.yourdomain.com').replace(/\/$/, '');
+  return {
+    openai: `${apiUrl}/proxy/openai/v1`,
+    anthropic: `${apiUrl}/proxy/anthropic`,
+  };
+}
+
+/**
+ * Inject the user's proxy key into their OpenClaw container.
  *
- * Keys are written ONLY to:
- *   - auth-profiles.json (credential store, not visible in OpenClaw UI)
- *   - Docker env vars (set at container creation, not readable via UI)
+ * NO real API keys are written anywhere in the container.
+ * Instead, the container gets:
+ *   - auth-profiles.json with the proxy key (val_sk_xxx)
+ *   - openclaw.json with baseURL pointing to the platform proxy
  *
- * Keys are intentionally NOT stored in openclaw.json — that file is
- * readable through the OpenClaw Control UI settings page.
- *
- * File permissions are locked to owner-only (chmod 600).
+ * When OpenClaw calls OpenAI/Anthropic, it hits our proxy which
+ * validates the key and forwards with the real provider key.
  *
  * Idempotent — safe to call multiple times.
  */
@@ -21,15 +62,10 @@ export async function injectApiKeys(
   userId: string,
   containerName: string
 ): Promise<void> {
-  const openaiKey = process.env.OPENAI_API_KEY || '';
-  const anthropicKey = process.env.ANTHROPIC_API_KEY || '';
+  const proxyKey = await ensureProxyKey(userId);
+  const baseUrls = getProxyBaseUrls();
 
-  if (!openaiKey && !anthropicKey) {
-    console.warn(`[apiKeys] No API keys in env — skipping injection for ${userId}`);
-    return;
-  }
-
-  // Strip any leftover keys from openclaw.json (may exist from previous version)
+  // 1. Update openclaw.json with proxy base URLs (no actual keys)
   const configResult = await sshExec(
     serverIp,
     `cat ${INSTANCE_DIR}/${userId}/openclaw.json 2>/dev/null || echo '{}'`
@@ -42,53 +78,44 @@ export async function injectApiKeys(
     config = {};
   }
 
-  let configDirty = false;
-  if (config.models?.providers?.openai?.apiKey) {
-    delete config.models.providers.openai.apiKey;
-    if (Object.keys(config.models.providers.openai).length === 0) delete config.models.providers.openai;
-    configDirty = true;
-  }
-  if (config.models?.providers?.anthropic?.apiKey) {
-    delete config.models.providers.anthropic.apiKey;
-    if (Object.keys(config.models.providers.anthropic).length === 0) delete config.models.providers.anthropic;
-    configDirty = true;
-  }
-  if (config.models?.providers && Object.keys(config.models.providers).length === 0) {
-    delete config.models.providers;
-  }
-  if (config.models && Object.keys(config.models).length === 0) {
-    delete config.models;
-  }
+  // Remove any real keys that may exist from previous versions
+  if (config.models?.providers?.openai?.apiKey) delete config.models.providers.openai.apiKey;
+  if (config.models?.providers?.anthropic?.apiKey) delete config.models.providers.anthropic.apiKey;
 
-  if (configDirty) {
-    const configB64 = Buffer.from(JSON.stringify(config, null, 2)).toString('base64');
-    await sshExec(
-      serverIp,
-      `echo '${configB64}' | base64 -d > ${INSTANCE_DIR}/${userId}/openclaw.json`
-    );
-  }
+  // Set proxy base URLs so SDKs call our proxy instead of the real provider
+  if (!config.models) config.models = {};
+  if (!config.models.providers) config.models.providers = {};
+  config.models.providers.openai = {
+    ...(config.models.providers.openai || {}),
+    baseURL: baseUrls.openai,
+  };
+  config.models.providers.anthropic = {
+    ...(config.models.providers.anthropic || {}),
+    baseURL: baseUrls.anthropic,
+  };
 
-  // Write auth-profiles.json — the secure credential store
-  const authProfiles: Record<string, any> = {};
+  const configB64 = Buffer.from(JSON.stringify(config, null, 2)).toString('base64');
+  await sshExec(
+    serverIp,
+    `echo '${configB64}' | base64 -d > ${INSTANCE_DIR}/${userId}/openclaw.json`
+  );
 
-  if (openaiKey) {
-    authProfiles['openai:platform'] = {
+  // 2. Write auth-profiles.json with the proxy key (not real key)
+  const authProfiles: Record<string, any> = {
+    'openai:platform': {
       provider: 'openai',
       mode: 'api_key',
-      apiKey: openaiKey,
-    };
-  }
-  if (anthropicKey) {
-    authProfiles['anthropic:platform'] = {
+      apiKey: proxyKey,
+    },
+    'anthropic:platform': {
       provider: 'anthropic',
       mode: 'api_key',
-      apiKey: anthropicKey,
-    };
-  }
+      apiKey: proxyKey,
+    },
+  };
 
   const authB64 = Buffer.from(JSON.stringify(authProfiles, null, 2)).toString('base64');
 
-  // Create directory, write file, and lock permissions (owner-only read/write)
   await sshExec(
     serverIp,
     [
@@ -98,13 +125,12 @@ export async function injectApiKeys(
     ].join(' && ')
   );
 
-  console.log(`[apiKeys] Keys injected securely for user ${userId}`);
+  console.log(`[apiKeys] Proxy key injected for user ${userId} (key=${proxyKey.slice(0, 12)}...)`);
 }
 
 /**
  * Build the initial openclaw.json config — gateway settings only.
- * API keys are NOT included here; they go only into auth-profiles.json
- * so they are never visible through the OpenClaw Control UI.
+ * No API keys are included. Those go through the proxy system.
  */
 export function buildOpenclawConfig(gatewayToken: string): Record<string, any> {
   return {

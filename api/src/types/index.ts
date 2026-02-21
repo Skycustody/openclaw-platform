@@ -20,6 +20,7 @@ export interface User {
   referral_code: string | null;
   referred_by: string | null;
   gateway_token: string | null;
+  api_proxy_key: string | null;
   grace_period_end: Date | null;
   created_at: Date;
   last_active: Date;
