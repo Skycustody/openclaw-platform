@@ -1,0 +1,395 @@
+import { Router, Response, NextFunction } from 'express';
+import { AuthRequest, authenticate, requireActiveSubscription } from '../middleware/auth';
+import db from '../lib/db';
+import { wakeContainer, sleepContainer, getContainerStatus, touchActivity } from '../services/sleepWake';
+import { restartContainer, provisionUser } from '../services/provisioning';
+import { User, Server } from '../types';
+import { sshExec } from '../services/ssh';
+
+const router = Router();
+router.use(authenticate);
+
+/**
+ * Ensure Traefik on a worker has DOCKER_API_VERSION set.
+ * Without it, Traefik v3 can't talk to Docker and returns 404 for everything.
+ * Returns true if Traefik was recreated (caller should wait a moment).
+ */
+async function ensureTraefik(serverIp: string): Promise<boolean> {
+  try {
+    const envCheck = await sshExec(
+      serverIp,
+      `docker inspect traefik --format='{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null`
+    ).catch(() => null);
+
+    if (envCheck?.stdout?.includes('DOCKER_API_VERSION')) return false;
+
+    console.log(`[traefik] Fixing Traefik on ${serverIp} — missing DOCKER_API_VERSION`);
+    const traefikCfgB64 = Buffer.from([
+      'api:',
+      '  dashboard: false',
+      'entryPoints:',
+      '  web:',
+      '    address: ":80"',
+      '  websecure:',
+      '    address: ":443"',
+      'providers:',
+      '  docker:',
+      '    endpoint: "unix:///var/run/docker.sock"',
+      '    exposedByDefault: false',
+      '    network: openclaw-net',
+    ].join('\n')).toString('base64');
+
+    await sshExec(serverIp, [
+      `mkdir -p /opt/openclaw/config`,
+      `echo '${traefikCfgB64}' | base64 -d > /opt/openclaw/config/traefik.yml`,
+      `docker rm -f traefik 2>/dev/null || true`,
+      `docker run -d --name traefik --restart unless-stopped --network openclaw-net -e DOCKER_API_VERSION=$(docker version --format '{{.Server.APIVersion}}' 2>/dev/null || echo 1.44) -p 80:80 -p 443:443 -v /var/run/docker.sock:/var/run/docker.sock:ro -v /opt/openclaw/config/traefik.yml:/etc/traefik/traefik.yml:ro traefik:latest`,
+    ].join(' && '));
+
+    console.log(`[traefik] Traefik recreated on ${serverIp} with worker Docker API version`);
+    return true;
+  } catch (err) {
+    console.error(`[traefik] Failed to fix Traefik on ${serverIp}:`, err);
+    return false;
+  }
+}
+
+/**
+ * Build the agent URL with gateway auth token + gatewayUrl so the Control UI
+ * auto-connects without requiring the user to paste a token manually.
+ * The OpenClaw Control UI reads ?token= when ?gatewayUrl= is also present
+ * and stores both in localStorage for subsequent visits.
+ */
+async function agentUrl(subdomain: string, userId: string, server?: Server | null): Promise<string> {
+  const domain = process.env.DOMAIN || 'yourdomain.com';
+  const base = `https://${subdomain}.${domain}`;
+
+  let token: string | null = null;
+
+  // Try DB first
+  const row = await db.getOne<{ gateway_token: string }>(
+    'SELECT gateway_token FROM users WHERE id = $1',
+    [userId]
+  ).catch(() => null);
+
+  if (row?.gateway_token) {
+    token = row.gateway_token;
+  }
+
+  // Fallback: retrieve from the running container via SSH
+  if (!token && server) {
+    try {
+      const containerName = (await db.getOne<User>('SELECT container_name FROM users WHERE id = $1', [userId]))
+        ?.container_name || `openclaw-${userId.slice(0, 12)}`;
+      const result = await sshExec(
+        server.ip,
+        `docker exec ${containerName} openclaw config get gateway.auth.token 2>/dev/null`
+      );
+      const fetched = result.stdout.replace(/["\s]/g, '').trim();
+      if (fetched && fetched.length > 8) {
+        token = fetched;
+        await db.query('UPDATE users SET gateway_token = $1 WHERE id = $2', [token, userId]).catch(() => {});
+      }
+    } catch {
+      // SSH failed
+    }
+  }
+
+  if (token) {
+    const wsUrl = encodeURIComponent(`wss://${subdomain}.${domain}`);
+    return `${base}/?gatewayUrl=${wsUrl}&token=${token}`;
+  }
+
+  return base;
+}
+
+// Get agent status
+router.get('/status', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const user = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [req.userId]);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const status = await getContainerStatus(req.userId!);
+
+    // Quick stats from Redis/DB
+    const [messagesResult, tokensResult, cronResult] = await Promise.all([
+      db.getOne<{ count: string }>(
+        `SELECT COUNT(*) as count FROM conversations
+         WHERE user_id = $1 AND created_at > CURRENT_DATE`,
+        [req.userId]
+      ),
+      db.getOne<{ total: string }>(
+        `SELECT COALESCE(SUM(ABS(amount)), 0) as total FROM token_transactions
+         WHERE user_id = $1 AND type = 'usage' AND created_at > CURRENT_DATE`,
+        [req.userId]
+      ),
+      db.getOne<{ count: string }>(
+        `SELECT COUNT(*) as count FROM cron_jobs WHERE user_id = $1 AND enabled = true`,
+        [req.userId]
+      ),
+    ]);
+
+    res.json({
+      status,
+      subscriptionStatus: user.status,
+      subdomain: user.subdomain,
+      plan: user.plan,
+      lastActive: user.last_active,
+      createdAt: user.created_at,
+      stats: {
+        messagesToday: parseInt(messagesResult?.count || '0'),
+        tokensToday: parseInt(tokensResult?.total || '0'),
+        activeSkills: parseInt(cronResult?.count || '0'),
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Ensure the user's agent is provisioned and running, then return its URL.
+ * - No container yet → full provision (creates worker if needed, builds image, starts container)
+ * - Sleeping → wake it
+ * - Already active → return URL immediately
+ */
+router.post('/open', authenticate, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const user = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [req.userId]);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (user.status === 'cancelled') {
+      return res.status(403).json({ error: 'Subscription cancelled. Please resubscribe.' });
+    }
+    if (user.status === 'paused') {
+      return res.status(403).json({ error: 'Agent paused — you need more tokens.' });
+    }
+
+    // Case 1: never provisioned (no server assigned)
+    if (!user.server_id || !user.subdomain) {
+      console.log(`[agent/open] User ${user.id} not provisioned — starting provisioning`);
+      const provisioned = await provisionUser({
+        userId: user.id,
+        email: user.email,
+        plan: user.plan,
+        stripeCustomerId: user.stripe_customer_id || undefined,
+      });
+      const url = await agentUrl(provisioned.subdomain!, user.id);
+      return res.json({ url, status: 'active' });
+    }
+
+    // Resolve the server once for token retrieval
+    const server = user.server_id
+      ? await db.getOne<Server>('SELECT * FROM servers WHERE id = $1', [user.server_id])
+      : null;
+
+    // Proactively fix Traefik on existing workers (don't await — runs in background)
+    if (server) {
+      ensureTraefik(server.ip).catch(() => {});
+    }
+
+    // Case 2: sleeping — wake it up
+    if (user.status === 'sleeping') {
+      console.log(`[agent/open] Waking container for ${user.id}`);
+      await wakeContainer(user.id);
+      const url = await agentUrl(user.subdomain!, user.id, server);
+      return res.json({ url, status: 'active' });
+    }
+
+    // Case 3: still provisioning from a previous attempt — verify the container actually exists
+    if (user.status === 'provisioning') {
+      if (server) {
+        const containerName = user.container_name || `openclaw-${user.id}`;
+        const check = await sshExec(server.ip, `docker inspect ${containerName} --format='{{.State.Running}}' 2>/dev/null`).catch(() => null);
+        if (check && check.stdout.includes('true')) {
+          await db.query(`UPDATE users SET status = 'active', last_active = NOW() WHERE id = $1`, [user.id]);
+          const url = await agentUrl(user.subdomain!, user.id, server);
+          return res.json({ url, status: 'active' });
+        }
+      }
+      console.log(`[agent/open] User ${user.id} stuck in provisioning — re-provisioning`);
+      const provisioned = await provisionUser({
+        userId: user.id,
+        email: user.email,
+        plan: user.plan,
+        stripeCustomerId: user.stripe_customer_id || undefined,
+      });
+      const url = await agentUrl(provisioned.subdomain!, user.id);
+      return res.json({ url, status: 'active' });
+    }
+
+    // Case 4: active or grace_period — verify the container is actually running
+    if (server) {
+      const containerName = user.container_name || `openclaw-${user.id}`;
+      const check = await sshExec(server.ip, `docker inspect ${containerName} --format='{{.State.Running}}' 2>/dev/null`).catch(() => null);
+      if (!check || !check.stdout.includes('true')) {
+        console.log(`[agent/open] Container for ${user.id} not running — restarting`);
+        const startResult = await sshExec(server.ip, `docker start ${containerName} 2>/dev/null`).catch(() => null);
+        if (!startResult || startResult.code !== 0) {
+          console.log(`[agent/open] Container missing — re-provisioning`);
+          const provisioned = await provisionUser({
+            userId: user.id,
+            email: user.email,
+            plan: user.plan,
+            stripeCustomerId: user.stripe_customer_id || undefined,
+          });
+          const url = await agentUrl(provisioned.subdomain!, user.id);
+          return res.json({ url, status: 'active' });
+        }
+      }
+    }
+
+    await touchActivity(user.id);
+    const url = await agentUrl(user.subdomain!, user.id, server);
+    return res.json({ url, status: 'active' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Start/wake agent
+router.post('/start', requireActiveSubscription, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    await wakeContainer(req.userId!);
+    res.json({ status: 'active' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Stop/sleep agent
+router.post('/stop', requireActiveSubscription, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const user = await db.getOne<User & { server_ip: string }>(
+      `SELECT u.*, s.ip as server_ip FROM users u
+       JOIN servers s ON s.id = u.server_id
+       WHERE u.id = $1`,
+      [req.userId]
+    );
+    if (user) await sleepContainer(user);
+    res.json({ status: 'sleeping' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Restart agent
+router.post('/restart', requireActiveSubscription, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    await restartContainer(req.userId!);
+    res.json({ status: 'restarting' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Get container logs
+router.get('/logs', requireActiveSubscription, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const user = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [req.userId]);
+    if (!user?.server_id) return res.json({ logs: '' });
+
+    const server = await db.getOne<Server>('SELECT * FROM servers WHERE id = $1', [user.server_id]);
+    if (!server) return res.json({ logs: '' });
+
+    const lines = parseInt(req.query.lines as string) || 100;
+    const containerName = user.container_name || `openclaw-${req.userId}`;
+    const result = await sshExec(server.ip, `docker logs --tail ${lines} ${containerName} 2>&1`);
+
+    res.json({ logs: result.stdout });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Server-side readiness probe: SSH into the worker and curl the container
+ * through Traefik to confirm routing works end-to-end.
+ * Auto-fixes broken Traefik (missing DOCKER_API_VERSION) when detected.
+ */
+router.get('/ready', authenticate, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const user = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [req.userId]);
+    if (!user?.server_id || !user?.subdomain) {
+      console.log(`[ready] User ${req.userId} not provisioned`);
+      return res.json({ ready: false, reason: 'not_provisioned' });
+    }
+
+    const server = await db.getOne<Server>('SELECT * FROM servers WHERE id = $1', [user.server_id]);
+    if (!server) {
+      console.log(`[ready] Server ${user.server_id} not found for user ${req.userId}`);
+      return res.json({ ready: false, reason: 'no_server' });
+    }
+
+    const containerName = user.container_name || `openclaw-${user.id}`;
+
+    // 1. Check if container is running
+    const inspect = await sshExec(
+      server.ip,
+      `docker inspect ${containerName} --format='{{.State.Running}}' 2>/dev/null`
+    ).catch((err) => {
+      console.error(`[ready] SSH to ${server.ip} failed:`, err.message);
+      return null;
+    });
+
+    if (!inspect || !inspect.stdout.includes('true')) {
+      const logs = await sshExec(server.ip, `docker logs --tail 15 ${containerName} 2>&1`).catch(() => null);
+      console.log(`[ready] Container ${containerName} not running on ${server.ip}. Logs: ${logs?.stdout?.slice(-200) || 'none'}`);
+      return res.json({
+        ready: false,
+        reason: 'container_not_running',
+        detail: 'Container is starting up...',
+      });
+    }
+
+    // 2. Check Traefik can route to it
+    const domain = process.env.DOMAIN || 'yourdomain.com';
+    const hostHeader = `${user.subdomain}.${domain}`;
+    const probe = await sshExec(
+      server.ip,
+      `curl -o /dev/null -w '%{http_code}' -H 'Host: ${hostHeader}' --max-time 5 http://127.0.0.1/ 2>/dev/null`
+    ).catch(() => null);
+
+    const httpCode = (probe?.stdout?.trim() || '000').slice(-3);
+    const isReady = httpCode === '200' || httpCode === '101';
+
+    if (isReady) {
+      return res.json({ ready: true, httpCode });
+    }
+
+    console.log(`[ready] Traefik probe for ${hostHeader} on ${server.ip} returned HTTP ${httpCode}`);
+
+    // 3. Auto-fix: if Traefik returns 404, it likely can't discover containers
+    if (httpCode === '404' || httpCode === '000') {
+      const wasFixed = await ensureTraefik(server.ip);
+      if (wasFixed) {
+        return res.json({
+          ready: false,
+          reason: 'traefik_fixed',
+          detail: 'Fixing routing, retrying shortly...',
+          httpCode,
+        });
+      }
+    }
+
+    return res.json({
+      ready: false,
+      reason: 'routing_not_ready',
+      detail: `Routing not ready (HTTP ${httpCode})`,
+      httpCode,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Touch activity (called by frontend periodically)
+router.post('/heartbeat', requireActiveSubscription, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    await touchActivity(req.userId!);
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+export default router;

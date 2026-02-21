@@ -1,0 +1,318 @@
+@import "tailwindcss";
+
+.glow {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.glow::after {
+  position: absolute;
+  content: "";
+}
+
+@theme {
+  --color-background: #09090b;
+  --color-foreground: #fafafa;
+  --color-card: #0c0c0e;
+  --color-card-foreground: #fafafa;
+  --color-popover: #09090b;
+  --color-popover-foreground: #fafafa;
+  --color-primary: #fafafa;
+  --color-primary-foreground: #18181b;
+  --color-secondary: #27272a;
+  --color-secondary-foreground: #fafafa;
+  --color-muted: #27272a;
+  --color-muted-foreground: #a1a1aa;
+  --color-accent: #27272a;
+  --color-accent-foreground: #fafafa;
+  --color-destructive: #7f1d1d;
+  --color-destructive-foreground: #fafafa;
+  --color-border: rgba(255, 255, 255, 0.1);
+  --color-input: rgba(255, 255, 255, 0.1);
+  --color-ring: #d4d4d8;
+  --radius: 0.625rem;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+  --animate-in: enter 0.3s ease-out;
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
+}
+
+@keyframes enter {
+  from {
+    opacity: var(--tw-enter-opacity, 1);
+    transform: translate3d(
+        var(--tw-enter-translate-x, 0),
+        var(--tw-enter-translate-y, 0),
+        0
+      )
+      scale3d(
+        var(--tw-enter-scale, 1),
+        var(--tw-enter-scale, 1),
+        var(--tw-enter-scale, 1)
+      )
+      rotate(var(--tw-enter-rotate, 0));
+  }
+}
+
+@keyframes accordion-down {
+  from { height: 0; }
+  to { height: var(--radix-accordion-content-height); }
+}
+
+@keyframes accordion-up {
+  from { height: var(--radix-accordion-content-height); }
+  to { height: 0; }
+}
+
+@utility animate-in {
+  animation-name: enter;
+  animation-duration: 150ms;
+  --tw-enter-opacity: initial;
+  --tw-enter-scale: initial;
+  --tw-enter-rotate: initial;
+  --tw-enter-translate-x: initial;
+  --tw-enter-translate-y: initial;
+}
+
+@utility fade-in {
+  --tw-enter-opacity: 0;
+}
+
+@utility slide-in-from-bottom-10 {
+  --tw-enter-translate-y: 2.5rem;
+}
+
+@utility zoom-in-97 {
+  --tw-enter-scale: 0.97;
+}
+
+@utility fill-mode-backwards {
+  animation-fill-mode: backwards;
+}
+
+@utility delay-100 {
+  animation-delay: 100ms;
+}
+
+@utility delay-200 {
+  animation-delay: 200ms;
+}
+
+@utility delay-300 {
+  animation-delay: 300ms;
+}
+
+@utility delay-500 {
+  animation-delay: 500ms;
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Legacy CSS classes for dashboard backward compatibility */
+:root {
+  --black: #000000;
+  --surface: rgba(255, 255, 255, 0.04);
+  --surface-hover: rgba(255, 255, 255, 0.06);
+  --surface-active: rgba(255, 255, 255, 0.08);
+  --border-legacy: rgba(255, 255, 255, 0.08);
+  --border-hover: rgba(255, 255, 255, 0.14);
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.5);
+  --text-tertiary: rgba(255, 255, 255, 0.3);
+  --green: #4ade80;
+  --green-soft: rgba(74, 222, 128, 0.12);
+  --amber: #fbbf24;
+  --amber-soft: rgba(251, 191, 36, 0.12);
+  --red: #f87171;
+  --red-soft: rgba(248, 113, 113, 0.12);
+  --blue: #60a5fa;
+  --blue-soft: rgba(96, 165, 250, 0.12);
+}
+
+.glass {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+}
+
+.glass-strong {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+}
+
+.glass-subtle {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+}
+
+.glass-hover:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-hover);
+}
+
+.glass-input {
+  background: transparent;
+  border: 1px solid var(--border-legacy);
+  border-radius: 10px;
+  color: #fff;
+  transition: border-color 0.15s ease;
+}
+
+.glass-input:focus {
+  border-color: rgba(255, 255, 255, 0.3);
+  outline: none;
+}
+
+.glass-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.btn-glass {
+  background: transparent;
+  border: 1px solid var(--border-legacy);
+  border-radius: 10px;
+  color: rgba(255, 255, 255, 0.7);
+  transition: all 0.15s ease;
+}
+
+.btn-glass:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-hover);
+  color: #fff;
+}
+
+.btn-primary {
+  background: #ffffff;
+  border: 1px solid #ffffff;
+  border-radius: 10px;
+  color: #000000;
+  font-weight: 600;
+  transition: opacity 0.15s ease;
+}
+
+.btn-primary:hover {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.btn-danger {
+  background: var(--red-soft);
+  border: 1px solid rgba(248, 113, 113, 0.2);
+  border-radius: 10px;
+  color: var(--red);
+  transition: all 0.15s ease;
+}
+
+.btn-danger:hover {
+  background: rgba(248, 113, 113, 0.18);
+}
+
+.status-online { color: var(--green); }
+.status-sleeping { color: var(--blue); }
+.status-paused { color: var(--red); }
+.status-starting { color: var(--amber); }
+.status-offline { color: var(--red); }
+
+.progress-bar {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  background: #ffffff;
+  border-radius: 999px;
+  transition: width 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.progress-fill-green { background: var(--green); }
+.progress-fill-amber { background: var(--amber); }
+.progress-fill-red { background: var(--red); }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.08); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.15); }
+
+input[type='range'] {
+  -webkit-appearance: none;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+  height: 6px;
+}
+
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  height: 18px;
+  width: 18px;
+  border-radius: 50%;
+  background: #ffffff;
+  cursor: pointer;
+  border: 3px solid #000;
+}
+
+@keyframes moveBackground {
+  from { background-position: 0% 0%; }
+  to { background-position: 0% -1000%; }
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-fade-up {
+  animation: fadeUp 0.3s ease-out;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s ease-out;
+}
+
+.glass-divider {
+  border: none;
+  height: 1px;
+  background: var(--border-legacy);
+}
+
+.badge-green { background: var(--green-soft); color: var(--green); }
+.badge-amber { background: var(--amber-soft); color: var(--amber); }
+.badge-red { background: var(--red-soft); color: var(--red); }
+.badge-blue { background: var(--blue-soft); color: var(--blue); }
+.badge-accent { background: rgba(255, 255, 255, 0.08); color: #ffffff; }
+
+.toggle-track {
+  width: 44px;
+  height: 26px;
+  border-radius: 13px;
+  padding: 2px;
+  transition: background 0.2s ease;
+}
+
+.toggle-track[data-state="on"] { background: #ffffff; }
+.toggle-track[data-state="off"] { background: rgba(255, 255, 255, 0.1); }
+
+.toggle-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 11px;
+  background: #000;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.toggle-track[data-state="off"] .toggle-thumb {
+  background: rgba(255, 255, 255, 0.5);
+}
