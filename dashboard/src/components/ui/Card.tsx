@@ -34,8 +34,8 @@ export function CardTitle({ children, className }: { children: ReactNode; classN
   return <h3 className={cn('text-[17px] font-semibold text-white tracking-tight', className)}>{children}</h3>;
 }
 
-export function CardDescription({ children }: { children: ReactNode }) {
-  return <p className="mt-1.5 text-[14px] leading-relaxed text-white/50">{children}</p>;
+export function CardDescription({ children, className }: { children: ReactNode; className?: string }) {
+  return <p className={cn('mt-1.5 text-[14px] leading-relaxed text-white/50', className)}>{children}</p>;
 }
 
 export function GlassPanel({ children, className }: { children: ReactNode; className?: string }) {

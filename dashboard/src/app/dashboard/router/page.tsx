@@ -262,45 +262,47 @@ export default function RouterPage() {
 
       {/* ── Mode Toggle ── */}
       <div className="grid gap-4 sm:grid-cols-2">
-        <Card
-          className={`cursor-pointer transition-all ${settings.brain_mode === 'auto' ? '!border-green-500/30 !bg-green-500/[0.04]' : 'hover:!border-white/15'}`}
-          onClick={() => updateBrain('auto')}
-        >
-          <div className="flex items-start gap-3">
-            <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${settings.brain_mode === 'auto' ? 'bg-green-500/20' : 'bg-white/[0.06]'}`}>
-              <Sparkles className={`h-5 w-5 ${settings.brain_mode === 'auto' ? 'text-green-400' : 'text-white/40'}`} />
-            </div>
-            <div className="flex-1">
-              <div className="flex items-center gap-2">
-                <CardTitle>Auto Mode</CardTitle>
-                {settings.brain_mode === 'auto' && <Badge variant="green">Active</Badge>}
+        <button className="text-left w-full" onClick={() => updateBrain('auto')}>
+          <Card
+            className={`cursor-pointer transition-all ${settings.brain_mode === 'auto' ? '!border-green-500/30 !bg-green-500/[0.04]' : 'hover:!border-white/15'}`}
+          >
+            <div className="flex items-start gap-3">
+              <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${settings.brain_mode === 'auto' ? 'bg-green-500/20' : 'bg-white/[0.06]'}`}>
+                <Sparkles className={`h-5 w-5 ${settings.brain_mode === 'auto' ? 'text-green-400' : 'text-white/40'}`} />
               </div>
-              <CardDescription className="mt-1">
-                Opus-quality responses at 80% less cost. Uses a draft-critique-refine pipeline with cheaper models to match Opus depth.
-              </CardDescription>
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <CardTitle>Auto Mode</CardTitle>
+                  {settings.brain_mode === 'auto' && <Badge variant="green">Active</Badge>}
+                </div>
+                <CardDescription className="mt-1">
+                  Opus-quality responses at 80% less cost. Uses a draft-critique-refine pipeline with cheaper models to match Opus depth.
+                </CardDescription>
+              </div>
             </div>
-          </div>
-        </Card>
+          </Card>
+        </button>
 
-        <Card
-          className={`cursor-pointer transition-all ${settings.brain_mode === 'manual' ? '!border-blue-500/30 !bg-blue-500/[0.04]' : 'hover:!border-white/15'}`}
-          onClick={() => updateBrain('manual', settings.manual_model || models[0]?.name)}
-        >
-          <div className="flex items-start gap-3">
-            <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${settings.brain_mode === 'manual' ? 'bg-blue-500/20' : 'bg-white/[0.06]'}`}>
-              <Brain className={`h-5 w-5 ${settings.brain_mode === 'manual' ? 'text-blue-400' : 'text-white/40'}`} />
-            </div>
-            <div className="flex-1">
-              <div className="flex items-center gap-2">
-                <CardTitle>Manual Mode</CardTitle>
-                {settings.brain_mode === 'manual' && <Badge variant="blue">Active</Badge>}
+        <button className="text-left w-full" onClick={() => updateBrain('manual', settings.manual_model || models[0]?.name)}>
+          <Card
+            className={`cursor-pointer transition-all ${settings.brain_mode === 'manual' ? '!border-blue-500/30 !bg-blue-500/[0.04]' : 'hover:!border-white/15'}`}
+          >
+            <div className="flex items-start gap-3">
+              <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${settings.brain_mode === 'manual' ? 'bg-blue-500/20' : 'bg-white/[0.06]'}`}>
+                <Brain className={`h-5 w-5 ${settings.brain_mode === 'manual' ? 'text-blue-400' : 'text-white/40'}`} />
               </div>
-              <CardDescription className="mt-1">
-                Pick one model for everything. Full control over which AI handles your tasks.
-              </CardDescription>
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <CardTitle>Manual Mode</CardTitle>
+                  {settings.brain_mode === 'manual' && <Badge variant="blue">Active</Badge>}
+                </div>
+                <CardDescription className="mt-1">
+                  Pick one model for everything. Full control over which AI handles your tasks.
+                </CardDescription>
+              </div>
             </div>
-          </div>
-        </Card>
+          </Card>
+        </button>
       </div>
 
       {/* ── Manual Model Selector ── */}
