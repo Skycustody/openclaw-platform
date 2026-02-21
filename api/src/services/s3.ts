@@ -5,18 +5,20 @@ import {
   PutBucketLifecycleConfigurationCommand,
   ListObjectsV2Command,
   GetObjectCommand,
+  PutObjectCommand,
   DeleteObjectsCommand,
   DeleteBucketCommand,
-  PutObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 const s3 = new S3Client({
   region: process.env.AWS_REGION || 'us-east-1',
-  credentials: process.env.AWS_ACCESS_KEY_ID ? {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-  } : undefined,
+  credentials: process.env.AWS_ACCESS_KEY_ID
+    ? {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
+      }
+    : undefined,
 });
 
 const BUCKET_PREFIX = process.env.S3_BUCKET_PREFIX || 'openclaw-users';
@@ -34,7 +36,6 @@ export async function createUserBucket(userId: string): Promise<string> {
       Bucket: bucket,
       VersioningConfiguration: { Status: 'Enabled' },
     }));
-
     await s3.send(new PutBucketLifecycleConfigurationCommand({
       Bucket: bucket,
       LifecycleConfiguration: {
@@ -48,10 +49,9 @@ export async function createUserBucket(userId: string): Promise<string> {
         ],
       },
     }));
-
     return bucket;
   } catch (err: any) {
-    if (err.name === 'BucketAlreadyOwnedByYou') return bucket;
+    if (err.name === 'BucketAlreadyOwnedByYou' || err.Code === 'BucketAlreadyOwnedByYou') return bucket;
     throw err;
   }
 }
@@ -89,8 +89,8 @@ export async function syncFromS3(userId: string, localPath: string): Promise<voi
     fs.mkdirSync(dir, { recursive: true });
 
     const data = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: obj.Key }));
-    const body = await data.Body?.transformToByteArray();
-    if (body) fs.writeFileSync(filePath, Buffer.from(body));
+    const bytes = await data.Body?.transformToByteArray();
+    if (bytes) fs.writeFileSync(filePath, Buffer.from(bytes));
   }
 }
 
@@ -127,17 +127,10 @@ export async function listUserFiles(userId: string): Promise<Array<{ key: string
 
 export async function getPresignedUrl(userId: string, key: string): Promise<string> {
   const bucket = getBucketName(userId);
-  return getSignedUrl(s3, new GetObjectCommand({
-    Bucket: bucket,
-    Key: key,
-  }), { expiresIn: 3600 });
+  return getSignedUrl(s3, new GetObjectCommand({ Bucket: bucket, Key: key }), { expiresIn: 3600 });
 }
 
 export async function getUploadUrl(userId: string, key: string, contentType: string): Promise<string> {
   const bucket = getBucketName(userId);
-  return getSignedUrl(s3, new PutObjectCommand({
-    Bucket: bucket,
-    Key: key,
-    ContentType: contentType,
-  }), { expiresIn: 3600 });
+  return getSignedUrl(s3, new PutObjectCommand({ Bucket: bucket, Key: key, ContentType: contentType }), { expiresIn: 3600 });
 }
