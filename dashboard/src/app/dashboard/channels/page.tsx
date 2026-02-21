@@ -12,6 +12,7 @@ import {
   Check, Lock, Loader2, QrCode, MessageSquare,
   ArrowRight, Link2Off, AlertCircle, RefreshCw,
 } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 
 interface ChannelStatuses {
   telegram: boolean;
@@ -81,6 +82,7 @@ export default function ConnectApps() {
   const [whatsAppError, setWhatsAppError] = useState('');
   const [whatsAppPaired, setWhatsAppPaired] = useState(false);
   const statusPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const qrPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const { user } = useStore();
   const isStarterPlan = user?.plan === 'starter';
@@ -116,10 +118,10 @@ export default function ConnectApps() {
 
   useEffect(() => { fetchChannels(); }, [fetchChannels]);
 
-  // Cleanup polling on unmount
   useEffect(() => {
     return () => {
       if (statusPollRef.current) clearInterval(statusPollRef.current);
+      if (qrPollRef.current) clearInterval(qrPollRef.current);
     };
   }, []);
 
@@ -167,8 +169,12 @@ export default function ConnectApps() {
 
   // ── WhatsApp ──
 
-  // WhatsApp agent URL fallback
   const [whatsAppAgentUrl, setWhatsAppAgentUrl] = useState('');
+
+  const stopPolling = () => {
+    if (statusPollRef.current) { clearInterval(statusPollRef.current); statusPollRef.current = null; }
+    if (qrPollRef.current) { clearInterval(qrPollRef.current); qrPollRef.current = null; }
+  };
 
   const startWhatsAppPairing = async () => {
     setWhatsAppLoading(true);
@@ -176,55 +182,57 @@ export default function ConnectApps() {
     setWhatsAppQr('');
     setWhatsAppPaired(false);
     setWhatsAppAgentUrl('');
-
-    // Stop any existing status polling
-    if (statusPollRef.current) {
-      clearInterval(statusPollRef.current);
-      statusPollRef.current = null;
-    }
+    stopPolling();
 
     try {
-      const data = await api.post<{ qrData: string; agentUrl: string }>('/channels/whatsapp/pair');
-      const qr = data.qrData || '';
-      const agentUrl = data.agentUrl || '';
-      setWhatsAppAgentUrl(agentUrl);
+      const data = await api.post<{ agentUrl: string; alreadyLinked: boolean }>('/channels/whatsapp/pair');
+      setWhatsAppAgentUrl(data.agentUrl || '');
 
-      // Already linked
-      if (qr === '__ALREADY_LINKED__') {
+      if (data.alreadyLinked) {
         setWhatsAppPaired(true);
+        setWhatsAppLoading(false);
         await fetchChannels();
         return;
       }
 
-      setWhatsAppQr(qr);
+      // Poll container logs for the QR code
+      const pollQr = async () => {
+        try {
+          const qrData = await api.get<{ status: string; qrText?: string }>('/channels/whatsapp/qr');
+          if (qrData.status === 'paired') {
+            setWhatsAppPaired(true);
+            setWhatsAppQr('');
+            setWhatsAppLoading(false);
+            stopPolling();
+            await fetchChannels();
+            return;
+          }
+          if (qrData.status === 'qr' && qrData.qrText) {
+            setWhatsAppQr(qrData.qrText);
+            setWhatsAppLoading(false);
+          }
+        } catch {
+          // container may still be starting — keep polling
+        }
+      };
 
-      if (!qr && agentUrl) {
-        setWhatsAppError(`QR code not found in logs. You can pair WhatsApp directly from your Agent Dashboard.`);
-      } else if (!qr) {
-        setWhatsAppError('Could not generate QR code. Ensure your agent is online, then try again.');
-        return;
-      }
+      setTimeout(pollQr, 5000);
+      qrPollRef.current = setInterval(pollQr, 4000);
 
-      // Start polling for pairing status
       statusPollRef.current = setInterval(async () => {
         try {
           const status = await api.get<{ paired: boolean }>('/channels/whatsapp/status');
           if (status.paired) {
             setWhatsAppPaired(true);
             setWhatsAppQr('');
-            if (statusPollRef.current) {
-              clearInterval(statusPollRef.current);
-              statusPollRef.current = null;
-            }
+            setWhatsAppLoading(false);
+            stopPolling();
             await fetchChannels();
           }
-        } catch {
-          // ignore polling errors
-        }
-      }, 5000);
+        } catch {}
+      }, 6000);
     } catch (err: any) {
       setWhatsAppError(err?.message || 'Could not start WhatsApp pairing. Open Agent first, wait until online, then retry.');
-    } finally {
       setWhatsAppLoading(false);
     }
   };
@@ -234,29 +242,8 @@ export default function ConnectApps() {
     setWhatsAppQr('');
     setWhatsAppError('');
     setWhatsAppPaired(false);
-    if (statusPollRef.current) {
-      clearInterval(statusPollRef.current);
-      statusPollRef.current = null;
-    }
+    stopPolling();
   };
-
-  // ── Extract QR block from output ──
-
-  function extractQrBlock(raw: string): string {
-    const lines = raw.split('\n');
-    let firstQr = -1;
-    let lastQr = -1;
-    for (let i = 0; i < lines.length; i++) {
-      if (lines[i].includes('\u2588') || lines[i].includes('\u2584') || lines[i].includes('\u2580')) {
-        if (firstQr === -1) firstQr = i;
-        lastQr = i;
-      }
-    }
-    if (firstQr >= 0 && lastQr > firstQr) {
-      return lines.slice(firstQr, lastQr + 1).join('\n');
-    }
-    return raw;
-  }
 
   // ── Disconnect ──
 
@@ -498,13 +485,17 @@ export default function ConnectApps() {
               </>
             ) : whatsAppQr ? (
               <>
-                <div className="bg-white p-3 rounded-lg mb-4">
-                  <pre
-                    className="text-[5px] sm:text-[6px] md:text-[7px] leading-[1.05] text-black whitespace-pre font-mono select-none"
-                    style={{ letterSpacing: '-0.5px' }}
-                  >
-                    {extractQrBlock(whatsAppQr)}
-                  </pre>
+                <div className="bg-white p-4 rounded-xl mb-4">
+                  {!whatsAppQr.includes('\n') && whatsAppQr.length > 20 ? (
+                    <QRCodeSVG value={whatsAppQr} size={260} level="M" bgColor="#ffffff" fgColor="#000000" />
+                  ) : (
+                    <pre
+                      className="text-[5px] sm:text-[6px] md:text-[7px] leading-[1.05] text-black whitespace-pre font-mono select-none"
+                      style={{ letterSpacing: '-0.5px' }}
+                    >
+                      {whatsAppQr}
+                    </pre>
+                  )}
                 </div>
                 <p className="text-[13px] text-white/50 text-center">
                   Scan this QR code with your phone&apos;s WhatsApp

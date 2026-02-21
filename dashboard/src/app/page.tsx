@@ -21,6 +21,8 @@ import {
   BrainCircuit,
 } from 'lucide-react';
 import { GlowingEffect } from '@/components/ui/glowing-effect';
+import { LampContainer } from '@/components/ui/lamp';
+import { motion } from 'framer-motion';
 
 const features = [
   {
@@ -150,40 +152,17 @@ export default function LandingPage() {
 
 function HeroSection() {
   return (
-    <section className="relative mx-auto w-full max-w-5xl">
-      {/* Radial glow */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 isolate hidden overflow-hidden lg:block"
+    <LampContainer>
+      <motion.div
+        initial={{ opacity: 0.5, y: 100 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.3, duration: 0.8, ease: 'easeInOut' }}
+        className="flex flex-col items-center gap-5"
       >
-        <div className="absolute inset-0 -top-14 isolate -z-10 bg-[radial-gradient(35%_80%_at_49%_0%,rgba(250,250,250,0.08),transparent)]" />
-      </div>
-
-      {/* Vertical border lines */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 mx-auto hidden min-h-screen w-full max-w-5xl lg:block"
-      >
-        <div className="absolute inset-y-0 left-0 z-10 h-full w-px bg-foreground/15 [mask-image:linear-gradient(to_bottom,transparent,black_80%,transparent)]" />
-        <div className="absolute inset-y-0 right-0 z-10 h-full w-px bg-foreground/15 [mask-image:linear-gradient(to_bottom,transparent,black_80%,transparent)]" />
-      </div>
-
-      <div className="relative flex flex-col items-center justify-center gap-5 px-4 pt-32 pb-30">
-        {/* Inner decorative lines */}
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 -z-1 size-full overflow-hidden"
-        >
-          <div className="absolute inset-y-0 left-4 w-px bg-gradient-to-b from-transparent via-border to-border md:left-8" />
-          <div className="absolute inset-y-0 right-4 w-px bg-gradient-to-b from-transparent via-border to-border md:right-8" />
-          <div className="absolute inset-y-0 left-8 w-px bg-gradient-to-b from-transparent via-border/50 to-border/50 md:left-12" />
-          <div className="absolute inset-y-0 right-8 w-px bg-gradient-to-b from-transparent via-border/50 to-border/50 md:right-12" />
-        </div>
-
         <a
           className={cn(
             'group mx-auto flex w-fit items-center gap-3 rounded-full border bg-card px-3 py-1 shadow',
-            'fade-in slide-in-from-bottom-10 animate-in fill-mode-backwards transition-all delay-500 duration-500 ease-out'
+            'transition-all duration-500 ease-out'
           )}
           href="#features"
         >
@@ -193,23 +172,21 @@ function HeroSection() {
           <ArrowRight className="size-3 duration-150 ease-out group-hover:translate-x-1" />
         </a>
 
-        <h1
-          className={cn(
-            'fade-in slide-in-from-bottom-10 animate-in text-balance fill-mode-backwards text-center text-4xl font-bold tracking-tight delay-100 duration-500 ease-out md:text-5xl lg:text-6xl'
-          )}
-        >
+        <h1 className="text-balance text-center text-4xl font-bold tracking-tight md:text-5xl lg:text-6xl">
           Your Personal AI
           <br />
-          <span className="text-muted-foreground">Ready in 60 Seconds</span>
+          <span className="bg-gradient-to-br from-slate-300 to-slate-500 bg-clip-text text-transparent">
+            Ready in 60 Seconds
+          </span>
         </h1>
 
-        <p className="fade-in slide-in-from-bottom-10 mx-auto max-w-md animate-in fill-mode-backwards text-center text-base tracking-wider text-foreground/70 delay-200 duration-500 ease-out sm:text-lg md:text-xl">
+        <p className="mx-auto max-w-md text-center text-base tracking-wider text-foreground/70 sm:text-lg md:text-xl">
           The most powerful open-source AI agent,
           <br />
           hosted for you. Zero setup.
         </p>
 
-        <div className="fade-in slide-in-from-bottom-10 flex animate-in flex-row flex-wrap items-center justify-center gap-3 fill-mode-backwards pt-2 delay-300 duration-500 ease-out">
+        <div className="flex flex-row flex-wrap items-center justify-center gap-3 pt-2">
           <Link href="#pricing">
             <Button className="rounded-full" size="lg" variant="secondary">
               <PhoneCallIcon className="mr-2 size-4" />
@@ -223,8 +200,8 @@ function HeroSection() {
             </Button>
           </Link>
         </div>
-      </div>
-    </section>
+      </motion.div>
+    </LampContainer>
   );
 }
 
@@ -317,51 +294,62 @@ function PricingSection() {
 
       <div className="mt-16 grid grid-cols-1 gap-5 sm:grid-cols-3">
         {plans.map((plan) => (
-          <div
-            key={plan.name}
-            className={cn(
-              'relative flex flex-col rounded-xl border p-7 transition-all duration-300',
-              plan.popular
-                ? 'border-foreground bg-foreground/[0.03] shadow-[0_0_30px_rgba(250,250,250,0.04)]'
-                : 'border-border hover:border-foreground/20'
-            )}
-          >
-            {plan.popular && (
-              <span className="absolute -top-3 left-6 rounded-full bg-foreground px-3 py-0.5 text-[11px] font-semibold text-background">
-                Most Popular
-              </span>
-            )}
-            <h3 className="text-lg font-semibold">{plan.name}</h3>
-            <p className="mt-3">
-              <span className="text-4xl font-bold tracking-tight">
-                ${plan.price}
-              </span>
-              <span className="text-sm text-muted-foreground">/month</span>
-            </p>
-            <p className="mt-1 text-[13px] text-muted-foreground">
-              {plan.tokens} tokens included
-            </p>
-            <ul className="mt-6 flex-1 space-y-3">
-              {plan.features.map((f) => (
-                <li
-                  key={f}
-                  className="flex items-start gap-2.5 text-sm text-foreground/70"
-                >
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                  <span>{f}</span>
-                </li>
-              ))}
-            </ul>
-            <Link href="/auth/signup" className="mt-8">
-              <Button
-                variant={plan.popular ? 'default' : 'outline'}
-                className="w-full"
-                size="lg"
+          <div key={plan.name} className="min-h-[20rem]">
+            <div className="relative h-full rounded-[1.25rem] border-[0.75px] border-border p-2 md:rounded-[1.5rem] md:p-3">
+              <GlowingEffect
+                spread={40}
+                glow={true}
+                disabled={false}
+                proximity={64}
+                inactiveZone={0.01}
+                borderWidth={3}
+              />
+              <div
+                className={cn(
+                  'relative flex h-full flex-col rounded-xl border-[0.75px] p-7 bg-background',
+                  plan.popular
+                    ? 'border-foreground bg-foreground/[0.03] shadow-[0_0_30px_rgba(250,250,250,0.04)]'
+                    : 'border-border'
+                )}
               >
-                Get Started
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
+                {plan.popular && (
+                  <span className="absolute -top-3 left-6 rounded-full bg-foreground px-3 py-0.5 text-[11px] font-semibold text-background">
+                    Most Popular
+                  </span>
+                )}
+                <h3 className="text-lg font-semibold">{plan.name}</h3>
+                <p className="mt-3">
+                  <span className="text-4xl font-bold tracking-tight">
+                    ${plan.price}
+                  </span>
+                  <span className="text-sm text-muted-foreground">/month</span>
+                </p>
+                <p className="mt-1 text-[13px] text-muted-foreground">
+                  {plan.tokens} tokens included
+                </p>
+                <ul className="mt-6 flex-1 space-y-3">
+                  {plan.features.map((f) => (
+                    <li
+                      key={f}
+                      className="flex items-start gap-2.5 text-sm text-foreground/70"
+                    >
+                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                      <span>{f}</span>
+                    </li>
+                  ))}
+                </ul>
+                <Link href="/auth/signup" className="mt-8">
+                  <Button
+                    variant={plan.popular ? 'default' : 'outline'}
+                    className="w-full"
+                    size="lg"
+                  >
+                    Get Started
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </Link>
+              </div>
+            </div>
           </div>
         ))}
       </div>
@@ -372,28 +360,38 @@ function PricingSection() {
 function CTASection() {
   return (
     <section id="about" className="mx-auto max-w-3xl px-6 py-24">
-      <div className="relative overflow-hidden rounded-2xl border border-border bg-card p-12 text-center">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(250,250,250,0.04),transparent_70%)]"
+      <div className="relative rounded-[1.25rem] border-[0.75px] border-border p-2 md:rounded-[1.5rem] md:p-3">
+        <GlowingEffect
+          spread={40}
+          glow={true}
+          disabled={false}
+          proximity={64}
+          inactiveZone={0.01}
+          borderWidth={3}
         />
-        <div className="relative">
-          <div className="mx-auto mb-6 flex h-12 w-12 items-center justify-center rounded-xl bg-secondary">
-            <Bot className="h-6 w-6" />
+        <div className="relative overflow-hidden rounded-xl border-[0.75px] border-border bg-card p-12 text-center">
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(250,250,250,0.04),transparent_70%)]"
+          />
+          <div className="relative">
+            <div className="mx-auto mb-6 flex h-12 w-12 items-center justify-center rounded-xl bg-secondary">
+              <Bot className="h-6 w-6" />
+            </div>
+            <h2 className="text-2xl font-bold tracking-tight md:text-3xl">
+              Ready to meet your AI agent?
+            </h2>
+            <p className="mt-3 text-base text-muted-foreground">
+              From payment to working agent in under 60 seconds. Open-source and
+              self-hostable.
+            </p>
+            <Link href="/auth/signup">
+              <Button size="lg" className="mt-8 rounded-full">
+                Get Started Now
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </Link>
           </div>
-          <h2 className="text-2xl font-bold tracking-tight md:text-3xl">
-            Ready to meet your AI agent?
-          </h2>
-          <p className="mt-3 text-base text-muted-foreground">
-            From payment to working agent in under 60 seconds. Open-source and
-            self-hostable.
-          </p>
-          <Link href="/auth/signup">
-            <Button size="lg" className="mt-8 rounded-full">
-              Get Started Now
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
-          </Link>
         </div>
       </div>
     </section>

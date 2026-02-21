@@ -5,6 +5,7 @@ import {
   connectDiscord, disconnectDiscord,
   connectSlack, disconnectSlack,
   initiateWhatsAppPairing, checkWhatsAppStatus, disconnectWhatsApp,
+  getWhatsAppQr,
   getChannelStatuses, getMessageCounts,
 } from '../services/messaging';
 
@@ -92,6 +93,15 @@ router.post('/slack/disconnect', async (req: AuthRequest, res: Response, next: N
 router.post('/whatsapp/pair', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const result = await initiateWhatsAppPairing(req.userId!);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/whatsapp/qr', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const result = await getWhatsAppQr(req.userId!);
     res.json(result);
   } catch (err) {
     next(err);

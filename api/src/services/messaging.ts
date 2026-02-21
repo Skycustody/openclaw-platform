@@ -241,17 +241,68 @@ export async function disconnectSlack(userId: string): Promise<void> {
   );
 }
 
-// ── WhatsApp (QR code pairing via gateway restart) ──
+// ── WhatsApp ──
 
-export async function initiateWhatsAppPairing(userId: string): Promise<{ qrData: string; agentUrl: string }> {
+/**
+ * Extract QR data from container logs.
+ * Tries (in order):
+ *  1. Raw Baileys pairing string (2@…) — renderable client-side with qrcode.react
+ *  2. Content between ---QR CODE--- markers
+ *  3. Unicode block-art QR (≥15 contiguous lines, skipping short ASCII banners)
+ */
+function extractQrFromLogs(raw: string): string | null {
+  const cleaned = raw.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '');
+  const lines = cleaned.split('\n');
+
+  // 1. Raw pairing string (search newest → oldest)
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const m = lines[i].match(/(2@[A-Za-z0-9+/=,._-]{20,})/);
+    if (m) return m[1];
+  }
+
+  // 2. Between ---QR CODE--- markers
+  const mm = cleaned.match(/---\s*QR\s*CODE\s*---\r?\n([\s\S]*?)\r?\n[\s\S]*?---/i);
+  if (mm) {
+    const block = mm[1].trim();
+    if (block.length > 10) return block;
+  }
+
+  // 3. Unicode block art — collect contiguous blocks, pick last one ≥ 15 lines
+  //    (the OPENCLAW banner is shorter and narrower than an actual QR code)
+  const qrRe = /[\u2580\u2584\u2588]/;
+  const blocks: string[][] = [];
+  let cur: string[] = [];
+  let gap = 0;
+
+  for (const line of lines) {
+    const t = line.trimEnd();
+    if (qrRe.test(t) && t.length > 20) {
+      cur.push(t);
+      gap = 0;
+    } else if (cur.length > 0) {
+      if (++gap > 1) { blocks.push(cur); cur = []; gap = 0; }
+    }
+  }
+  if (cur.length > 0) blocks.push(cur);
+
+  for (let i = blocks.length - 1; i >= 0; i--) {
+    if (blocks[i].length >= 15) return blocks[i].join('\n');
+  }
+
+  return null;
+}
+
+/**
+ * Start WhatsApp pairing: write config, restart container.
+ * Returns immediately — the frontend polls GET /whatsapp/qr for the code.
+ */
+export async function initiateWhatsAppPairing(userId: string): Promise<{ agentUrl: string; alreadyLinked: boolean }> {
   const { serverIp, containerName, user } = await getUserContainer(userId);
 
   const domain = process.env.DOMAIN || 'yourdomain.com';
   const subdomain = user.subdomain || '';
-  const agentBase = subdomain ? `https://${subdomain}.${domain}` : '';
+  const agentUrl = subdomain ? `https://${subdomain}.${domain}` : '';
 
-  // Use Node.js inside the container to add WhatsApp to the config
-  // This is reliable regardless of which openclaw CLI version is installed
   const addWhatsAppScript = `
     const fs = require("fs");
     const p = "/root/.openclaw/openclaw.json";
@@ -271,84 +322,73 @@ export async function initiateWhatsAppPairing(userId: string): Promise<{ qrData:
     serverIp,
     `docker exec ${containerName} node -e '${addWhatsAppScript.replace(/'/g, "'\\''")}'`
   );
-
   console.log(`[whatsapp] Config update: ${addResult.stdout}`);
 
-  // Restart the container so the gateway connects WhatsApp and generates a QR
+  // Check if already paired
+  const credsCheck = await sshExec(
+    serverIp,
+    `docker exec ${containerName} sh -c 'ls /root/.openclaw/credentials/whatsapp/*/creds.json 2>/dev/null || ls /data/credentials/whatsapp/*/creds.json 2>/dev/null || echo NONE'`
+  ).catch(() => null);
+
+  if (credsCheck && !credsCheck.stdout.includes('NONE')) {
+    await db.query(
+      `UPDATE user_channels SET whatsapp_connected = true, updated_at = NOW() WHERE user_id = $1`,
+      [userId]
+    );
+    return { agentUrl, alreadyLinked: true };
+  }
+
+  // Restart so the gateway starts WhatsApp and generates a QR
   await sshExec(serverIp, `docker restart ${containerName}`);
 
-  // Wait for gateway to boot and output the QR code to logs
-  let qrOutput = '';
-  for (let attempt = 0; attempt < 10; attempt++) {
-    await new Promise(r => setTimeout(r, 3000));
-
-    const logsResult = await sshExec(
-      serverIp,
-      `docker logs --tail 80 ${containerName} 2>&1`
-    ).catch(() => null);
-
-    const raw = (logsResult?.stdout || '') + '\n' + (logsResult?.stderr || '');
-    // Strip ANSI escape codes
-    const cleaned = raw.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '');
-
-    // Look for QR code block characters in the logs
-    const lines = cleaned.split('\n');
-    let firstQr = -1;
-    let lastQr = -1;
-    for (let i = 0; i < lines.length; i++) {
-      if (lines[i].includes('\u2588') || lines[i].includes('\u2584') || lines[i].includes('\u2580')) {
-        if (firstQr === -1) firstQr = i;
-        lastQr = i;
-      }
-    }
-
-    if (firstQr >= 0 && lastQr > firstQr) {
-      qrOutput = lines.slice(firstQr, lastQr + 1).join('\n');
-      break;
-    }
-
-    // Check if WhatsApp is already linked (no QR needed)
-    if (cleaned.toLowerCase().includes('whatsapp') &&
-        (cleaned.toLowerCase().includes('connected') || cleaned.toLowerCase().includes('linked'))) {
-      await db.query(
-        `UPDATE user_channels SET whatsapp_connected = true, updated_at = NOW() WHERE user_id = $1`,
-        [userId]
-      );
-      return { qrData: '__ALREADY_LINKED__', agentUrl: agentBase };
-    }
-  }
-
-  if (!qrOutput && agentBase) {
-    // QR not found in logs — direct user to their agent's Control UI
-    return { qrData: '', agentUrl: agentBase };
-  }
-
-  if (!qrOutput) {
-    throw Object.assign(
-      new Error('Could not generate WhatsApp QR code. Make sure your agent is online, then try again.'),
-      { statusCode: 502 }
-    );
-  }
-
-  return { qrData: qrOutput, agentUrl: agentBase };
+  return { agentUrl, alreadyLinked: false };
 }
 
-export async function checkWhatsAppStatus(userId: string): Promise<{ paired: boolean; detail: string }> {
+/**
+ * Poll container logs for the WhatsApp QR code.
+ * Called by GET /channels/whatsapp/qr from the frontend.
+ */
+export async function getWhatsAppQr(userId: string): Promise<{
+  status: 'waiting' | 'qr' | 'paired';
+  qrText?: string;
+}> {
+  const { serverIp, containerName } = await getUserContainer(userId);
+
+  // Already paired?
+  const credsCheck = await sshExec(
+    serverIp,
+    `docker exec ${containerName} sh -c 'ls /root/.openclaw/credentials/whatsapp/*/creds.json 2>/dev/null || ls /data/credentials/whatsapp/*/creds.json 2>/dev/null || echo NONE'`
+  ).catch(() => null);
+
+  if (credsCheck && !credsCheck.stdout.includes('NONE')) {
+    await db.query(
+      `UPDATE user_channels SET whatsapp_connected = true, updated_at = NOW() WHERE user_id = $1`,
+      [userId]
+    );
+    return { status: 'paired' };
+  }
+
+  const logs = await sshExec(
+    serverIp,
+    `docker logs --tail 300 ${containerName} 2>&1`
+  ).catch(() => null);
+
+  if (!logs?.stdout) return { status: 'waiting' };
+
+  const qrText = extractQrFromLogs(logs.stdout);
+  return qrText ? { status: 'qr', qrText } : { status: 'waiting' };
+}
+
+export async function checkWhatsAppStatus(userId: string): Promise<{ paired: boolean }> {
   try {
     const { serverIp, containerName } = await getUserContainer(userId);
 
-    // Check container logs for WhatsApp connection status
-    const logsResult = await sshExec(
+    const credsCheck = await sshExec(
       serverIp,
-      `docker logs --tail 40 ${containerName} 2>&1`
+      `docker exec ${containerName} sh -c 'ls /root/.openclaw/credentials/whatsapp/*/creds.json 2>/dev/null || ls /data/credentials/whatsapp/*/creds.json 2>/dev/null || echo NONE'`
     ).catch(() => null);
 
-    const output = (logsResult?.stdout || '').toLowerCase() + (logsResult?.stderr || '').toLowerCase();
-    const isPaired = output.includes('whatsapp') && (
-      output.includes('connected') || output.includes('linked') ||
-      output.includes('authenticated') || output.includes('active') ||
-      output.includes('ready')
-    );
+    const isPaired = !!credsCheck && !credsCheck.stdout.includes('NONE');
 
     if (isPaired) {
       await db.query(
@@ -357,9 +397,9 @@ export async function checkWhatsAppStatus(userId: string): Promise<{ paired: boo
       );
     }
 
-    return { paired: isPaired, detail: logsResult?.stdout || '' };
-  } catch (err: any) {
-    return { paired: false, detail: err?.message || 'Could not check status' };
+    return { paired: isPaired };
+  } catch {
+    return { paired: false };
   }
 }
 
