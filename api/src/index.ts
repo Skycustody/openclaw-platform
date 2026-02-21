@@ -45,6 +45,7 @@ import templateRoutes from './routes/templates';
 import webhookRoutes from './routes/webhooks';
 import adminRoutes from './routes/admin';
 import proxyRoutes from './routes/proxy';
+import autoRoutes from './routes/auto';
 
 import { startScheduler } from './jobs/scheduler';
 import redis from './lib/redis';
@@ -108,6 +109,7 @@ app.use('/templates', templateRoutes);
 app.use('/webhooks', webhookRoutes);
 app.use('/admin', adminRoutes);
 app.use('/proxy', proxyRoutes);
+app.use('/auto', autoRoutes);
 
 // Health check
 app.get('/health', (_req, res) => {

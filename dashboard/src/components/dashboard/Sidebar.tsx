@@ -19,7 +19,7 @@ const navItems = [
   { href: '/dashboard/cron', label: 'Schedule', icon: Clock },
   { href: '/dashboard/browser', label: 'Browser', icon: Globe },
   { href: '/dashboard/tokens', label: 'Tokens', icon: Coins },
-  { href: '/dashboard/router', label: 'Brain', icon: Cpu },
+  { href: '/dashboard/router', label: 'Auto', icon: Cpu },
   { href: '/dashboard/personality', label: 'Persona', icon: User },
   { href: '/dashboard/protection', label: 'Shield', icon: Shield },
   { href: '/dashboard/conversations', label: 'History', icon: MessageSquare },

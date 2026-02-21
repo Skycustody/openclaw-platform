@@ -3,6 +3,7 @@ import https from 'https';
 import { URL } from 'url';
 import db from '../lib/db';
 import { checkBalance, trackUsage } from '../services/tokenTracker';
+import { classifyTask, RETAIL_PRICES } from '../services/smartRouter';
 
 const router = Router();
 
@@ -29,6 +30,23 @@ const MODEL_COST_PER_1K: Record<string, number> = {
   'claude-sonnet-4-6': 3,
   'claude-opus-4-6': 15,
 };
+
+/**
+ * Check if the request is using the user's own API key (not a platform proxy key).
+ * If so, we pass it straight through -- no token checks, no balance deductions.
+ * Users who bring their own keys are responsible for their own usage.
+ */
+function isUserOwnKey(req: Request): boolean {
+  const auth = req.headers.authorization;
+  if (auth?.startsWith('Bearer ')) {
+    const key = auth.slice(7).trim();
+    // Real OpenAI keys start with sk-, real Anthropic keys start with sk-ant-
+    if (key.startsWith('sk-') && !key.startsWith('val_sk_')) return true;
+  }
+  const xApiKey = req.headers['x-api-key'];
+  if (typeof xApiKey === 'string' && xApiKey.startsWith('sk-ant-')) return true;
+  return false;
+}
 
 /**
  * Extract the proxy key from the request.
@@ -111,6 +129,28 @@ function extractModel(body: any): string | null {
 }
 
 /**
+ * Extract the user's message content from the request body for classification.
+ * Works with both OpenAI (messages[].content) and Anthropic (messages[].content) formats.
+ */
+function extractUserMessage(body: any): string | null {
+  if (!body || typeof body !== 'object') return null;
+  const messages = body.messages;
+  if (!Array.isArray(messages) || messages.length === 0) return null;
+  // Get the last user message
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === 'user') {
+      const content = messages[i].content;
+      if (typeof content === 'string') return content;
+      if (Array.isArray(content)) {
+        const textPart = content.find((p: any) => p.type === 'text');
+        return textPart?.text || null;
+      }
+    }
+  }
+  return null;
+}
+
+/**
  * Estimate the max_tokens for this request to give a rough cost check.
  */
 function extractMaxTokens(body: any): number {
@@ -185,12 +225,51 @@ async function preFlightCheck(
     };
   }
 
-  // 3. Cost estimate for expensive models
+  // 3. Cost estimate — use the smart router's small LLM to classify the task
+  //    and estimate tokens, then check against the user's balance
   const model = extractModel(body);
   const maxTokens = extractMaxTokens(body);
+
+  // Extract the user's message content for classification
+  const userMessage = extractUserMessage(body);
+
+  if (userMessage && userMessage.length > 10) {
+    try {
+      const classification = await classifyTask(userMessage, false);
+      const estimatedTokens = classification.estimatedTokens || maxTokens;
+
+      // Use retail prices if available for the model, otherwise fall back to cost map
+      const retailRate = model && RETAIL_PRICES[model]
+        ? RETAIL_PRICES[model] / 1_000_000
+        : (model && MODEL_COST_PER_1K[model] ? MODEL_COST_PER_1K[model] / 1000 : 0);
+
+      if (retailRate > 0) {
+        const estimatedCost = Math.ceil(estimatedTokens * retailRate * 1000);
+        if (estimatedCost > user.balance) {
+          return {
+            status: 402,
+            body: {
+              error: {
+                message: `This ${classification.complexity} task is estimated to use ~${estimatedCost.toLocaleString()} tokens (model: ${model || 'auto'}, ~${estimatedTokens.toLocaleString()} tokens), but you only have ${user.balance.toLocaleString()} tokens. Try a simpler prompt, use a cheaper model, or purchase more tokens.`,
+                type: 'insufficient_tokens',
+                code: 'ESTIMATED_COST_TOO_HIGH',
+                balance: user.balance,
+                estimated_cost: estimatedCost,
+                complexity: classification.complexity,
+                model,
+              },
+            },
+          };
+        }
+      }
+    } catch {
+      // Classification failed — fall back to simple max_tokens check
+    }
+  }
+
+  // Fallback: simple max_tokens * model cost check when classification isn't available
   if (model && MODEL_COST_PER_1K[model]) {
     const costPer1K = MODEL_COST_PER_1K[model];
-    // rough estimate: max_tokens * cost factor
     const estimatedCost = Math.ceil(maxTokens * costPer1K);
     if (estimatedCost > user.balance) {
       return {
@@ -293,7 +372,7 @@ function forwardRequest(
       const responseText = Buffer.concat(chunks).toString('utf8');
       const tokensUsed = extractTokenUsage(responseText, provider);
 
-      if (tokensUsed > 0) {
+      if (tokensUsed > 0 && userId !== 'self-key') {
         trackUsage(userId, model, tokensUsed).catch((err) =>
           console.error(`[proxy] Token tracking failed for ${userId}:`, err.message)
         );
@@ -382,6 +461,12 @@ function extractTokenUsage(responseText: string, provider: string): number {
 // ── OpenAI proxy: /proxy/openai/* ──
 
 router.all('/openai/*', async (req: Request, res: Response) => {
+  // If user is using their own API key, pass through directly -- no token checks
+  if (isUserOwnKey(req)) {
+    const ownKey = req.headers.authorization!.slice(7).trim();
+    return forwardRequest(req, res, OPENAI_ORIGIN, ownKey, 'openai', 'self-key', 'self');
+  }
+
   const proxyKey = extractProxyKey(req);
   if (!proxyKey) {
     return res.status(401).json({ error: { message: 'Missing or invalid API key', code: 'INVALID_KEY' } });
@@ -408,6 +493,13 @@ router.all('/openai/*', async (req: Request, res: Response) => {
 // ── Anthropic proxy: /proxy/anthropic/* ──
 
 router.all('/anthropic/*', async (req: Request, res: Response) => {
+  // If user is using their own API key, pass through directly -- no token checks
+  if (isUserOwnKey(req)) {
+    const ownKey = (req.headers['x-api-key'] as string) ||
+      req.headers.authorization!.slice(7).trim();
+    return forwardRequest(req, res, ANTHROPIC_ORIGIN, ownKey, 'anthropic', 'self-key', 'self');
+  }
+
   const proxyKey = extractProxyKey(req);
   if (!proxyKey) {
     return res.status(401).json({ error: { message: 'Missing or invalid API key', code: 'INVALID_KEY' } });
