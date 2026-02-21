@@ -59,7 +59,7 @@ const fragmentShader = `
     
     float scaleInfluence = max(mouseInfluence * 0.5, circleAnimatedMask * 0.3);
 
-    float dotSize = min(pow(circleMaskCenter, 2.0) * 0.3, 0.3);
+    float dotSize = min(pow(circleMaskCenter, 2.0) * 0.2, 0.18);
 
     float sdfDot = sdfCircle(gridUv, dotSize * (1.0 + scaleInfluence * 0.5));
 
@@ -85,7 +85,7 @@ function Scene() {
   const viewport = useThree((s: any) => s.viewport)
 
   const rotation = 0
-  const gridSize = 100
+  const gridSize = 160
 
   const [trail, onMove] = useTrailTexture({
     size: 512,
@@ -102,12 +102,12 @@ function Scene() {
       uniforms: {
         time: { value: 0 },
         resolution: { value: new THREE.Vector2(1, 1) },
-        dotColor: { value: new THREE.Color('#FFFFFF') },
+        dotColor: { value: new THREE.Color('#3a3a3a') },
         bgColor: { value: new THREE.Color('#09090b') },
         mouseTrail: { value: null },
         rotation: { value: rotation },
         gridSize: { value: gridSize },
-        dotOpacity: { value: 0.08 },
+        dotOpacity: { value: 0.045 },
       },
       vertexShader,
       fragmentShader,
@@ -149,8 +149,8 @@ export const DotScreenShader = () => {
       <div
         className="absolute inset-0 h-full w-full"
         style={{
-          background: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.03) 1px, transparent 1px)',
-          backgroundSize: '24px 24px',
+          background: 'radial-gradient(circle at 50% 50%, rgba(60,60,60,0.5) 0.5px, transparent 0.5px)',
+          backgroundSize: '18px 18px',
           backgroundColor: '#09090b',
         }}
       />
@@ -166,8 +166,8 @@ export const DotScreenShader = () => {
       <div
         className="absolute inset-0 h-full w-full"
         style={{
-          background: 'radial-gradient(circle at center, rgba(255,255,255,0.08) 1px, transparent 1px)',
-          backgroundSize: '28px 28px',
+          background: 'radial-gradient(circle at center, rgba(50,50,50,0.6) 0.5px, transparent 0.5px)',
+          backgroundSize: '18px 18px',
           backgroundColor: '#09090b',
         }}
       />
