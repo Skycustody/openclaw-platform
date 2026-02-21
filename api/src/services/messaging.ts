@@ -396,7 +396,7 @@ export async function initiateWhatsAppPairing(userId: string): Promise<{
  * Reads from the host-mounted volume + docker logs for maximum coverage.
  */
 export async function getWhatsAppQr(userId: string): Promise<{
-  status: 'waiting' | 'qr' | 'paired' | 'error';
+  status: 'waiting' | 'qr' | 'paired' | 'finalizing' | 'error';
   qrText?: string;
   message?: string;
 }> {
@@ -413,6 +413,32 @@ export async function getWhatsAppQr(userId: string): Promise<{
 
   // Check credentials on host filesystem
   if (await hasWhatsAppCredentials(serverIp, userId)) {
+    // Credentials exist. Restart container so the gateway fully initializes
+    // the WhatsApp connection (this completes the handshake on the phone side
+    // and stops the phone from showing "logging in" forever).
+    const needsRestart = await sshExec(
+      serverIp,
+      `cat ${INSTANCE_DIR}/${userId}/whatsapp-qr.log 2>/dev/null`
+    ).catch(() => null);
+
+    // If qr log still exists, this is the first time we're seeing paired status
+    // after a fresh scan — restart the container to finalize the connection.
+    if (needsRestart?.stdout && needsRestart.stdout.trim().length > 0) {
+      console.log(`[whatsapp] Credentials found for ${userId}, restarting container to finalize connection`);
+
+      // Clear the QR log so we don't restart again on next poll
+      await sshExec(serverIp, `rm -f ${INSTANCE_DIR}/${userId}/whatsapp-qr.log`).catch(() => {});
+
+      // Restart in background so this poll returns quickly
+      void sshExec(serverIp, `docker restart ${containerName}`).catch(() => {});
+
+      await db.query(
+        `UPDATE user_channels SET whatsapp_connected = true, updated_at = NOW() WHERE user_id = $1`,
+        [userId]
+      );
+      return { status: 'finalizing', message: 'Finalizing connection...' };
+    }
+
     await db.query(
       `UPDATE user_channels SET whatsapp_connected = true, updated_at = NOW() WHERE user_id = $1`,
       [userId]
@@ -487,15 +513,67 @@ export async function disconnectWhatsApp(userId: string): Promise<void> {
   try {
     const { serverIp, containerName } = await getUserContainer(userId);
 
-    // Logout from WhatsApp first so the linked device disappears from the user's phone.
-    // This tells Baileys to send a proper disconnect to WhatsApp servers.
-    await sshExec(
-      serverIp,
-      `docker exec ${containerName} sh -c 'openclaw channels logout --channel whatsapp 2>/dev/null || true'`
-    ).catch(() => {});
+    // Use Baileys inside the container to send a proper logout to WhatsApp servers.
+    // This removes the linked device from the user's phone immediately.
+    // The script finds the Baileys module (bundled inside openclaw), loads creds,
+    // connects, calls sock.logout(), then exits.
+    const logoutScript = `
+      const fs = require("fs");
+      const path = require("path");
+      const credsDir = "/root/.openclaw/credentials/whatsapp";
+      if (!fs.existsSync(credsDir)) { console.log("NO_CREDS"); process.exit(0); }
+      const sessions = fs.readdirSync(credsDir).filter(d => fs.existsSync(path.join(credsDir, d, "creds.json")));
+      if (sessions.length === 0) { console.log("NO_CREDS"); process.exit(0); }
 
-    // Give it a moment for the logout signal to reach WhatsApp servers
-    await new Promise(r => setTimeout(r, 3000));
+      // Find Baileys — it's a dependency of openclaw
+      let baileys;
+      const searchPaths = [
+        "/usr/local/lib/node_modules/openclaw/node_modules/@whiskeysockets/baileys",
+        "/usr/local/lib/node_modules/@whiskeysockets/baileys",
+        "/usr/lib/node_modules/openclaw/node_modules/@whiskeysockets/baileys",
+      ];
+      for (const p of searchPaths) { try { baileys = require(p); break; } catch {} }
+      if (!baileys) {
+        try { baileys = require("@whiskeysockets/baileys"); } catch {}
+      }
+      if (!baileys) { console.log("NO_BAILEYS"); process.exit(0); }
+
+      const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = baileys;
+
+      (async () => {
+        for (const session of sessions) {
+          try {
+            const sessionPath = path.join(credsDir, session);
+            const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
+            const sock = makeWASocket({ auth: state, printQRInTerminal: false });
+            sock.ev.on("creds.update", saveCreds);
+            await new Promise(resolve => {
+              sock.ev.on("connection.update", async (update) => {
+                if (update.connection === "open") {
+                  try { await sock.logout(); } catch {}
+                  console.log("LOGGED_OUT");
+                  resolve(undefined);
+                } else if (update.connection === "close") {
+                  console.log("CLOSE_BEFORE_LOGOUT");
+                  resolve(undefined);
+                }
+              });
+              setTimeout(() => { console.log("TIMEOUT"); resolve(undefined); }, 15000);
+            });
+            try { sock.end(undefined); } catch {}
+          } catch (e) { console.log("ERR:" + e.message); }
+        }
+        process.exit(0);
+      })();
+    `.replace(/\n/g, ' ');
+
+    const logoutResult = await sshExec(
+      serverIp,
+      `docker exec ${containerName} node -e '${logoutScript.replace(/'/g, "'\\''")}'`,
+      1 // single attempt, 30s timeout is fine
+    ).catch(() => null);
+
+    console.log(`[whatsapp] Logout result for ${userId}: ${logoutResult?.stdout || 'no output'}`);
 
     // Remove WhatsApp from config and clear credentials via host filesystem
     const config = await readContainerConfig(serverIp, userId);
@@ -509,7 +587,19 @@ export async function disconnectWhatsApp(userId: string): Promise<void> {
 
     await sshExec(serverIp, `docker restart ${containerName}`);
   } catch {
-    // agent might not be running — still update DB
+    // agent might not be running — still clean up what we can
+    try {
+      const user = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [userId]);
+      if (user?.server_id) {
+        const server = await db.getOne<any>('SELECT ip FROM servers WHERE id = $1', [user.server_id]);
+        if (server) {
+          await sshExec(
+            server.ip,
+            `rm -rf ${INSTANCE_DIR}/${userId}/credentials/whatsapp ${INSTANCE_DIR}/${userId}/whatsapp-qr.log`
+          ).catch(() => {});
+        }
+      }
+    } catch {}
   }
 
   await db.query(

@@ -218,6 +218,13 @@ export default function ConnectApps() {
         try {
           const qrData = await api.get<{ status: string; qrText?: string; message?: string }>('/channels/whatsapp/qr');
 
+          if (qrData.status === 'finalizing') {
+            setWhatsAppQr('');
+            setWhatsAppLoading(true);
+            setWhatsAppStatus('Finalizing connection — your phone will stop showing "logging in" shortly...');
+            return;
+          }
+
           if (qrData.status === 'paired') {
             setWhatsAppPaired(true);
             setWhatsAppQr('');
@@ -570,18 +577,42 @@ export default function ConnectApps() {
 
           {/* What to do next (shown after successful pairing) */}
           {whatsAppPaired && (
-            <div className="space-y-3">
-              <p className="text-[13px] font-medium text-white/80">What to do next</p>
+            <div className="space-y-4">
+              <div className="space-y-2 rounded-lg border border-green-500/20 bg-green-500/5 p-4">
+                <p className="text-[13px] font-semibold text-green-400">How to chat with your AI agent</p>
+                <p className="text-[13px] text-white/60">
+                  When someone sends a message to your WhatsApp number, your AI agent will automatically read and reply to them.
+                  The agent uses your personality settings, skills, and custom instructions to respond.
+                </p>
+              </div>
+
+              <p className="text-[13px] font-medium text-white/80">Try it now</p>
               <div className="space-y-2">
                 {[
-                  ['1', 'Anyone who messages your WhatsApp number will get a response from your AI agent automatically.'],
-                  ['2', 'To test it, ask a friend to send you a WhatsApp message — your agent will reply.'],
-                  ['3', 'Configure how your agent responds in the Personality and Skills pages.'],
-                  ['4', 'To disconnect later, click Disconnect on the WhatsApp card. This will also remove the linked device from your phone.'],
+                  ['1', 'Open WhatsApp on another phone or ask a friend to message your number.'],
+                  ['2', 'Send any message — for example: "Hey, what can you help me with?"'],
+                  ['3', 'Your AI agent will reply within a few seconds automatically.'],
                 ].map(([num, text]) => (
                   <div key={num} className="flex items-start gap-3 p-3 rounded-lg bg-white/[0.03] border border-white/[0.04]">
                     <span className="flex h-6 w-6 items-center justify-center rounded-full bg-green-500/20 text-green-400 text-[12px] font-bold shrink-0">{num}</span>
                     <p className="text-[13px] text-white/60">{text}</p>
+                  </div>
+                ))}
+              </div>
+
+              <p className="text-[13px] font-medium text-white/80">Customize your agent</p>
+              <div className="space-y-2">
+                {[
+                  ['Personality', 'Set your agent\'s name, tone, and custom instructions so it responds the way you want.'],
+                  ['Skills', 'Enable or disable what your agent can do — web search, image generation, scheduling, and more.'],
+                  ['Disconnect', 'Click Disconnect on the WhatsApp card anytime. It will fully unlink from your phone too.'],
+                ].map(([title, text]) => (
+                  <div key={title} className="flex items-start gap-3 p-3 rounded-lg bg-white/[0.03] border border-white/[0.04]">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/[0.08] text-white/60 text-[11px] font-bold shrink-0">{(title as string)[0]}</span>
+                    <div>
+                      <p className="text-[13px] font-medium text-white/70">{title}</p>
+                      <p className="text-[12px] text-white/40 mt-0.5">{text}</p>
+                    </div>
                   </div>
                 ))}
               </div>
