@@ -307,12 +307,19 @@ function extractQrFromLogs(raw: string): string | null {
  * Start WhatsApp pairing: write config, restart container.
  * Returns immediately — the frontend polls GET /whatsapp/qr for the code.
  */
-export async function initiateWhatsAppPairing(userId: string): Promise<{ agentUrl: string; alreadyLinked: boolean }> {
+export async function initiateWhatsAppPairing(userId: string): Promise<{
+  agentUrl: string;
+  dashboardUrl: string;
+  alreadyLinked: boolean;
+}> {
   const { serverIp, containerName, user } = await getUserContainer(userId);
 
   const domain = process.env.DOMAIN || 'yourdomain.com';
   const subdomain = user.subdomain || '';
   const agentUrl = subdomain ? `https://${subdomain}.${domain}` : '';
+  const dashboardUrl = agentUrl && user.gateway_token
+    ? `${agentUrl}/?token=${encodeURIComponent(user.gateway_token)}`
+    : agentUrl;
 
   const addWhatsAppScript = `
     const fs = require("fs");
@@ -346,7 +353,7 @@ export async function initiateWhatsAppPairing(userId: string): Promise<{ agentUr
       `UPDATE user_channels SET whatsapp_connected = true, updated_at = NOW() WHERE user_id = $1`,
       [userId]
     );
-    return { agentUrl, alreadyLinked: true };
+    return { agentUrl, dashboardUrl, alreadyLinked: true };
   }
 
   // Restart so the gateway picks up the WhatsApp config
@@ -360,7 +367,7 @@ export async function initiateWhatsAppPairing(userId: string): Promise<{ agentUr
     `nohup sh -c "sleep 10 && docker exec -d ${containerName} sh -c 'openclaw channels login --channel whatsapp > /tmp/whatsapp-qr.log 2>&1'" > /dev/null 2>&1 &`
   ).catch(() => {});
 
-  return { agentUrl, alreadyLinked: false };
+  return { agentUrl, dashboardUrl, alreadyLinked: false };
 }
 
 /**

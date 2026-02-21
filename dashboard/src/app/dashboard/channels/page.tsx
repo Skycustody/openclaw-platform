@@ -170,6 +170,7 @@ export default function ConnectApps() {
   // ── WhatsApp ──
 
   const [whatsAppAgentUrl, setWhatsAppAgentUrl] = useState('');
+  const [whatsAppDashboardUrl, setWhatsAppDashboardUrl] = useState('');
 
   const stopPolling = () => {
     if (statusPollRef.current) { clearInterval(statusPollRef.current); statusPollRef.current = null; }
@@ -182,11 +183,13 @@ export default function ConnectApps() {
     setWhatsAppQr('');
     setWhatsAppPaired(false);
     setWhatsAppAgentUrl('');
+    setWhatsAppDashboardUrl('');
     stopPolling();
 
     try {
-      const data = await api.post<{ agentUrl: string; alreadyLinked: boolean }>('/channels/whatsapp/pair');
+      const data = await api.post<{ agentUrl: string; dashboardUrl: string; alreadyLinked: boolean }>('/channels/whatsapp/pair');
       setWhatsAppAgentUrl(data.agentUrl || '');
+      setWhatsAppDashboardUrl(data.dashboardUrl || data.agentUrl || '');
 
       if (data.alreadyLinked) {
         setWhatsAppPaired(true);
@@ -480,7 +483,7 @@ export default function ConnectApps() {
             ) : whatsAppLoading ? (
               <>
                 <Loader2 className="h-10 w-10 animate-spin text-white/20 mb-4" />
-                <p className="text-[14px] text-white/50">Generating QR code from your agent...</p>
+                <p className="text-[14px] text-white/50">Preparing WhatsApp pairing...</p>
                 <p className="text-[12px] text-white/25 mt-1">This may take up to 30 seconds while the agent restarts</p>
               </>
             ) : whatsAppQr ? (
@@ -509,28 +512,38 @@ export default function ConnectApps() {
               <>
                 <QrCode className="h-20 w-20 text-white/10 mb-4" />
                 <p className="text-[14px] text-white/50 text-center">
-                  {whatsAppError || 'Click below to generate a pairing QR code'}
+                  {whatsAppError || 'Waiting for QR code...'}
                 </p>
+                {whatsAppDashboardUrl && (
+                  <a
+                    href={whatsAppDashboardUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-4 inline-flex items-center gap-2 rounded-lg bg-blue-600/20 border border-blue-500/30 px-4 py-2.5 text-[13px] font-medium text-blue-400 hover:bg-blue-600/30 transition-colors"
+                  >
+                    <QrCode className="h-4 w-4" />
+                    Open Agent Dashboard to scan QR
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </a>
+                )}
               </>
             )}
           </div>
 
+          {whatsAppDashboardUrl && !whatsAppPaired && !whatsAppQr && !whatsAppLoading && (
+            <div className="flex items-start gap-2 rounded-lg border border-blue-500/20 bg-blue-500/10 p-3 text-[13px] text-blue-300">
+              <QrCode className="h-4 w-4 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium">Recommended: Use your Agent Dashboard</p>
+                <p className="text-blue-300/70 mt-0.5">Your agent dashboard has a built-in WhatsApp QR scanner. Click the link above or button below to open it.</p>
+              </div>
+            </div>
+          )}
+
           {whatsAppError && (
             <div className="flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-[13px] text-red-400">
               <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-              <div>
-                <p>{whatsAppError}</p>
-                {whatsAppAgentUrl && !whatsAppQr && (
-                  <a
-                    href={whatsAppAgentUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-2 inline-block text-blue-400 underline hover:text-blue-300"
-                  >
-                    Open Agent Dashboard to pair WhatsApp &rarr;
-                  </a>
-                )}
-              </div>
+              <p>{whatsAppError}</p>
             </div>
           )}
 
@@ -538,13 +551,14 @@ export default function ConnectApps() {
             {!whatsAppPaired && !whatsAppLoading && (
               <Button variant="primary" size="md" onClick={startWhatsAppPairing}>
                 <RefreshCw className="h-3.5 w-3.5" />
-                {whatsAppQr ? 'Refresh QR Code' : 'Generate QR Code'}
+                {whatsAppQr ? 'Refresh QR Code' : 'Retry'}
               </Button>
             )}
-            {whatsAppAgentUrl && !whatsAppPaired && (
-              <a href={whatsAppAgentUrl} target="_blank" rel="noopener noreferrer">
+            {whatsAppDashboardUrl && !whatsAppPaired && (
+              <a href={whatsAppDashboardUrl} target="_blank" rel="noopener noreferrer">
                 <Button variant="glass" size="md">
-                  Open Agent Dashboard
+                  <QrCode className="h-3.5 w-3.5" />
+                  Agent Dashboard
                 </Button>
               </a>
             )}
