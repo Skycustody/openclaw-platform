@@ -56,6 +56,12 @@ interface ListKeysResponse {
 /** Retail price multiplier over OpenRouter wholesale cost. 1.5 = 50% margin. */
 export const RETAIL_MARKUP = 1.5;
 
+/** 1 credit = $0.01 of OpenRouter API spend (100 credits = $1). */
+export const USD_PER_CREDIT = 0.01;
+
+/** Revenue split for credit top-up purchases. */
+export const PURCHASE_SPLIT = { openrouter: 0.06, platform: 0.50, userCredit: 0.44 } as const;
+
 /**
  * OpenRouter wholesale costs per 1M tokens (USD).
  * OpenRouter charges no markup on provider pricing — these are direct provider costs.
@@ -244,8 +250,8 @@ export async function getNexosUsage(userId: string): Promise<OpenRouterUsage | n
           const used = userKey.usage_monthly ?? userKey.usage ?? 0;
           const limit = userKey.limit ?? 0;
           return {
-            creditsUsed: used,
-            creditsRemaining: Math.max(0, limit - used),
+            creditsUsed: Math.round(used / USD_PER_CREDIT),
+            creditsRemaining: Math.round(Math.max(0, limit - used) / USD_PER_CREDIT),
             lastUpdated: new Date().toISOString(),
           };
         }

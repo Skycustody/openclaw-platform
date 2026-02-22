@@ -1,7 +1,7 @@
 export type Plan = 'starter' | 'pro' | 'business';
 export type UserStatus = 'provisioning' | 'active' | 'sleeping' | 'paused' | 'cancelled' | 'grace_period';
 export type ServerStatus = 'active' | 'provisioning' | 'draining' | 'offline';
-/** @deprecated Token tracking removed — OpenRouter handles billing via credits */
+/** @deprecated Legacy token type — billing now uses credits */
 export type TokenTransactionType = 'purchase' | 'usage' | 'bonus' | 'refund' | 'subscription_grant' | 'auto_topup';
 export type MemoryType = 'fact' | 'preference' | 'episode' | 'skill' | 'person' | 'context';
 export type TaskComplexity = 'simple' | 'medium' | 'complex';
@@ -144,8 +144,8 @@ export interface PlanLimits {
   maxSkills: number;
   maxCronJobs: number;
   storageGb: number;
-  /** @deprecated Use nexosCreditBudgetEurCents — OpenRouter handles billing */
-  includedTokens: number;
+  /** Monthly credits included with plan (1 credit = $0.01 OR spend) */
+  includedCredits: number;
   priceEurCents: number;
   hasBrowser: boolean;
   allChannels: boolean;
@@ -182,7 +182,7 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     maxSkills: 10,
     maxCronJobs: 3,
     storageGb: 1,
-    includedTokens: 500_000,
+    includedCredits: 200,
     priceEurCents: 1000,
     nexosCreditBudgetEurCents: 185,
     serverCostShareEurCents: 333,
@@ -196,7 +196,7 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     maxSkills: 53,
     maxCronJobs: 20,
     storageGb: 5,
-    includedTokens: 1_500_000,
+    includedCredits: 700,
     priceEurCents: 2000,
     nexosCreditBudgetEurCents: 650,
     serverCostShareEurCents: 667,
@@ -210,7 +210,7 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     maxSkills: 53,
     maxCronJobs: 100,
     storageGb: 20,
-    includedTokens: 5_000_000,
+    includedCredits: 1200,
     priceEurCents: 5000,
     nexosCreditBudgetEurCents: 1115,
     serverCostShareEurCents: 1000,
@@ -236,12 +236,11 @@ export interface CreditPurchase {
 }
 
 /**
- * Credit top-up packs. Users buy these one-time via Stripe to increase
- * their OpenRouter spending limit for the current billing period.
- * Pricing maintains ~50% margin (RETAIL_MARKUP = 1.5).
+ * Credit top-up packs. Revenue split: 6% OpenRouter, 50% platform, 44% user credit.
+ * `credits` is the display amount (6% of EUR→USD converted to credits at $0.01 each).
  */
-export const CREDIT_PACKS: Record<string, { priceEurCents: number; label: string }> = {
-  '5':  { priceEurCents: 500,  label: '€5 AI Credit Pack' },
-  '10': { priceEurCents: 1000, label: '€10 AI Credit Pack' },
-  '20': { priceEurCents: 2000, label: '€20 AI Credit Pack' },
+export const CREDIT_PACKS: Record<string, { priceEurCents: number; label: string; credits: number }> = {
+  '5':  { priceEurCents: 500,  label: '€5 — 33 Credits',  credits: 33  },
+  '10': { priceEurCents: 1000, label: '€10 — 65 Credits',  credits: 65  },
+  '20': { priceEurCents: 2000, label: '€20 — 130 Credits', credits: 130 },
 };

@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/Button';
 import { StatusBadge } from '@/components/ui/Badge';
 import api from '@/lib/api';
-import { formatTokens } from '@/lib/utils';
+import { formatCredits } from '@/lib/utils';
 import { useStore } from '@/lib/store';
 import ChatPanel from '@/components/dashboard/ChatPanel';
 import {
@@ -363,7 +363,7 @@ export default function DashboardHome() {
             title="Credits & billing">
             <Sparkles className="h-3.5 w-3.5 text-white/20" />
             <span className={`text-[12px] font-medium tabular-nums ${creditsRemaining != null && creditsRemaining < 50000 ? 'text-amber-400' : 'text-white/50'}`}>
-              {creditsRemaining != null ? `${formatTokens(creditsRemaining)} left` : 'Credits'}
+              {creditsRemaining != null ? `${formatCredits(creditsRemaining)} left` : 'Credits'}
             </span>
           </button>
         </div>

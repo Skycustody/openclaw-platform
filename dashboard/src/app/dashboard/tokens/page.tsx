@@ -40,9 +40,9 @@ interface Invoice {
 type TabId = 'overview' | 'billing';
 
 const CREDIT_PACKS = [
-  { id: '5',  price: '€5',  desc: 'Small top-up' },
-  { id: '10', price: '€10', desc: 'Medium top-up' },
-  { id: '20', price: '€20', desc: 'Large top-up' },
+  { id: '5',  price: '€5',  credits: '33 credits',  desc: 'Small top-up' },
+  { id: '10', price: '€10', credits: '65 credits',  desc: 'Medium top-up' },
+  { id: '20', price: '€20', credits: '130 credits', desc: 'Large top-up' },
 ];
 
 export default function TokensPage() {
@@ -191,7 +191,8 @@ export default function TokensPage() {
                   className="flex flex-col items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.02] p-5 hover:border-indigo-500/30 hover:bg-indigo-500/[0.04] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <span className="text-[24px] font-bold text-white">{pack.price}</span>
-                  <span className="text-[12px] text-white/40">{pack.desc}</span>
+                  <span className="text-[13px] font-medium text-white/60">{pack.credits}</span>
+                  <span className="text-[11px] text-white/30">{pack.desc}</span>
                   {buyingPack === pack.id ? (
                     <Loader2 className="h-4 w-4 animate-spin text-indigo-400 mt-1" />
                   ) : (
@@ -248,13 +249,13 @@ export default function TokensPage() {
             <CardDescription>Credits consumed per 1M tokens (approximate)</CardDescription>
             <div className="mt-4 space-y-1">
               {[
-                { model: 'Gemini 2.0 Flash', input: '0.15', output: '0.60', tag: 'Cheapest' },
-                { model: 'GPT-4o Mini', input: '0.23', output: '0.90', tag: 'Budget' },
-                { model: 'Claude 3.5 Haiku', input: '1.20', output: '6.00', tag: '' },
-                { model: 'GPT-4o', input: '3.75', output: '15.00', tag: '' },
-                { model: 'GPT-4.1', input: '3.00', output: '12.00', tag: '' },
-                { model: 'Claude Sonnet 4', input: '4.50', output: '22.50', tag: 'Default (Pro)' },
-                { model: 'O3 Mini', input: '1.65', output: '6.60', tag: 'Reasoning' },
+                { model: 'Gemini 2.0 Flash', input: '10',   output: '40',    tag: 'Cheapest' },
+                { model: 'GPT-4o Mini',      input: '15',   output: '60',    tag: 'Budget' },
+                { model: 'Claude 3.5 Haiku', input: '80',   output: '400',   tag: '' },
+                { model: 'GPT-4o',           input: '250',  output: '1,000', tag: '' },
+                { model: 'GPT-4.1',          input: '200',  output: '800',   tag: '' },
+                { model: 'Claude Sonnet 4',  input: '300',  output: '1,500', tag: 'Default (Pro)' },
+                { model: 'O3 Mini',          input: '110',  output: '440',   tag: 'Reasoning' },
               ].map(m => (
                 <div key={m.model} className="flex items-center justify-between py-2.5 border-b border-white/[0.04] last:border-0">
                   <div className="flex items-center gap-2">

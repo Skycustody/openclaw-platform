@@ -14,12 +14,11 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
     const user = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [req.userId]);
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    const tokenSpend = await db.getOne<{ total: string }>(
-      `SELECT COALESCE(SUM(price_cents), 0) as total
-       FROM token_transactions t
-       JOIN token_packages p ON p.tokens = t.amount
-       WHERE t.user_id = $1 AND t.type = 'purchase'
-       AND t.created_at > DATE_TRUNC('month', NOW())`,
+    const creditSpend = await db.getOne<{ total: string }>(
+      `SELECT COALESCE(SUM(amount_eur_cents), 0) as total
+       FROM credit_purchases
+       WHERE user_id = $1
+       AND created_at > DATE_TRUNC('month', NOW())`,
       [req.userId]
     );
 
@@ -27,7 +26,7 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
       plan: user.plan,
       status: user.status,
       stripeCustomerId: user.stripe_customer_id,
-      tokenSpendThisMonth: parseInt(tokenSpend?.total || '0'),
+      creditSpendThisMonth: parseInt(creditSpend?.total || '0'),
     });
   } catch (err) {
     next(err);

@@ -12,7 +12,7 @@ type BillingOverview = {
   plan: string;
   status: string;
   stripeCustomerId?: string | null;
-  tokenSpendThisMonth: number;
+  creditSpendThisMonth: number;
 };
 
 type Invoice = {
@@ -105,9 +105,9 @@ export default function BillingPage() {
 
           <div className="mt-5">
             <GlassPanel>
-              <p className="text-[13px] text-white/40">Token purchases this month</p>
+              <p className="text-[13px] text-white/40">Credit purchases this month</p>
               <p className="mt-1 text-[20px] font-semibold text-white tabular-nums">
-                {formatCents(overview?.tokenSpendThisMonth || 0)}
+                {formatCents(overview?.creditSpendThisMonth || 0)}
               </p>
             </GlassPanel>
           </div>

@@ -47,12 +47,12 @@ async function grantInitialTokens(userId: string, plan: Plan): Promise<void> {
     db.query(
       `INSERT INTO token_balances (user_id, balance, total_purchased)
        VALUES ($1, $2, $2) ON CONFLICT (user_id) DO NOTHING`,
-      [userId, limits.includedTokens]
+      [userId, limits.includedCredits]
     ),
     db.query(
       `INSERT INTO token_transactions (user_id, amount, type, description)
        VALUES ($1, $2, 'subscription_grant', $3)`,
-      [userId, limits.includedTokens, `${plan} plan signup bonus`]
+      [userId, limits.includedCredits, `${plan} plan signup bonus`]
     ),
   ]);
 }
