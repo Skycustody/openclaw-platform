@@ -87,20 +87,25 @@ export async function injectApiKeys(
   if (!config.models) config.models = {};
   if (!config.models.providers) config.models.providers = {};
   const defaultOpenaiModels = [
-    { name: 'gpt-4o' },
-    { name: 'gpt-4o-mini' },
-    { name: 'o3-mini' },
+    { id: 'gpt-4o', name: 'GPT-4o' },
+    { id: 'gpt-4o-mini', name: 'GPT-4o Mini' },
+    { id: 'o3-mini', name: 'O3 Mini' },
   ];
   const defaultAnthropicModels = [
-    { name: 'claude-sonnet-4-20250514' },
-    { name: 'claude-3-5-haiku-20241022' },
+    { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4' },
+    { id: 'claude-3-5-haiku-20241022', name: 'Claude 3.5 Haiku' },
   ];
+
+  function normalizeModel(m: any): { id: string; name: string } {
+    if (typeof m === 'string') return { id: m, name: m };
+    return { id: m.id || m.name || m, name: m.name || m.id || m, ...m };
+  }
 
   config.models.providers.openai = {
     ...(config.models.providers.openai || {}),
     baseUrl: baseUrls.openai,
     models: config.models.providers.openai?.models?.length
-      ? config.models.providers.openai.models.map((m: any) => typeof m === 'string' ? { name: m } : m)
+      ? config.models.providers.openai.models.map(normalizeModel)
       : defaultOpenaiModels,
   };
   delete config.models.providers.openai.baseURL;
@@ -108,7 +113,7 @@ export async function injectApiKeys(
     ...(config.models.providers.anthropic || {}),
     baseUrl: baseUrls.anthropic,
     models: config.models.providers.anthropic?.models?.length
-      ? config.models.providers.anthropic.models.map((m: any) => typeof m === 'string' ? { name: m } : m)
+      ? config.models.providers.anthropic.models.map(normalizeModel)
       : defaultAnthropicModels,
   };
   delete config.models.providers.anthropic.baseURL;
