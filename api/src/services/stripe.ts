@@ -5,6 +5,7 @@ import { handlePaymentFailure } from './gracePeriod';
 import { addCreditsToKey, updateKeyLimit, RETAIL_MARKUP, USD_TO_EUR_CENTS } from './nexos';
 import { Plan, User, CREDIT_PACKS } from '../types';
 import { v4 as uuid } from 'uuid';
+import { validateUserId, validateAmounts, verifyPackMath, logCreditAudit } from './creditAudit';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2024-12-18.acacia' as any,
@@ -167,13 +168,26 @@ async function handleCheckoutComplete(session: Stripe.Checkout.Session): Promise
 
 async function handleCreditPurchase(session: Stripe.Checkout.Session): Promise<void> {
   const { userId, pack } = session.metadata || {};
-  if (!userId || !pack) return;
+  if (!userId || !pack) {
+    console.warn('[stripe] Credit webhook missing userId or pack in metadata');
+    return;
+  }
 
   const packInfo = CREDIT_PACKS[pack];
-  if (!packInfo) return;
+  if (!packInfo) {
+    console.warn(`[stripe] Unknown pack: ${pack}`);
+    return;
+  }
 
-  // Prevent duplicate processing — Stripe retries webhooks and each retry
-  // would add credits again without this guard.
+  const user = await validateUserId(userId);
+  if (!user) {
+    console.error(`[stripe] Credit webhook: user ${userId} not found — rejecting`);
+    return;
+  }
+
+  validateAmounts(packInfo.priceEurCents, packInfo.orBudgetUsd);
+  verifyPackMath(pack, packInfo.priceEurCents, packInfo.orBudgetUsd);
+
   const existing = await db.getOne<{ id: string }>(
     `SELECT id FROM credit_purchases WHERE stripe_session_id = $1`,
     [session.id]
@@ -200,6 +214,15 @@ async function handleCreditPurchase(session: Stripe.Checkout.Session): Promise<v
   );
 
   await addCreditsToKey(userId, orBudgetIncrease);
+
+  await logCreditAudit({
+    operation: 'purchase',
+    userId,
+    amountEurCents: packInfo.priceEurCents,
+    creditsUsd: orBudgetIncrease,
+    stripeSessionId: session.id,
+    metadata: { pack, paymentStatus: session.payment_status },
+  });
 
   console.log(`[stripe] Top-up: user=${userId} pack=${packInfo.label} orBudget=$${orBudgetIncrease}`);
 }
@@ -237,7 +260,6 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription): Pro
 async function handleInvoicePaid(invoice: Stripe.Invoice): Promise<void> {
   if (!invoice.subscription) return;
 
-  // Subscription renewal: reset add-on credits for the new billing period
   const customerId = invoice.customer as string;
   const user = await db.getOne<{ id: string; plan: string; api_budget_addon_usd: number }>(
     'SELECT id, plan, api_budget_addon_usd FROM users WHERE stripe_customer_id = $1',
@@ -245,8 +267,17 @@ async function handleInvoicePaid(invoice: Stripe.Invoice): Promise<void> {
   );
   if (!user || user.api_budget_addon_usd <= 0) return;
 
+  const addonBeforeReset = user.api_budget_addon_usd;
   await db.query('UPDATE users SET api_budget_addon_usd = 0 WHERE id = $1', [user.id]);
   await updateKeyLimit(user.id, (user.plan || 'starter') as Plan, 0).catch(() => {});
+
+  await logCreditAudit({
+    operation: 'subscription_reset',
+    userId: user.id,
+    creditsUsd: 0,
+    openrouterLimitAfter: 0,
+    metadata: { invoiceId: invoice.id, addonCleared: addonBeforeReset },
+  });
   console.log(`[stripe] Reset add-on credits for ${user.id} on subscription renewal`);
 }
 

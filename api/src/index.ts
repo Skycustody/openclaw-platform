@@ -174,6 +174,15 @@ const PORT = parseInt(process.env.PORT || '4000');
 
 async function start() {
   try {
+    const { verifyCreditMathAtStartup } = await import('./services/creditAudit');
+    verifyCreditMathAtStartup();
+    console.log('Credit math verified');
+  } catch (err) {
+    console.error('Credit math verification failed:', err);
+    process.exit(1);
+  }
+
+  try {
     await redis.connect();
     console.log('Redis connected');
   } catch (err) {

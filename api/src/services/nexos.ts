@@ -36,6 +36,7 @@
  */
 import db from '../lib/db';
 import { PLAN_LIMITS, Plan } from '../types';
+import { validateUserId, logCreditAudit } from './creditAudit';
 
 const OPENROUTER_BASE = 'https://openrouter.ai/api/v1';
 const OPENROUTER_MGMT_KEY = process.env.OPENROUTER_MGMT_KEY || '';
@@ -255,8 +256,12 @@ export async function getNexosUsage(userId: string): Promise<OpenRouterUsage | n
     'SELECT COALESCE(SUM(amount_eur_cents / 100.0), 0) as total FROM credit_purchases WHERE user_id = $1',
     [userId]
   );
-  const creditDisplayTotal = parseFloat(creditSum?.total || '0');
-  const totalDisplay = planBase + creditDisplayTotal;
+  let creditDisplayTotal = parseFloat(creditSum?.total || '0');
+  if (!Number.isFinite(creditDisplayTotal) || creditDisplayTotal < 0) creditDisplayTotal = 0;
+  if (creditDisplayTotal > MAX_ADDON_USD) creditDisplayTotal = MAX_ADDON_USD;
+
+  let totalDisplay = planBase + creditDisplayTotal;
+  if (!Number.isFinite(totalDisplay) || totalDisplay < 0) totalDisplay = planBase;
 
   if (OPENROUTER_MGMT_KEY) {
     try {
@@ -352,32 +357,56 @@ export async function updateKeyLimit(userId: string, plan: Plan, extraCreditsUsd
   }
 }
 
+const MAX_ADDON_USD = 50_000;
+
 /**
  * Add purchased credits to a user's OpenRouter spending limit.
  * Recalculates total addon from credit_purchases table to prevent
  * accumulated errors from previous bugs.
  */
 export async function addCreditsToKey(userId: string, creditsUsd: number): Promise<void> {
-  // Recalculate addon from actual purchase records (credits_usd = orBudgetUsd at purchase time).
-  // Prevents accumulation bugs from duplicate webhooks or stale api_budget_addon_usd.
-  const sum = await db.getOne<{ total: string }>(
-    'SELECT COALESCE(SUM(credits_usd), 0) as total FROM credit_purchases WHERE user_id = $1',
+  const user = await validateUserId(userId);
+  if (!user) {
+    console.error(`[nexos] addCreditsToKey: user ${userId} not found — aborting`);
+    return;
+  }
+
+  const sum = await db.getOne<{ total: string; cnt: string }>(
+    'SELECT COALESCE(SUM(credits_usd), 0) as total, COUNT(*)::text as cnt FROM credit_purchases WHERE user_id = $1',
     [userId]
   );
   const totalAddon = Math.round(parseFloat(sum?.total || '0') * 100) / 100;
+  const purchaseCount = parseInt(sum?.cnt || '0', 10);
+
+  if (totalAddon < 0 || totalAddon > MAX_ADDON_USD) {
+    console.error(`[nexos] addCreditsToKey: invalid totalAddon ${totalAddon} for user ${userId}`);
+    return;
+  }
 
   await db.query(
     'UPDATE users SET api_budget_addon_usd = $1 WHERE id = $2',
     [totalAddon, userId]
   );
 
-  const user = await db.getOne<{ plan: string }>(
+  const userRow = await db.getOne<{ plan: string }>(
     'SELECT plan FROM users WHERE id = $1',
     [userId]
   );
-  if (!user) return;
+  if (!userRow) return;
 
-  await updateKeyLimit(userId, (user.plan || 'starter') as Plan, totalAddon);
+  const plan = (userRow.plan || 'starter') as Plan;
+  const base = PLAN_SPEND_LIMITS_USD[plan] || PLAN_SPEND_LIMITS_USD.starter;
+  const newLimit = Math.round((base + totalAddon) * 100) / 100;
+
+  await updateKeyLimit(userId, plan, totalAddon);
+
+  await logCreditAudit({
+    operation: 'recalculation',
+    userId,
+    creditsUsd: totalAddon,
+    openrouterLimitAfter: newLimit,
+    metadata: { purchaseCount, base },
+  });
 }
 
 /**
