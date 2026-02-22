@@ -250,14 +250,14 @@ export default function SkillsPage() {
         >
           Built-in Tools ({allTools.length})
         </button>
-        <button
+            <button
           onClick={() => setTab('skills')}
           className={`px-4 py-2 rounded-lg text-[14px] font-medium transition-all ${
             tab === 'skills' ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/60'
           }`}
         >
           Bundled Skills ({Object.keys(BUNDLED_SKILLS).length})
-        </button>
+            </button>
       </div>
 
       {/* Built-in tools tab */}
@@ -279,14 +279,14 @@ export default function SkillsPage() {
                     const meta = TOOL_META[name] || { label: name, desc: `OpenClaw tool: ${name}`, icon: Wrench, cat: 'Other' };
                     const Icon = meta.icon;
                     const isEnabled = enabledSet.has(name);
-                    return (
+                  return (
                       <Card key={name} className={`transition-all ${isEnabled ? 'ring-1 ring-emerald-500/10' : ''}`}>
                         <div className="flex items-start gap-3 mb-2">
                           <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${isEnabled ? 'bg-emerald-500/10' : 'bg-white/5'}`}>
                             <Icon className={`h-4.5 w-4.5 ${isEnabled ? 'text-emerald-400' : 'text-white/40'}`} />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
                               <h3 className={`text-[14px] font-semibold ${isEnabled ? 'text-white' : 'text-white/70'}`}>{meta.label}</h3>
                               {isEnabled ? <Badge variant="green" dot>Active</Badge> : <Badge variant="default">Off</Badge>}
                             </div>
@@ -300,15 +300,15 @@ export default function SkillsPage() {
                         >
                           {isEnabled ? <><PowerOff className="h-3.5 w-3.5" /> Disable</> : <><Power className="h-3.5 w-3.5" /> Enable</>}
                         </Button>
-                      </Card>
-                    );
-                  })}
-                </div>
+                    </Card>
+                  );
+                })}
+              </div>
               )}
             </div>
           ))}
-        </div>
-      )}
+            </div>
+          )}
 
       {/* Bundled skills tab */}
       {tab === 'skills' && (
@@ -342,13 +342,13 @@ export default function SkillsPage() {
                     else if (meta.canUseOpenRouter) { statusLabel = 'Auto-key'; statusVariant = 'green'; }
                     else if (needsKey && !hasKey) { statusLabel = 'Needs Key'; statusVariant = 'accent'; }
 
-                    return (
+                  return (
                       <Card key={name} className={`transition-all ${isEnabled ? 'ring-1 ring-emerald-500/10' : ''}`}>
                         <div className="flex items-start gap-3 mb-2">
                           <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-lg ${isEnabled ? 'bg-emerald-500/10' : 'bg-white/5'}`}>
                             {meta.emoji}
-                          </div>
-                          <div className="flex-1 min-w-0">
+                        </div>
+                        <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
                               <h3 className={`text-[14px] font-semibold ${isEnabled ? 'text-white' : 'text-white/70'}`}>{meta.label}</h3>
                               {isEnabled ? (
@@ -376,7 +376,7 @@ export default function SkillsPage() {
                               onChange={e => setApiKeyInputs(prev => ({ ...prev, [name]: e.target.value }))}
                               className="w-full px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-[12px] text-white placeholder-white/25 focus:outline-none focus:ring-1 focus:ring-emerald-500/30"
                             />
-                          </div>
+                      </div>
                         )}
 
                         {isMacOnly ? (
@@ -395,12 +395,12 @@ export default function SkillsPage() {
                             ) : (
                               <><Power className="h-3.5 w-3.5" /> Enable</>
                             )}
-                          </Button>
-                        )}
-                      </Card>
-                    );
-                  })}
-                </div>
+                        </Button>
+                      )}
+                    </Card>
+                  );
+                })}
+              </div>
               )}
             </div>
           ))}

@@ -117,6 +117,42 @@ export async function injectApiKeys(
     fallbacks: ['openrouter/openai/gpt-4o-mini'],
   };
 
+  // Ensure the main agent always exists in agents.list — the OpenClaw gateway
+  // dashboard needs this to show agents and enable the "Start Agent" button.
+  if (!Array.isArray(config.agents.list)) config.agents.list = [];
+
+  const dbAgents = await db.getMany<{ name: string; is_primary: boolean; openclaw_agent_id: string | null }>(
+    `SELECT name, is_primary, openclaw_agent_id FROM agents WHERE user_id = $1 ORDER BY is_primary DESC, created_at ASC`,
+    [userId]
+  ).catch(() => []);
+
+  for (const ag of dbAgents) {
+    const ocId = ag.is_primary ? 'main' : (ag.openclaw_agent_id || ag.name.toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 20));
+    const existIdx = config.agents.list.findIndex((a: any) => a.id === ocId);
+    const entry = {
+      id: ocId,
+      ...(ag.is_primary ? { default: true } : {}),
+      workspace: ag.is_primary ? '~/.openclaw/workspace' : `~/.openclaw/workspace-${ocId}`,
+      agentDir: `~/.openclaw/agents/${ocId}/agent`,
+      identity: { name: ag.name },
+    };
+    if (existIdx >= 0) {
+      config.agents.list[existIdx] = { ...config.agents.list[existIdx], ...entry };
+    } else {
+      config.agents.list.push(entry);
+    }
+  }
+
+  if (config.agents.list.length === 0) {
+    config.agents.list.push({
+      id: 'main',
+      default: true,
+      workspace: '~/.openclaw/workspace',
+      agentDir: '~/.openclaw/agents/main/agent',
+      identity: { name: 'Main Agent' },
+    });
+  }
+
   // ── Tools configuration ──
   // Enable all tools that work with our OpenRouter key / existing services.
   // Users can toggle individual tools via the dashboard Skills page.
