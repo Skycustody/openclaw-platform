@@ -3,9 +3,9 @@ import { cn } from '@/lib/utils';
 import { ReactNode } from 'react';
 import { GlowingEffect } from '@/components/ui/glowing-effect';
 
-export function Card({ children, className, glow = true }: { children: ReactNode; className?: string; glow?: boolean }) {
+export function Card({ children, className, glow = true, onClick }: { children: ReactNode; className?: string; glow?: boolean; onClick?: () => void }) {
   return (
-    <div className="relative rounded-[1.25rem] border-[0.75px] border-white/[0.08] p-2 animate-fade-up">
+    <div className="relative rounded-[1.25rem] border-[0.75px] border-white/[0.08] p-2 animate-fade-up" onClick={onClick} role={onClick ? 'button' : undefined}>
       {glow && (
         <GlowingEffect
           spread={40}
