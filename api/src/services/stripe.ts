@@ -259,26 +259,8 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription): Pro
 
 async function handleInvoicePaid(invoice: Stripe.Invoice): Promise<void> {
   if (!invoice.subscription) return;
-
-  const customerId = invoice.customer as string;
-  const user = await db.getOne<{ id: string; plan: string; api_budget_addon_usd: number }>(
-    'SELECT id, plan, api_budget_addon_usd FROM users WHERE stripe_customer_id = $1',
-    [customerId]
-  );
-  if (!user || user.api_budget_addon_usd <= 0) return;
-
-  const addonBeforeReset = user.api_budget_addon_usd;
-  await db.query('UPDATE users SET api_budget_addon_usd = 0 WHERE id = $1', [user.id]);
-  await updateKeyLimit(user.id, (user.plan || 'starter') as Plan, 0).catch(() => {});
-
-  await logCreditAudit({
-    operation: 'subscription_reset',
-    userId: user.id,
-    creditsUsd: 0,
-    openrouterLimitAfter: 0,
-    metadata: { invoiceId: invoice.id, addonCleared: addonBeforeReset },
-  });
-  console.log(`[stripe] Reset add-on credits for ${user.id} on subscription renewal`);
+  // Subscription renewal: no action needed for credits.
+  // Purchased credits never expire — they persist across billing cycles.
 }
 
 async function handlePaymentFailed(invoice: Stripe.Invoice): Promise<void> {
