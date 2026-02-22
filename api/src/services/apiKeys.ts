@@ -161,6 +161,20 @@ export async function injectApiKeys(
     fallbacks: modelConfig.fallbacks,
   };
 
+  // Enforce gateway config every time — prevents "pairing required" drift
+  // when configs get partially overwritten or containers are recreated.
+  const gatewayToken = config.gateway?.auth?.token;
+  if (gatewayToken) {
+    if (!config.gateway) config.gateway = {};
+    config.gateway.bind = 'lan';
+    config.gateway.trustedProxies = ['0.0.0.0/0'];
+    if (!config.gateway.controlUi) config.gateway.controlUi = {};
+    config.gateway.controlUi.enabled = true;
+    config.gateway.controlUi.allowInsecureAuth = true;
+    config.gateway.controlUi.dangerouslyDisableDeviceAuth = true;
+    config.gateway.auth = { mode: 'token', token: gatewayToken };
+  }
+
   const configB64 = Buffer.from(JSON.stringify(config, null, 2)).toString('base64');
   await sshExec(
     serverIp,
@@ -187,7 +201,7 @@ export function buildOpenclawConfig(gatewayToken: string): Record<string, any> {
   return {
     gateway: {
       bind: 'lan',
-      trustedProxies: ['172.16.0.0/12', '10.0.0.0/8', '192.168.0.0/16'],
+      trustedProxies: ['0.0.0.0/0'],
       controlUi: {
         enabled: true,
         allowInsecureAuth: true,
