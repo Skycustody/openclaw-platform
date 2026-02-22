@@ -570,7 +570,7 @@ router.post('/chat', requireActiveSubscription, async (req: AuthRequest, res: Re
     });
 
     const msgB64 = Buffer.from(message.trim()).toString('base64');
-    const cmd = `echo '${msgB64}' | base64 -d | timeout 120 docker exec -i ${containerName} sh -c 'MSG="$(cat)"; exec openclaw agent --session-id ${chatSession} --message "$MSG"' 2>&1`;
+    const cmd = `echo '${msgB64}' | base64 -d | timeout 120 docker exec -i ${containerName} sh -c 'MSG="$(cat)"; exec openclaw agent --local --session-id ${chatSession} --message "$MSG"' 2>&1`;
 
     const stream = sshExecStream(serverIp, cmd);
     let fullResponse = '';
