@@ -26,10 +26,10 @@ interface CronTask {
   lastRun?: {
     timestamp: string;
     status: 'success' | 'error';
-    costUsd: number;
+    tokensUsed: number;
     message?: string;
   };
-  budgetUsd: number;
+  tokenBudget: number;
 }
 
 const FREQ_OPTIONS = [
@@ -208,7 +208,7 @@ export default function SchedulePage() {
                     </div>
                     <div className="flex items-center gap-1.5 text-white/35">
                       <Zap className="h-3.5 w-3.5" />
-                      <span>Budget: <span className="text-white">{formatUsd(task.budgetUsd)}</span></span>
+                      <span>Budget: <span className="text-white">{formatUsd(task.tokenBudget)}</span></span>
                     </div>
                     {task.enabled && (
                       <div className="flex items-center gap-1.5 text-white/35">
@@ -234,7 +234,7 @@ export default function SchedulePage() {
                           </div>
                         )}
                         <span className="text-white/20">·</span>
-                        <span className="text-white/30">Cost {formatUsd(task.lastRun.costUsd)}</span>
+                        <span className="text-white/30">Cost {formatUsd(task.lastRun.tokensUsed)}</span>
                       </div>
                       {task.lastRun.status === 'error' && task.lastRun.message && (
                         <div className="flex items-start gap-2 mt-2 p-2.5 rounded-xl bg-red-500/5 border border-red-500/10">

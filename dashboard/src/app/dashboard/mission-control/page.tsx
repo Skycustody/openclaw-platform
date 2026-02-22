@@ -26,7 +26,7 @@ interface ApiStatus {
   createdAt: string;
   stats: {
     messagesToday: number;
-    spendToday: number;
+    tokensToday: number;
     activeSkills: number;
   };
 }
@@ -37,7 +37,7 @@ interface ActivityEntry {
   summary: string;
   created_at: string;
   status?: string;
-  cost_usd?: number;
+  tokens_used?: number;
   model_used?: string;
   channel?: string;
   details?: any;
@@ -93,12 +93,12 @@ export default function MissionControlPage() {
     try {
       const [statusRes, tokensRes, activityRes, cronRes] = await Promise.allSettled([
         api.get<any>('/agent/status'),
-        api.get<any>('/tokens/balance'),
+        api.get<any>('/settings/nexos-usage'),
         api.get<{ activities: ActivityEntry[] }>('/activity?limit=15&offset=0'),
         api.get<{ jobs: CronJob[] }>('/cron'),
       ]);
       if (statusRes.status === 'fulfilled') setApiData(statusRes.value);
-      if (tokensRes.status === 'fulfilled') setBalanceUsd(tokensRes.value.balance ?? 0);
+      if (tokensRes.status === 'fulfilled' && tokensRes.value.usage) setBalanceUsd(tokensRes.value.usage.remainingUsd ?? 0);
       if (activityRes.status === 'fulfilled') setRecentActivity(activityRes.value.activities || []);
       if (cronRes.status === 'fulfilled') {
         const jobs = (cronRes.value.jobs || cronRes.value || []) as CronJob[];
@@ -119,7 +119,7 @@ export default function MissionControlPage() {
 
   const displayStatus = (apiData?.subscriptionStatus || apiData?.status || 'offline') as AgentDisplayStatus;
   const statusConf = STATUS_CONFIG[displayStatus] || STATUS_CONFIG.offline;
-  const stats = apiData?.stats || { messagesToday: 0, spendToday: 0, activeSkills: 0 };
+  const stats = apiData?.stats || { messagesToday: 0, tokensToday: 0, activeSkills: 0 };
   const subdomain = apiData?.subdomain || user?.subdomain || 'your-agent';
   const isRunning = displayStatus === 'active' || displayStatus === 'online';
 
@@ -256,7 +256,7 @@ export default function MissionControlPage() {
             </div>
             <span className="text-[12px] text-white/30">Spent Today</span>
           </div>
-          <p className="text-[24px] font-bold text-white tabular-nums">{formatUsd(stats.spendToday)}</p>
+          <p className="text-[24px] font-bold text-white tabular-nums">{formatUsd(stats.tokensToday)}</p>
           <p className="text-[11px] text-white/20 mt-0.5">today</p>
         </Card>
 
@@ -365,7 +365,7 @@ export default function MissionControlPage() {
                           <p className="text-[13px] text-white/70 truncate">{entry.summary}</p>
                           <div className="flex items-center gap-2 text-[11px] text-white/25">
                             <span>{timeAgo(entry.created_at)}</span>
-                            {entry.cost_usd ? <span>{formatUsd(entry.cost_usd)}</span> : null}
+                            {entry.tokens_used ? <span>{formatUsd(entry.tokens_used)}</span> : null}
                           </div>
                         </div>
                       </div>
@@ -397,7 +397,7 @@ export default function MissionControlPage() {
                         <div className="flex items-center gap-2 mt-0.5">
                           <span className="text-[11px] text-white/20">{timeAgo(entry.created_at)}</span>
                           {entry.channel && <Badge className="!text-[10px] !py-0 !px-1.5">{channelLabel[entry.channel] || entry.channel}</Badge>}
-                          {entry.cost_usd ? <span className="text-[11px] text-white/20">{formatUsd(entry.cost_usd)}</span> : null}
+                          {entry.tokens_used ? <span className="text-[11px] text-white/20">{formatUsd(entry.tokens_used)}</span> : null}
                           {entry.model_used && <span className="text-[10px] text-white/15">{entry.model_used}</span>}
                         </div>
                       </div>
