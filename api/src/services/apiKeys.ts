@@ -178,26 +178,12 @@ export async function injectApiKeys(
     if (!validToolKeys.includes(key)) delete config.tools[key];
   }
 
-  // Browser config — top-level key in OpenClaw (not under tools)
-  if (process.env.BROWSERLESS_TOKEN) {
-    config.browser = {
-      enabled: true,
-      defaultProfile: 'browserless',
-      profiles: {
-        browserless: {
-          type: 'cdp',
-          cdpUrl: `wss://production-sfo.browserless.io?token=${process.env.BROWSERLESS_TOKEN}`,
-        },
-      },
-    };
-  }
-
-  // Memory — top-level key
-  config.memory = { enabled: true, maxItems: 2000 };
-
-  // Remove any stale invalid top-level keys from previous versions
+  // Remove any stale invalid top-level keys from previous versions.
+  // OpenClaw has a strict config schema — unknown keys crash the container.
   delete config.personality;
   delete config.bindings;
+  delete config.browser;
+  delete config.memory;
 
   // ── Per-agent channel bindings ──
   // Merge channel connections from agent_channels table into config
