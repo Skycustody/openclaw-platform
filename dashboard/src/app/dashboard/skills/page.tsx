@@ -8,46 +8,108 @@ import api from '@/lib/api';
 import {
   Globe, Code, FileText, Brain, Search, Wrench,
   Loader2, Power, PowerOff, AlertTriangle, RefreshCw,
+  Terminal, Image, Users, Clock, Key, ChevronDown, ChevronUp,
+  MessageSquare, Music, Home, Shield, Zap, Camera, Mail,
 } from 'lucide-react';
 
-const TOOL_META: Record<string, { label: string; description: string; icon: typeof Globe; category: string }> = {
-  web_search:       { label: 'Web Search',       description: 'Search the web using AI-powered Perplexity Sonar via OpenRouter. Returns synthesized answers with citations.',    icon: Search,   category: 'Research' },
-  web_fetch:        { label: 'Web Fetch',         description: 'Fetch any URL and extract readable content (HTML to markdown). Great for reading articles and docs.',             icon: Globe,    category: 'Research' },
-  browser:          { label: 'Web Browser',       description: 'Full browser automation — navigate sites, click, type, fill forms, take screenshots, and extract data.',          icon: Globe,    category: 'Research' },
-  exec:             { label: 'Shell / Terminal',   description: 'Run shell commands in a sandboxed container. Install packages, run scripts, manage files.',                       icon: Code,     category: 'Development' },
-  code:             { label: 'Code Execution',     description: 'Write and execute code in a sandboxed environment.',                                                              icon: Code,     category: 'Development' },
-  code_exec:        { label: 'Code Execution',     description: 'Write and execute code in a sandboxed environment.',                                                              icon: Code,     category: 'Development' },
-  read:             { label: 'File Read',          description: 'Read file contents from the agent workspace.',                                                                    icon: FileText, category: 'Files' },
-  write:            { label: 'File Write',         description: 'Create and write files in the agent workspace.',                                                                  icon: FileText, category: 'Files' },
-  edit:             { label: 'File Edit',          description: 'Edit existing files with precise replacements.',                                                                   icon: FileText, category: 'Files' },
-  file:             { label: 'File Access',        description: 'Read, write, and manage files in the agent workspace.',                                                            icon: FileText, category: 'Files' },
-  files:            { label: 'File Access',        description: 'Read, write, and manage files in the agent workspace.',                                                            icon: FileText, category: 'Files' },
-  memory_search:    { label: 'Memory Search',      description: 'Search stored memories across conversations. The agent remembers what you tell it.',                               icon: Brain,    category: 'Intelligence' },
-  memory_get:       { label: 'Memory Recall',      description: 'Retrieve a specific memory entry by ID.',                                                                         icon: Brain,    category: 'Intelligence' },
-  memory:           { label: 'Memory',             description: 'Store and recall information across conversations.',                                                               icon: Brain,    category: 'Intelligence' },
-  image:            { label: 'Image Analysis',     description: 'Analyze images using the model\'s vision capability. Describe, extract text, understand charts.',                  icon: Search,   category: 'Intelligence' },
-  sessions_spawn:   { label: 'Sub-Agents',         description: 'Spawn sub-agent sessions for parallel tasks. The agent can delegate work to specialized sub-agents.',              icon: Brain,    category: 'Multi-Agent' },
-  sessions_list:    { label: 'Session List',       description: 'List all active agent sessions and their status.',                                                                 icon: Wrench,   category: 'Multi-Agent' },
-  sessions_send:    { label: 'Session Messaging',  description: 'Send messages between agent sessions for coordination.',                                                           icon: Wrench,   category: 'Multi-Agent' },
-  session_status:   { label: 'Session Status',     description: 'Check or update the current session status and model.',                                                            icon: Wrench,   category: 'Multi-Agent' },
-  cron:             { label: 'Cron / Scheduler',   description: 'Create scheduled tasks and automations. The agent can set reminders and recurring jobs.',                          icon: Wrench,   category: 'Automation' },
-  rag:              { label: 'Knowledge Base',     description: 'Search and retrieve from uploaded documents and knowledge.',                                                        icon: Brain,    category: 'Intelligence' },
+/* ── Tool metadata (built-in OpenClaw tools) ── */
+const TOOL_META: Record<string, { label: string; desc: string; icon: typeof Globe; cat: string }> = {
+  web_search:     { label: 'Web Search',        desc: 'AI-powered web search via Perplexity Sonar through OpenRouter.',              icon: Search,   cat: 'Research' },
+  web_fetch:      { label: 'Web Fetch',          desc: 'Fetch any URL and extract readable content (HTML to markdown).',              icon: Globe,    cat: 'Research' },
+  browser:        { label: 'Web Browser',        desc: 'Full browser automation — navigate, click, type, screenshot.',                icon: Globe,    cat: 'Research' },
+  exec:           { label: 'Shell / Terminal',    desc: 'Run shell commands in a sandboxed container.',                                icon: Terminal,  cat: 'Development' },
+  read:           { label: 'File Read',           desc: 'Read file contents from the agent workspace.',                                icon: FileText, cat: 'Files' },
+  write:          { label: 'File Write',          desc: 'Create and write files in the agent workspace.',                              icon: FileText, cat: 'Files' },
+  edit:           { label: 'File Edit',           desc: 'Edit existing files with precise replacements.',                              icon: FileText, cat: 'Files' },
+  memory_search:  { label: 'Memory Search',       desc: 'Search stored memories across conversations.',                                icon: Brain,    cat: 'Intelligence' },
+  memory_get:     { label: 'Memory Recall',        desc: 'Retrieve a specific memory entry by ID.',                                    icon: Brain,    cat: 'Intelligence' },
+  image:          { label: 'Image Analysis',       desc: 'Analyze images using vision models.',                                        icon: Image,    cat: 'Intelligence' },
+  sessions_spawn: { label: 'Sub-Agents',           desc: 'Spawn sub-agent sessions for parallel tasks.',                               icon: Users,    cat: 'Multi-Agent' },
+  sessions_list:  { label: 'Session List',         desc: 'List all active agent sessions.',                                            icon: Users,    cat: 'Multi-Agent' },
+  sessions_send:  { label: 'Session Messaging',    desc: 'Send messages between agent sessions.',                                     icon: Users,    cat: 'Multi-Agent' },
+  session_status: { label: 'Session Status',       desc: 'Check or update session status and model.',                                  icon: Users,    cat: 'Multi-Agent' },
+  cron:           { label: 'Cron / Scheduler',     desc: 'Create scheduled tasks and automations.',                                    icon: Clock,    cat: 'Automation' },
 };
 
-function getToolMeta(name: string) {
-  return TOOL_META[name] || {
-    label: name.replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
-    description: `OpenClaw tool: ${name}`,
-    icon: Wrench,
-    category: 'Other',
-  };
+/* ── Bundled skill metadata (all OpenClaw bundled skills) ── */
+interface SkillMeta {
+  label: string;
+  emoji: string;
+  desc: string;
+  cat: string;
+  icon: typeof Globe;
+  envKey?: string;
+  envLabel?: string;
+  requiresBin?: string[];
+  requiresOs?: string;
+  canUseOpenRouter?: boolean;
 }
+
+const BUNDLED_SKILLS: Record<string, SkillMeta> = {
+  'weather':            { label: 'Weather',            emoji: '🌤️', desc: 'Get current weather and forecasts via wttr.in or Open-Meteo.',                          cat: 'Productivity',  icon: Globe,    },
+  'healthcheck':        { label: 'Security Hardening',  emoji: '🛡️', desc: 'Host security audits, firewall/SSH/update checks for deployments.',                    cat: 'DevOps',        icon: Shield,   },
+  'skill-creator':      { label: 'Skill Creator',       emoji: '🧩', desc: 'Create or update AgentSkills. Design and package skills with scripts.',                cat: 'Development',   icon: Wrench,   },
+  'coding-agent':       { label: 'Coding Agent',        emoji: '🧩', desc: 'Delegate coding tasks to sub-agents. Build features, fix bugs, refactor code.',       cat: 'Development',   icon: Code,     },
+  'github':             { label: 'GitHub',               emoji: '🐙', desc: 'GitHub operations via gh CLI: issues, PRs, CI runs, code review.',                   cat: 'Development',   icon: Code,     requiresBin: ['gh'] },
+  'gh-issues':          { label: 'GitHub Issues',        emoji: '📋', desc: 'Fetch issues, spawn sub-agents for fixes, open PRs, address review comments.',       cat: 'Development',   icon: Code,     requiresBin: ['gh'] },
+  'clawhub':            { label: 'ClawHub',              emoji: '📦', desc: 'Search, install, update, and publish agent skills from clawhub.com.',                 cat: 'Development',   icon: Wrench,   requiresBin: ['clawhub'] },
+  'tmux':               { label: 'Tmux',                 emoji: '🧵', desc: 'Remote-control tmux sessions for interactive CLIs.',                                  cat: 'Development',   icon: Terminal,  requiresBin: ['tmux'] },
+  'session-logs':       { label: 'Session Logs',         emoji: '📜', desc: 'Search and analyze your own session logs using jq.',                                  cat: 'Development',   icon: FileText, requiresBin: ['jq', 'rg'] },
+  'summarize':          { label: 'Summarize',            emoji: '🧾', desc: 'Summarize or extract text/transcripts from URLs, podcasts, and local files.',         cat: 'Research',      icon: FileText, requiresBin: ['summarize'] },
+  'video-frames':       { label: 'Video Frames',         emoji: '🎞️', desc: 'Extract frames or short clips from videos using ffmpeg.',                            cat: 'Media',         icon: Camera,   requiresBin: ['ffmpeg'] },
+  'notion':             { label: 'Notion',                emoji: '📝', desc: 'Notion API for creating and managing pages, databases, and blocks.',                 cat: 'Productivity',  icon: FileText, envKey: 'NOTION_API_KEY', envLabel: 'Notion API Key' },
+  'trello':             { label: 'Trello',                emoji: '📋', desc: 'Manage Trello boards, lists, and cards via the Trello REST API.',                    cat: 'Productivity',  icon: FileText, envKey: 'TRELLO_API_KEY', envLabel: 'Trello API Key' },
+  'nano-banana-pro':    { label: 'Image Generation',     emoji: '🍌', desc: 'Generate or edit images via Gemini 3 Pro Image.',                                     cat: 'AI / Creative', icon: Image,    envKey: 'GEMINI_API_KEY', envLabel: 'Gemini API Key', requiresBin: ['uv'] },
+  'openai-image-gen':   { label: 'OpenAI Images',        emoji: '🖼️', desc: 'Batch-generate images via OpenAI Images API with gallery.',                          cat: 'AI / Creative', icon: Image,    envKey: 'OPENAI_API_KEY', envLabel: 'OpenAI API Key' },
+  'openai-whisper-api': { label: 'Speech to Text (API)', emoji: '☁️', desc: 'Transcribe audio via OpenAI Whisper API.',                                            cat: 'AI / Creative', icon: Music,    envKey: 'OPENAI_API_KEY', envLabel: 'OpenAI API Key' },
+  'openai-whisper':     { label: 'Speech to Text (Local)',emoji: '🎙️', desc: 'Local speech-to-text with the Whisper CLI (no API key).',                           cat: 'AI / Creative', icon: Music,    requiresBin: ['whisper'] },
+  'gemini':             { label: 'Gemini CLI',            emoji: '♊', desc: 'Gemini CLI for one-shot Q&A, summaries, and generation.',                              cat: 'AI / Creative', icon: Brain,    requiresBin: ['gemini'] },
+  'oracle':             { label: 'Oracle CLI',            emoji: '🧿', desc: 'Prompt + file bundling, engines, sessions, and file attachment patterns.',            cat: 'AI / Creative', icon: Brain,    requiresBin: ['oracle'] },
+  'himalaya':           { label: 'Email (Himalaya)',      emoji: '📧', desc: 'Manage emails via IMAP/SMTP: list, read, write, reply, forward, search.',            cat: 'Communication', icon: Mail,     requiresBin: ['himalaya'] },
+  'gog':                { label: 'Google Workspace',      emoji: '🎮', desc: 'Gmail, Calendar, Drive, Contacts, Sheets, and Docs via gog CLI.',                   cat: 'Productivity',  icon: Globe,    requiresBin: ['gog'] },
+  'goplaces':           { label: 'Google Places',         emoji: '📍', desc: 'Query Google Places API for text search, details, and reviews.',                     cat: 'Research',      icon: Search,   envKey: 'GOOGLE_PLACES_API_KEY', envLabel: 'Google Places Key', requiresBin: ['goplaces'] },
+  'discord':            { label: 'Discord',               emoji: '🎮', desc: 'Discord ops via the message tool.',                                                  cat: 'Communication', icon: MessageSquare },
+  'slack':              { label: 'Slack',                  emoji: '💬', desc: 'Slack operations via the message tool.',                                             cat: 'Communication', icon: MessageSquare },
+  'wacli':              { label: 'WhatsApp CLI',           emoji: '📱', desc: 'Send WhatsApp messages or search/sync history.',                                    cat: 'Communication', icon: MessageSquare, requiresBin: ['wacli'] },
+  'xurl':               { label: 'X / Twitter',           emoji: '𝕏',  desc: 'Post tweets, reply, quote, search, read timelines via X API.',                      cat: 'Communication', icon: MessageSquare, requiresBin: ['xurl'] },
+  'voice-call':         { label: 'Voice Call',             emoji: '📞', desc: 'Start voice calls via the OpenClaw voice-call plugin.',                             cat: 'Communication', icon: MessageSquare },
+  'sag':                { label: 'Text-to-Speech (Cloud)', emoji: '🗣️', desc: 'ElevenLabs text-to-speech.',                                                       cat: 'Media',         icon: Music,    envKey: 'ELEVENLABS_API_KEY', envLabel: 'ElevenLabs Key', requiresBin: ['sag'] },
+  'sherpa-onnx-tts':    { label: 'Text-to-Speech (Local)', emoji: '🗣️', desc: 'Local TTS via sherpa-onnx (offline, no cloud).',                                   cat: 'Media',         icon: Music   },
+  'songsee':            { label: 'Audio Visualizer',       emoji: '🌊', desc: 'Generate spectrograms from audio with songsee CLI.',                                cat: 'Media',         icon: Music,    requiresBin: ['songsee'] },
+  'gifgrep':            { label: 'GIF Search',             emoji: '🧲', desc: 'Search GIF providers, download results, extract stills.',                           cat: 'Media',         icon: Search,   requiresBin: ['gifgrep'] },
+  'spotify-player':     { label: 'Spotify',                emoji: '🎵', desc: 'Terminal Spotify playback and search.',                                              cat: 'Media',         icon: Music   },
+  'openhue':            { label: 'Philips Hue',            emoji: '💡', desc: 'Control Philips Hue lights and scenes.',                                             cat: 'Smart Home',    icon: Home,     requiresBin: ['openhue'] },
+  'sonoscli':           { label: 'Sonos',                  emoji: '🔊', desc: 'Control Sonos speakers: discover, play, volume, group.',                             cat: 'Smart Home',    icon: Home,     requiresBin: ['sonos'] },
+  'blucli':             { label: 'BluOS',                  emoji: '🫐', desc: 'BluOS CLI for discovery, playback, grouping, and volume.',                           cat: 'Smart Home',    icon: Home,     requiresBin: ['blu'] },
+  'eightctl':           { label: 'Eight Sleep',            emoji: '🎛️', desc: 'Control Eight Sleep pods: status, temperature, alarms.',                            cat: 'Smart Home',    icon: Home,     requiresBin: ['eightctl'] },
+  'camsnap':            { label: 'Camera Capture',         emoji: '📸', desc: 'Capture frames or clips from RTSP/ONVIF cameras.',                                  cat: 'Smart Home',    icon: Camera,   requiresBin: ['camsnap'] },
+  '1password':          { label: '1Password',              emoji: '🔐', desc: 'Use 1Password CLI (op) for secrets and credential management.',                     cat: 'Security',      icon: Key,      requiresBin: ['op'] },
+  'blogwatcher':        { label: 'Blog Watcher',           emoji: '📰', desc: 'Monitor blogs and RSS/Atom feeds for updates.',                                     cat: 'Research',      icon: Globe,    requiresBin: ['blogwatcher'] },
+  'mcporter':           { label: 'MCP Tools',              emoji: '📦', desc: 'List, configure, auth, and call MCP servers/tools directly.',                       cat: 'Development',   icon: Wrench,   requiresBin: ['mcporter'] },
+  'nano-pdf':           { label: 'PDF Editor',             emoji: '📄', desc: 'Edit PDFs with natural-language instructions.',                                      cat: 'Productivity',  icon: FileText, requiresBin: ['nano-pdf'] },
+  'obsidian':           { label: 'Obsidian',               emoji: '💎', desc: 'Work with Obsidian vaults (plain Markdown notes).',                                  cat: 'Productivity',  icon: FileText, requiresBin: ['obsidian-cli'] },
+  'ordercli':           { label: 'Food Delivery',          emoji: '🛵', desc: 'Check past orders and active order status on Foodora.',                              cat: 'Productivity',  icon: Wrench,   requiresBin: ['ordercli'] },
+  'apple-notes':        { label: 'Apple Notes',            emoji: '📝', desc: 'Manage Apple Notes via memo CLI (macOS only).',                                     cat: 'Productivity',  icon: FileText, requiresOs: 'darwin' },
+  'apple-reminders':    { label: 'Apple Reminders',        emoji: '⏰', desc: 'Manage Apple Reminders via remindctl CLI (macOS only).',                             cat: 'Productivity',  icon: Clock,    requiresOs: 'darwin' },
+  'bear-notes':         { label: 'Bear Notes',             emoji: '🐻', desc: 'Create, search, and manage Bear notes (macOS only).',                                cat: 'Productivity',  icon: FileText, requiresOs: 'darwin' },
+  'things-mac':         { label: 'Things 3',               emoji: '✅', desc: 'Manage Things 3 via the things CLI (macOS only).',                                   cat: 'Productivity',  icon: FileText, requiresOs: 'darwin' },
+  'peekaboo':           { label: 'Peekaboo',               emoji: '👀', desc: 'Capture and automate macOS UI (macOS only).',                                        cat: 'Productivity',  icon: Camera,   requiresOs: 'darwin' },
+  'imsg':               { label: 'iMessage',               emoji: '📨', desc: 'iMessage/SMS CLI for listing chats and sending messages (macOS only).',              cat: 'Communication', icon: MessageSquare, requiresOs: 'darwin' },
+  'bluebubbles':        { label: 'BlueBubbles',            emoji: '🫧', desc: 'Send/manage iMessages via BlueBubbles.',                                              cat: 'Communication', icon: MessageSquare },
+};
+
+const CATEGORY_ORDER = [
+  'Research', 'Development', 'Files', 'Intelligence', 'Multi-Agent', 'Automation',
+  'Productivity', 'AI / Creative', 'Communication', 'Media', 'Smart Home', 'DevOps', 'Security',
+];
 
 interface SkillsData {
   enabled: string[];
   disabled: string[];
   available: string[];
   config: Record<string, any>;
+  skills: any[];
+  skillsConfig: Record<string, any>;
   notProvisioned?: boolean;
 }
 
@@ -56,6 +118,9 @@ export default function SkillsPage() {
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set(CATEGORY_ORDER.slice(0, 6)));
+  const [apiKeyInputs, setApiKeyInputs] = useState<Record<string, string>>({});
+  const [tab, setTab] = useState<'tools' | 'skills'>('tools');
 
   const fetchSkills = useCallback(async () => {
     try {
@@ -74,13 +139,40 @@ export default function SkillsPage() {
   const toggleTool = async (name: string, enable: boolean) => {
     setToggling(name);
     try {
-      await api.put(`/skills/${name}`, { enabled: enable });
+      await api.put(`/skills/tool/${name}`, { enabled: enable });
       await fetchSkills();
+    } catch (err: any) {
+      setError(err.message || 'Failed to update');
+    } finally {
+      setToggling(null);
+    }
+  };
+
+  const toggleSkill = async (name: string, enable: boolean, envKey?: string) => {
+    setToggling(name);
+    try {
+      const body: any = { enabled: enable };
+      const keyVal = apiKeyInputs[name];
+      if (envKey && keyVal) {
+        body.apiKey = keyVal;
+        body.envKey = envKey;
+      }
+      await api.put(`/skills/bundled/${name}`, body);
+      await fetchSkills();
+      if (keyVal) setApiKeyInputs(prev => ({ ...prev, [name]: '' }));
     } catch (err: any) {
       setError(err.message || 'Failed to update skill');
     } finally {
       setToggling(null);
     }
+  };
+
+  const toggleCat = (cat: string) => {
+    setExpandedCats(prev => {
+      const next = new Set(prev);
+      next.has(cat) ? next.delete(cat) : next.add(cat);
+      return next;
+    });
   };
 
   if (loading) {
@@ -106,24 +198,39 @@ export default function SkillsPage() {
     );
   }
 
-  const allTools = [...new Set([...(data?.enabled || []), ...(data?.disabled || [])])];
   const enabledSet = new Set(data?.enabled || []);
+  const skillsConfig = data?.skillsConfig || {};
+
+  const allTools = [...new Set([...(data?.enabled || []), ...(data?.disabled || [])])];
+
+  const toolsByCat: Record<string, string[]> = {};
+  for (const name of allTools) {
+    const meta = TOOL_META[name];
+    const cat = meta?.cat || 'Other';
+    if (!toolsByCat[cat]) toolsByCat[cat] = [];
+    toolsByCat[cat].push(name);
+  }
+
+  const skillsByCat: Record<string, string[]> = {};
+  for (const [name, meta] of Object.entries(BUNDLED_SKILLS)) {
+    if (!skillsByCat[meta.cat]) skillsByCat[meta.cat] = [];
+    skillsByCat[meta.cat].push(name);
+  }
 
   return (
     <div className="space-y-6">
       <div className="animate-fade-up">
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-3">
-            <h1 className="text-[26px] font-bold text-white tracking-tight">Skills</h1>
-            <Badge variant="accent">{data?.enabled?.length || 0} active</Badge>
+            <h1 className="text-[26px] font-bold text-white tracking-tight">Skills & Tools</h1>
+            <Badge variant="accent">{data?.enabled?.length || 0} tools active</Badge>
           </div>
           <Button variant="glass" size="sm" onClick={fetchSkills}>
-            <RefreshCw className="h-3.5 w-3.5" />
-            Refresh
+            <RefreshCw className="h-3.5 w-3.5" /> Refresh
           </Button>
         </div>
         <p className="text-[15px] text-white/40">
-          Tools your OpenClaw agent can use — these are read from your container config
+          Manage your agent&apos;s capabilities — built-in tools and OpenClaw bundled skills
         </p>
       </div>
 
@@ -133,68 +240,163 @@ export default function SkillsPage() {
         </div>
       )}
 
-      {allTools.length === 0 ? (
-        <Card className="flex flex-col items-center justify-center py-20 text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/5 mb-4">
-            <Wrench className="h-7 w-7 text-white/20" />
-          </div>
-          <p className="text-[17px] font-medium text-white/60">No tools configured</p>
-          <p className="text-[14px] text-white/30 mt-2 max-w-md">
-            Your OpenClaw container doesn&apos;t have any tools configured yet.
-            Tools are automatically available when your agent starts.
-          </p>
-        </Card>
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {allTools.map(name => {
-            const meta = getToolMeta(name);
-            const Icon = meta.icon;
-            const isEnabled = enabledSet.has(name);
-            const isToggling = toggling === name;
+      {/* Tab switcher */}
+      <div className="flex gap-2">
+        <button
+          onClick={() => setTab('tools')}
+          className={`px-4 py-2 rounded-lg text-[14px] font-medium transition-all ${
+            tab === 'tools' ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/60'
+          }`}
+        >
+          Built-in Tools ({allTools.length})
+        </button>
+        <button
+          onClick={() => setTab('skills')}
+          className={`px-4 py-2 rounded-lg text-[14px] font-medium transition-all ${
+            tab === 'skills' ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/60'
+          }`}
+        >
+          Bundled Skills ({Object.keys(BUNDLED_SKILLS).length})
+        </button>
+      </div>
 
-            return (
-              <Card
-                key={name}
-                className={`transition-all ${isEnabled ? 'ring-1 ring-emerald-500/10' : ''}`}
+      {/* Built-in tools tab */}
+      {tab === 'tools' && (
+        <div className="space-y-4">
+          {CATEGORY_ORDER.filter(c => toolsByCat[c]).map(cat => (
+            <div key={cat}>
+              <button
+                onClick={() => toggleCat(cat)}
+                className="flex items-center gap-2 mb-3 text-[14px] font-semibold text-white/60 hover:text-white/80 transition-colors"
               >
-                <div className="flex items-start gap-3 mb-3">
-                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-                    isEnabled ? 'bg-emerald-500/10' : 'bg-white/5'
-                  }`}>
-                    <Icon className={`h-5 w-5 ${isEnabled ? 'text-emerald-400' : 'text-white/40'}`} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h3 className={`text-[15px] font-semibold ${isEnabled ? 'text-white' : 'text-white/70'}`}>
-                        {meta.label}
-                      </h3>
-                      {isEnabled ? (
-                        <Badge variant="green" dot>Active</Badge>
-                      ) : (
-                        <Badge variant="default">Disabled</Badge>
-                      )}
-                    </div>
-                    <span className="text-[12px] text-white/25">{meta.category}</span>
-                  </div>
+                {expandedCats.has(cat) ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                {cat}
+                <span className="text-white/25">({toolsByCat[cat].length})</span>
+              </button>
+              {expandedCats.has(cat) && (
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 mb-4">
+                  {toolsByCat[cat].map(name => {
+                    const meta = TOOL_META[name] || { label: name, desc: `OpenClaw tool: ${name}`, icon: Wrench, cat: 'Other' };
+                    const Icon = meta.icon;
+                    const isEnabled = enabledSet.has(name);
+                    return (
+                      <Card key={name} className={`transition-all ${isEnabled ? 'ring-1 ring-emerald-500/10' : ''}`}>
+                        <div className="flex items-start gap-3 mb-2">
+                          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${isEnabled ? 'bg-emerald-500/10' : 'bg-white/5'}`}>
+                            <Icon className={`h-4.5 w-4.5 ${isEnabled ? 'text-emerald-400' : 'text-white/40'}`} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <h3 className={`text-[14px] font-semibold ${isEnabled ? 'text-white' : 'text-white/70'}`}>{meta.label}</h3>
+                              {isEnabled ? <Badge variant="green" dot>Active</Badge> : <Badge variant="default">Off</Badge>}
+                            </div>
+                          </div>
+                        </div>
+                        <p className="text-[12px] text-white/40 leading-relaxed mb-3">{meta.desc}</p>
+                        <Button
+                          variant={isEnabled ? 'glass' : 'primary'} size="sm"
+                          loading={toggling === name}
+                          onClick={() => toggleTool(name, !isEnabled)}
+                        >
+                          {isEnabled ? <><PowerOff className="h-3.5 w-3.5" /> Disable</> : <><Power className="h-3.5 w-3.5" /> Enable</>}
+                        </Button>
+                      </Card>
+                    );
+                  })}
                 </div>
-                <p className="text-[13px] text-white/40 leading-relaxed mb-4">
-                  {meta.description}
-                </p>
-                <Button
-                  variant={isEnabled ? 'glass' : 'primary'}
-                  size="sm"
-                  loading={isToggling}
-                  onClick={() => toggleTool(name, !isEnabled)}
-                >
-                  {isEnabled ? (
-                    <><PowerOff className="h-3.5 w-3.5" /> Disable</>
-                  ) : (
-                    <><Power className="h-3.5 w-3.5" /> Enable</>
-                  )}
-                </Button>
-              </Card>
-            );
-          })}
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Bundled skills tab */}
+      {tab === 'skills' && (
+        <div className="space-y-4">
+          {CATEGORY_ORDER.filter(c => skillsByCat[c]).map(cat => (
+            <div key={cat}>
+              <button
+                onClick={() => toggleCat(cat)}
+                className="flex items-center gap-2 mb-3 text-[14px] font-semibold text-white/60 hover:text-white/80 transition-colors"
+              >
+                {expandedCats.has(cat) ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                {cat}
+                <span className="text-white/25">({skillsByCat[cat].length})</span>
+              </button>
+              {expandedCats.has(cat) && (
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 mb-4">
+                  {skillsByCat[cat].map(name => {
+                    const meta = BUNDLED_SKILLS[name];
+                    const Icon = meta.icon;
+                    const isEnabled = skillsConfig[name]?.enabled === true;
+                    const isMacOnly = meta.requiresOs === 'darwin';
+                    const needsBin = meta.requiresBin && meta.requiresBin.length > 0;
+                    const needsKey = !!meta.envKey;
+                    const hasKey = !!(skillsConfig[name]?.env?.[meta.envKey || '']);
+
+                    let statusLabel = 'Available';
+                    let statusVariant: 'green' | 'default' | 'accent' = 'default';
+                    if (isEnabled) { statusLabel = 'Active'; statusVariant = 'green'; }
+                    else if (isMacOnly) { statusLabel = 'macOS only'; }
+                    else if (needsBin) { statusLabel = 'Needs CLI'; }
+                    else if (needsKey && !hasKey) { statusLabel = 'Needs Key'; statusVariant = 'accent'; }
+
+                    return (
+                      <Card key={name} className={`transition-all ${isEnabled ? 'ring-1 ring-emerald-500/10' : ''}`}>
+                        <div className="flex items-start gap-3 mb-2">
+                          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-lg ${isEnabled ? 'bg-emerald-500/10' : 'bg-white/5'}`}>
+                            {meta.emoji}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h3 className={`text-[14px] font-semibold ${isEnabled ? 'text-white' : 'text-white/70'}`}>{meta.label}</h3>
+                              {isEnabled ? (
+                                <Badge variant="green" dot>Active</Badge>
+                              ) : (
+                                <Badge variant={statusVariant}>{statusLabel}</Badge>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <p className="text-[12px] text-white/40 leading-relaxed mb-3">{meta.desc}</p>
+
+                        {needsKey && !hasKey && !isMacOnly && (
+                          <div className="mb-3">
+                            <input
+                              type="password"
+                              placeholder={meta.envLabel || 'API Key'}
+                              value={apiKeyInputs[name] || ''}
+                              onChange={e => setApiKeyInputs(prev => ({ ...prev, [name]: e.target.value }))}
+                              className="w-full px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-[12px] text-white placeholder-white/25 focus:outline-none focus:ring-1 focus:ring-emerald-500/30"
+                            />
+                          </div>
+                        )}
+
+                        {isMacOnly ? (
+                          <div className="text-[11px] text-white/25">Not available in cloud containers</div>
+                        ) : (
+                          <Button
+                            variant={isEnabled ? 'glass' : 'primary'} size="sm"
+                            loading={toggling === name}
+                            onClick={() => toggleSkill(name, !isEnabled, meta.envKey)}
+                            disabled={needsKey && !hasKey && !isEnabled && !apiKeyInputs[name]}
+                          >
+                            {isEnabled ? (
+                              <><PowerOff className="h-3.5 w-3.5" /> Disable</>
+                            ) : needsKey && !hasKey ? (
+                              <><Key className="h-3.5 w-3.5" /> Save Key & Enable</>
+                            ) : (
+                              <><Power className="h-3.5 w-3.5" /> Enable</>
+                            )}
+                          </Button>
+                        )}
+                      </Card>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </div>

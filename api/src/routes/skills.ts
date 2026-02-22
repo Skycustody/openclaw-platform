@@ -1,14 +1,18 @@
 /**
- * Skills routes — manages agent tool configs in openclaw.json.
+ * Skills routes — manages agent tools AND bundled skills in openclaw.json.
+ *
+ * Two config sections:
+ *   tools.*          → built-in tool enable/disable (exec, browser, web_search, etc.)
+ *   skills.entries.* → bundled skill enable/disable + env/apiKey overrides
  *
  * ┌─────────────────────────────────────────────────────────────────────────┐
  * │ SECURITY — DO NOT CHANGE WITHOUT UNDERSTANDING                         │
  * │                                                                        │
- * │ 1. PROTOTYPE POLLUTION: toolName is validated against __proto__,       │
+ * │ 1. PROTOTYPE POLLUTION: names validated against __proto__,             │
  * │    constructor, prototype. Without this, PUT /__proto__ would pollute │
  * │    the config object and potentially the process.                     │
  * │                                                                        │
- * │ 2. TOOL NAME FORMAT: Only alphanumeric chars and hyphens/underscores. │
+ * │ 2. NAME FORMAT: Only alphanumeric chars and hyphens/underscores.      │
  * │    This prevents shell injection when the name is used in file paths. │
  * └─────────────────────────────────────────────────────────────────────────┘
  */
@@ -26,9 +30,14 @@ const router = Router();
 router.use(authenticate);
 router.use(requireActiveSubscription);
 
+function isValidName(name: string): boolean {
+  return !!name && !/^(__proto__|constructor|prototype)$/.test(name) && /^[a-zA-Z0-9_\-.:]+$/.test(name);
+}
+
+// GET /skills — returns both tools config AND bundled skills config
 router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { serverIp, containerName, user } = await getUserContainer(req.userId!);
+    const { serverIp, containerName } = await getUserContainer(req.userId!);
 
     let availableTools: string[] = [];
     try {
@@ -42,17 +51,32 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
       }
     } catch {}
 
+    let availableSkills: any[] = [];
+    try {
+      const skillsResult = await sshExec(
+        serverIp,
+        `docker exec ${containerName} openclaw skills list --json 2>/dev/null || echo '[]'`
+      );
+      const parsed = JSON.parse(skillsResult.stdout.trim() || '[]');
+      if (Array.isArray(parsed)) {
+        availableSkills = parsed;
+      }
+    } catch {}
+
     const config = await readContainerConfig(serverIp, req.userId!);
     const toolsConfig = config.tools || {};
+    const skillsEntries = config.skills?.entries || {};
 
     const enabledTools: string[] = [];
     const disabledTools: string[] = [];
     for (const [name, val] of Object.entries(toolsConfig)) {
       const v = val as any;
-      if (v === true || v?.enabled === true) {
-        enabledTools.push(name);
-      } else if (v === false || v?.enabled === false) {
+      if (typeof v === 'object' && v !== null && !v.enabled && v.enabled !== undefined) {
         disabledTools.push(name);
+      } else if (v === false) {
+        disabledTools.push(name);
+      } else {
+        enabledTools.push(name);
       }
     }
 
@@ -67,21 +91,26 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
       disabled: disabledTools,
       available: availableTools,
       config: toolsConfig,
+      skills: availableSkills,
+      skillsConfig: skillsEntries,
     });
   } catch (err: any) {
     if (err.statusCode === 409) {
-      return res.json({ enabled: [], disabled: [], available: [], config: {}, notProvisioned: true });
+      return res.json({
+        enabled: [], disabled: [], available: [], config: {},
+        skills: [], skillsConfig: {},
+        notProvisioned: true,
+      });
     }
     next(err);
   }
 });
 
-router.put('/:toolName', async (req: AuthRequest, res: Response, next: NextFunction) => {
+// PUT /skills/tool/:name — toggle a built-in tool
+router.put('/tool/:toolName', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const toolName = req.params.toolName as string;
-    if (!toolName || /^(__proto__|constructor|prototype)$/.test(toolName) || !/^[a-zA-Z0-9_\-.:]+$/.test(toolName)) {
-      return res.status(400).json({ error: 'Invalid tool name' });
-    }
+    const toolName = req.params.toolName;
+    if (!isValidName(toolName)) return res.status(400).json({ error: 'Invalid tool name' });
     const { enabled, settings } = req.body;
 
     const { serverIp, containerName } = await getUserContainer(req.userId!);
@@ -97,7 +126,65 @@ router.put('/:toolName', async (req: AuthRequest, res: Response, next: NextFunct
     }
 
     await writeContainerConfig(serverIp, req.userId!, config);
+    const ready = await restartContainer(serverIp, containerName);
 
+    res.json({ ok: true, restarted: ready, tool: toolName, enabled: enabled !== false });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PUT /skills/bundled/:name — toggle a bundled skill + set API keys
+router.put('/bundled/:skillName', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const skillName = req.params.skillName;
+    if (!isValidName(skillName)) return res.status(400).json({ error: 'Invalid skill name' });
+    const { enabled, apiKey, envKey } = req.body;
+
+    const { serverIp, containerName } = await getUserContainer(req.userId!);
+    const config = await readContainerConfig(serverIp, req.userId!);
+
+    if (!config.skills) config.skills = {};
+    if (!config.skills.entries) config.skills.entries = {};
+
+    const entry: Record<string, any> = { ...config.skills.entries[skillName], enabled: enabled !== false };
+
+    if (apiKey && envKey) {
+      if (!entry.env) entry.env = {};
+      entry.env[envKey] = apiKey;
+    }
+
+    config.skills.entries[skillName] = entry;
+
+    await writeContainerConfig(serverIp, req.userId!, config);
+    const ready = await restartContainer(serverIp, containerName);
+
+    res.json({ ok: true, restarted: ready, skill: skillName, enabled: enabled !== false });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Legacy: PUT /skills/:toolName — backwards compatible tool toggle
+router.put('/:toolName', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const toolName = req.params.toolName;
+    if (!isValidName(toolName)) return res.status(400).json({ error: 'Invalid tool name' });
+    const { enabled, settings } = req.body;
+
+    const { serverIp, containerName } = await getUserContainer(req.userId!);
+    const config = await readContainerConfig(serverIp, req.userId!);
+
+    if (!config.tools) config.tools = {};
+
+    if (settings && typeof settings === 'object') {
+      config.tools[toolName] = { ...config.tools[toolName], ...settings, enabled: enabled !== false };
+    } else {
+      const existing = typeof config.tools[toolName] === 'object' ? config.tools[toolName] : {};
+      config.tools[toolName] = { ...existing, enabled: enabled !== false };
+    }
+
+    await writeContainerConfig(serverIp, req.userId!, config);
     const ready = await restartContainer(serverIp, containerName);
 
     res.json({ ok: true, restarted: ready, tool: toolName, enabled: enabled !== false });
@@ -108,17 +195,14 @@ router.put('/:toolName', async (req: AuthRequest, res: Response, next: NextFunct
 
 router.delete('/:toolName', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const toolName = req.params.toolName as string;
-    if (!toolName || /^(__proto__|constructor|prototype)$/.test(toolName) || !/^[a-zA-Z0-9_\-.:]+$/.test(toolName)) {
-      return res.status(400).json({ error: 'Invalid tool name' });
-    }
+    const toolName = req.params.toolName;
+    if (!isValidName(toolName)) return res.status(400).json({ error: 'Invalid tool name' });
 
     const { serverIp, containerName } = await getUserContainer(req.userId!);
     const config = await readContainerConfig(serverIp, req.userId!);
 
-    if (config.tools) {
-      delete config.tools[toolName];
-    }
+    if (config.tools) delete config.tools[toolName];
+    if (config.skills?.entries) delete config.skills.entries[toolName];
 
     await writeContainerConfig(serverIp, req.userId!, config);
     await restartContainer(serverIp, containerName);

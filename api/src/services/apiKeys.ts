@@ -169,6 +169,15 @@ export async function injectApiKeys(
   if (!config.tools.image) config.tools.image = {};
   config.tools.image.enabled = true;
 
+  // ── Bundled skills — enable the ones that work without extra setup ──
+  if (!config.skills) config.skills = {};
+  if (!config.skills.entries) config.skills.entries = {};
+  const defaultSkills = ['weather', 'healthcheck', 'skill-creator', 'coding-agent', 'summarize', 'session-logs'];
+  for (const sk of defaultSkills) {
+    if (!config.skills.entries[sk]) config.skills.entries[sk] = {};
+    config.skills.entries[sk].enabled = true;
+  }
+
   // Sub-agent configuration — allow spawning and model inheritance
   if (!config.agents.defaults.subagents) config.agents.defaults.subagents = {};
   config.agents.defaults.subagents.allowAgents = ['*'];
