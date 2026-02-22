@@ -80,10 +80,27 @@ export default function DashboardHome() {
     setErrorMsg('Agent took too long to start. Try refreshing.');
   }, []);
 
-  const storeGatewayInfo = useCallback((data: { gatewayWsUrl?: string | null; gatewayToken?: string | null; url?: string }) => {
+  const storeGatewayInfo = useCallback((data: { gatewayWsUrl?: string | null; gatewayUrl?: string | null; gatewayToken?: string | null; url?: string }) => {
     if (data.url) setAgentUrl(data.url);
-    if (data.gatewayWsUrl) setGatewayWsUrl(data.gatewayWsUrl);
     if (data.gatewayToken) setGatewayToken(data.gatewayToken);
+
+    if (data.gatewayWsUrl) {
+      setGatewayWsUrl(data.gatewayWsUrl);
+    } else if (data.gatewayUrl) {
+      // Derive clean WSS URL by stripping query params
+      try {
+        const u = new URL(data.gatewayUrl.replace('wss://', 'https://'));
+        setGatewayWsUrl(`wss://${u.host}`);
+      } catch {
+        setGatewayWsUrl(data.gatewayUrl.split('?')[0]);
+      }
+    } else if (data.url) {
+      // Derive from the HTTPS URL
+      try {
+        const u = new URL(data.url);
+        setGatewayWsUrl(`wss://${u.host}`);
+      } catch {}
+    }
   }, []);
 
   const startAgent = useCallback(async () => {
@@ -95,7 +112,8 @@ export default function DashboardHome() {
         url: string;
         status: string;
         message?: string;
-        gatewayWsUrl: string | null;
+        gatewayUrl?: string | null;
+        gatewayWsUrl?: string | null;
         gatewayToken: string | null;
       }>('/agent/open');
 
@@ -113,7 +131,8 @@ export default function DashboardHome() {
               url: string;
               status: string;
               message?: string;
-              gatewayWsUrl: string | null;
+              gatewayUrl?: string | null;
+              gatewayWsUrl?: string | null;
               gatewayToken: string | null;
             }>('/agent/open');
 
@@ -183,6 +202,7 @@ export default function DashboardHome() {
         const embed = await api.get<{
           available: boolean;
           url?: string;
+          gatewayUrl?: string;
           gatewayWsUrl?: string;
           gatewayToken?: string;
           subscriptionStatus?: string;
@@ -414,6 +434,30 @@ export default function DashboardHome() {
 
         {phase === 'ready' && gatewayWsUrl && gatewayToken && (
           <GatewayChat gatewayUrl={gatewayWsUrl} token={gatewayToken} />
+        )}
+
+        {phase === 'ready' && (!gatewayWsUrl || !gatewayToken) && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-center z-10">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/[0.04] mb-5">
+              <Bot className="h-8 w-8 text-white/20" />
+            </div>
+            <p className="text-[15px] font-medium text-white/40">Connecting to agent gateway...</p>
+            <p className="text-[12px] text-white/20 mt-2 max-w-sm">
+              Could not establish WebSocket connection. The agent may still be starting up.
+            </p>
+            <div className="flex items-center gap-3 mt-5">
+              <Button variant="primary" size="sm" onClick={handleRetry}>
+                <RefreshCw className="h-4 w-4 mr-1.5" />
+                Retry
+              </Button>
+              {agentUrl && (
+                <Button variant="secondary" size="sm" onClick={() => window.open(agentUrl, '_blank')}>
+                  <ExternalLink className="h-4 w-4 mr-1.5" />
+                  Open Gateway
+                </Button>
+              )}
+            </div>
+          </div>
         )}
       </div>
     </div>
