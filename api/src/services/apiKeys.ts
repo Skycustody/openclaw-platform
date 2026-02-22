@@ -86,6 +86,9 @@ export async function injectApiKeys(
   // Set API key in env (used by the proxy for auth + forwarding to OpenRouter)
   if (!config.env) config.env = {};
   config.env.OPENROUTER_API_KEY = apiKey;
+  if (process.env.BROWSERLESS_TOKEN) {
+    config.env.BROWSERLESS_TOKEN = process.env.BROWSERLESS_TOKEN;
+  }
 
   // Configure "platform" as a custom OpenAI-compatible provider pointing to our proxy.
   // The proxy receives requests, classifies complexity, selects the real model,
