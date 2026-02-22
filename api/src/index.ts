@@ -59,6 +59,7 @@ import adminRoutes from './routes/admin';
 import autoRoutes from './routes/auto';
 import agentsRoutes from './routes/agents';
 import skillsRoutes from './routes/skills';
+import proxyRoutes from './routes/proxy';
 
 import { startScheduler } from './jobs/scheduler';
 import redis from './lib/redis';
@@ -111,7 +112,7 @@ app.use('/webhooks/stripe', express.raw({ type: 'application/json' }));
 // losing the body and silently failing worker registration.
 if (process.env.NODE_ENV === 'production') {
   app.use((req, res, next) => {
-    if (req.path.startsWith('/webhooks/') || req.path === '/health') {
+    if (req.path.startsWith('/webhooks/') || req.path.startsWith('/proxy/') || req.path === '/health') {
       return next();
     }
     if (req.headers['x-forwarded-proto'] !== 'https') {
@@ -134,7 +135,10 @@ app.use(cors({
 }));
 app.use(helmet());
 app.use(morgan('short'));
-app.use(rateLimitGeneral);
+app.use((req, res, next) => {
+  if (req.path.startsWith('/proxy/')) return next();
+  rateLimitGeneral(req, res, next);
+});
 
 // ── Routes ──
 app.use('/auth', authRoutes);
@@ -155,6 +159,7 @@ app.use('/admin', adminRoutes);
 app.use('/auto', autoRoutes);
 app.use('/agents', agentsRoutes);
 app.use('/skills', skillsRoutes);
+app.use('/proxy', proxyRoutes);
 
 // Health check
 app.get('/health', (_req, res) => {

@@ -6,8 +6,9 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import api from '@/lib/api';
 import {
-  Cpu, Brain, Loader2,
+  Brain, Loader2,
   Key, Eye, EyeOff, Trash2, Lock, Sparkles, Info, X, ExternalLink,
+  Zap, TrendingDown,
 } from 'lucide-react';
 
 interface Model {
@@ -28,6 +29,25 @@ interface Settings {
   own_openrouter_key_masked: string | null;
 }
 
+interface RoutingEntry {
+  id: string;
+  message_preview: string;
+  model_selected: string;
+  reason: string;
+  tokens_saved: number;
+  created_at: string;
+}
+
+function formatTimeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'now';
+  if (mins < 60) return `${mins}m`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h`;
+  return `${Math.floor(hours / 24)}d`;
+}
+
 export default function RouterPage() {
   const [models, setModels] = useState<Model[]>([]);
   const [settings, setSettings] = useState<Settings>({
@@ -41,14 +61,20 @@ export default function RouterPage() {
   const [keyInput, setKeyInput] = useState('');
   const [showKey, setShowKey] = useState(false);
   const [keySaving, setKeySaving] = useState(false);
+  const [routingHistory, setRoutingHistory] = useState<RoutingEntry[]>([]);
+  const [tokensSaved, setTokensSaved] = useState(0);
 
   const fetchData = useCallback(async () => {
     try {
-      const [modelsRes, settingsRes] = await Promise.all([
+      const [modelsRes, settingsRes, historyRes, savingsRes] = await Promise.all([
         api.get<{ models: Model[] }>('/router/models'),
         api.get<{ settings: any }>('/settings'),
+        api.get<{ history: RoutingEntry[] }>('/router/history?limit=10').catch(() => ({ history: [] })),
+        api.get<{ tokensSavedThisMonth: number }>('/router/savings').catch(() => ({ tokensSavedThisMonth: 0 })),
       ]);
       setModels(modelsRes.models || []);
+      setRoutingHistory(historyRes.history || []);
+      setTokensSaved(savingsRes.tokensSavedThisMonth || 0);
       if (settingsRes.settings) {
         const s = settingsRes.settings;
         setSettings({
@@ -128,7 +154,7 @@ export default function RouterPage() {
                   {settings.brain_mode === 'auto' && <Badge variant="green">Active</Badge>}
                 </div>
                 <CardDescription className="mt-1">
-                  Let OpenClaw pick the best model for each task. Balances speed, quality, and cost automatically.
+                  Smart routing picks the cheapest capable model per message. &quot;Hello&quot; uses Gemini Flash, &quot;build me an app&quot; uses Claude Sonnet.
                 </CardDescription>
               </div>
             </div>
@@ -196,6 +222,60 @@ export default function RouterPage() {
             ))}
           </div>
         </Card>
+      )}
+
+      {/* Smart Routing Activity */}
+      {settings.brain_mode === 'auto' && (
+        <div className="space-y-4">
+          {tokensSaved > 0 && (
+            <Card className="!border-green-500/20 !bg-green-500/[0.03]">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-500/20">
+                  <TrendingDown className="h-5 w-5 text-green-400" />
+                </div>
+                <div>
+                  <p className="text-[15px] font-semibold text-green-400">
+                    {(tokensSaved / 1000).toFixed(0)}K tokens saved this month
+                  </p>
+                  <p className="text-[12px] text-white/40">
+                    Smart routing picks the cheapest capable model for each task
+                  </p>
+                </div>
+              </div>
+            </Card>
+          )}
+
+          {routingHistory.length > 0 && (
+            <Card>
+              <div className="flex items-center gap-2 mb-3">
+                <Zap className="h-4 w-4 text-amber-400" />
+                <CardTitle>Recent Routing Decisions</CardTitle>
+              </div>
+              <div className="space-y-1">
+                {routingHistory.map((entry) => {
+                  const modelShort = entry.model_selected.split('/').pop() || entry.model_selected;
+                  const timeAgo = formatTimeAgo(entry.created_at);
+                  return (
+                    <div key={entry.id} className="flex items-center gap-3 rounded-lg border border-white/[0.04] bg-white/[0.01] px-3 py-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[12px] text-white/60 truncate">{entry.message_preview || '...'}</p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Badge variant={modelShort.includes('flash') || modelShort.includes('mini') ? 'green' : modelShort.includes('sonnet') || modelShort.includes('o3') ? 'amber' : 'default'}>
+                          {modelShort}
+                        </Badge>
+                        <span className="text-[10px] text-white/25 w-12 text-right">{timeAgo}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="mt-2 text-[11px] text-white/25">
+                {routingHistory[0]?.reason}
+              </p>
+            </Card>
+          )}
+        </div>
       )}
 
       {/* Own OpenRouter Key (BYOK) */}
@@ -278,12 +358,13 @@ export default function RouterPage() {
             <Info className="h-4.5 w-4.5 text-blue-400/60" />
           </div>
           <div>
-            <p className="text-[13px] text-white/50 font-medium">How it works</p>
+            <p className="text-[13px] text-white/50 font-medium">How smart routing works</p>
             <p className="text-[12px] text-white/30 mt-1 leading-relaxed">
-              These settings are synced to your OpenClaw container. When you chat, your agent
-              uses the configured model to process messages. All AI calls go through OpenRouter
-              which provides access to Claude, GPT-4, Gemini, and more. To test your settings,
-              go to the home page and chat with your agent.
+              In Auto mode, every message is classified instantly and routed to the best model.
+              Simple messages (&quot;hello&quot;) go to fast, cheap models like Gemini Flash ($0.10/1M tokens).
+              Complex tasks (&quot;build me an app&quot;) go to powerful models like Claude Sonnet ($3.00/1M tokens).
+              This typically saves 60-80% on API costs compared to always using one model.
+              In Fixed mode, all messages use your selected model.
             </p>
           </div>
         </div>
