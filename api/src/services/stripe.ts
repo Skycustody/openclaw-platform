@@ -80,16 +80,14 @@ export async function createCreditCheckoutSession(
   stripeCustomerId?: string,
 ): Promise<string> {
   const packInfo = CREDIT_PACKS[pack];
-  if (!packInfo) throw new Error(`Invalid credit pack: ${pack}`);
+  if (!packInfo) throw new Error(`Invalid token pack: ${pack}. Valid packs: ${Object.keys(CREDIT_PACKS).join(', ')}`);
 
-  const priceIds: Record<string, string | undefined> = {
-    '5': process.env.STRIPE_PRICE_CREDITS_5,
-    '10': process.env.STRIPE_PRICE_CREDITS_10,
-    '20': process.env.STRIPE_PRICE_CREDITS_20,
-  };
-
-  const priceId = priceIds[pack];
-  if (!priceId) throw new Error(`Stripe price not configured for credit pack ${pack}`);
+  const priceId = process.env[packInfo.envKey];
+  if (!priceId) {
+    throw new Error(
+      `Token pack not configured. Set ${packInfo.envKey} in your .env file with the Stripe price ID.`
+    );
+  }
 
   const sessionParams: Stripe.Checkout.SessionCreateParams = {
     mode: 'payment',

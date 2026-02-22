@@ -9,7 +9,10 @@
  *   - Its own identity (name, emoji)
  *
  * NO separate containers. RAM is shared within one container.
- * This wraps `openclaw agents add/delete` CLI commands.
+ *
+ * Additional features:
+ *   - Per-agent channel connections (multiple Telegram bots, WhatsApp numbers, etc.)
+ *   - Inter-agent communication permissions (directed graph)
  */
 import { Router, Response, NextFunction } from 'express';
 import { AuthRequest, authenticate, requireActiveSubscription } from '../middleware/auth';
@@ -21,6 +24,9 @@ import {
   restartContainer as restartContainerHelper,
 } from '../services/containerConfig';
 import { sshExec } from '../services/ssh';
+import { encrypt } from '../lib/encryption';
+import { injectApiKeys } from '../services/apiKeys';
+
 const router = Router();
 router.use(authenticate);
 router.use(requireActiveSubscription);
@@ -39,12 +45,42 @@ interface Agent {
   name: string;
   purpose: string | null;
   instructions: string | null;
-  openclaw_agent_id: string;
+  openclaw_agent_id: string | null;
   status: string;
   ram_mb: number;
   is_primary: boolean;
   created_at: string;
   last_active: string;
+}
+
+interface AgentChannel {
+  id: string;
+  agent_id: string;
+  user_id: string;
+  channel_type: string;
+  token: string | null;
+  config: Record<string, any>;
+  connected: boolean;
+  label: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface AgentComm {
+  id: string;
+  source_agent_id: string;
+  target_agent_id: string;
+  enabled: boolean;
+}
+
+function deriveOpenclawId(name: string, agentId: string): string {
+  return name.trim().toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').slice(0, 20)
+    || `agent-${agentId.slice(0, 6)}`;
+}
+
+function getOpenclawId(agent: Agent): string {
+  if (agent.is_primary) return 'main';
+  return agent.openclaw_agent_id || deriveOpenclawId(agent.name, agent.id);
 }
 
 /**
@@ -91,7 +127,6 @@ async function syncAgentToContainer(
 
   await writeContainerConfig(serverIp, userId, config);
 
-  // Create workspace directory and write personality
   const wsDir = `${INSTANCE_DIR}/${userId}/workspace-${agent.openclawId}`;
   const agentDir = `${INSTANCE_DIR}/${userId}/agents/${agent.openclawId}/agent`;
 
@@ -107,10 +142,6 @@ async function syncAgentToContainer(
     `mkdir -p ${agentDir}`,
     `echo '${soulB64}' | base64 -d > ${wsDir}/SOUL.md`,
   ].join(' && '));
-
-  // OpenRouter API key is configured at the provider level in openclaw.json,
-  // so all agents in the container share it automatically — no per-agent
-  // auth-profiles.json needed.
 }
 
 /**
@@ -127,28 +158,142 @@ async function removeAgentFromContainer(
     config.agents.list = config.agents.list.filter((a: any) => a.id !== openclawId);
   }
 
-  // Remove any bindings for this agent
   if (Array.isArray(config.bindings)) {
     config.bindings = config.bindings.filter((b: any) => b.agentId !== openclawId);
   }
 
   await writeContainerConfig(serverIp, userId, config);
 
-  // Clean up workspace and agent dir
   const wsDir = `${INSTANCE_DIR}/${userId}/workspace-${openclawId}`;
   const agentDir = `${INSTANCE_DIR}/${userId}/agents/${openclawId}`;
   await sshExec(serverIp, `rm -rf ${wsDir} ${agentDir}`).catch(() => {});
 }
 
 /**
- * GET /agents — list all agents, synced with container's agents.list.
+ * Sync all channel bindings and communication rules to openclaw.json.
+ * Call after any channel or communication change.
  */
+async function syncBindingsToContainer(
+  serverIp: string,
+  userId: string,
+): Promise<void> {
+  const config = await readContainerConfig(serverIp, userId);
+
+  // Build channel configs and bindings from agent_channels
+  const channels = await db.getMany<AgentChannel & { agent_name: string; agent_is_primary: boolean }>(
+    `SELECT ac.*, a.name as agent_name, a.is_primary as agent_is_primary,
+            COALESCE(a.openclaw_agent_id, CASE WHEN a.is_primary THEN 'main' ELSE NULL END) as resolved_ocid
+     FROM agent_channels ac
+     JOIN agents a ON a.id = ac.agent_id
+     WHERE ac.user_id = $1 AND ac.connected = true`,
+    [userId]
+  );
+
+  if (!config.channels) config.channels = {};
+  config.bindings = [];
+
+  // Group by channel type to handle multiple instances
+  const channelsByType: Record<string, (AgentChannel & { resolved_ocid: string })[]> = {};
+  for (const ch of channels) {
+    if (!channelsByType[ch.channel_type]) channelsByType[ch.channel_type] = [];
+    channelsByType[ch.channel_type].push(ch as any);
+  }
+
+  // Clear existing channel configs that we manage
+  for (const type of ['telegram', 'discord', 'slack', 'whatsapp', 'signal']) {
+    // Remove base and numbered variants
+    delete config.channels[type];
+    for (let i = 2; i <= 10; i++) delete config.channels[`${type}-${i}`];
+  }
+
+  for (const [type, instances] of Object.entries(channelsByType)) {
+    instances.forEach((ch, idx) => {
+      const channelKey = idx === 0 ? type : `${type}-${idx + 1}`;
+      const agentId = (ch as any).resolved_ocid || deriveOpenclawId((ch as any).agent_name, ch.agent_id);
+
+      if (type === 'telegram') {
+        config.channels[channelKey] = {
+          enabled: true,
+          botToken: ch.token,
+          dmPolicy: 'open',
+          allowFrom: ['*'],
+          groups: { '*': { requireMention: true } },
+        };
+      } else if (type === 'discord') {
+        config.channels[channelKey] = {
+          enabled: true,
+          token: ch.token,
+          dmPolicy: 'open',
+          allowFrom: ['*'],
+          ...(ch.config?.guildId ? { guildId: ch.config.guildId } : {}),
+        };
+      } else if (type === 'slack') {
+        config.channels[channelKey] = {
+          enabled: true,
+          token: ch.token,
+          ...(ch.config?.teamId ? { teamId: ch.config.teamId } : {}),
+        };
+      } else if (type === 'whatsapp') {
+        config.channels[channelKey] = {
+          dmPolicy: 'open',
+          allowFrom: ['*'],
+        };
+      }
+
+      config.bindings.push({ channel: channelKey, agentId });
+    });
+  }
+
+  // Sync communication permissions to per-agent subagents config
+  const comms = await db.getMany<AgentComm & { source_ocid: string; target_ocid: string }>(
+    `SELECT ac.*,
+            COALESCE(sa.openclaw_agent_id, CASE WHEN sa.is_primary THEN 'main' ELSE NULL END) as source_ocid,
+            COALESCE(ta.openclaw_agent_id, CASE WHEN ta.is_primary THEN 'main' ELSE NULL END) as target_ocid
+     FROM agent_communications ac
+     JOIN agents sa ON sa.id = ac.source_agent_id
+     JOIN agents ta ON ta.id = ac.target_agent_id
+     WHERE ac.user_id = $1 AND ac.enabled = true`,
+    [userId]
+  );
+
+  // Build per-agent allowAgents map
+  const allowMap: Record<string, string[]> = {};
+  for (const comm of comms) {
+    const srcId = comm.source_ocid || 'main';
+    const tgtId = comm.target_ocid || 'main';
+    if (!allowMap[srcId]) allowMap[srcId] = [];
+    if (!allowMap[srcId].includes(tgtId)) allowMap[srcId].push(tgtId);
+  }
+
+  // Apply to agents.list entries
+  if (config.agents?.list) {
+    for (const agentEntry of config.agents.list) {
+      const allowed = allowMap[agentEntry.id];
+      if (allowed && allowed.length > 0) {
+        agentEntry.subagents = {
+          allowAgents: allowed,
+          maxConcurrent: 3,
+        };
+      } else {
+        agentEntry.subagents = {
+          allowAgents: [],
+          maxConcurrent: 0,
+        };
+      }
+    }
+  }
+
+  await writeContainerConfig(serverIp, userId, config);
+}
+
+// ─── GET /agents ─── List all agents ───
+
 router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const user = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [req.userId]);
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    // Ensure primary agent record exists in DB
+    // Ensure primary agent record exists
     const existingPrimary = await db.getOne<Agent>(
       'SELECT * FROM agents WHERE user_id = $1 AND is_primary = true',
       [req.userId]
@@ -156,9 +301,9 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
 
     if (!existingPrimary) {
       await db.query(
-        `INSERT INTO agents (id, user_id, name, purpose, status, ram_mb, is_primary)
+        `INSERT INTO agents (id, user_id, name, purpose, status, ram_mb, is_primary, openclaw_agent_id)
          VALUES ($1, $2, 'Primary Agent', 'Your main AI assistant',
-           $3, $4, true)
+           $3, $4, true, 'main')
          ON CONFLICT DO NOTHING`,
         [
           uuid(), req.userId,
@@ -173,23 +318,40 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
       [req.userId]
     );
 
+    // Get channel counts per agent
+    const channelCounts = await db.getMany<{ agent_id: string; count: string }>(
+      `SELECT agent_id, COUNT(*) as count FROM agent_channels
+       WHERE user_id = $1 AND connected = true GROUP BY agent_id`,
+      [req.userId]
+    );
+    const countMap: Record<string, number> = {};
+    for (const c of channelCounts) countMap[c.agent_id] = parseInt(c.count);
+
+    // Get communication counts per agent
+    const commCounts = await db.getMany<{ source_agent_id: string; count: string }>(
+      `SELECT source_agent_id, COUNT(*) as count FROM agent_communications
+       WHERE user_id = $1 AND enabled = true GROUP BY source_agent_id`,
+      [req.userId]
+    );
+    const commMap: Record<string, number> = {};
+    for (const c of commCounts) commMap[c.source_agent_id] = parseInt(c.count);
+
     const plan = user.plan || 'starter';
     const maxAgents = MAX_AGENTS[plan] || 1;
     const planLimits = PLAN_LIMITS[plan as Plan];
-
-    // RAM is shared within one container — plan RAM is the total pool
     const totalRamMb = planLimits.ramMb;
-    const agentCount = agents.length;
 
     res.json({
       agents: agents.map(a => ({
         ...a,
-        openclawAgentId: a.is_primary ? 'main' : (a.name.toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 20) || `agent-${a.id.slice(0, 6)}`),
+        openclawAgentId: getOpenclawId(a),
+        channelCount: countMap[a.id] || 0,
+        commCount: commMap[a.id] || 0,
       })),
       limits: {
         maxAgents,
-        currentCount: agentCount,
-        canCreate: agentCount < maxAgents,
+        currentCount: agents.length,
+        canCreate: agents.length < maxAgents,
         totalRamMb,
         sharedRam: true,
       },
@@ -200,10 +362,65 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
   }
 });
 
-/**
- * POST /agents — create a new agent inside the user's OpenClaw container.
- * Uses openclaw.json agents.list — NO new container.
- */
+// ─── GET /agents/:agentId ─── Single agent detail with channels + comms ───
+
+router.get('/:agentId', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { agentId } = req.params;
+    const agent = await db.getOne<Agent>(
+      'SELECT * FROM agents WHERE id = $1 AND user_id = $2',
+      [agentId, req.userId]
+    );
+    if (!agent) return res.status(404).json({ error: 'Agent not found' });
+
+    const channels = await db.getMany<AgentChannel>(
+      `SELECT * FROM agent_channels WHERE agent_id = $1 ORDER BY created_at ASC`,
+      [agentId]
+    );
+
+    // Get all agents for this user (for comm checkboxes)
+    const allAgents = await db.getMany<Agent>(
+      'SELECT id, name, is_primary, openclaw_agent_id FROM agents WHERE user_id = $1 ORDER BY is_primary DESC, created_at ASC',
+      [req.userId]
+    );
+
+    // Get communication permissions FROM this agent
+    const commsFrom = await db.getMany<AgentComm>(
+      `SELECT * FROM agent_communications WHERE source_agent_id = $1`,
+      [agentId]
+    );
+
+    // Get communication permissions TO this agent
+    const commsTo = await db.getMany<AgentComm>(
+      `SELECT * FROM agent_communications WHERE target_agent_id = $1`,
+      [agentId]
+    );
+
+    res.json({
+      agent: {
+        ...agent,
+        openclawAgentId: getOpenclawId(agent),
+      },
+      channels: channels.map(ch => ({
+        ...ch,
+        token: undefined, // never expose raw tokens to frontend
+        hasToken: !!ch.token,
+      })),
+      communications: {
+        canTalkTo: commsFrom.filter(c => c.enabled).map(c => c.target_agent_id),
+        canBeReachedBy: commsTo.filter(c => c.enabled).map(c => c.source_agent_id),
+      },
+      otherAgents: allAgents
+        .filter(a => a.id !== agentId)
+        .map(a => ({ id: a.id, name: a.name, is_primary: a.is_primary })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── POST /agents ─── Create new agent ───
+
 router.post('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const user = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [req.userId]);
@@ -230,10 +447,8 @@ router.post('/', async (req: AuthRequest, res: Response, next: NextFunction) => 
     }
 
     const agentId = uuid();
-    const openclawId = name.trim().toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 20)
-      || `agent-${agentId.slice(0, 6)}`;
+    const openclawId = deriveOpenclawId(name, agentId);
 
-    // Require a running container
     let container;
     try {
       container = await getUserContainer(req.userId!);
@@ -243,20 +458,17 @@ router.post('/', async (req: AuthRequest, res: Response, next: NextFunction) => 
       });
     }
 
-    // Add agent to openclaw.json agents.list + create workspace
     await syncAgentToContainer(
       container.serverIp, req.userId!, container.containerName,
       { openclawId, name: name.trim(), purpose: purpose || null, instructions: instructions || null }
     );
 
-    // Restart container so it picks up the new agent
     await restartContainerHelper(container.serverIp, container.containerName, 15000);
 
-    // Save to DB
     await db.query(
-      `INSERT INTO agents (id, user_id, name, purpose, instructions, status, ram_mb, is_primary)
-       VALUES ($1, $2, $3, $4, $5, 'active', 0, false)`,
-      [agentId, req.userId, name.trim(), purpose || null, instructions || null]
+      `INSERT INTO agents (id, user_id, name, purpose, instructions, status, ram_mb, is_primary, openclaw_agent_id)
+       VALUES ($1, $2, $3, $4, $5, 'active', 0, false, $6)`,
+      [agentId, req.userId, name.trim(), purpose || null, instructions || null, openclawId]
     );
 
     const agent = await db.getOne<Agent>('SELECT * FROM agents WHERE id = $1', [agentId]);
@@ -270,9 +482,8 @@ router.post('/', async (req: AuthRequest, res: Response, next: NextFunction) => 
   }
 });
 
-/**
- * PUT /agents/:agentId — update agent personality in the container.
- */
+// ─── PUT /agents/:agentId ─── Update agent personality ───
+
 router.put('/:agentId', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { agentId } = req.params;
@@ -298,7 +509,6 @@ router.put('/:agentId', async (req: AuthRequest, res: Response, next: NextFuncti
       const updatedAgent = await db.getOne<Agent>('SELECT * FROM agents WHERE id = $1', [agentId]);
 
       if (agent.is_primary) {
-        // For primary agent, write SOUL.md directly to the main workspace
         const soulContent: string[] = [];
         const agentName = updatedAgent?.name || agent.name;
         if (agentName) soulContent.push(`# ${agentName}`);
@@ -309,9 +519,7 @@ router.put('/:agentId', async (req: AuthRequest, res: Response, next: NextFuncti
         const wsDir = `${INSTANCE_DIR}/${req.userId}`;
         await sshExec(container.serverIp, `echo '${soulB64}' | base64 -d > ${wsDir}/SOUL.md`);
       } else {
-        const openclawId = (updatedAgent?.name || agent.name).toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 20)
-          || `agent-${agentId.slice(0, 6)}`;
-
+        const openclawId = getOpenclawId(agent);
         await syncAgentToContainer(
           container.serverIp, req.userId!, container.containerName,
           {
@@ -334,9 +542,8 @@ router.put('/:agentId', async (req: AuthRequest, res: Response, next: NextFuncti
   }
 });
 
-/**
- * DELETE /agents/:agentId — remove agent from container's agents.list + workspace.
- */
+// ─── DELETE /agents/:agentId ─── Remove agent ───
+
 router.delete('/:agentId', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { agentId } = req.params;
@@ -350,18 +557,16 @@ router.delete('/:agentId', async (req: AuthRequest, res: Response, next: NextFun
       return res.status(400).json({ error: 'Cannot delete your primary agent' });
     }
 
-    // Remove from container's openclaw.json and clean up workspace
     try {
       const container = await getUserContainer(req.userId!);
-      const openclawId = agent.name.toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 20)
-        || `agent-${agentId.slice(0, 6)}`;
-
+      const openclawId = getOpenclawId(agent);
       await removeAgentFromContainer(container.serverIp, req.userId!, openclawId);
       await restartContainerHelper(container.serverIp, container.containerName, 15000);
     } catch (err) {
       console.warn(`[agents] Container cleanup failed for agent ${agentId}:`, err);
     }
 
+    // Cascade deletes agent_channels and agent_communications via FK
     await db.query('DELETE FROM agents WHERE id = $1', [agentId]);
 
     res.json({ ok: true, message: 'Agent removed from your OpenClaw instance' });
@@ -370,10 +575,170 @@ router.delete('/:agentId', async (req: AuthRequest, res: Response, next: NextFun
   }
 });
 
-/**
- * POST /agents/:agentId/start — agents are always running inside the container.
- * This just marks the DB status.
- */
+// ─── POST /agents/:agentId/channels ─── Connect a channel to this agent ───
+
+router.post('/:agentId/channels', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { agentId } = req.params;
+    const agent = await db.getOne<Agent>(
+      'SELECT * FROM agents WHERE id = $1 AND user_id = $2',
+      [agentId, req.userId]
+    );
+    if (!agent) return res.status(404).json({ error: 'Agent not found' });
+
+    const { channelType, token, label, config: channelConfig } = req.body;
+    if (!channelType) return res.status(400).json({ error: 'Channel type is required' });
+
+    const validTypes = ['telegram', 'discord', 'slack', 'whatsapp', 'signal'];
+    if (!validTypes.includes(channelType)) {
+      return res.status(400).json({ error: `Invalid channel type. Must be one of: ${validTypes.join(', ')}` });
+    }
+
+    // Validate the token for supported channels
+    if (channelType === 'telegram' && token) {
+      const tgRes = await fetch(`https://api.telegram.org/bot${token}/getMe`);
+      if (!tgRes.ok) return res.status(400).json({ error: 'Invalid Telegram bot token' });
+    }
+    if (channelType === 'discord' && token) {
+      const dcRes = await fetch('https://discord.com/api/v10/users/@me', {
+        headers: { Authorization: `Bot ${token}` },
+      });
+      if (!dcRes.ok) return res.status(400).json({ error: 'Invalid Discord bot token' });
+    }
+
+    const channelId = uuid();
+
+    await db.query(
+      `INSERT INTO agent_channels (id, agent_id, user_id, channel_type, token, config, connected, label)
+       VALUES ($1, $2, $3, $4, $5, $6, true, $7)`,
+      [
+        channelId, agentId, req.userId,
+        channelType,
+        token ? encrypt(token) : null,
+        JSON.stringify(channelConfig || {}),
+        label || `${channelType} for ${agent.name}`,
+      ]
+    );
+
+    // Also update legacy user_channels for backward compatibility
+    await updateLegacyChannels(req.userId!, channelType, true);
+
+    // Sync to container
+    try {
+      const container = await getUserContainer(req.userId!);
+      await injectApiKeys(container.serverIp, req.userId!, container.containerName, 'starter');
+      await syncBindingsToContainer(container.serverIp, req.userId!);
+      await restartContainerHelper(container.serverIp, container.containerName, 15000);
+    } catch (err) {
+      console.warn(`[agents/channels] Container sync failed:`, err);
+    }
+
+    res.json({
+      channel: { id: channelId, channelType, connected: true, label: label || `${channelType} for ${agent.name}` },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── DELETE /agents/:agentId/channels/:channelId ─── Disconnect a channel ───
+
+router.delete('/:agentId/channels/:channelId', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { agentId, channelId } = req.params;
+    const channel = await db.getOne<AgentChannel>(
+      `SELECT * FROM agent_channels WHERE id = $1 AND agent_id = $2 AND user_id = $3`,
+      [channelId, agentId, req.userId]
+    );
+    if (!channel) return res.status(404).json({ error: 'Channel connection not found' });
+
+    await db.query('DELETE FROM agent_channels WHERE id = $1', [channelId]);
+
+    // Check if this was the last connection for this channel type
+    const remaining = await db.getOne<{ count: string }>(
+      `SELECT COUNT(*) as count FROM agent_channels WHERE user_id = $1 AND channel_type = $2 AND connected = true`,
+      [req.userId, channel.channel_type]
+    );
+    if (parseInt(remaining?.count || '0') === 0) {
+      await updateLegacyChannels(req.userId!, channel.channel_type, false);
+    }
+
+    // Sync to container
+    try {
+      const container = await getUserContainer(req.userId!);
+      await syncBindingsToContainer(container.serverIp, req.userId!);
+      await restartContainerHelper(container.serverIp, container.containerName, 15000);
+    } catch (err) {
+      console.warn(`[agents/channels] Container sync failed:`, err);
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── PUT /agents/:agentId/communications ─── Update inter-agent permissions ───
+
+router.put('/:agentId/communications', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { agentId } = req.params;
+    const agent = await db.getOne<Agent>(
+      'SELECT * FROM agents WHERE id = $1 AND user_id = $2',
+      [agentId, req.userId]
+    );
+    if (!agent) return res.status(404).json({ error: 'Agent not found' });
+
+    // canTalkTo: array of agent IDs this agent is allowed to communicate with
+    const { canTalkTo } = req.body as { canTalkTo: string[] };
+    if (!Array.isArray(canTalkTo)) {
+      return res.status(400).json({ error: 'canTalkTo must be an array of agent IDs' });
+    }
+
+    // Verify all target agents belong to this user
+    if (canTalkTo.length > 0) {
+      const validTargets = await db.getMany<{ id: string }>(
+        `SELECT id FROM agents WHERE user_id = $1 AND id = ANY($2::uuid[])`,
+        [req.userId, canTalkTo]
+      );
+      if (validTargets.length !== canTalkTo.length) {
+        return res.status(400).json({ error: 'Some target agents not found' });
+      }
+    }
+
+    // Remove all existing outgoing permissions
+    await db.query(
+      `DELETE FROM agent_communications WHERE source_agent_id = $1`,
+      [agentId]
+    );
+
+    // Insert new permissions
+    for (const targetId of canTalkTo) {
+      await db.query(
+        `INSERT INTO agent_communications (id, user_id, source_agent_id, target_agent_id, enabled)
+         VALUES ($1, $2, $3, $4, true)
+         ON CONFLICT (source_agent_id, target_agent_id) DO UPDATE SET enabled = true`,
+        [uuid(), req.userId, agentId, targetId]
+      );
+    }
+
+    // Sync to container
+    try {
+      const container = await getUserContainer(req.userId!);
+      await syncBindingsToContainer(container.serverIp, req.userId!);
+      await restartContainerHelper(container.serverIp, container.containerName, 15000);
+    } catch (err) {
+      console.warn(`[agents/comms] Container sync failed:`, err);
+    }
+
+    res.json({ ok: true, canTalkTo });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── POST /agents/:agentId/start ───
+
 router.post('/:agentId/start', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { agentId } = req.params;
@@ -398,10 +763,8 @@ router.post('/:agentId/start', async (req: AuthRequest, res: Response, next: Nex
   }
 });
 
-/**
- * POST /agents/:agentId/stop — mark agent as sleeping.
- * The agent still exists in the container but is not actively used.
- */
+// ─── POST /agents/:agentId/stop ───
+
 router.post('/:agentId/stop', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { agentId } = req.params;
@@ -421,5 +784,16 @@ router.post('/:agentId/stop', async (req: AuthRequest, res: Response, next: Next
     next(err);
   }
 });
+
+// ─── Helpers ───
+
+async function updateLegacyChannels(userId: string, channelType: string, connected: boolean): Promise<void> {
+  const col = `${channelType}_connected`;
+  await db.query(
+    `INSERT INTO user_channels (user_id, ${col}, updated_at) VALUES ($1, $2, NOW())
+     ON CONFLICT (user_id) DO UPDATE SET ${col} = $2, updated_at = NOW()`,
+    [userId, connected]
+  ).catch(() => {});
+}
 
 export default router;

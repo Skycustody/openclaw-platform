@@ -146,7 +146,7 @@ router.put('/brain', async (req: AuthRequest, res: Response, next: NextFunction)
   }
 });
 
-// Update token protection settings
+// Update token protection settings — syncs to openclaw.json
 router.put('/protection', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const {
@@ -177,6 +177,42 @@ router.put('/protection', async (req: AuthRequest, res: Response, next: NextFunc
         req.userId,
       ]
     );
+
+    // Sync protection settings to the OpenClaw container
+    try {
+      const { serverIp, containerName } = await getUserContainer(req.userId!);
+      const config = await readContainerConfig(serverIp, req.userId!);
+
+      if (!config.protection) config.protection = {};
+
+      // Token budgets per task complexity
+      if (tokenBudgetSimple !== undefined) config.protection.maxTokensSimple = tokenBudgetSimple;
+      if (tokenBudgetMedium !== undefined) config.protection.maxTokensMedium = tokenBudgetMedium;
+      if (tokenBudgetComplex !== undefined) config.protection.maxTokensComplex = tokenBudgetComplex;
+
+      // Quiet hours — agent won't start new tasks during these times
+      config.protection.quietHours = {
+        enabled: quietHoursEnabled ?? false,
+        start: quietStart || '22:00',
+        end: quietEnd || '07:00',
+      };
+
+      // Loop detection — stops agent if stuck in a loop
+      config.protection.loopDetection = {
+        enabled: loopDetection ?? true,
+        maxMinutes: maxTaskDuration || 5,
+      };
+
+      // Max task duration in seconds
+      if (maxTaskDuration !== undefined) {
+        config.protection.maxTaskDurationSecs = maxTaskDuration;
+      }
+
+      await writeContainerConfig(serverIp, req.userId!, config);
+      restartContainer(serverIp, containerName).catch(() => {});
+    } catch {
+      // Container not provisioned — settings saved to DB only
+    }
 
     res.json({ ok: true });
   } catch (err) {

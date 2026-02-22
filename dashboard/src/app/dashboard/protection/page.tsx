@@ -52,8 +52,26 @@ export default function ProtectionPage() {
   useEffect(() => {
     api.get<any>('/settings')
       .then((res) => {
-        const s = res.settings || res.protection || res;
-        if (s && typeof s === 'object' && 'dailyTokenLimit' in s) setSettings(s);
+        const s = res.settings;
+        if (s && typeof s === 'object') {
+          setSettings(prev => ({
+            ...prev,
+            tokenBudgets: {
+              simple: s.token_budget_simple ?? prev.tokenBudgets.simple,
+              medium: s.token_budget_medium ?? prev.tokenBudgets.medium,
+              complex: s.token_budget_complex ?? prev.tokenBudgets.complex,
+            },
+            quietHours: {
+              enabled: s.quiet_hours_enabled ?? prev.quietHours.enabled,
+              start: s.quiet_start ?? prev.quietHours.start,
+              end: s.quiet_end ?? prev.quietHours.end,
+            },
+            loopProtection: {
+              enabled: s.loop_detection ?? prev.loopProtection.enabled,
+              maxMinutes: s.max_task_duration ?? prev.loopProtection.maxMinutes,
+            },
+          }));
+        }
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -63,7 +81,16 @@ export default function ProtectionPage() {
     setSaving(true);
     setSaved(false);
     try {
-      await api.put('/settings/protection', settings);
+      await api.put('/settings/protection', {
+        quietHoursEnabled: settings.quietHours.enabled,
+        quietStart: settings.quietHours.start,
+        quietEnd: settings.quietHours.end,
+        maxTaskDuration: settings.loopProtection.maxMinutes,
+        loopDetection: settings.loopProtection.enabled,
+        tokenBudgetSimple: settings.tokenBudgets.simple,
+        tokenBudgetMedium: settings.tokenBudgets.medium,
+        tokenBudgetComplex: settings.tokenBudgets.complex,
+      });
     } catch {}
     finally {
       setSaving(false);

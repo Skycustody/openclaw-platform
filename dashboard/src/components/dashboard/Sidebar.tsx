@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, Activity, Smartphone, Puzzle, Brain, Clock,
   Globe, Coins, Cpu, User, Shield, MessageSquare, FileText,
-  CreditCard, Gift, Store, LogOut, ChevronLeft, Zap, HelpCircle,
+  CreditCard, Store, LogOut, ChevronLeft, Zap, HelpCircle,
 } from 'lucide-react';
 import { useStore } from '@/lib/store';
 import { GlowingEffect } from '@/components/ui/glowing-effect';
@@ -26,7 +26,6 @@ const navItems = [
   { href: '/dashboard/protection', label: 'Shield', icon: Shield },
   { href: '/dashboard/conversations', label: 'History', icon: MessageSquare },
   { href: '/dashboard/files', label: 'Files', icon: FileText },
-  { href: '/dashboard/referrals', label: 'Refer', icon: Gift },
   { href: '/dashboard/billing', label: 'Billing', icon: CreditCard },
   { href: '/dashboard/templates', label: 'Templates', icon: Store },
 ];

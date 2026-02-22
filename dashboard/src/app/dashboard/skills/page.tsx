@@ -59,9 +59,9 @@ const BUNDLED_SKILLS: Record<string, SkillMeta> = {
   'video-frames':       { label: 'Video Frames',         emoji: '🎞️', desc: 'Extract frames or short clips from videos using ffmpeg.',                            cat: 'Media',         icon: Camera,   requiresBin: ['ffmpeg'] },
   'notion':             { label: 'Notion',                emoji: '📝', desc: 'Notion API for creating and managing pages, databases, and blocks.',                 cat: 'Productivity',  icon: FileText, envKey: 'NOTION_API_KEY', envLabel: 'Notion API Key' },
   'trello':             { label: 'Trello',                emoji: '📋', desc: 'Manage Trello boards, lists, and cards via the Trello REST API.',                    cat: 'Productivity',  icon: FileText, envKey: 'TRELLO_API_KEY', envLabel: 'Trello API Key' },
-  'nano-banana-pro':    { label: 'Image Generation',     emoji: '🍌', desc: 'Generate or edit images via Gemini 3 Pro Image.',                                     cat: 'AI / Creative', icon: Image,    envKey: 'GEMINI_API_KEY', envLabel: 'Gemini API Key', requiresBin: ['uv'] },
-  'openai-image-gen':   { label: 'OpenAI Images',        emoji: '🖼️', desc: 'Batch-generate images via OpenAI Images API with gallery.',                          cat: 'AI / Creative', icon: Image,    envKey: 'OPENAI_API_KEY', envLabel: 'OpenAI API Key' },
-  'openai-whisper-api': { label: 'Speech to Text (API)', emoji: '☁️', desc: 'Transcribe audio via OpenAI Whisper API.',                                            cat: 'AI / Creative', icon: Music,    envKey: 'OPENAI_API_KEY', envLabel: 'OpenAI API Key' },
+  'nano-banana-pro':    { label: 'Image Generation',     emoji: '🍌', desc: 'Generate or edit images via Gemini 3 Pro Image.',                                     cat: 'AI / Creative', icon: Image,    requiresBin: ['uv'], canUseOpenRouter: true },
+  'openai-image-gen':   { label: 'OpenAI Images',        emoji: '🖼️', desc: 'Batch-generate images via OpenAI Images API with gallery.',                          cat: 'AI / Creative', icon: Image,    canUseOpenRouter: true },
+  'openai-whisper-api': { label: 'Speech to Text (API)', emoji: '☁️', desc: 'Transcribe audio via OpenAI Whisper API.',                                            cat: 'AI / Creative', icon: Music,    canUseOpenRouter: true },
   'openai-whisper':     { label: 'Speech to Text (Local)',emoji: '🎙️', desc: 'Local speech-to-text with the Whisper CLI (no API key).',                           cat: 'AI / Creative', icon: Music,    requiresBin: ['whisper'] },
   'gemini':             { label: 'Gemini CLI',            emoji: '♊', desc: 'Gemini CLI for one-shot Q&A, summaries, and generation.',                              cat: 'AI / Creative', icon: Brain,    requiresBin: ['gemini'] },
   'oracle':             { label: 'Oracle CLI',            emoji: '🧿', desc: 'Prompt + file bundling, engines, sessions, and file attachment patterns.',            cat: 'AI / Creative', icon: Brain,    requiresBin: ['oracle'] },
@@ -331,14 +331,15 @@ export default function SkillsPage() {
                     const isEnabled = skillsConfig[name]?.enabled === true;
                     const isMacOnly = meta.requiresOs === 'darwin';
                     const needsBin = meta.requiresBin && meta.requiresBin.length > 0;
-                    const needsKey = !!meta.envKey;
-                    const hasKey = !!(skillsConfig[name]?.env?.[meta.envKey || '']);
+                    const needsKey = !!meta.envKey && !meta.canUseOpenRouter;
+                    const hasKey = meta.canUseOpenRouter || !!(skillsConfig[name]?.env?.[meta.envKey || '']);
 
                     let statusLabel = 'Available';
                     let statusVariant: 'green' | 'default' | 'accent' = 'default';
                     if (isEnabled) { statusLabel = 'Active'; statusVariant = 'green'; }
                     else if (isMacOnly) { statusLabel = 'macOS only'; }
                     else if (needsBin) { statusLabel = 'Needs CLI'; }
+                    else if (meta.canUseOpenRouter) { statusLabel = 'Auto-key'; statusVariant = 'green'; }
                     else if (needsKey && !hasKey) { statusLabel = 'Needs Key'; statusVariant = 'accent'; }
 
                     return (
@@ -360,7 +361,13 @@ export default function SkillsPage() {
                         </div>
                         <p className="text-[12px] text-white/40 leading-relaxed mb-3">{meta.desc}</p>
 
-                        {needsKey && !hasKey && !isMacOnly && (
+                        {meta.canUseOpenRouter && !isEnabled && (
+                          <div className="mb-3 px-2.5 py-1.5 rounded-lg bg-emerald-500/5 border border-emerald-500/10">
+                            <span className="text-[11px] text-emerald-400/70">Uses your included OpenRouter key — no extra setup</span>
+                          </div>
+                        )}
+
+                        {needsKey && !hasKey && !isMacOnly && !meta.canUseOpenRouter && (
                           <div className="mb-3">
                             <input
                               type="password"

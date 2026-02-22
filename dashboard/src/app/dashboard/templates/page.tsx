@@ -137,7 +137,7 @@ export default function TemplatesPage() {
         <div>
           <h1 className="text-[28px] font-bold text-white tracking-tight">Agent Templates</h1>
           <p className="mt-2 text-[15px] text-white/50 leading-relaxed">
-            Download pre-built agent setups created by the community. One click and you're ready to go.
+            Pre-built OpenClaw agent configurations. Install to apply personality, skills, tools, and automations in one click.
           </p>
         </div>
         <Button variant="glass" onClick={() => setShareModal(true)}>
@@ -311,12 +311,13 @@ export default function TemplatesPage() {
           <div className="space-y-5">
             {/* What it will do */}
             <div>
-              <p className="text-[13px] font-medium text-white/60 mb-3">This template will set up:</p>
+              <p className="text-[13px] font-medium text-white/60 mb-3">This template will configure your OpenClaw agent:</p>
               <div className="space-y-2">
                 {(installModal.setupActions || [
-                  'Configure your agent personality for this use case',
-                  'Add specialized conversation prompts',
-                  'Set up recommended response style',
+                  'Write agent personality to SOUL.md in your container',
+                  'Enable recommended tools and skills in openclaw.json',
+                  'Set up scheduled tasks and automations',
+                  'Configure budget protection settings',
                 ]).map((action, i) => (
                   <div key={i} className="flex items-start gap-2.5">
                     <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />

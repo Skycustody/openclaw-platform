@@ -84,8 +84,14 @@ export async function injectApiKeys(
   }
 
   // ── Environment variables ──
+  // Inject the OpenRouter key under multiple names so skills that expect
+  // OPENAI_API_KEY or GEMINI_API_KEY work automatically through OpenRouter.
   if (!config.env) config.env = {};
   config.env.OPENROUTER_API_KEY = apiKey;
+  config.env.OPENAI_API_KEY = apiKey;
+  config.env.OPENAI_BASE_URL = 'https://openrouter.ai/api/v1';
+  config.env.ANTHROPIC_API_KEY = apiKey;
+  config.env.ANTHROPIC_BASE_URL = 'https://openrouter.ai/api/v1';
   if (process.env.BROWSERLESS_TOKEN) {
     config.env.BROWSERLESS_TOKEN = process.env.BROWSERLESS_TOKEN;
   }
@@ -178,26 +184,125 @@ export async function injectApiKeys(
     config.skills.entries[sk].enabled = true;
   }
 
-  // Sub-agent configuration — allow spawning and model inheritance
+  // Sub-agent defaults (overridden per-agent by communication permissions)
   if (!config.agents.defaults.subagents) config.agents.defaults.subagents = {};
   config.agents.defaults.subagents.allowAgents = ['*'];
   config.agents.defaults.subagents.maxConcurrent = 3;
 
-  // Enforce gateway config every time — prevents "pairing required" drift
-  const gatewayToken = config.gateway?.auth?.token;
+  // ── Per-agent channel bindings ──
+  // Merge channel connections from agent_channels table into config
+  try {
+    const agentChannels = await db.getMany<{
+      channel_type: string; token: string | null; config: any;
+      agent_name: string; agent_is_primary: boolean; agent_ocid: string | null;
+    }>(
+      `SELECT ac.channel_type, ac.token, ac.config,
+              a.name as agent_name, a.is_primary as agent_is_primary,
+              a.openclaw_agent_id as agent_ocid
+       FROM agent_channels ac
+       JOIN agents a ON a.id = ac.agent_id
+       WHERE ac.user_id = $1 AND ac.connected = true
+       ORDER BY ac.created_at ASC`,
+      [userId]
+    );
+
+    if (agentChannels.length > 0) {
+      if (!config.channels) config.channels = {};
+      if (!config.bindings) config.bindings = [];
+
+      const countByType: Record<string, number> = {};
+
+      for (const ch of agentChannels) {
+        countByType[ch.channel_type] = (countByType[ch.channel_type] || 0) + 1;
+        const idx = countByType[ch.channel_type];
+        const channelKey = idx === 1 ? ch.channel_type : `${ch.channel_type}-${idx}`;
+        const agentId = ch.agent_is_primary ? 'main'
+          : (ch.agent_ocid || ch.agent_name.toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 20));
+
+        if (ch.channel_type === 'telegram' && ch.token) {
+          config.channels[channelKey] = {
+            enabled: true, botToken: ch.token,
+            dmPolicy: 'open', allowFrom: ['*'],
+            groups: { '*': { requireMention: true } },
+          };
+        } else if (ch.channel_type === 'discord' && ch.token) {
+          config.channels[channelKey] = {
+            enabled: true, token: ch.token,
+            dmPolicy: 'open', allowFrom: ['*'],
+            ...(ch.config?.guildId ? { guildId: ch.config.guildId } : {}),
+          };
+        } else if (ch.channel_type === 'slack' && ch.token) {
+          config.channels[channelKey] = { enabled: true, token: ch.token };
+        } else if (ch.channel_type === 'whatsapp') {
+          config.channels[channelKey] = { dmPolicy: 'open', allowFrom: ['*'] };
+        }
+
+        config.bindings.push({ channel: channelKey, agentId });
+      }
+    }
+  } catch (err) {
+    console.warn(`[apiKeys] Failed to sync agent channels:`, err);
+  }
+
+  // ── Per-agent communication permissions ──
+  try {
+    const comms = await db.getMany<{
+      source_ocid: string; target_ocid: string;
+    }>(
+      `SELECT
+         COALESCE(sa.openclaw_agent_id, CASE WHEN sa.is_primary THEN 'main' END) as source_ocid,
+         COALESCE(ta.openclaw_agent_id, CASE WHEN ta.is_primary THEN 'main' END) as target_ocid
+       FROM agent_communications ac
+       JOIN agents sa ON sa.id = ac.source_agent_id
+       JOIN agents ta ON ta.id = ac.target_agent_id
+       WHERE ac.user_id = $1 AND ac.enabled = true`,
+      [userId]
+    );
+
+    if (comms.length > 0 && config.agents?.list) {
+      const allowMap: Record<string, string[]> = {};
+      for (const c of comms) {
+        if (c.source_ocid && c.target_ocid) {
+          if (!allowMap[c.source_ocid]) allowMap[c.source_ocid] = [];
+          if (!allowMap[c.source_ocid].includes(c.target_ocid)) {
+            allowMap[c.source_ocid].push(c.target_ocid);
+          }
+        }
+      }
+
+      for (const entry of config.agents.list) {
+        const allowed = allowMap[entry.id];
+        if (allowed) {
+          entry.subagents = { allowAgents: allowed, maxConcurrent: 3 };
+        }
+      }
+    }
+  } catch (err) {
+    console.warn(`[apiKeys] Failed to sync agent communications:`, err);
+  }
+
+  // ── Gateway config ──
+  // ALWAYS read token from DB (not from config file — doctor --fix can strip it).
+  // Without this, the dashboard shows "pairing required".
+  const tokenRow = await db.getOne<{ gateway_token: string }>(
+    'SELECT gateway_token FROM users WHERE id = $1',
+    [userId]
+  );
+  const gatewayToken = tokenRow?.gateway_token || config.gateway?.auth?.token;
   if (gatewayToken) {
-    if (!config.gateway) config.gateway = {};
-    config.gateway.bind = 'lan';
-    config.gateway.trustedProxies = ['0.0.0.0/0'];
-    if (!config.gateway.controlUi) config.gateway.controlUi = {};
-    config.gateway.controlUi.enabled = true;
-    config.gateway.controlUi.allowInsecureAuth = true;
-    config.gateway.controlUi.dangerouslyDisableDeviceAuth = true;
-    // Allow loopback connections without rate limiting (sub-agents connect internally)
-    config.gateway.auth = {
-      mode: 'token',
-      token: gatewayToken,
-      rateLimit: { exemptLoopback: true },
+    config.gateway = {
+      bind: 'lan',
+      trustedProxies: ['0.0.0.0/0'],
+      controlUi: {
+        enabled: true,
+        allowInsecureAuth: true,
+        dangerouslyDisableDeviceAuth: true,
+      },
+      auth: {
+        mode: 'token',
+        token: gatewayToken,
+        rateLimit: { exemptLoopback: true },
+      },
     };
   }
 

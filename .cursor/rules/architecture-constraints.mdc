@@ -1,0 +1,49 @@
+---
+description: Critical architecture constraints for the OpenClaw SaaS platform. Must be followed during any audit, refactor, or feature work.
+alwaysApply: true
+---
+
+# OpenClaw SaaS Architecture Constraints
+
+These are hard-won lessons. Each one was discovered by a production outage or security audit. Do not change them without understanding the full impact.
+
+## OpenClaw Gateway Config (openclaw.json)
+
+- `allowInsecureAuth: true` — REQUIRED. TLS terminates at Cloudflare/Traefik. The container sees plain WS. Without this, token auth is rejected.
+- `dangerouslyDisableDeviceAuth: true` — REQUIRED. OpenClaw device pairing requires browser crypto + operator approval. In a SaaS the gateway token IS the auth. Without this: "pairing required" error.
+- `trustedProxies: ["172.16.0.0/12", ...]` — REQUIRED. Without it the gateway rejects connections from Traefik's Docker IP.
+- `models` array entries must be objects `{ id: "gpt-4o", name: "GPT-4o" }`, never plain strings. Strings crash the gateway.
+- Use `baseUrl` (camelCase), never `baseURL`. Wrong casing silently fails.
+
+## Docker Networking
+
+- Containers MUST be on `openclaw-net` — Traefik's config has `network: openclaw-net`. Without it, Traefik returns 404.
+- Containers also get a per-user network (`{name}-net`) for isolation. Other containers can't reach each other.
+- Never remove `openclaw-net` from `docker run`.
+
+## Container Secrets
+
+- Containers get `CONTAINER_SECRET = HMAC(INTERNAL_SECRET, userId)`, never raw `INTERNAL_SECRET`.
+- Webhook endpoints verify the HMAC matches the claimed userId.
+- Never pass `INTERNAL_SECRET` directly to a container.
+
+## SSH Command Safety
+
+- All user-derived values in SSH commands must use `shellEscape()` or base64 encoding.
+- File paths must go through `resolveWorkspacePath()` (path.resolve + containment check).
+- `updateContainerConfig()` uses base64 piping to avoid shell injection.
+- Never use string interpolation for user input in SSH commands.
+
+## HTTPS Redirect
+
+- `/webhooks/*` and `/health` MUST be excluded from HTTPS redirect.
+- Workers call POST to `/webhooks/servers/register` over HTTP. A 301 converts POST→GET, losing the body.
+
+## Server Selection
+
+- `findBestServer()` uses `UPDATE...FOR UPDATE SKIP LOCKED` for atomic RAM reservation.
+- Never replace with SELECT-then-UPDATE — it causes double-booking under concurrent requests.
+
+## Dockerfile
+
+- Must include `python3 make g++` in apt-get for native module compilation (@discordjs/opus).

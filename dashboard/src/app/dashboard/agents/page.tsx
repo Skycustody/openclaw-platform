@@ -11,8 +11,9 @@ import {
   Bot, Plus, Loader2, Trash2, Edit3,
   HardDrive, ArrowRight, ChevronRight,
   Sparkles, AlertTriangle, Crown, Info, X,
-  MessageSquare,
+  MessageSquare, Radio, Send, Settings2,
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useStore } from '@/lib/store';
 
 interface Agent {
@@ -26,6 +27,8 @@ interface Agent {
   is_primary: boolean;
   created_at: string;
   last_active: string;
+  channelCount: number;
+  commCount: number;
 }
 
 interface AgentLimits {
@@ -72,6 +75,7 @@ export default function AgentsPage() {
   const [loading, setLoading] = useState(true);
   const [actionError, setActionError] = useState<string | null>(null);
   const { user } = useStore();
+  const router = useRouter();
 
   const [showCreate, setShowCreate] = useState(false);
   const [createStep, setCreateStep] = useState(0);
@@ -256,7 +260,8 @@ export default function AgentsPage() {
           const sc = statusConfig[agent.status] || statusConfig.pending;
 
           return (
-            <Card key={agent.id} className="!p-5">
+            <Card key={agent.id} className="!p-5 hover:border-white/[0.12] transition-colors cursor-pointer"
+              onClick={() => router.push(`/dashboard/agents/${agent.id}`)}>
               <div className="flex items-start gap-4">
                 <div className="relative">
                   <div className={`flex h-12 w-12 items-center justify-center rounded-2xl border border-white/[0.08] ${
@@ -289,14 +294,31 @@ export default function AgentsPage() {
                       <Info className="h-3 w-3 text-white/15" />
                       <span className="text-[11px] text-white/20 font-mono">{agent.openclawAgentId}</span>
                     </div>
+                    {agent.channelCount > 0 && (
+                      <div className="flex items-center gap-1">
+                        <Radio className="h-3 w-3 text-blue-400/40" />
+                        <span className="text-[11px] text-blue-400/50">{agent.channelCount} channel{agent.channelCount !== 1 ? 's' : ''}</span>
+                      </div>
+                    )}
+                    {agent.commCount > 0 && (
+                      <div className="flex items-center gap-1">
+                        <Send className="h-3 w-3 text-purple-400/40" />
+                        <span className="text-[11px] text-purple-400/50">{agent.commCount} link{agent.commCount !== 1 ? 's' : ''}</span>
+                      </div>
+                    )}
                     {agent.last_active && (
                       <span className="text-[11px] text-white/15">Active {timeAgo(agent.last_active)}</span>
                     )}
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1.5">
-                  <button onClick={() => window.location.href = `/dashboard?agent=${agent.id}`}
+                <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
+                  <button onClick={() => router.push(`/dashboard/agents/${agent.id}`)}
+                    className="p-2 rounded-lg text-white/30 hover:text-white/60 hover:bg-white/[0.06] transition-colors"
+                    title="Configure agent">
+                    <Settings2 className="h-4 w-4" />
+                  </button>
+                  <button onClick={() => router.push(`/dashboard?agent=${agent.id}`)}
                     className="p-2 rounded-lg text-white/30 hover:text-blue-400 hover:bg-blue-400/5 transition-colors"
                     title="Chat with this agent">
                     <MessageSquare className="h-4 w-4" />

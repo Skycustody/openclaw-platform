@@ -236,12 +236,20 @@ export interface CreditPurchase {
 }
 
 /**
- * Top-up packs. Pricing: pack USD / 1.59 = actual OR budget increase.
- * `displayUsd` = what user sees as balance added (EUR→USD conversion).
- * `orBudgetUsd` = actual OR API limit increase (displayUsd / DISPLAY_FACTOR).
+ * Token top-up packs. Each pack adds tokens to the user's OpenRouter budget.
+ * `tokens` = number of tokens added.
+ * `orBudgetUsd` = actual OpenRouter API limit increase (based on avg ~$2/1M tokens).
  */
-export const CREDIT_PACKS: Record<string, { priceEurCents: number; label: string; displayUsd: number; orBudgetUsd: number }> = {
-  '5':  { priceEurCents: 500,  label: '€5 Top-Up',  displayUsd: 5.43,  orBudgetUsd: 3.42  },
-  '10': { priceEurCents: 1000, label: '€10 Top-Up', displayUsd: 10.87, orBudgetUsd: 6.84  },
-  '20': { priceEurCents: 2000, label: '€20 Top-Up', displayUsd: 21.74, orBudgetUsd: 13.67 },
+export const CREDIT_PACKS: Record<string, {
+  priceEurCents: number;
+  label: string;
+  tokens: number;
+  displayTokens: string;
+  orBudgetUsd: number;
+  envKey: string;
+}> = {
+  '500k':  { priceEurCents: 500,  label: '500K Tokens',  tokens: 500_000,   displayTokens: '500K',  orBudgetUsd: 1.00,  envKey: 'STRIPE_PRICE_TOKENS_500K'  },
+  '1200k': { priceEurCents: 1000, label: '1.2M Tokens',  tokens: 1_200_000, displayTokens: '1.2M',  orBudgetUsd: 2.40,  envKey: 'STRIPE_PRICE_TOKENS_1200K' },
+  '3500k': { priceEurCents: 2000, label: '3.5M Tokens',  tokens: 3_500_000, displayTokens: '3.5M',  orBudgetUsd: 7.00,  envKey: 'STRIPE_PRICE_TOKENS_3500K' },
+  '8m':    { priceEurCents: 4000, label: '8M Tokens',    tokens: 8_000_000, displayTokens: '8M',    orBudgetUsd: 16.00, envKey: 'STRIPE_PRICE_TOKENS_8M'    },
 };
