@@ -86,16 +86,30 @@ export async function injectApiKeys(
   // OpenClaw expects "baseUrl" (camelCase), NOT "baseURL"
   if (!config.models) config.models = {};
   if (!config.models.providers) config.models.providers = {};
+  const defaultOpenaiModels = [
+    { name: 'gpt-4o' },
+    { name: 'gpt-4o-mini' },
+    { name: 'o3-mini' },
+  ];
+  const defaultAnthropicModels = [
+    { name: 'claude-sonnet-4-20250514' },
+    { name: 'claude-3-5-haiku-20241022' },
+  ];
+
   config.models.providers.openai = {
     ...(config.models.providers.openai || {}),
     baseUrl: baseUrls.openai,
-    models: config.models.providers.openai?.models || ['gpt-4o', 'gpt-4o-mini', 'o3-mini'],
+    models: config.models.providers.openai?.models?.length
+      ? config.models.providers.openai.models.map((m: any) => typeof m === 'string' ? { name: m } : m)
+      : defaultOpenaiModels,
   };
   delete config.models.providers.openai.baseURL;
   config.models.providers.anthropic = {
     ...(config.models.providers.anthropic || {}),
     baseUrl: baseUrls.anthropic,
-    models: config.models.providers.anthropic?.models || ['claude-sonnet-4-20250514', 'claude-3-5-haiku-20241022'],
+    models: config.models.providers.anthropic?.models?.length
+      ? config.models.providers.anthropic.models.map((m: any) => typeof m === 'string' ? { name: m } : m)
+      : defaultAnthropicModels,
   };
   delete config.models.providers.anthropic.baseURL;
 
