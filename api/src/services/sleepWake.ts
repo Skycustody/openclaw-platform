@@ -10,8 +10,8 @@
  * │    the container would restart multiple times and sometimes crash.    │
  * │                                                                        │
  * │ 2. API KEY RE-INJECTION: After waking, injectApiKeys() re-writes     │
- * │    proxy keys and config. Docker stop/start preserves volumes, but    │
- * │    config may have changed while sleeping (e.g. user changed models). │
+ * │    OpenRouter keys and config. Docker stop/start preserves volumes,  │
+ * │    but config may change while sleeping (e.g. user changed models).  │
  * └─────────────────────────────────────────────────────────────────────────┘
  */
 import db from '../lib/db';

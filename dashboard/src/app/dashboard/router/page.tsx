@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/Badge';
 import api from '@/lib/api';
 import {
   Cpu, Brain, Loader2,
-  Key, Eye, EyeOff, Trash2, Lock, Sparkles, Info, X,
+  Key, Eye, EyeOff, Trash2, Lock, Sparkles, Info, X, ExternalLink,
 } from 'lucide-react';
 
 interface Model {
@@ -24,23 +24,20 @@ interface Model {
 interface Settings {
   brain_mode: 'auto' | 'manual';
   manual_model: string | null;
-  has_own_openai_key: boolean;
-  own_openai_key_masked: string | null;
-  has_own_anthropic_key: boolean;
-  own_anthropic_key_masked: string | null;
+  has_own_openrouter_key: boolean;
+  own_openrouter_key_masked: string | null;
 }
 
 export default function RouterPage() {
   const [models, setModels] = useState<Model[]>([]);
   const [settings, setSettings] = useState<Settings>({
     brain_mode: 'auto', manual_model: null,
-    has_own_openai_key: false, own_openai_key_masked: null,
-    has_own_anthropic_key: false, own_anthropic_key_masked: null,
+    has_own_openrouter_key: false, own_openrouter_key_masked: null,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const [showKeyInput, setShowKeyInput] = useState<'openai' | 'anthropic' | null>(null);
+  const [showKeyInput, setShowKeyInput] = useState(false);
   const [keyInput, setKeyInput] = useState('');
   const [showKey, setShowKey] = useState(false);
   const [keySaving, setKeySaving] = useState(false);
@@ -57,10 +54,8 @@ export default function RouterPage() {
         setSettings({
           brain_mode: s.brain_mode || 'auto',
           manual_model: s.manual_model || null,
-          has_own_openai_key: !!s.has_own_openai_key,
-          own_openai_key_masked: s.own_openai_key_masked || null,
-          has_own_anthropic_key: !!s.has_own_anthropic_key,
-          own_anthropic_key_masked: s.own_anthropic_key_masked || null,
+          has_own_openrouter_key: !!s.has_own_openrouter_key,
+          own_openrouter_key_masked: s.own_openrouter_key_masked || null,
         });
       }
     } catch {}
@@ -78,14 +73,13 @@ export default function RouterPage() {
     setSaving(false);
   };
 
-  const saveOwnKey = async (provider: 'openai' | 'anthropic') => {
+  const saveOwnKey = async () => {
     if (!keyInput.trim()) return;
     setKeySaving(true);
     try {
-      const body = provider === 'openai' ? { openaiKey: keyInput } : { anthropicKey: keyInput };
-      await api.put('/settings/own-keys', body);
+      await api.put('/settings/own-openrouter-key', { key: keyInput });
       setKeyInput('');
-      setShowKeyInput(null);
+      setShowKeyInput(false);
       fetchData();
     } catch (err: any) {
       alert(err.message || 'Failed to save key');
@@ -93,10 +87,10 @@ export default function RouterPage() {
     setKeySaving(false);
   };
 
-  const deleteOwnKey = async (provider: 'openai' | 'anthropic') => {
-    if (!confirm(`Remove your ${provider === 'openai' ? 'OpenAI' : 'Anthropic'} key? Your agent will use platform tokens instead.`)) return;
+  const deleteOwnKey = async () => {
+    if (!confirm('Remove your OpenRouter key? Your agent will switch back to using the included platform credits.')) return;
     try {
-      await api.delete(`/settings/own-keys/${provider}`);
+      await api.delete('/settings/own-openrouter-key');
       fetchData();
     } catch {}
   };
@@ -204,109 +198,65 @@ export default function RouterPage() {
         </Card>
       )}
 
-      {/* Own API Keys */}
+      {/* Own OpenRouter Key (BYOK) */}
       <Card>
         <div className="flex items-center gap-2 mb-3">
           <Key className="h-4 w-4 text-white/40" />
-          <CardTitle>Your Own API Keys</CardTitle>
+          <CardTitle>Your Own OpenRouter Key</CardTitle>
           <Badge variant="default">Optional</Badge>
         </div>
         <CardDescription className="mb-4">
-          Bring your own OpenAI or Anthropic key. Your OpenClaw agent will use your key directly — no platform tokens deducted.
+          Bring your own OpenRouter key for unlimited AI usage. You pay OpenRouter directly — no platform credit limits apply.
+          {' '}
+          <a href="https://openrouter.ai/keys" target="_blank" rel="noreferrer"
+            className="inline-flex items-center gap-1 text-indigo-400 hover:text-indigo-300 transition-colors">
+            Get a key <ExternalLink className="h-3 w-3" />
+          </a>
         </CardDescription>
 
         <div className="space-y-3">
-          {/* OpenAI key */}
           <div className="flex items-center justify-between rounded-lg border border-white/[0.06] bg-white/[0.02] px-4 py-3">
             <div className="flex items-center gap-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-green-500/10 border border-green-500/20">
-                <span className="text-[11px] font-bold text-green-400">OAI</span>
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-500/10 border border-indigo-500/20">
+                <Key className="h-3.5 w-3.5 text-indigo-400" />
               </div>
               <div>
-                <p className="text-[13px] font-medium text-white/70">OpenAI</p>
-                {settings.has_own_openai_key ? (
-                  <p className="text-[11px] text-green-400 font-mono">{settings.own_openai_key_masked}</p>
+                <p className="text-[13px] font-medium text-white/70">OpenRouter</p>
+                {settings.has_own_openrouter_key ? (
+                  <p className="text-[11px] text-indigo-400 font-mono">{settings.own_openrouter_key_masked}</p>
                 ) : (
-                  <p className="text-[11px] text-white/30">No key set — uses platform tokens</p>
+                  <p className="text-[11px] text-white/30">No key set — using included platform credits</p>
                 )}
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {settings.has_own_openai_key && (
-                <button onClick={() => deleteOwnKey('openai')} className="p-1.5 rounded-md text-white/20 hover:text-red-400 hover:bg-red-400/10 transition-colors">
+              {settings.has_own_openrouter_key && (
+                <button onClick={deleteOwnKey} className="p-1.5 rounded-md text-white/20 hover:text-red-400 hover:bg-red-400/10 transition-colors">
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
               )}
-              <Button variant="glass" size="sm" onClick={() => { setShowKeyInput(showKeyInput === 'openai' ? null : 'openai'); setKeyInput(''); setShowKey(false); }}>
-                {settings.has_own_openai_key ? 'Change' : 'Add Key'}
+              <Button variant="glass" size="sm" onClick={() => { setShowKeyInput(!showKeyInput); setKeyInput(''); setShowKey(false); }}>
+                {settings.has_own_openrouter_key ? 'Change' : 'Add Key'}
               </Button>
             </div>
           </div>
 
-          {showKeyInput === 'openai' && (
+          {showKeyInput && (
             <div className="flex gap-2 pl-11">
               <div className="relative flex-1">
                 <input
                   type={showKey ? 'text' : 'password'}
                   value={keyInput}
                   onChange={(e) => setKeyInput(e.target.value)}
-                  placeholder="sk-..."
+                  placeholder="sk-or-..."
                   className="w-full rounded-lg border border-white/[0.08] bg-transparent px-3 py-2 pr-8 text-[13px] text-white font-mono placeholder:text-white/20 focus:border-white/25 focus:outline-none"
                 />
                 <button onClick={() => setShowKey(!showKey)} className="absolute right-2 top-1/2 -translate-y-1/2 text-white/20 hover:text-white/50">
                   {showKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                 </button>
               </div>
-              <Button variant="primary" size="sm" onClick={() => saveOwnKey('openai')} loading={keySaving} disabled={!keyInput.startsWith('sk-')}>Save</Button>
-              <Button variant="glass" size="sm" onClick={() => { setShowKeyInput(null); setKeyInput(''); }}>
-                <X className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          )}
-
-          {/* Anthropic key */}
-          <div className="flex items-center justify-between rounded-lg border border-white/[0.06] bg-white/[0.02] px-4 py-3">
-            <div className="flex items-center gap-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-500/10 border border-orange-500/20">
-                <span className="text-[11px] font-bold text-orange-400">ANT</span>
-              </div>
-              <div>
-                <p className="text-[13px] font-medium text-white/70">Anthropic</p>
-                {settings.has_own_anthropic_key ? (
-                  <p className="text-[11px] text-orange-400 font-mono">{settings.own_anthropic_key_masked}</p>
-                ) : (
-                  <p className="text-[11px] text-white/30">No key set — uses platform tokens</p>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              {settings.has_own_anthropic_key && (
-                <button onClick={() => deleteOwnKey('anthropic')} className="p-1.5 rounded-md text-white/20 hover:text-red-400 hover:bg-red-400/10 transition-colors">
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              )}
-              <Button variant="glass" size="sm" onClick={() => { setShowKeyInput(showKeyInput === 'anthropic' ? null : 'anthropic'); setKeyInput(''); setShowKey(false); }}>
-                {settings.has_own_anthropic_key ? 'Change' : 'Add Key'}
-              </Button>
-            </div>
-          </div>
-
-          {showKeyInput === 'anthropic' && (
-            <div className="flex gap-2 pl-11">
-              <div className="relative flex-1">
-                <input
-                  type={showKey ? 'text' : 'password'}
-                  value={keyInput}
-                  onChange={(e) => setKeyInput(e.target.value)}
-                  placeholder="sk-ant-..."
-                  className="w-full rounded-lg border border-white/[0.08] bg-transparent px-3 py-2 pr-8 text-[13px] text-white font-mono placeholder:text-white/20 focus:border-white/25 focus:outline-none"
-                />
-                <button onClick={() => setShowKey(!showKey)} className="absolute right-2 top-1/2 -translate-y-1/2 text-white/20 hover:text-white/50">
-                  {showKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                </button>
-              </div>
-              <Button variant="primary" size="sm" onClick={() => saveOwnKey('anthropic')} loading={keySaving} disabled={!keyInput.startsWith('sk-ant-')}>Save</Button>
-              <Button variant="glass" size="sm" onClick={() => { setShowKeyInput(null); setKeyInput(''); }}>
+              <Button variant="primary" size="sm" onClick={saveOwnKey} loading={keySaving} disabled={keyInput.length < 10}>Save</Button>
+              <Button variant="glass" size="sm" onClick={() => { setShowKeyInput(false); setKeyInput(''); }}>
                 <X className="h-3.5 w-3.5" />
               </Button>
             </div>
@@ -316,7 +266,7 @@ export default function RouterPage() {
         <div className="mt-3 flex items-start gap-2 rounded-lg bg-white/[0.02] p-2.5">
           <Lock className="h-3.5 w-3.5 text-white/20 shrink-0 mt-0.5" />
           <p className="text-[11px] text-white/30">
-            Keys are encrypted with AES-256 and never displayed in full. When you use your own key, no platform tokens are deducted.
+            Your key is stored securely and never displayed in full. When using your own key, all AI costs are billed directly to your OpenRouter account with no limits from us.
           </p>
         </div>
       </Card>
@@ -331,8 +281,9 @@ export default function RouterPage() {
             <p className="text-[13px] text-white/50 font-medium">How it works</p>
             <p className="text-[12px] text-white/30 mt-1 leading-relaxed">
               These settings are synced to your OpenClaw container. When you chat, your agent
-              uses the configured model to process messages. All AI calls go through the platform
-              proxy which tracks token usage. To test your settings, go to the home page and chat with your agent.
+              uses the configured model to process messages. All AI calls go through OpenRouter
+              which provides access to Claude, GPT-4, Gemini, and more. To test your settings,
+              go to the home page and chat with your agent.
             </p>
           </div>
         </div>

@@ -58,7 +58,7 @@ export async function sendTokenAlert(
         <p>${message}</p>
         <a href="${process.env.PLATFORM_URL}/dashboard/tokens"
            style="display: inline-block; background: #6366f1; color: white; padding: 12px 32px; border-radius: 8px; text-decoration: none; margin-top: 16px;">
-          Top Up Tokens
+          Manage billing
         </a>
       </div>
     `,

@@ -1,9 +1,9 @@
 import { Router, Response, NextFunction } from 'express';
 import { AuthRequest, authenticate } from '../middleware/auth';
 import db from '../lib/db';
-import { createCheckoutSession, getCustomerPortalUrl, getInvoices } from '../services/stripe';
+import { createCheckoutSession, createCreditCheckoutSession, getCustomerPortalUrl, getInvoices } from '../services/stripe';
 import { BadRequestError } from '../lib/errors';
-import { Plan, User } from '../types';
+import { Plan, User, CREDIT_PACKS } from '../types';
 
 const router = Router();
 router.use(authenticate);
@@ -77,6 +77,53 @@ router.post('/checkout', async (req: AuthRequest, res: Response, next: NextFunct
 
     const checkoutUrl = await createCheckoutSession(user.email, plan, referralCode, req.userId);
     res.json({ checkoutUrl });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Buy a one-time credit top-up pack
+router.post('/buy-credits', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { pack } = req.body as { pack?: string };
+    if (!pack || !CREDIT_PACKS[pack]) {
+      throw new BadRequestError('Invalid credit pack. Choose 5, 10, or 20.');
+    }
+
+    const user = await db.getOne<User>('SELECT id, email, stripe_customer_id FROM users WHERE id = $1', [req.userId]);
+    if (!user) throw new BadRequestError('User not found');
+
+    const checkoutUrl = await createCreditCheckoutSession(
+      user.email,
+      pack,
+      req.userId!,
+      user.stripe_customer_id || undefined,
+    );
+    res.json({ checkoutUrl });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Get credit purchase history for current user
+router.get('/credits', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const purchases = await db.getMany<any>(
+      `SELECT id, amount_eur_cents, credits_usd, created_at
+       FROM credit_purchases WHERE user_id = $1
+       ORDER BY created_at DESC LIMIT 20`,
+      [req.userId]
+    );
+
+    const user = await db.getOne<{ api_budget_addon_usd: number }>(
+      'SELECT api_budget_addon_usd FROM users WHERE id = $1',
+      [req.userId]
+    );
+
+    res.json({
+      purchases,
+      currentAddonUsd: parseFloat(String(user?.api_budget_addon_usd || 0)),
+    });
   } catch (err) {
     next(err);
   }

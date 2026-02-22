@@ -21,8 +21,6 @@ import {
   restartContainer as restartContainerHelper,
 } from '../services/containerConfig';
 import { sshExec } from '../services/ssh';
-import { ensureProxyKey } from '../services/apiKeys';
-
 const router = Router();
 router.use(authenticate);
 router.use(requireActiveSubscription);
@@ -110,15 +108,9 @@ async function syncAgentToContainer(
     `echo '${soulB64}' | base64 -d > ${wsDir}/SOUL.md`,
   ].join(' && '));
 
-  // Copy auth profiles from main agent so this agent can use the proxy
-  const proxyKey = await ensureProxyKey(agent.openclawId === 'main' ? '' : '').catch(() => null);
-  const mainAuthPath = `${INSTANCE_DIR}/${userId}/agents/main/agent/auth-profiles.json`;
-  const agentAuthPath = `${agentDir}/auth-profiles.json`;
-
-  await sshExec(serverIp, [
-    `test -f ${mainAuthPath} && cp ${mainAuthPath} ${agentAuthPath} || true`,
-    `chmod 600 ${agentAuthPath} 2>/dev/null || true`,
-  ].join(' && '));
+  // OpenRouter API key is configured at the provider level in openclaw.json,
+  // so all agents in the container share it automatically — no per-agent
+  // auth-profiles.json needed.
 }
 
 /**

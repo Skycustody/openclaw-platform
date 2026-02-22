@@ -20,7 +20,7 @@ const navItems = [
   { href: '/dashboard/memories', label: 'Memory', icon: Brain },
   { href: '/dashboard/cron', label: 'Schedule', icon: Clock },
   { href: '/dashboard/browser', label: 'Browser', icon: Globe },
-  { href: '/dashboard/tokens', label: 'Tokens', icon: Coins },
+  { href: '/dashboard/tokens', label: 'Credits', icon: Coins },
   { href: '/dashboard/router', label: 'Auto', icon: LayoutDashboard },
   { href: '/dashboard/personality', label: 'Persona', icon: User },
   { href: '/dashboard/protection', label: 'Shield', icon: Shield },

@@ -1,74 +1,32 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Card, CardTitle, CardDescription, GlassPanel } from '@/components/ui/Card';
+import { useSearchParams } from 'next/navigation';
+import { Card, CardTitle, CardDescription } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { Toggle } from '@/components/ui/Toggle';
-import { Modal } from '@/components/ui/Modal';
 import api from '@/lib/api';
-import { formatTokens } from '@/lib/utils';
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-} from 'recharts';
 import {
   Coins,
-  Sparkles,
   Loader2,
-  Check,
-  AlertTriangle,
-  TrendingDown,
-  Receipt,
-  CreditCard,
   ExternalLink,
   FileText,
-  Clock,
-  ArrowUpRight,
+  CreditCard,
+  Zap,
+  Receipt,
+  Plus,
+  CheckCircle2,
 } from 'lucide-react';
 
-interface TokenBalance {
-  balance: number;
-  dailyRate: number;
-  totalPurchased: number;
-  totalUsed: number;
-}
-
-interface DailyUsage {
-  date: string;
-  tokens: number;
-}
-
-interface ModelUsage {
-  model: string;
-  friendlyName: string;
-  tokens: number;
-  percentage: number;
-}
-
-interface TokenPackage {
-  id: string;
-  price: number;
-  tokens: number;
-  bestValue?: boolean;
-}
-
-interface Transaction {
-  id: string;
-  amount: number;
-  type: string;
-  description: string;
-  created_at: string;
+interface NexosUsage {
+  creditsUsed: number;
+  creditsRemaining: number;
+  lastUpdated: string;
 }
 
 interface BillingInfo {
   plan: string;
   status: string;
-  tokenSpendThisMonth: number;
 }
 
 interface Invoice {
@@ -79,109 +37,49 @@ interface Invoice {
   hosted_invoice_url?: string;
 }
 
-const MODEL_NAMES: Record<string, string> = {
-  'gpt-4o-mini': 'Fast model',
-  'gpt-4o': 'Smart model',
-  'claude-3.5': 'Powerful',
-  'claude-3-opus': 'Most Powerful',
-};
+type TabId = 'overview' | 'billing';
 
-const CHART_TOOLTIP_STYLE = {
-  backgroundColor: 'rgba(0,0,0,0.9)',
-  border: '1px solid rgba(255,255,255,0.08)',
-  borderRadius: '12px',
-  color: '#fff',
-  fontSize: '13px',
-  padding: '8px 12px',
-};
-
-type TabId = 'overview' | 'usage' | 'billing';
+const CREDIT_PACKS = [
+  { id: '5',  price: '€5',  desc: 'Small top-up' },
+  { id: '10', price: '€10', desc: 'Medium top-up' },
+  { id: '20', price: '€20', desc: 'Large top-up' },
+];
 
 export default function TokensPage() {
-  const [balance, setBalance] = useState<TokenBalance | null>(null);
-  const [dailyUsage, setDailyUsage] = useState<DailyUsage[]>([]);
-  const [modelUsage, setModelUsage] = useState<ModelUsage[]>([]);
-  const [packages, setPackages] = useState<TokenPackage[]>([]);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const searchParams = useSearchParams();
+  const [nexosUsage, setNexosUsage] = useState<NexosUsage | null>(null);
   const [billingInfo, setBillingInfo] = useState<BillingInfo | null>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
-  const [purchaseModal, setPurchaseModal] = useState<TokenPackage | null>(null);
-  const [purchasing, setPurchasing] = useState(false);
-  const [autoTopUp, setAutoTopUp] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>('overview');
+  const [buyingPack, setBuyingPack] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchTokenData();
-  }, []);
+    fetchData();
+    if (searchParams.get('credits') === 'success') {
+      setSuccessMsg('Credits added successfully! Your budget has been increased.');
+      setTimeout(() => setSuccessMsg(null), 6000);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function fetchTokenData() {
+  async function fetchData() {
     try {
-      const [balRes, dailyRes, modelsRes, packsRes, txRes, billRes, invRes] = await Promise.allSettled([
-        api.get<any>('/tokens/balance'),
-        api.get<any>('/tokens/usage/daily'),
-        api.get<any>('/tokens/usage/models'),
-        api.get<any>('/tokens/packages'),
-        api.get<any>('/tokens/transactions?limit=20'),
+      const [usageRes, billRes, invRes] = await Promise.allSettled([
+        api.get<any>('/settings/nexos-usage'),
         api.get<any>('/billing'),
         api.get<any>('/billing/invoices'),
       ]);
 
-      if (balRes.status === 'fulfilled') {
-        setBalance({
-          balance: balRes.value.balance ?? 0,
-          dailyRate: balRes.value.dailyRate ?? balRes.value.daysRemaining ?? 0,
-          totalPurchased: balRes.value.totalPurchased ?? 0,
-          totalUsed: balRes.value.totalUsed ?? 0,
-        });
-        setAutoTopUp(balRes.value.autoTopup ?? false);
-      } else {
-        setBalance({ balance: 0, dailyRate: 0, totalPurchased: 0, totalUsed: 0 });
+      if (usageRes.status === 'fulfilled' && usageRes.value.usage) {
+        setNexosUsage(usageRes.value.usage);
       }
-
-      if (dailyRes.status === 'fulfilled') setDailyUsage(dailyRes.value.usage || dailyRes.value || []);
-      if (modelsRes.status === 'fulfilled') setModelUsage(modelsRes.value.models || modelsRes.value || []);
-
-      if (packsRes.status === 'fulfilled') {
-        const raw = (packsRes.value.packages || packsRes.value || []).map((p: any) => ({
-          id: p.id,
-          price: p.price_cents ?? p.priceCents ?? p.price ?? 0,
-          tokens: p.tokens ?? 0,
-          bestValue: p.bestValue ?? p.best_value,
-        }));
-        const seen = new Set<number>();
-        const deduped = raw.filter((p: TokenPackage) => {
-          if (seen.has(p.tokens)) return false;
-          seen.add(p.tokens);
-          return true;
-        });
-        setPackages(deduped);
-      }
-
-      if (txRes.status === 'fulfilled') setTransactions(txRes.value.transactions || []);
       if (billRes.status === 'fulfilled') setBillingInfo(billRes.value);
       if (invRes.status === 'fulfilled') setInvoices(invRes.value.invoices || []);
     } catch {
-      setBalance({ balance: 0, dailyRate: 0, totalPurchased: 0, totalUsed: 0 });
+      // Graceful fallback
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function handlePurchase(pkg: TokenPackage) {
-    setPurchasing(true);
-    try {
-      const res = await api.post<any>('/tokens/purchase', { packageId: pkg.id });
-      if (res.checkoutUrl) {
-        window.location.href = res.checkoutUrl;
-        return;
-      }
-      if (balance) setBalance({ ...balance, balance: balance.balance + pkg.tokens });
-    } catch {
-      if (balance) setBalance({ ...balance, balance: balance.balance + pkg.tokens });
-    } finally {
-      setPurchasing(false);
-      setPurchaseModal(null);
     }
   }
 
@@ -192,6 +90,16 @@ export default function TokensPage() {
     } catch {}
   }
 
+  async function handleBuyCredits(pack: string) {
+    setBuyingPack(pack);
+    try {
+      const res = await api.post<{ checkoutUrl: string }>('/billing/buy-credits', { pack });
+      if (res.checkoutUrl) window.location.href = res.checkoutUrl;
+    } catch {
+      setBuyingPack(null);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -200,27 +108,13 @@ export default function TokensPage() {
     );
   }
 
-  const daysLeft = balance && balance.dailyRate > 0
-    ? Math.floor(balance.balance / balance.dailyRate)
-    : 0;
-  const balancePct = balance ? Math.min((balance.balance / 5000000) * 100, 100) : 0;
-  const progressColor = daysLeft < 1 ? 'progress-fill-red' : daysLeft < 3 ? 'progress-fill-amber' : 'progress-fill-green';
-
-  const txTypeLabel: Record<string, string> = {
-    subscription_grant: 'Plan bonus',
-    purchase: 'Top-up',
-    usage: 'Usage',
-    refund: 'Refund',
-    adjustment: 'Adjustment',
-  };
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-[28px] font-bold text-white tracking-tight">Tokens & Billing</h1>
+          <h1 className="text-[28px] font-bold text-white tracking-tight">AI Credits & Billing</h1>
           <p className="mt-1 text-[15px] text-white/50">
-            Manage your token balance, usage, and billing
+            Your AI usage is powered by multi-model smart routing
           </p>
         </div>
       </div>
@@ -229,7 +123,6 @@ export default function TokensPage() {
       <div className="flex items-center gap-1 border-b border-white/[0.06] pb-0">
         {([
           { id: 'overview' as TabId, label: 'Overview' },
-          { id: 'usage' as TabId, label: 'Usage' },
           { id: 'billing' as TabId, label: 'Billing' },
         ]).map(tab => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id)}
@@ -243,252 +136,144 @@ export default function TokensPage() {
         ))}
       </div>
 
-      {/* Warning banners */}
-      {daysLeft < 1 && (
-        <div className="glass p-4 border-red-500/20 bg-red-500/5 flex items-center gap-3">
-          <AlertTriangle className="h-5 w-5 text-red-400 shrink-0" />
-          <div>
-            <p className="text-[14px] font-medium text-red-400">Running on empty</p>
-            <p className="text-[13px] text-red-400/60">Your agent may stop working soon. Top up now.</p>
-          </div>
+      {/* Success banner */}
+      {successMsg && (
+        <div className="flex items-center gap-3 rounded-xl border border-green-500/20 bg-green-500/5 px-4 py-3 animate-fade-up">
+          <CheckCircle2 className="h-4 w-4 text-green-400 shrink-0" />
+          <p className="text-[13px] text-green-400">{successMsg}</p>
         </div>
       )}
 
-      {/* ── OVERVIEW TAB ── */}
+      {/* OVERVIEW TAB */}
       {activeTab === 'overview' && (
         <div className="space-y-6">
-          {/* Balance Card */}
+          {/* Credits Card */}
           <Card glow>
             <div className="flex items-start justify-between mb-6">
               <div>
-                <p className="text-[14px] text-white/40 mb-2">Remaining balance</p>
+                <p className="text-[14px] text-white/40 mb-2">AI Credits</p>
                 <p className="text-[42px] font-bold text-white tracking-tight leading-none">
-                  {balance ? balance.balance.toLocaleString() : '—'}
+                  {nexosUsage ? nexosUsage.creditsRemaining.toLocaleString() : 'Unlimited*'}
                 </p>
-                <p className="text-[14px] text-white/40 mt-1">tokens</p>
+                <p className="text-[14px] text-white/40 mt-1">credits remaining this month</p>
               </div>
               <div className="rounded-2xl bg-white/[0.06] p-4">
-                <Coins className="h-7 w-7 text-white/40" />
+                <Zap className="h-7 w-7 text-white/40" />
               </div>
             </div>
 
-            <div className="space-y-3">
-              <div className="progress-bar h-3">
-                <div className={`h-full ${progressColor}`} style={{ width: `${balancePct}%` }} />
-              </div>
+            {nexosUsage && (
               <p className="text-[14px] text-white/40">
-                {balance && balance.dailyRate > 0
-                  ? `At ~${formatTokens(balance.dailyRate)}/day, this lasts about ${daysLeft} day${daysLeft !== 1 ? 's' : ''}`
-                  : 'No usage data yet'}
+                {nexosUsage.creditsUsed.toLocaleString()} credits used
               </p>
-            </div>
+            )}
 
             <div className="mt-5">
-              <Button size="lg" onClick={() => {
-                const el = document.getElementById('packages');
-                el?.scrollIntoView({ behavior: 'smooth' });
-              }}>
-                <Coins className="h-4 w-4" />
-                Buy More Tokens
-              </Button>
+              <p className="text-[12px] text-white/20">Credits reset monthly with your subscription</p>
             </div>
           </Card>
 
-          {/* Stats Row */}
-          <div className="grid grid-cols-3 gap-4">
-            <Card className="!p-4">
-              <p className="text-[12px] text-white/30 mb-1">Total purchased</p>
-              <p className="text-[22px] font-bold text-white">{formatTokens(balance?.totalPurchased ?? 0)}</p>
-            </Card>
-            <Card className="!p-4">
-              <p className="text-[12px] text-white/30 mb-1">Total used</p>
-              <p className="text-[22px] font-bold text-white">{formatTokens(balance?.totalUsed ?? 0)}</p>
-            </Card>
-            <Card className="!p-4">
-              <p className="text-[12px] text-white/30 mb-1">Daily rate</p>
-              <p className="text-[22px] font-bold text-white">{formatTokens(balance?.dailyRate ?? 0)}/d</p>
-            </Card>
-          </div>
-
-          {/* Token Packages */}
-          <div id="packages">
-            <h2 className="text-[18px] font-semibold text-white mb-4">Token Packages</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {packages.map((pkg) => (
-                <Card
-                  key={pkg.id}
-                  className={`relative text-center cursor-pointer transition-all hover:scale-[1.02] ${
-                    pkg.bestValue ? 'ring-1 ring-white/20' : ''
-                  }`}
-                  glow={pkg.bestValue}
+          {/* Buy More Credits */}
+          <Card>
+            <div className="flex items-center gap-2 mb-1">
+              <Plus className="h-4 w-4 text-white/40" />
+              <CardTitle>Need more credits?</CardTitle>
+            </div>
+            <CardDescription className="mb-5">
+              Your subscription includes a small AI budget. Buy a credit pack to increase your limit for the current billing period.
+            </CardDescription>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {CREDIT_PACKS.map(pack => (
+                <button
+                  key={pack.id}
+                  onClick={() => handleBuyCredits(pack.id)}
+                  disabled={buyingPack !== null}
+                  className="flex flex-col items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.02] p-5 hover:border-indigo-500/30 hover:bg-indigo-500/[0.04] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  {pkg.bestValue && (
-                    <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                      <Badge variant="accent" dot={false}>Best Value</Badge>
-                    </div>
+                  <span className="text-[24px] font-bold text-white">{pack.price}</span>
+                  <span className="text-[12px] text-white/40">{pack.desc}</span>
+                  {buyingPack === pack.id ? (
+                    <Loader2 className="h-4 w-4 animate-spin text-indigo-400 mt-1" />
+                  ) : (
+                    <span className="text-[11px] font-medium text-indigo-400 mt-1">Buy now</span>
                   )}
-                  <div className="pt-2">
-                    <p className="text-[32px] font-bold text-white">${(pkg.price / 100).toFixed(0)}</p>
-                    <p className="text-[14px] text-white/50 mt-1">{formatTokens(pkg.tokens)} tokens</p>
-                    <p className="text-[12px] text-white/25 mt-0.5">
-                      ~{Math.round(pkg.tokens / 70000)} days of usage
-                    </p>
-                    <Button
-                      className="mt-4 w-full"
-                      variant={pkg.bestValue ? 'primary' : 'glass'}
-                      onClick={() => setPurchaseModal(pkg)}
-                    >
-                      Buy
-                    </Button>
-                  </div>
-                </Card>
+                </button>
               ))}
             </div>
-          </div>
-
-          {/* Auto Top-Up */}
-          <Card>
-            <CardTitle>Auto Top-Up</CardTitle>
-            <CardDescription>Automatically buy more tokens when you&apos;re running low.</CardDescription>
-            <div className="mt-4">
-              <Toggle
-                enabled={autoTopUp}
-                onChange={async (v) => {
-                  setAutoTopUp(v);
-                  try { await api.put('/tokens/auto-topup', { enabled: v }); } catch {}
-                }}
-                label="Enable Auto Top-Up"
-                description="We'll add tokens when your balance drops below 1 day of usage."
-              />
-            </div>
+            <p className="mt-4 text-[11px] text-white/20">
+              One-time purchase. Credits are added to your current month and reset on your next billing cycle.
+            </p>
           </Card>
 
-          {/* Recent Transactions */}
-          {transactions.length > 0 && (
-            <Card>
-              <CardTitle>Recent Transactions</CardTitle>
-              <div className="mt-4 space-y-1">
-                {transactions.slice(0, 10).map(tx => (
-                  <div key={tx.id} className="flex items-center justify-between py-2.5 border-b border-white/[0.04] last:border-0">
-                    <div className="flex items-center gap-3">
-                      <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${
-                        tx.amount > 0 ? 'bg-green-500/10' : 'bg-red-500/10'
-                      }`}>
-                        {tx.amount > 0
-                          ? <ArrowUpRight className="h-3.5 w-3.5 text-green-400" />
-                          : <TrendingDown className="h-3.5 w-3.5 text-red-400" />
-                        }
-                      </div>
-                      <div>
-                        <p className="text-[13px] text-white/70">{tx.description || txTypeLabel[tx.type] || tx.type}</p>
-                        <p className="text-[11px] text-white/20">
-                          {new Date(tx.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                        </p>
-                      </div>
-                    </div>
-                    <span className={`text-[14px] font-medium tabular-nums ${tx.amount > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {tx.amount > 0 ? '+' : ''}{formatTokens(tx.amount)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          )}
-        </div>
-      )}
-
-      {/* ── USAGE TAB ── */}
-      {activeTab === 'usage' && (
-        <div className="space-y-6">
+          {/* How it works */}
           <Card>
-            <CardTitle>Daily usage</CardTitle>
-            <CardDescription>How many tokens your agent used each day this week</CardDescription>
-            <div className="h-64 mt-5">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={dailyUsage} barCategoryGap="25%">
-                  <XAxis
-                    dataKey="date"
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fill: 'rgba(255,255,255,0.3)', fontSize: 12 }}
-                  />
-                  <YAxis
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fill: 'rgba(255,255,255,0.3)', fontSize: 12 }}
-                    tickFormatter={(v) => formatTokens(v)}
-                  />
-                  <Tooltip
-                    contentStyle={CHART_TOOLTIP_STYLE}
-                    formatter={(value: any) => [formatTokens(value ?? 0), 'Tokens']}
-                    cursor={{ fill: 'rgba(255, 255, 255, 0.04)' }}
-                  />
-                  <Bar dataKey="tokens" fill="rgba(255,255,255,0.3)" radius={[8, 8, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </Card>
-
-          <Card>
-            <CardTitle>Usage by model</CardTitle>
-            <CardDescription>Which AI models your agent has been using</CardDescription>
+            <CardTitle>How AI billing works</CardTitle>
+            <CardDescription>
+              Your agent uses intelligent multi-model routing to optimise cost and performance
+            </CardDescription>
             <div className="mt-5 space-y-4">
-              {modelUsage.length === 0 && (
-                <p className="text-[13px] text-white/30 text-center py-8">No usage data yet</p>
-              )}
-              {modelUsage.map((model) => (
-                <div key={model.model} className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[14px] text-white/70">
-                      {MODEL_NAMES[model.model] || model.friendlyName || model.model}
-                    </span>
-                    <span className="text-[13px] text-white/40">{model.percentage}%</span>
+              <div className="flex items-start gap-4">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[0.06]">
+                  <Zap className="h-4 w-4 text-white/40" />
+                </div>
+                <div>
+                  <p className="text-[14px] font-medium text-white/80">Smart model routing</p>
+                  <p className="text-[13px] text-white/40">Simple tasks automatically use cheaper models (Gemini Flash, GPT-4o Mini). Complex tasks route to powerful models (Claude Sonnet). This cuts costs without sacrificing quality.</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-4">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[0.06]">
+                  <Coins className="h-4 w-4 text-white/40" />
+                </div>
+                <div>
+                  <p className="text-[14px] font-medium text-white/80">Credit-based pricing</p>
+                  <p className="text-[13px] text-white/40">Different models cost different amounts. Your plan includes a monthly credit budget. Lighter models stretch your credits further.</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-4">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[0.06]">
+                  <CreditCard className="h-4 w-4 text-white/40" />
+                </div>
+                <div>
+                  <p className="text-[14px] font-medium text-white/80">Multi-model access included</p>
+                  <p className="text-[13px] text-white/40">Access Claude, GPT-4, Gemini, and more. Switch models anytime from the agent UI or let smart routing choose for you.</p>
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          {/* Model pricing reference */}
+          <Card>
+            <CardTitle>Model credit costs</CardTitle>
+            <CardDescription>Credits consumed per 1M tokens (approximate)</CardDescription>
+            <div className="mt-4 space-y-1">
+              {[
+                { model: 'Gemini 2.0 Flash', input: '0.15', output: '0.60', tag: 'Cheapest' },
+                { model: 'GPT-4o Mini', input: '0.23', output: '0.90', tag: 'Budget' },
+                { model: 'Claude 3.5 Haiku', input: '1.20', output: '6.00', tag: '' },
+                { model: 'GPT-4o', input: '3.75', output: '15.00', tag: '' },
+                { model: 'GPT-4.1', input: '3.00', output: '12.00', tag: '' },
+                { model: 'Claude Sonnet 4', input: '4.50', output: '22.50', tag: 'Default (Pro)' },
+                { model: 'O3 Mini', input: '1.65', output: '6.60', tag: 'Reasoning' },
+              ].map(m => (
+                <div key={m.model} className="flex items-center justify-between py-2.5 border-b border-white/[0.04] last:border-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[13px] text-white/70">{m.model}</span>
+                    {m.tag && <Badge variant="amber" className="text-[10px]">{m.tag}</Badge>}
                   </div>
-                  <div className="progress-bar h-2">
-                    <div
-                      className="h-full progress-fill"
-                      style={{ width: `${model.percentage}%` }}
-                    />
+                  <div className="flex items-center gap-4">
+                    <span className="text-[12px] text-white/30">{m.input} in</span>
+                    <span className="text-[12px] text-white/30">{m.output} out</span>
                   </div>
                 </div>
               ))}
             </div>
+            <p className="mt-3 text-[11px] text-white/20">Prices in credits per 1M tokens. Smart routing typically uses cheaper models, keeping average costs low.</p>
           </Card>
-
-          {transactions.length > 0 && (
-            <Card>
-              <CardTitle>Transaction History</CardTitle>
-              <div className="mt-4 space-y-1">
-                {transactions.map(tx => (
-                  <div key={tx.id} className="flex items-center justify-between py-2.5 border-b border-white/[0.04] last:border-0">
-                    <div className="flex items-center gap-3">
-                      <div className={`flex h-7 w-7 items-center justify-center rounded-lg ${
-                        tx.amount > 0 ? 'bg-green-500/10' : 'bg-red-500/10'
-                      }`}>
-                        {tx.amount > 0
-                          ? <ArrowUpRight className="h-3 w-3 text-green-400" />
-                          : <TrendingDown className="h-3 w-3 text-red-400" />
-                        }
-                      </div>
-                      <div>
-                        <p className="text-[13px] text-white/70">{tx.description || txTypeLabel[tx.type] || tx.type}</p>
-                        <p className="text-[11px] text-white/20">
-                          {new Date(tx.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                        </p>
-                      </div>
-                    </div>
-                    <span className={`text-[13px] font-medium tabular-nums ${tx.amount > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {tx.amount > 0 ? '+' : ''}{formatTokens(tx.amount)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          )}
         </div>
       )}
 
-      {/* ── BILLING TAB ── */}
+      {/* BILLING TAB */}
       {activeTab === 'billing' && (
         <div className="space-y-6">
           <Card>
@@ -502,7 +287,7 @@ export default function TokensPage() {
                 Manage
               </Button>
             </div>
-            <div className="mt-5 grid grid-cols-3 gap-4">
+            <div className="mt-5 grid grid-cols-2 gap-4">
               <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
                 <p className="text-[12px] text-white/30 mb-1">Plan</p>
                 <p className="text-[18px] font-bold text-white capitalize">{billingInfo?.plan || 'Pro'}</p>
@@ -510,12 +295,6 @@ export default function TokensPage() {
               <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
                 <p className="text-[12px] text-white/30 mb-1">Status</p>
                 <p className="text-[18px] font-bold text-white capitalize">{billingInfo?.status || 'Active'}</p>
-              </div>
-              <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
-                <p className="text-[12px] text-white/30 mb-1">Token spend (this month)</p>
-                <p className="text-[18px] font-bold text-white">
-                  ${((billingInfo?.tokenSpendThisMonth ?? 0) / 100).toFixed(2)}
-                </p>
               </div>
             </div>
           </Card>
@@ -566,33 +345,6 @@ export default function TokensPage() {
           )}
         </div>
       )}
-
-      <Modal
-        open={!!purchaseModal}
-        onClose={() => setPurchaseModal(null)}
-        title="Confirm Purchase"
-      >
-        {purchaseModal && (
-          <div className="space-y-5">
-            <GlassPanel>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-[15px] font-medium text-white">{formatTokens(purchaseModal.tokens)} tokens</p>
-                  <p className="text-[13px] text-white/40">~{Math.round(purchaseModal.tokens / 70000)} days of usage</p>
-                </div>
-                <p className="text-[22px] font-bold text-white">${(purchaseModal.price / 100).toFixed(0)}</p>
-              </div>
-            </GlassPanel>
-            <div className="flex justify-end gap-3">
-              <Button variant="ghost" onClick={() => setPurchaseModal(null)}>Cancel</Button>
-              <Button onClick={() => handlePurchase(purchaseModal)} loading={purchasing}>
-                <Check className="h-4 w-4" />
-                Confirm
-              </Button>
-            </div>
-          </div>
-        )}
-      </Modal>
     </div>
   );
 }

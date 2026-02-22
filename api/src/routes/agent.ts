@@ -235,7 +235,7 @@ router.post('/open', authenticate, async (req: AuthRequest, res: Response, next:
       return res.status(403).json({ error: 'Subscription cancelled. Please resubscribe.' });
     }
     if (user.status === 'paused') {
-      return res.status(403).json({ error: 'Agent paused — you need more tokens.' });
+      return res.status(403).json({ error: 'Agent paused — update your subscription or payment to resume.' });
     }
 
     const respond = (parts: AgentUrlParts, status: string) =>
@@ -276,10 +276,10 @@ router.post('/open', authenticate, async (req: AuthRequest, res: Response, next:
       ensureTraefik(server.ip).catch(() => {});
     }
 
-    // Ensure API keys are injected into the container (fixes existing users)
+    // Ensure API keys + model router config are injected (fixes existing users)
     if (server) {
       const cn = user.container_name || `openclaw-${user.id.slice(0, 12)}`;
-      injectApiKeys(server.ip, user.id, cn).catch((err) =>
+      injectApiKeys(server.ip, user.id, cn, user.plan as any).catch((err) =>
         console.warn(`[agent/open] Key injection failed for ${user.id}:`, err.message)
       );
     }
@@ -420,7 +420,8 @@ router.get('/logs', requireActiveSubscription, async (req: AuthRequest, res: Res
       .replace(/CONTAINER_SECRET=[^\s]+/g, 'CONTAINER_SECRET=[REDACTED]')
       .replace(/GATEWAY_TOKEN=[^\s]+/g, 'GATEWAY_TOKEN=[REDACTED]')
       .replace(/OPENAI_API_KEY=[^\s]+/g, 'OPENAI_API_KEY=[REDACTED]')
-      .replace(/ANTHROPIC_API_KEY=[^\s]+/g, 'ANTHROPIC_API_KEY=[REDACTED]');
+      .replace(/ANTHROPIC_API_KEY=[^\s]+/g, 'ANTHROPIC_API_KEY=[REDACTED]')
+      .replace(/OPENROUTER_API_KEY=[^\s]+/g, 'OPENROUTER_API_KEY=[REDACTED]');
 
     res.json({ logs: result.stdout });
   } catch (err) {

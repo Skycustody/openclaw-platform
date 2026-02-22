@@ -1,9 +1,9 @@
 import Stripe from 'stripe';
 import db from '../lib/db';
 import { provisionUser, deprovisionUser } from './provisioning';
-import { addTokens } from './tokenTracker';
 import { handlePaymentFailure } from './gracePeriod';
-import { Plan, User } from '../types';
+import { addCreditsToKey, updateKeyLimit, RETAIL_MARKUP, USD_TO_EUR_CENTS } from './nexos';
+import { Plan, User, CREDIT_PACKS } from '../types';
 import { v4 as uuid } from 'uuid';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -69,41 +69,44 @@ export async function createCheckoutSession(
   return session.url!;
 }
 
-export async function createTokenPurchaseSession(
+/**
+ * Create a one-time Stripe Checkout session for credit top-ups.
+ * The pack amount (€5/€10/€20) increases the user's OpenRouter spending limit.
+ */
+export async function createCreditCheckoutSession(
+  email: string,
+  pack: string,
   userId: string,
-  packageId: string
+  stripeCustomerId?: string,
 ): Promise<string> {
-  const pkg = await db.getOne<any>(
-    'SELECT * FROM token_packages WHERE id = $1 AND active = true',
-    [packageId]
-  );
-  if (!pkg) throw new Error('Package not found');
+  const packInfo = CREDIT_PACKS[pack];
+  if (!packInfo) throw new Error(`Invalid credit pack: ${pack}`);
 
-  const user = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [userId]);
-  if (!user) throw new Error('User not found');
+  const priceIds: Record<string, string | undefined> = {
+    '5': process.env.STRIPE_PRICE_CREDITS_5,
+    '10': process.env.STRIPE_PRICE_CREDITS_10,
+    '20': process.env.STRIPE_PRICE_CREDITS_20,
+  };
 
-  const session = await stripe.checkout.sessions.create({
+  const priceId = priceIds[pack];
+  if (!priceId) throw new Error(`Stripe price not configured for credit pack ${pack}`);
+
+  const sessionParams: Stripe.Checkout.SessionCreateParams = {
     mode: 'payment',
     payment_method_types: ['card'],
-    customer: user.stripe_customer_id || undefined,
-    customer_email: user.stripe_customer_id ? undefined : user.email,
-    line_items: [
-      {
-        price_data: {
-          currency: 'usd',
-          unit_amount: pkg.price_cents,
-          product_data: {
-            name: `${pkg.name} — ${(pkg.tokens / 1000).toLocaleString()}K tokens`,
-          },
-        },
-        quantity: 1,
-      },
-    ],
-    success_url: `${process.env.PLATFORM_URL}/dashboard/tokens?purchased=true`,
+    line_items: [{ price: priceId, quantity: 1 }],
+    success_url: `${process.env.PLATFORM_URL}/dashboard/tokens?credits=success`,
     cancel_url: `${process.env.PLATFORM_URL}/dashboard/tokens`,
-    metadata: { userId, packageId, tokens: pkg.tokens.toString(), type: 'token_purchase' },
-  });
+    metadata: { type: 'credit_topup', userId, pack },
+  };
 
+  if (stripeCustomerId) {
+    sessionParams.customer = stripeCustomerId;
+  } else {
+    sessionParams.customer_email = email;
+  }
+
+  const session = await stripe.checkout.sessions.create(sessionParams);
   return session.url!;
 }
 
@@ -128,21 +131,14 @@ export async function handleWebhook(event: Stripe.Event): Promise<void> {
 }
 
 async function handleCheckoutComplete(session: Stripe.Checkout.Session): Promise<void> {
-  const { userId, plan, type, packageId, tokens } = session.metadata || {};
+  const metadata = session.metadata || {};
 
-  // Token purchase
-  if (type === 'token_purchase' && userId && tokens) {
-    const tokenAmount = parseInt(tokens);
-    const pkg = await db.getOne<any>('SELECT * FROM token_packages WHERE id = $1', [packageId]);
-    const bonus = pkg ? Math.floor(tokenAmount * (pkg.bonus_percent / 100)) : 0;
-
-    await addTokens(userId, tokenAmount + bonus, 'purchase',
-      `Purchased ${(tokenAmount / 1000).toLocaleString()}K tokens${bonus ? ` + ${(bonus / 1000).toLocaleString()}K bonus` : ''}`
-    );
+  if (metadata.type === 'credit_topup') {
+    await handleCreditPurchase(session);
     return;
   }
 
-  // Subscription checkout
+  const { userId, plan } = metadata;
   if (!userId || !plan) return;
 
   const stripeCustomerId = session.customer as string;
@@ -162,7 +158,6 @@ async function handleCheckoutComplete(session: Stripe.Checkout.Session): Promise
     console.error('Provisioning failed after payment:', err);
   }
 
-  // Handle referral
   const user = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [userId]);
   if (user?.referred_by) {
     await db.query(
@@ -170,6 +165,27 @@ async function handleCheckoutComplete(session: Stripe.Checkout.Session): Promise
       [user.referred_by, userId]
     );
   }
+}
+
+async function handleCreditPurchase(session: Stripe.Checkout.Session): Promise<void> {
+  const { userId, pack } = session.metadata || {};
+  if (!userId || !pack) return;
+
+  const packInfo = CREDIT_PACKS[pack];
+  if (!packInfo) return;
+
+  // EUR cents → wholesale USD: divide by RETAIL_MARKUP, convert cents to dollars, EUR→USD
+  const creditsUsd = Math.round((packInfo.priceEurCents / RETAIL_MARKUP / USD_TO_EUR_CENTS) * 100) / 100;
+
+  await db.query(
+    `INSERT INTO credit_purchases (user_id, amount_eur_cents, credits_usd, stripe_session_id)
+     VALUES ($1, $2, $3, $4)`,
+    [userId, packInfo.priceEurCents, creditsUsd, session.id]
+  );
+
+  await addCreditsToKey(userId, creditsUsd);
+
+  console.log(`[stripe] Credit top-up: user=${userId} pack=€${pack} credits=$${creditsUsd}`);
 }
 
 async function handleSubscriptionCancelled(subscription: Stripe.Subscription): Promise<void> {
@@ -203,22 +219,19 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription): Pro
 }
 
 async function handleInvoicePaid(invoice: Stripe.Invoice): Promise<void> {
-  // Monthly subscription renewal — grant included tokens
-  if (invoice.billing_reason !== 'subscription_cycle') return;
+  if (!invoice.subscription) return;
 
+  // Subscription renewal: reset add-on credits for the new billing period
   const customerId = invoice.customer as string;
-  const user = await db.getOne<User>(
-    'SELECT * FROM users WHERE stripe_customer_id = $1',
+  const user = await db.getOne<{ id: string; plan: string; api_budget_addon_usd: number }>(
+    'SELECT id, plan, api_budget_addon_usd FROM users WHERE stripe_customer_id = $1',
     [customerId]
   );
-  if (!user) return;
+  if (!user || user.api_budget_addon_usd <= 0) return;
 
-  const { PLAN_LIMITS } = await import('../types');
-  const included = PLAN_LIMITS[user.plan].includedTokens;
-
-  await addTokens(user.id, included, 'subscription_grant',
-    `Monthly ${user.plan} plan token grant`
-  );
+  await db.query('UPDATE users SET api_budget_addon_usd = 0 WHERE id = $1', [user.id]);
+  await updateKeyLimit(user.id, (user.plan || 'starter') as Plan, 0).catch(() => {});
+  console.log(`[stripe] Reset add-on credits for ${user.id} on subscription renewal`);
 }
 
 async function handlePaymentFailed(invoice: Stripe.Invoice): Promise<void> {

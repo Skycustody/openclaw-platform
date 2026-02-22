@@ -17,8 +17,7 @@ type AgentDisplayStatus = 'active' | 'online' | 'sleeping' | 'paused' | 'provisi
 interface UserSettings {
   brain_mode: 'auto' | 'manual';
   manual_model: string | null;
-  has_own_openai_key: boolean;
-  has_own_anthropic_key: boolean;
+  has_own_openrouter_key: boolean;
   agent_name: string;
 }
 
@@ -33,7 +32,7 @@ export default function DashboardHome() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const [settings, setSettings] = useState<UserSettings | null>(null);
-  const [tokenBalance, setTokenBalance] = useState<number>(0);
+  const [creditsRemaining, setCreditsRemaining] = useState<number | null>(null);
   const [agentStatus, setAgentStatus] = useState<AgentDisplayStatus>('offline');
 
   const [uploadingFile, setUploadingFile] = useState(false);
@@ -43,13 +42,13 @@ export default function DashboardHome() {
 
   const fetchContext = useCallback(async () => {
     try {
-      const [settingsRes, tokensRes, statusRes] = await Promise.allSettled([
+      const [settingsRes, usageRes, statusRes] = await Promise.allSettled([
         api.get<{ settings: UserSettings }>('/settings'),
-        api.get<any>('/tokens/balance'),
+        api.get<{ usage?: { creditsRemaining: number } }>('/settings/nexos-usage'),
         api.get<any>('/agent/status'),
       ]);
       if (settingsRes.status === 'fulfilled') setSettings(settingsRes.value.settings);
-      if (tokensRes.status === 'fulfilled') setTokenBalance(tokensRes.value.balance ?? 0);
+      if (usageRes.status === 'fulfilled' && usageRes.value.usage) setCreditsRemaining(usageRes.value.usage.creditsRemaining);
       if (statusRes.status === 'fulfilled') {
         setAgentStatus((statusRes.value.subscriptionStatus || statusRes.value.status || 'offline') as AgentDisplayStatus);
       }
@@ -162,8 +161,8 @@ export default function DashboardHome() {
     if (phase !== 'ready') return;
     const interval = setInterval(async () => {
       try {
-        const res = await api.get<any>('/tokens/balance');
-        if (res.balance !== undefined) setTokenBalance(res.balance);
+        const res = await api.get<{ usage?: { creditsRemaining: number } }>('/settings/nexos-usage');
+        if (res.usage?.creditsRemaining !== undefined) setCreditsRemaining(res.usage.creditsRemaining);
       } catch {}
     }, 30000);
     return () => clearInterval(interval);
@@ -190,7 +189,7 @@ export default function DashboardHome() {
         if (!embed.available) {
           if (embed.reason === 'paused') {
             setPhase('error');
-            setErrorMsg('Agent paused — you are out of tokens.');
+            setErrorMsg('Agent paused — update your subscription or payment to resume.');
             return;
           }
           if (embed.reason === 'cancelled') {
@@ -264,21 +263,19 @@ export default function DashboardHome() {
   const getModeLabel = () => {
     if (!settings) return { label: 'Auto', icon: Cpu, desc: 'Smart model routing', variant: 'green' as const };
 
-    const hasOwnKey = settings.has_own_openai_key || settings.has_own_anthropic_key;
-
     if (settings.brain_mode === 'manual' && settings.manual_model) {
       return {
         label: settings.manual_model.length > 20 ? settings.manual_model.slice(0, 18) + '...' : settings.manual_model,
         icon: Zap,
-        desc: hasOwnKey ? 'Using your API key' : 'Fixed model',
-        variant: hasOwnKey ? 'amber' as const : 'blue' as const,
+        desc: settings.has_own_openrouter_key ? 'Using your API key' : 'Fixed model',
+        variant: settings.has_own_openrouter_key ? 'amber' as const : 'blue' as const,
       };
     }
 
     return {
       label: 'Auto',
       icon: Cpu,
-      desc: hasOwnKey ? 'Smart routing + your API key' : 'Smart model routing',
+      desc: settings.has_own_openrouter_key ? 'Smart routing + your key' : 'Smart model routing',
       variant: 'green' as const,
     };
   };
@@ -301,9 +298,9 @@ export default function DashboardHome() {
       {agentStatus === 'paused' && (
         <div className="border border-red-500/20 bg-red-500/5 rounded-xl px-4 py-3 flex items-center gap-3 mb-3 shrink-0">
           <AlertTriangle className="h-4 w-4 text-red-400 shrink-0" />
-          <p className="text-[13px] text-red-400 flex-1">Agent paused — you&apos;re out of tokens</p>
+          <p className="text-[13px] text-red-400 flex-1">Agent paused — update your subscription or payment to resume</p>
           <Button variant="danger" size="sm" onClick={() => window.location.href = '/dashboard/tokens'}>
-            Top Up
+            Billing
           </Button>
         </div>
       )}
@@ -363,10 +360,10 @@ export default function DashboardHome() {
 
           <button onClick={() => window.location.href = '/dashboard/tokens'}
             className="flex items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-1.5 hover:border-white/15 hover:bg-white/[0.04] transition-all"
-            title="Token balance">
+            title="Credits & billing">
             <Sparkles className="h-3.5 w-3.5 text-white/20" />
-            <span className={`text-[12px] font-medium tabular-nums ${tokenBalance < 50000 ? 'text-amber-400' : 'text-white/50'}`}>
-              {formatTokens(tokenBalance)}
+            <span className={`text-[12px] font-medium tabular-nums ${creditsRemaining != null && creditsRemaining < 50000 ? 'text-amber-400' : 'text-white/50'}`}>
+              {creditsRemaining != null ? `${formatTokens(creditsRemaining)} left` : 'Credits'}
             </span>
           </button>
         </div>
@@ -416,7 +413,7 @@ export default function DashboardHome() {
               </Button>
               {agentStatus === 'paused' && (
                 <Button variant="danger" size="sm" onClick={() => window.location.href = '/dashboard/tokens'}>
-                  Top Up Tokens
+                  Billing
                 </Button>
               )}
             </div>

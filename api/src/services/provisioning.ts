@@ -40,6 +40,7 @@ import { sendWelcomeEmail } from './email';
 import { cloudflareDNS } from './cloudflare';
 import { v4 as uuid } from 'uuid';
 import { buildOpenclawConfig, injectApiKeys } from './apiKeys';
+import { ensureNexosKey } from './nexos';
 
 /** Generate a per-container secret bound to a specific userId. */
 export function generateContainerSecret(userId: string): string {
@@ -85,7 +86,7 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
     [server.id, containerName, subdomain, stripeCustomerId || null, referralCode, userId]
   );
 
-  // Step 4: Initialize user settings, channels, and token balance
+  // Step 4: Initialize user settings and channels
   await Promise.all([
     db.query(
       `INSERT INTO user_settings (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING`,
@@ -94,16 +95,6 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
     db.query(
       `INSERT INTO user_channels (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING`,
       [userId]
-    ),
-    db.query(
-      `INSERT INTO token_balances (user_id, balance, total_purchased)
-       VALUES ($1, $2, $2) ON CONFLICT (user_id) DO NOTHING`,
-      [userId, limits.includedTokens]
-    ),
-    db.query(
-      `INSERT INTO token_transactions (user_id, amount, type, description)
-       VALUES ($1, $2, 'subscription_grant', $3)`,
-      [userId, limits.includedTokens, `${plan} plan signup bonus`]
     ),
   ]);
 
@@ -231,6 +222,9 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
   // Give Node.js ~75% of the container memory for its heap
   const heapMb = Math.floor(limits.ramMb * 0.75);
 
+  // Ensure user has an OpenRouter API key before container creation
+  const nexosKey = await ensureNexosKey(userId);
+
   // Mount the instance directory at /root/.openclaw so config + credentials persist
   const startScript = `sh -c 'openclaw doctor --fix 2>/dev/null || true; exec openclaw gateway --port 18789 --bind lan --allow-unconfigured run'`;
   const dockerRunCmd = [
@@ -249,6 +243,7 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
     `-e CONTAINER_SECRET=${generateContainerSecret(userId)}`,
     `-e "BROWSERLESS_URL=wss://production-sfo.browserless.io?token=${browserlessToken}"`,
     `-e OPENCLAW_GATEWAY_TOKEN=${gatewayToken}`,
+    `-e OPENROUTER_API_KEY=${nexosKey}`,
     `-v /opt/openclaw/instances/${userId}:/root/.openclaw`,
     `--label traefik.enable=true`,
     `--label 'traefik.http.routers.${containerName}.rule=Host(\`${hostRule}\`)'`,
@@ -293,8 +288,8 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
     await new Promise(r => setTimeout(r, 3000));
   }
 
-  // Step 6b: Write auth-profiles.json so OpenClaw finds the API keys
-  await injectApiKeys(server.ip, userId, containerName);
+  // Step 6b: Inject OpenRouter key + configure model router per plan tier
+  await injectApiKeys(server.ip, userId, containerName, plan);
 
   // Step 7: Create DNS record pointing subdomain → worker IP
   await cloudflareDNS.upsertRecord(subdomain, server.ip);

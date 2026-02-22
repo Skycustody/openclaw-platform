@@ -99,8 +99,8 @@ export async function connectTelegram(userId: string, botToken: string): Promise
 
   const { serverIp, containerName, user } = await getUserContainer(userId);
 
-  // Ensure API keys are injected before starting the channel
-  await injectApiKeys(serverIp, userId, containerName);
+  // Ensure API keys + model router are configured before starting the channel
+  await injectApiKeys(serverIp, userId, containerName, user.plan as any);
 
   const config = await readContainerConfig(serverIp, userId);
   if (!config.channels) config.channels = {};
@@ -347,8 +347,8 @@ export async function initiateWhatsAppPairing(userId: string): Promise<{
     ? `${agentUrl}/?token=${encodeURIComponent(user.gateway_token)}`
     : agentUrl;
 
-  // Ensure API keys are injected before starting the channel
-  await injectApiKeys(serverIp, userId, containerName);
+  // Ensure API keys + model router are configured before starting the channel
+  await injectApiKeys(serverIp, userId, containerName, user.plan as any);
 
   // Write WhatsApp config via host filesystem (no docker exec needed)
   const config = await readContainerConfig(serverIp, userId);

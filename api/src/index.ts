@@ -4,7 +4,7 @@
  * This is NOT a standalone AI service. This is the control plane for a hosted
  * OpenClaw platform. Every user gets their own OpenClaw container. The API:
  *  - Provisions and manages containers on worker servers
- *  - Proxies AI calls from containers and tracks token usage
+ *  - Injects OpenRouter API keys so containers talk directly to OpenRouter
  *  - Syncs settings/skills/channels to container config (openclaw.json)
  *  - Serves auth, billing, and admin endpoints
  *
@@ -43,7 +43,6 @@ import jwt from 'jsonwebtoken';
 
 import authRoutes from './routes/auth';
 import agentRoutes from './routes/agent';
-import tokenRoutes from './routes/tokens';
 import settingsRoutes from './routes/settings';
 import channelRoutes from './routes/channels';
 import memoryRoutes from './routes/memories';
@@ -57,7 +56,6 @@ import referralRoutes from './routes/referrals';
 import templateRoutes from './routes/templates';
 import webhookRoutes from './routes/webhooks';
 import adminRoutes from './routes/admin';
-import proxyRoutes from './routes/proxy';
 import autoRoutes from './routes/auto';
 import agentsRoutes from './routes/agents';
 import skillsRoutes from './routes/skills';
@@ -141,7 +139,6 @@ app.use(rateLimitGeneral);
 // ── Routes ──
 app.use('/auth', authRoutes);
 app.use('/agent', agentRoutes);
-app.use('/tokens', tokenRoutes);
 app.use('/settings', settingsRoutes);
 app.use('/channels', channelRoutes);
 app.use('/memories', memoryRoutes);
@@ -155,7 +152,6 @@ app.use('/referrals', referralRoutes);
 app.use('/templates', templateRoutes);
 app.use('/webhooks', webhookRoutes);
 app.use('/admin', adminRoutes);
-app.use('/proxy', proxyRoutes);
 app.use('/auto', autoRoutes);
 app.use('/agents', agentsRoutes);
 app.use('/skills', skillsRoutes);

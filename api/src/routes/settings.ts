@@ -1,68 +1,16 @@
 /**
- * Settings routes — user preferences and encrypted API key storage.
+ * Settings routes — user preferences and agent configuration.
  *
- * ┌─────────────────────────────────────────────────────────────────────────┐
- * │ SECURITY — DO NOT CHANGE WITHOUT UNDERSTANDING                         │
- * │                                                                        │
- * │ 1. ENCRYPTION: Uses AES-256-GCM with random IV + auth tag. Encrypted  │
- * │    values are stored as "iv:authTag:ciphertext" (3 parts). If you     │
- * │    see 2-part format ("iv:ciphertext"), it's legacy and vulnerable —  │
- * │    the decrypt function intentionally throws for those.               │
- * │    DO NOT re-add the 2-part decryption path.                          │
- * │                                                                        │
- * │ 2. INPUT VALIDATION: Personality fields have length limits to prevent │
- * │    abuse (e.g. customInstructions max 5000 chars). Don't remove.      │
- * └─────────────────────────────────────────────────────────────────────────┘
+ * API key management has been replaced by OpenRouter integration.
+ * Each user gets an OpenRouter API key (managed by services/nexos.ts) that provides
+ * access to multiple AI models through OpenRouter's credit-based billing.
  */
 import { Router, Response, NextFunction } from 'express';
 import { AuthRequest, authenticate, requireActiveSubscription } from '../middleware/auth';
-import crypto from 'crypto';
 import db from '../lib/db';
 import { UserSettings } from '../types';
 import { getUserContainer, readContainerConfig, writeContainerConfig, restartContainer } from '../services/containerConfig';
-
-if (!process.env.ENCRYPTION_KEY) {
-  throw new Error('ENCRYPTION_KEY environment variable is required. Generate with: openssl rand -hex 32');
-}
-
-const ENC_KEY = process.env.ENCRYPTION_KEY;
-const ENC_ALGO = 'aes-256-gcm';
-
-function encrypt(text: string): string {
-  const iv = crypto.randomBytes(16);
-  const salt = crypto.randomBytes(16);
-  const derivedKey = crypto.scryptSync(ENC_KEY, salt, 32);
-  const cipher = crypto.createCipheriv(ENC_ALGO, derivedKey, iv);
-  let encrypted = cipher.update(text, 'utf8', 'hex');
-  encrypted += cipher.final('hex');
-  const authTag = cipher.getAuthTag().toString('hex');
-  return salt.toString('hex') + ':' + iv.toString('hex') + ':' + authTag + ':' + encrypted;
-}
-
-function decrypt(data: string): string {
-  const parts = data.split(':');
-  if (parts.length === 2) {
-    const legacyKey = crypto.scryptSync(ENC_KEY, 'salt', 32);
-    const iv = Buffer.from(parts[0], 'hex');
-    const decipher = crypto.createDecipheriv('aes-256-cbc', legacyKey, iv);
-    let decrypted = decipher.update(parts[1], 'hex', 'utf8');
-    decrypted += decipher.final('utf8');
-    return decrypted;
-  }
-  const [saltHex, ivHex, authTagHex, encrypted] = parts;
-  const derivedKey = crypto.scryptSync(ENC_KEY, Buffer.from(saltHex, 'hex'), 32);
-  const iv = Buffer.from(ivHex, 'hex');
-  const decipher = crypto.createDecipheriv(ENC_ALGO, derivedKey, iv);
-  decipher.setAuthTag(Buffer.from(authTagHex, 'hex'));
-  let decrypted = decipher.update(encrypted, 'hex', 'utf8');
-  decrypted += decipher.final('utf8');
-  return decrypted;
-}
-
-function maskKey(key: string): string {
-  if (key.length < 10) return '****';
-  return key.slice(0, 7) + '...' + key.slice(-4);
-}
+import { getNexosUsage } from '../services/nexos';
 
 async function syncSettingsToContainer(userId: string): Promise<void> {
   try {
@@ -104,7 +52,7 @@ const router = Router();
 router.use(authenticate);
 router.use(requireActiveSubscription);
 
-// Get all settings — own API keys are returned masked
+// Get all settings
 router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const settings = await db.getOne<UserSettings>(
@@ -114,19 +62,26 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
     if (!settings) return res.json({ settings: {} });
 
     const safeSettings: any = { ...settings };
-    // Never return raw keys, only masked versions
-    safeSettings.has_own_openai_key = !!settings.own_openai_key;
-    safeSettings.own_openai_key_masked = settings.own_openai_key
-      ? maskKey(decrypt(settings.own_openai_key))
-      : null;
-    safeSettings.has_own_anthropic_key = !!settings.own_anthropic_key;
-    safeSettings.own_anthropic_key_masked = settings.own_anthropic_key
-      ? maskKey(decrypt(settings.own_anthropic_key))
-      : null;
     delete safeSettings.own_openai_key;
     delete safeSettings.own_anthropic_key;
 
+    safeSettings.has_own_openrouter_key = !!settings.own_openrouter_key;
+    safeSettings.own_openrouter_key_masked = settings.own_openrouter_key
+      ? settings.own_openrouter_key.slice(0, 8) + '...' + settings.own_openrouter_key.slice(-4)
+      : null;
+    delete safeSettings.own_openrouter_key;
+
     res.json({ settings: safeSettings });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Get OpenRouter credit usage
+router.get('/nexos-usage', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const usage = await getNexosUsage(req.userId!);
+    res.json({ usage });
   } catch (err) {
     next(err);
   }
@@ -229,57 +184,6 @@ router.put('/protection', async (req: AuthRequest, res: Response, next: NextFunc
   }
 });
 
-// Save user's own API keys (encrypted at rest)
-router.put('/own-keys', async (req: AuthRequest, res: Response, next: NextFunction) => {
-  try {
-    const { openaiKey, anthropicKey } = req.body;
-
-    // Validate key format before saving
-    if (openaiKey !== undefined) {
-      if (openaiKey && !openaiKey.startsWith('sk-')) {
-        return res.status(400).json({ error: 'Invalid OpenAI key format. Keys start with sk-' });
-      }
-      const encrypted = openaiKey ? encrypt(openaiKey) : null;
-      await db.query(
-        'UPDATE user_settings SET own_openai_key = $1 WHERE user_id = $2',
-        [encrypted, req.userId]
-      );
-    }
-
-    if (anthropicKey !== undefined) {
-      if (anthropicKey && !anthropicKey.startsWith('sk-ant-')) {
-        return res.status(400).json({ error: 'Invalid Anthropic key format. Keys start with sk-ant-' });
-      }
-      const encrypted = anthropicKey ? encrypt(anthropicKey) : null;
-      await db.query(
-        'UPDATE user_settings SET own_anthropic_key = $1 WHERE user_id = $2',
-        [encrypted, req.userId]
-      );
-    }
-
-    res.json({ ok: true });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// Delete a specific own API key
-router.delete('/own-keys/:provider', async (req: AuthRequest, res: Response, next: NextFunction) => {
-  try {
-    const { provider } = req.params;
-    if (provider === 'openai') {
-      await db.query('UPDATE user_settings SET own_openai_key = NULL WHERE user_id = $1', [req.userId]);
-    } else if (provider === 'anthropic') {
-      await db.query('UPDATE user_settings SET own_anthropic_key = NULL WHERE user_id = $1', [req.userId]);
-    } else {
-      return res.status(400).json({ error: 'Invalid provider. Use openai or anthropic.' });
-    }
-    res.json({ ok: true });
-  } catch (err) {
-    next(err);
-  }
-});
-
 // Save onboarding answers and push to agent
 router.post('/onboarding', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
@@ -322,19 +226,59 @@ router.post('/onboarding', async (req: AuthRequest, res: Response, next: NextFun
   }
 });
 
-// Internal-only: get decrypted own key for proxy (not exposed via auth middleware externally)
-export async function getUserOwnKey(userId: string, provider: 'openai' | 'anthropic'): Promise<string | null> {
-  const col = provider === 'openai' ? 'own_openai_key' : 'own_anthropic_key';
-  const row = await db.getOne<{ key: string | null }>(
-    `SELECT ${col} as key FROM user_settings WHERE user_id = $1`,
-    [userId]
-  );
-  if (!row?.key) return null;
+// Save own OpenRouter key (BYOK — unlimited AI, user pays OpenRouter directly)
+router.put('/own-openrouter-key', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    return decrypt(row.key);
-  } catch {
-    return null;
+    const { key } = req.body;
+    if (!key || typeof key !== 'string' || key.length < 10) {
+      return res.status(400).json({ error: 'Invalid OpenRouter API key' });
+    }
+
+    await db.query(
+      'UPDATE user_settings SET own_openrouter_key = $1 WHERE user_id = $2',
+      [key.trim(), req.userId]
+    );
+
+    // Re-inject API keys with the user's own key
+    try {
+      const { injectApiKeys } = await import('../services/apiKeys');
+      const { serverIp, containerName } = await getUserContainer(req.userId!);
+      const user = await db.getOne<{ plan: string }>('SELECT plan FROM users WHERE id = $1', [req.userId]);
+      await injectApiKeys(serverIp, req.userId!, containerName, (user?.plan || 'starter') as any);
+      restartContainer(serverIp, containerName).catch(() => {});
+    } catch {
+      // Container not provisioned — key saved to DB for next provision
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
   }
-}
+});
+
+// Remove own OpenRouter key (revert to platform-managed key)
+router.delete('/own-openrouter-key', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    await db.query(
+      'UPDATE user_settings SET own_openrouter_key = NULL WHERE user_id = $1',
+      [req.userId]
+    );
+
+    // Re-inject platform key
+    try {
+      const { injectApiKeys } = await import('../services/apiKeys');
+      const { serverIp, containerName } = await getUserContainer(req.userId!);
+      const user = await db.getOne<{ plan: string }>('SELECT plan FROM users WHERE id = $1', [req.userId]);
+      await injectApiKeys(serverIp, req.userId!, containerName, (user?.plan || 'starter') as any);
+      restartContainer(serverIp, containerName).catch(() => {});
+    } catch {
+      // Container not provisioned
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
 
 export default router;

@@ -1,8 +1,13 @@
-import db from '../lib/db';
+/**
+ * Task execution wrapper with budget limits and loop detection.
+ *
+ * Token billing is handled by OpenRouter credits — this module only provides
+ * the execution scaffolding for cron jobs (budget limits, loop detection).
+ */
 import { TaskComplexity, Plan, UserSettings } from '../types';
-import { trackUsage } from './tokenTracker';
 import { loopDetector } from './loopDetector';
 import { v4 as uuid } from 'uuid';
+import db from '../lib/db';
 
 const DEFAULT_BUDGETS: Record<TaskComplexity, Record<Plan, number>> = {
   simple: { starter: 2000, pro: 3000, business: 5000 },
@@ -54,9 +59,6 @@ export async function executeWithBudget(
 
   try {
     const result = await executeFn(budget, taskId);
-
-    await trackUsage(userId, result.model, result.tokensUsed, taskId);
-
     return {
       ...result,
       budgetReached: result.tokensUsed >= budget * 0.9,
@@ -66,19 +68,15 @@ export async function executeWithBudget(
   }
 }
 
-// For efficient auto/cron tasks: single-pass execution
 export async function autoWorkExecute(
   userId: string,
   task: { description: string; type: string; tokenBudget?: number; requiredTools?: any[] },
   executeFn: (budget: number) => Promise<{ response: string; tokensUsed: number; model: string }>
 ): Promise<ExecutionResult> {
   const budget = task.tokenBudget || 2000;
-  const taskId = uuid();
 
   try {
     const result = await executeFn(budget);
-    await trackUsage(userId, result.model, result.tokensUsed, taskId);
-
     return {
       ...result,
       budgetReached: result.tokensUsed >= budget * 0.9,
