@@ -210,7 +210,7 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
     `--name ${containerName}`,
     '--restart unless-stopped',
     '--no-healthcheck',
-    `--network ${containerName}-net`,
+    '--network openclaw-net',
     '--pids-limit 256',
     `--memory ${limits.ramMb}m`,
     `--memory-swap ${limits.ramMb}m`,
@@ -251,8 +251,8 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
 
   console.log(`[provision] Container ${containerName} started: ${runResult.stdout.slice(0, 20)}`);
 
-  // Connect Traefik to this user's network so it can route to the container
-  await sshExec(server.ip, `docker network connect ${containerName}-net traefik 2>/dev/null || true`);
+  // Also connect container to its own isolated network (prevents cross-container access)
+  await sshExec(server.ip, `docker network connect ${containerName}-net ${containerName} 2>/dev/null || true`);
 
   // Step 6: Quick alive check — give the container 5s to start, then verify
   await new Promise(r => setTimeout(r, 5000));
