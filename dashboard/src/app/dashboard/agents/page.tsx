@@ -1,16 +1,16 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { Card, CardTitle, CardDescription } from '@/components/ui/Card';
+import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import api from '@/lib/api';
-import { cn, timeAgo } from '@/lib/utils';
+import { timeAgo } from '@/lib/utils';
 import {
-  Bot, Plus, Loader2, Play, Square, Trash2, Edit3,
-  HardDrive, Cpu, ArrowRight, Check, ChevronRight,
-  Sparkles, AlertTriangle, Zap, Crown, Moon, Info,
+  Bot, Plus, Loader2, Trash2, Edit3,
+  HardDrive, ArrowRight, ChevronRight,
+  Sparkles, AlertTriangle, Crown, Info, X,
 } from 'lucide-react';
 import { useStore } from '@/lib/store';
 
@@ -19,12 +19,12 @@ interface Agent {
   name: string;
   purpose: string | null;
   instructions: string | null;
+  openclawAgentId: string;
   status: string;
   ram_mb: number;
   is_primary: boolean;
   created_at: string;
   last_active: string;
-  subdomain: string | null;
 }
 
 interface AgentLimits {
@@ -32,10 +32,7 @@ interface AgentLimits {
   currentCount: number;
   canCreate: boolean;
   totalRamMb: number;
-  usedRamMb: number;
-  freeRamMb: number;
-  borrowableRamMb: number;
-  agentRamMb: number;
+  sharedRam: boolean;
 }
 
 interface AgentsResponse {
@@ -48,25 +45,23 @@ const statusConfig: Record<string, { label: string; color: string; dotColor: str
   active:       { label: 'Running',      color: 'text-green-400',  dotColor: 'bg-green-400' },
   sleeping:     { label: 'Sleeping',     color: 'text-blue-400',   dotColor: 'bg-blue-400' },
   provisioning: { label: 'Setting up',   color: 'text-amber-400',  dotColor: 'bg-amber-400' },
-  paused:       { label: 'Paused',       color: 'text-red-400',    dotColor: 'bg-red-400' },
-  stopped:      { label: 'Stopped',      color: 'text-white/30',   dotColor: 'bg-white/30' },
   pending:      { label: 'Not started',  color: 'text-white/30',   dotColor: 'bg-white/20' },
 };
 
 const ONBOARDING_STEPS = [
   {
     title: 'What should this agent be called?',
-    subtitle: 'Give it a name that describes its role.',
+    subtitle: 'This becomes the agent identity inside your OpenClaw instance.',
     field: 'name',
   },
   {
     title: 'What will this agent do?',
-    subtitle: 'Describe its main purpose in a sentence or two.',
+    subtitle: 'Written to the agent\'s SOUL.md file as its personality and purpose.',
     field: 'purpose',
   },
   {
     title: 'Any special instructions?',
-    subtitle: 'Optional — personality, rules, context, or constraints.',
+    subtitle: 'Optional rules or context. Also goes into SOUL.md inside the container.',
     field: 'instructions',
   },
 ];
@@ -74,21 +69,18 @@ const ONBOARDING_STEPS = [
 export default function AgentsPage() {
   const [data, setData] = useState<AgentsResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const { user } = useStore();
 
-  // Create modal
   const [showCreate, setShowCreate] = useState(false);
   const [createStep, setCreateStep] = useState(0);
   const [newAgent, setNewAgent] = useState({ name: '', purpose: '', instructions: '' });
   const [creating, setCreating] = useState(false);
 
-  // Edit modal
   const [editAgent, setEditAgent] = useState<Agent | null>(null);
   const [editForm, setEditForm] = useState({ name: '', purpose: '', instructions: '' });
   const [saving, setSaving] = useState(false);
 
-  // Delete confirm
   const [deleteAgent, setDeleteAgent] = useState<Agent | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -99,32 +91,21 @@ export default function AgentsPage() {
     } catch {} finally { setLoading(false); }
   }, []);
 
-  useEffect(() => {
-    fetchAgents();
-  }, [fetchAgents]);
+  useEffect(() => { fetchAgents(); }, [fetchAgents]);
 
   const handleCreate = async () => {
     if (!newAgent.name.trim()) return;
     setCreating(true);
+    setActionError(null);
     try {
       await api.post('/agents', newAgent);
       setShowCreate(false);
       setCreateStep(0);
       setNewAgent({ name: '', purpose: '', instructions: '' });
       await fetchAgents();
-    } catch {} finally { setCreating(false); }
-  };
-
-  const handleStartStop = async (agent: Agent) => {
-    setActionLoading(agent.id);
-    try {
-      if (agent.status === 'active') {
-        await api.post(`/agents/${agent.id}/stop`);
-      } else {
-        await api.post(`/agents/${agent.id}/start`);
-      }
-      await fetchAgents();
-    } catch {} finally { setActionLoading(null); }
+    } catch (err: any) {
+      setActionError(err.message || 'Failed to create agent');
+    } finally { setCreating(false); }
   };
 
   const handleEdit = (agent: Agent) => {
@@ -143,7 +124,9 @@ export default function AgentsPage() {
       await api.put(`/agents/${editAgent.id}`, editForm);
       setEditAgent(null);
       await fetchAgents();
-    } catch {} finally { setSaving(false); }
+    } catch (err: any) {
+      setActionError(err.message || 'Failed to update agent');
+    } finally { setSaving(false); }
   };
 
   const handleDelete = async () => {
@@ -153,7 +136,9 @@ export default function AgentsPage() {
       await api.delete(`/agents/${deleteAgent.id}`);
       setDeleteAgent(null);
       await fetchAgents();
-    } catch {} finally { setDeleting(false); }
+    } catch (err: any) {
+      setActionError(err.message || 'Failed to delete agent');
+    } finally { setDeleting(false); }
   };
 
   if (loading) {
@@ -164,12 +149,10 @@ export default function AgentsPage() {
     );
   }
 
-  const { agents = [], limits, plan = 'starter' } = data || { limits: {
-    maxAgents: 1, currentCount: 0, canCreate: true, totalRamMb: 2048,
-    usedRamMb: 0, freeRamMb: 2048, borrowableRamMb: 0, agentRamMb: 2048,
-  }};
+  const { agents = [], limits, plan = 'starter' } = data || {
+    limits: { maxAgents: 1, currentCount: 0, canCreate: true, totalRamMb: 2048, sharedRam: true },
+  };
 
-  const ramPercentUsed = limits.totalRamMb > 0 ? (limits.usedRamMb / limits.totalRamMb) * 100 : 0;
   const canAddAgent = limits.canCreate && plan !== 'starter';
 
   return (
@@ -181,24 +164,31 @@ export default function AgentsPage() {
           <p className="text-[14px] text-white/40 mt-0.5">
             {plan === 'starter'
               ? 'Upgrade to Pro to run multiple agents'
-              : `Manage your AI agents — ${limits.currentCount} of ${limits.maxAgents} used`
+              : `Multiple agents inside one OpenClaw instance — ${limits.currentCount} of ${limits.maxAgents} used`
             }
           </p>
         </div>
         {plan !== 'starter' && (
-          <Button
-            variant="primary"
-            size="sm"
+          <Button variant="primary" size="sm"
             onClick={() => canAddAgent ? setShowCreate(true) : null}
-            disabled={!canAddAgent}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            New Agent
+            disabled={!canAddAgent}>
+            <Plus className="h-3.5 w-3.5" /> New Agent
           </Button>
         )}
       </div>
 
-      {/* Starter Plan Upgrade Banner */}
+      {/* Error banner */}
+      {actionError && (
+        <div className="border border-red-500/20 bg-red-500/5 rounded-xl px-4 py-3 flex items-center gap-3 animate-fade-up">
+          <AlertTriangle className="h-4 w-4 text-red-400 shrink-0" />
+          <p className="text-[13px] text-red-400 flex-1">{actionError}</p>
+          <button onClick={() => setActionError(null)} className="text-white/20 hover:text-white/40">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Starter Upgrade Banner */}
       {plan === 'starter' && (
         <Card className="!p-5 animate-fade-up">
           <div className="flex items-center gap-4">
@@ -208,7 +198,7 @@ export default function AgentsPage() {
             <div className="flex-1">
               <p className="text-[15px] font-semibold text-white">Unlock Multiple Agents</p>
               <p className="text-[13px] text-white/40 mt-0.5">
-                Pro plan lets you run 2 agents (2GB each). Business plan gives you 4 agents with shared RAM pooling.
+                Pro plan: 2 agents sharing 4GB. Business: 4 agents sharing 8GB. All run inside one OpenClaw container — idle agents free RAM automatically.
               </p>
             </div>
             <Button variant="primary" size="sm" onClick={() => window.location.href = '/dashboard/billing'}>
@@ -218,72 +208,35 @@ export default function AgentsPage() {
         </Card>
       )}
 
-      {/* Resource Overview */}
+      {/* Shared RAM Info */}
       {plan !== 'starter' && (
-        <div className="grid grid-cols-3 gap-3 animate-fade-up">
-          {/* RAM Usage */}
-          <Card className="!p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <HardDrive className="h-4 w-4 text-white/20" />
-              <span className="text-[12px] text-white/30">Memory Pool</span>
+        <Card className="!p-4 animate-fade-up">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/[0.04]">
+              <HardDrive className="h-5 w-5 text-white/20" />
             </div>
-            <div className="space-y-2">
-              <div className="flex items-baseline justify-between">
-                <span className="text-[20px] font-bold text-white tabular-nums">
-                  {(limits.usedRamMb / 1024).toFixed(1)}
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <span className="text-[14px] font-medium text-white">
+                  {(limits.totalRamMb / 1024).toFixed(0)} GB shared RAM
                 </span>
-                <span className="text-[12px] text-white/30">
-                  / {(limits.totalRamMb / 1024).toFixed(1)} GB
-                </span>
+                <Badge variant="green" className="!text-[10px]">Pooled</Badge>
               </div>
-              <div className="h-2 bg-white/5 rounded-full overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all duration-500 ${
-                    ramPercentUsed > 85 ? 'bg-red-400' : ramPercentUsed > 60 ? 'bg-amber-400' : 'bg-green-400'
-                  }`}
-                  style={{ width: `${Math.min(100, ramPercentUsed)}%` }}
-                />
-              </div>
+              <p className="text-[12px] text-white/30 mt-0.5">
+                All {limits.currentCount} agent{limits.currentCount !== 1 ? 's' : ''} share one container. Idle agents free RAM automatically.
+              </p>
             </div>
-          </Card>
-
-          {/* Agent Slots */}
-          <Card className="!p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Bot className="h-4 w-4 text-white/20" />
-              <span className="text-[12px] text-white/30">Agent Slots</span>
-            </div>
-            <div className="flex items-baseline gap-1">
-              <span className="text-[20px] font-bold text-white tabular-nums">{limits.currentCount}</span>
-              <span className="text-[14px] text-white/30">/ {limits.maxAgents}</span>
-            </div>
-            <div className="flex gap-1.5 mt-2">
+            <div className="flex gap-1.5">
               {Array.from({ length: limits.maxAgents }).map((_, i) => (
-                <div key={i} className={`h-2 flex-1 rounded-full ${
-                  i < limits.currentCount ? 'bg-white/30' : 'bg-white/5'
-                }`} />
+                <div key={i} className={`h-6 w-6 rounded-lg flex items-center justify-center ${
+                  i < limits.currentCount ? 'bg-white/10' : 'bg-white/[0.03] border border-dashed border-white/[0.08]'
+                }`}>
+                  {i < limits.currentCount && <Bot className="h-3 w-3 text-white/40" />}
+                </div>
               ))}
             </div>
-          </Card>
-
-          {/* Borrowable RAM */}
-          <Card className="!p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Zap className="h-4 w-4 text-white/20" />
-              <span className="text-[12px] text-white/30">Borrowable RAM</span>
-            </div>
-            <div className="flex items-baseline gap-1">
-              <span className="text-[20px] font-bold text-white tabular-nums">
-                {limits.borrowableRamMb > 0 ? `${(limits.borrowableRamMb / 1024).toFixed(1)}` : '0'}
-              </span>
-              <span className="text-[14px] text-white/30">GB</span>
-            </div>
-            <div className="flex items-center gap-1 mt-1">
-              <Info className="h-3 w-3 text-white/15" />
-              <span className="text-[10px] text-white/20">From idle agents</span>
-            </div>
-          </Card>
-        </div>
+          </div>
+        </Card>
       )}
 
       {/* Agent Cards */}
@@ -293,22 +246,17 @@ export default function AgentsPage() {
             <Bot className="h-12 w-12 text-white/10 mb-4" />
             <p className="text-[16px] font-medium text-white/50">No agents yet</p>
             <p className="text-[13px] text-white/25 mt-1 max-w-sm">
-              Your primary agent will appear here. Create additional agents for different tasks.
+              Your primary agent appears once provisioned. Create additional agents — each gets its own workspace and personality inside your OpenClaw instance.
             </p>
-            <Button variant="primary" size="sm" className="mt-5" onClick={() => setShowCreate(true)}>
-              <Plus className="h-3.5 w-3.5" /> Create Agent
-            </Button>
           </Card>
         )}
 
         {agents.map(agent => {
           const sc = statusConfig[agent.status] || statusConfig.pending;
-          const ramPercent = limits.totalRamMb > 0 ? (agent.ram_mb / limits.totalRamMb) * 100 : 0;
 
           return (
             <Card key={agent.id} className="!p-5">
               <div className="flex items-start gap-4">
-                {/* Agent icon */}
                 <div className="relative">
                   <div className={`flex h-12 w-12 items-center justify-center rounded-2xl border border-white/[0.08] ${
                     agent.status === 'active' ? 'bg-green-500/10' :
@@ -321,7 +269,6 @@ export default function AgentsPage() {
                   )}
                 </div>
 
-                {/* Agent info */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <h3 className="text-[15px] font-semibold text-white truncate">{agent.name}</h3>
@@ -336,70 +283,43 @@ export default function AgentsPage() {
                     <p className="text-[13px] text-white/40 mt-1 line-clamp-1">{agent.purpose}</p>
                   )}
 
-                  {/* RAM bar */}
                   <div className="flex items-center gap-3 mt-3">
-                    <div className="flex items-center gap-1.5">
-                      <HardDrive className="h-3 w-3 text-white/15" />
-                      <span className="text-[11px] text-white/25">{(agent.ram_mb / 1024).toFixed(1)} GB</span>
+                    <div className="flex items-center gap-1">
+                      <Info className="h-3 w-3 text-white/15" />
+                      <span className="text-[11px] text-white/20 font-mono">{agent.openclawAgentId}</span>
                     </div>
-                    <div className="flex-1 h-1.5 bg-white/5 rounded-full overflow-hidden max-w-[120px]">
-                      <div className="h-full bg-white/20 rounded-full" style={{ width: `${ramPercent}%` }} />
-                    </div>
-                    {agent.status === 'sleeping' && (
-                      <div className="flex items-center gap-1">
-                        <Moon className="h-3 w-3 text-blue-400/50" />
-                        <span className="text-[10px] text-blue-400/50">RAM shareable</span>
-                      </div>
-                    )}
                     {agent.last_active && (
                       <span className="text-[11px] text-white/15">Active {timeAgo(agent.last_active)}</span>
                     )}
                   </div>
                 </div>
 
-                {/* Actions */}
-                <div className="flex items-center gap-1.5">
-                  <button onClick={() => handleStartStop(agent)} disabled={actionLoading === agent.id}
-                    className={`p-2 rounded-lg transition-colors disabled:opacity-30 ${
-                      agent.status === 'active'
-                        ? 'text-white/30 hover:text-amber-400 hover:bg-amber-400/5'
-                        : 'text-white/30 hover:text-green-400 hover:bg-green-400/5'
-                    }`}
-                    title={agent.status === 'active' ? 'Sleep' : 'Start'}>
-                    {actionLoading === agent.id
-                      ? <Loader2 className="h-4 w-4 animate-spin" />
-                      : agent.status === 'active'
-                        ? <Square className="h-4 w-4" />
-                        : <Play className="h-4 w-4" />
-                    }
-                  </button>
-
-                  <button onClick={() => handleEdit(agent)}
-                    className="p-2 rounded-lg text-white/30 hover:text-white/60 hover:bg-white/[0.06] transition-colors"
-                    title="Edit">
-                    <Edit3 className="h-4 w-4" />
-                  </button>
-
-                  {!agent.is_primary && (
+                {/* Actions — only for non-primary agents */}
+                {!agent.is_primary && (
+                  <div className="flex items-center gap-1.5">
+                    <button onClick={() => handleEdit(agent)}
+                      className="p-2 rounded-lg text-white/30 hover:text-white/60 hover:bg-white/[0.06] transition-colors"
+                      title="Edit personality">
+                      <Edit3 className="h-4 w-4" />
+                    </button>
                     <button onClick={() => setDeleteAgent(agent)}
                       className="p-2 rounded-lg text-white/30 hover:text-red-400 hover:bg-red-400/5 transition-colors"
                       title="Delete">
                       <Trash2 className="h-4 w-4" />
                     </button>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             </Card>
           );
         })}
       </div>
 
-      {/* Create Agent Modal (with Onboarding) */}
+      {/* Create Agent Modal */}
       <Modal open={showCreate} onClose={() => { setShowCreate(false); setCreateStep(0); setNewAgent({ name: '', purpose: '', instructions: '' }); }}
         title={`New Agent — Step ${createStep + 1} of ${ONBOARDING_STEPS.length}`}
         className="max-w-md">
         <div className="space-y-5">
-          {/* Progress */}
           <div className="h-1 bg-white/5 rounded-full overflow-hidden">
             <div className="h-full bg-white/30 rounded-full transition-all duration-500"
               style={{ width: `${((createStep + 1) / ONBOARDING_STEPS.length) * 100}%` }} />
@@ -411,9 +331,7 @@ export default function AgentsPage() {
           </div>
 
           {createStep === 0 && (
-            <input
-              type="text"
-              value={newAgent.name}
+            <input type="text" value={newAgent.name}
               onChange={e => setNewAgent(prev => ({ ...prev, name: e.target.value }))}
               placeholder="e.g. Sales Assistant, Research Bot, Support Agent"
               autoFocus
@@ -422,18 +340,16 @@ export default function AgentsPage() {
           )}
 
           {createStep === 1 && (
-            <textarea
-              value={newAgent.purpose}
+            <textarea value={newAgent.purpose}
               onChange={e => setNewAgent(prev => ({ ...prev, purpose: e.target.value }))}
-              placeholder="e.g. Handle customer inquiries on Telegram, do market research, manage social media..."
+              placeholder="e.g. Handle customer inquiries, do market research, manage social media..."
               rows={4}
               className="w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-[14px] text-white placeholder:text-white/20 focus:border-white/25 focus:outline-none resize-none"
             />
           )}
 
           {createStep === 2 && (
-            <textarea
-              value={newAgent.instructions}
+            <textarea value={newAgent.instructions}
               onChange={e => setNewAgent(prev => ({ ...prev, instructions: e.target.value }))}
               placeholder="e.g. Be professional, always confirm before taking actions, respond in English only..."
               rows={4}
@@ -441,24 +357,15 @@ export default function AgentsPage() {
             />
           )}
 
-          {/* RAM allocation info */}
           <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-4 py-3">
             <div className="flex items-center gap-2 text-[12px] text-white/30">
-              <HardDrive className="h-3.5 w-3.5" />
-              <span>This agent will use <strong className="text-white/50">2 GB</strong> of your memory pool</span>
+              <Bot className="h-3.5 w-3.5" />
+              <span>Creates a new agent inside your <strong className="text-white/50">existing OpenClaw container</strong> — no extra resources needed</span>
             </div>
-            {limits.freeRamMb < 2048 && (
-              <p className="text-[11px] text-amber-400/70 mt-1.5 flex items-center gap-1">
-                <AlertTriangle className="h-3 w-3" />
-                Low memory — idle agents will share RAM automatically
-              </p>
-            )}
           </div>
 
-          {/* Nav */}
           <div className="flex items-center justify-between pt-2">
-            <button
-              onClick={() => setCreateStep(Math.max(0, createStep - 1))}
+            <button onClick={() => setCreateStep(Math.max(0, createStep - 1))}
               className={`text-[13px] text-white/30 hover:text-white/50 transition-colors ${createStep === 0 ? 'invisible' : ''}`}>
               Back
             </button>
@@ -479,36 +386,35 @@ export default function AgentsPage() {
         </div>
       </Modal>
 
-      {/* Edit Agent Modal */}
+      {/* Edit Modal */}
       <Modal open={!!editAgent} onClose={() => setEditAgent(null)} title="Edit Agent" className="max-w-md">
         <div className="space-y-4">
           <div>
             <label className="text-[12px] text-white/30 block mb-1.5">Name</label>
-            <input
-              type="text"
-              value={editForm.name}
+            <input type="text" value={editForm.name}
               onChange={e => setEditForm(prev => ({ ...prev, name: e.target.value }))}
-              className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 text-[14px] text-white placeholder:text-white/20 focus:border-white/25 focus:outline-none"
+              className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 text-[14px] text-white focus:border-white/25 focus:outline-none"
             />
           </div>
           <div>
             <label className="text-[12px] text-white/30 block mb-1.5">Purpose</label>
-            <textarea
-              value={editForm.purpose}
+            <textarea value={editForm.purpose}
               onChange={e => setEditForm(prev => ({ ...prev, purpose: e.target.value }))}
               rows={3}
-              className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 text-[14px] text-white placeholder:text-white/20 focus:border-white/25 focus:outline-none resize-none"
+              className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 text-[14px] text-white focus:border-white/25 focus:outline-none resize-none"
             />
           </div>
           <div>
             <label className="text-[12px] text-white/30 block mb-1.5">Instructions</label>
-            <textarea
-              value={editForm.instructions}
+            <textarea value={editForm.instructions}
               onChange={e => setEditForm(prev => ({ ...prev, instructions: e.target.value }))}
               rows={3}
-              className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 text-[14px] text-white placeholder:text-white/20 focus:border-white/25 focus:outline-none resize-none"
+              className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 text-[14px] text-white focus:border-white/25 focus:outline-none resize-none"
             />
           </div>
+          <p className="text-[11px] text-white/20">
+            Updates the agent&apos;s SOUL.md and identity in your OpenClaw container.
+          </p>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="glass" size="sm" onClick={() => setEditAgent(null)}>Cancel</Button>
             <Button variant="primary" size="sm" onClick={handleSaveEdit} loading={saving}>Save</Button>
@@ -516,12 +422,11 @@ export default function AgentsPage() {
         </div>
       </Modal>
 
-      {/* Delete Confirmation Modal */}
+      {/* Delete Modal */}
       <Modal open={!!deleteAgent} onClose={() => setDeleteAgent(null)} title="Delete Agent" className="max-w-sm">
         <div className="space-y-4">
           <p className="text-[14px] text-white/50">
-            Are you sure you want to delete <strong className="text-white/80">{deleteAgent?.name}</strong>?
-            This will free up {((deleteAgent?.ram_mb || 0) / 1024).toFixed(1)} GB of memory.
+            Delete <strong className="text-white/80">{deleteAgent?.name}</strong>? This removes it from your OpenClaw container&apos;s agents list and deletes its workspace.
           </p>
           <div className="flex justify-end gap-2">
             <Button variant="glass" size="sm" onClick={() => setDeleteAgent(null)}>Cancel</Button>

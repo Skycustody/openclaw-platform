@@ -29,17 +29,6 @@ const typeConfig: Record<string, { label: string; variant: 'default' | 'green' |
   work: { label: 'Work', variant: 'amber', icon: Briefcase },
 };
 
-const MOCK_MEMORIES: Memory[] = [
-  { id: '1', content: 'My wife\'s name is Sarah and she loves sushi', type: 'people', pinned: true, createdAt: new Date(Date.now() - 86400000 * 5).toISOString() },
-  { id: '2', content: 'Never book meetings before 10am — I\'m not a morning person', type: 'preference', pinned: true, createdAt: new Date(Date.now() - 86400000 * 3).toISOString() },
-  { id: '3', content: 'I work at Acme Corp as a product manager', type: 'work', pinned: true, createdAt: new Date(Date.now() - 86400000 * 7).toISOString() },
-  { id: '4', content: 'Prefers casual tone in emails, not formal', type: 'preference', pinned: false, createdAt: new Date(Date.now() - 3600000 * 2).toISOString() },
-  { id: '5', content: 'Allergic to peanuts — important for restaurant suggestions', type: 'about_you', pinned: true, createdAt: new Date(Date.now() - 86400000 * 10).toISOString() },
-  { id: '6', content: 'Uses Notion for project tracking, prefers it over Trello', type: 'work', pinned: false, createdAt: new Date(Date.now() - 3600000 * 8).toISOString() },
-  { id: '7', content: 'Best friend is Mike — they play tennis on Saturdays', type: 'people', pinned: false, createdAt: new Date(Date.now() - 86400000).toISOString() },
-  { id: '8', content: 'Timezone is PST (Los Angeles)', type: 'about_you', pinned: false, createdAt: new Date(Date.now() - 3600000 * 12).toISOString() },
-];
-
 export default function MemoryPage() {
   const [memories, setMemories] = useState<Memory[]>([]);
   const [loading, setLoading] = useState(true);

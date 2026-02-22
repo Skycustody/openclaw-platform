@@ -1,3 +1,11 @@
+/**
+ * OPENCLAW SAAS — Dashboard Layout
+ *
+ * This dashboard is a UI layer around OpenClaw. It does NOT implement its own
+ * chat, AI pipeline, or skills. The home page embeds the OpenClaw Control UI
+ * via iframe. All other pages read/write the container's openclaw.json config.
+ * See AGENTS.md at the project root.
+ */
 'use client';
 import { Sidebar } from '@/components/dashboard/Sidebar';
 import { useStore } from '@/lib/store';

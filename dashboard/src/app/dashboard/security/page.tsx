@@ -61,11 +61,7 @@ const deviceIcons: Record<string, typeof Monitor> = {
 
 export default function SecurityPage() {
   const [data, setData] = useState<SecurityData>({
-    sessions: [
-      { id: '1', device: 'This device', location: 'Dubai, UAE', lastActive: new Date().toISOString(), current: true, type: 'desktop' },
-      { id: '2', device: 'iPhone 15 Pro', location: 'Dubai, UAE', lastActive: new Date(Date.now() - 3600000).toISOString(), current: false, type: 'mobile' },
-      { id: '3', device: 'MacBook Air', location: 'Abu Dhabi, UAE', lastActive: new Date(Date.now() - 86400000).toISOString(), current: false, type: 'desktop' },
-    ],
+    sessions: [],
     loginAlerts: true,
     twoFactorEnabled: false,
     actionApprovals: {

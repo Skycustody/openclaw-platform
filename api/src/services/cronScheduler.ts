@@ -2,6 +2,7 @@ import db from '../lib/db';
 import redis from '../lib/redis';
 import { CronJob } from '../types';
 import { autoWorkExecute } from './tokenBudget';
+import { getUserContainer, sendContainerMessage } from './containerConfig';
 import { v4 as uuid } from 'uuid';
 
 export function parseToCron(schedule: string): string {
@@ -100,15 +101,16 @@ export async function getUserCronJobs(userId: string): Promise<CronJob[]> {
 
 async function executeJobTask(job: CronJob, budget: number): Promise<{ response: string; tokensUsed: number; model: string }> {
   try {
-    const { runAutoMode } = await import('./autoMode');
-    const result = await runAutoMode(
-      job.user_id,
+    const { serverIp, containerName } = await getUserContainer(job.user_id);
+    const response = await sendContainerMessage(
+      serverIp,
+      containerName,
       job.description || job.name,
     );
     return {
-      response: result.finalAnswer || `Completed: ${job.name}`,
-      tokensUsed: result.totalTokens || 0,
-      model: result.steps?.[result.steps.length - 1]?.model || 'auto',
+      response: response || `Completed: ${job.name}`,
+      tokensUsed: 0,
+      model: 'openclaw',
     };
   } catch (err: any) {
     return {

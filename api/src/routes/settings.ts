@@ -3,6 +3,7 @@ import { AuthRequest, authenticate, requireActiveSubscription } from '../middlew
 import crypto from 'crypto';
 import db from '../lib/db';
 import { UserSettings } from '../types';
+import { getUserContainer, readContainerConfig, writeContainerConfig, restartContainer } from '../services/containerConfig';
 
 if (!process.env.ENCRYPTION_KEY) {
   throw new Error('ENCRYPTION_KEY environment variable is required. Generate with: openssl rand -hex 32');
@@ -46,6 +47,42 @@ function decrypt(data: string): string {
 function maskKey(key: string): string {
   if (key.length < 10) return '****';
   return key.slice(0, 7) + '...' + key.slice(-4);
+}
+
+async function syncSettingsToContainer(userId: string): Promise<void> {
+  try {
+    const settings = await db.getOne<UserSettings>(
+      'SELECT * FROM user_settings WHERE user_id = $1',
+      [userId]
+    );
+    if (!settings) return;
+
+    const { serverIp, containerName } = await getUserContainer(userId);
+    const config = await readContainerConfig(serverIp, userId);
+
+    if (!config.personality) config.personality = {};
+    if (settings.agent_name) config.personality.name = settings.agent_name;
+    if (settings.agent_tone) config.personality.tone = settings.agent_tone;
+    if (settings.response_length) config.personality.responseLength = settings.response_length;
+    if (settings.language) config.personality.language = settings.language;
+    if (settings.custom_instructions) config.personality.instructions = settings.custom_instructions;
+
+    if (settings.brain_mode || settings.manual_model) {
+      if (!config.models) config.models = {};
+      if (settings.brain_mode === 'manual' && settings.manual_model) {
+        config.models.defaultModel = settings.manual_model;
+        config.models.autoRoute = false;
+      } else {
+        config.models.autoRoute = true;
+        delete config.models.defaultModel;
+      }
+    }
+
+    await writeContainerConfig(serverIp, userId, config);
+    restartContainer(serverIp, containerName).catch(() => {});
+  } catch {
+    // Container not provisioned or not running — settings saved to DB only
+  }
 }
 
 const router = Router();
@@ -96,6 +133,7 @@ router.put('/personality', async (req: AuthRequest, res: Response, next: NextFun
       [agentName, agentTone, responseLength, language, customInstructions, req.userId]
     );
 
+    syncSettingsToContainer(req.userId!).catch(() => {});
     res.json({ ok: true });
   } catch (err) {
     next(err);
@@ -115,6 +153,7 @@ router.put('/brain', async (req: AuthRequest, res: Response, next: NextFunction)
       [brainMode, manualModel || null, req.userId]
     );
 
+    syncSettingsToContainer(req.userId!).catch(() => {});
     res.json({ ok: true });
   } catch (err) {
     next(err);
@@ -245,6 +284,7 @@ router.post('/onboarding', async (req: AuthRequest, res: Response, next: NextFun
       [answers.name || null, agentTone, responseLength, customInstructions, req.userId]
     );
 
+    syncSettingsToContainer(req.userId!).catch(() => {});
     res.json({ ok: true });
   } catch (err) {
     next(err);

@@ -80,6 +80,20 @@ export async function requireAdmin(req: AuthRequest, _res: Response, next: NextF
       throw new UnauthorizedError('Authentication required');
     }
 
+    // IP allowlist check
+    const allowedIps = (process.env.ADMIN_ALLOWED_IPS || '').split(',').map(s => s.trim()).filter(Boolean);
+    if (allowedIps.length > 0) {
+      const clientIp = req.headers['x-forwarded-for']?.toString().split(',')[0]?.trim()
+        || req.socket.remoteAddress || '';
+      const normalizedIp = clientIp.replace('::ffff:', '');
+      if (!allowedIps.includes(normalizedIp) && !allowedIps.includes(clientIp)) {
+        console.warn(`[admin] Blocked IP: ${clientIp} (allowed: ${allowedIps.join(', ')})`);
+        const err: any = new Error('Access denied from this IP');
+        err.statusCode = 403;
+        return next(err);
+      }
+    }
+
     const user = await db.getOne<{ is_admin: boolean }>(
       'SELECT is_admin FROM users WHERE id = $1',
       [req.userId]
@@ -89,6 +103,26 @@ export async function requireAdmin(req: AuthRequest, _res: Response, next: NextF
       const err: any = new Error('Admin access required');
       err.statusCode = 403;
       return next(err);
+    }
+
+    // Admin password check (required for all admin endpoints)
+    // Uses 403 (not 401) to avoid the frontend's auto-redirect to login
+    const adminPassword = process.env.ADMIN_PASSWORD;
+    if (adminPassword) {
+      const providedPassword = req.headers['x-admin-password'] as string;
+      if (!providedPassword) {
+        const err: any = new Error('Admin password required');
+        err.statusCode = 403;
+        err.code = 'ADMIN_PASSWORD_REQUIRED';
+        return next(err);
+      }
+      if (providedPassword.length !== adminPassword.length ||
+          !crypto.timingSafeEqual(Buffer.from(providedPassword), Buffer.from(adminPassword))) {
+        const err: any = new Error('Invalid admin password');
+        err.statusCode = 403;
+        err.code = 'ADMIN_PASSWORD_INVALID';
+        return next(err);
+      }
     }
 
     next();

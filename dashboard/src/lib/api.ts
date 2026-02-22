@@ -2,6 +2,7 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 class ApiClient {
   private token: string | null = null;
+  private extraHeaders: Record<string, string> = {};
 
   setToken(token: string) {
     this.token = token;
@@ -25,8 +26,16 @@ class ApiClient {
     }
   }
 
+  setHeader(key: string, value: string) {
+    this.extraHeaders[key] = value;
+  }
+
+  removeHeader(key: string) {
+    delete this.extraHeaders[key];
+  }
+
   async request<T>(method: string, path: string, body?: unknown, isRetry = false): Promise<T> {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const headers: Record<string, string> = { 'Content-Type': 'application/json', ...this.extraHeaders };
     const token = this.getToken();
     if (token) headers['Authorization'] = `Bearer ${token}`;
 

@@ -1,3 +1,12 @@
+/**
+ * Platform-side memory system.
+ *
+ * NOTE: This uses OpenAI embeddings directly for vector search. This is a
+ * platform-level feature (not a user-facing AI interaction) so the direct
+ * OpenAI call is acceptable for now. Embeddings are infrastructure, not chat.
+ *
+ * TODO: Migrate to container-side memory when OpenClaw supports it natively.
+ */
 import OpenAI from 'openai';
 import db from '../lib/db';
 import { Memory, MemoryType } from '../types';

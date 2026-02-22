@@ -1,7 +1,6 @@
 import db from '../lib/db';
 import redis from '../lib/redis';
 import { sshExec, waitForReady } from './ssh';
-import { syncToS3, syncFromS3 } from './s3';
 import { updateServerRam } from './serverRegistry';
 import { User, Server } from '../types';
 
@@ -47,12 +46,7 @@ export async function sleepContainer(user: User & { server_ip?: string }): Promi
 
   const containerName = user.container_name || `openclaw-${user.id}`;
 
-  try {
-    await syncToS3(user.id, `/opt/openclaw/instances/${user.id}`);
-  } catch (err) {
-    console.warn(`S3 sync failed for ${user.id}, sleeping anyway:`, err);
-  }
-
+  // Data persists via host volume mount (/opt/openclaw/instances/{userId}), no S3 needed
   await sshExec(serverIp, `docker stop ${containerName}`);
 
   await db.query(
@@ -81,13 +75,7 @@ export async function wakeContainer(userId: string): Promise<void> {
 
   const containerName = user.container_name || `openclaw-${userId}`;
 
-  // Restore data from S3 first
-  try {
-    await syncFromS3(userId, `/opt/openclaw/instances/${userId}`);
-  } catch (err) {
-    console.warn(`S3 restore failed for ${userId}:`, err);
-  }
-
+  // Data persists via host volume mount, just start the container
   await sshExec(server.ip, `docker start ${containerName}`);
 
   try {

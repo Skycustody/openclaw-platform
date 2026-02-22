@@ -10,6 +10,9 @@ import { injectApiKeys } from '../services/apiKeys';
 const router = Router();
 router.use(authenticate);
 
+/** Track in-flight provisioning so we never duplicate work for the same user. */
+const provisioningInFlight = new Map<string, Promise<User>>();
+
 /**
  * Ensure Traefik on a worker has DOCKER_API_VERSION set.
  * Without it, Traefik v3 can't talk to Docker and returns 404 for everything.
@@ -55,19 +58,24 @@ async function ensureTraefik(serverIp: string): Promise<boolean> {
   }
 }
 
+interface AgentUrlParts {
+  url: string;
+  baseUrl: string;
+  gatewayUrl: string | null;
+  gatewayToken: string | null;
+}
+
 /**
  * Build the agent URL with gateway auth token + gatewayUrl so the Control UI
  * auto-connects without requiring the user to paste a token manually.
- * The OpenClaw Control UI reads ?token= when ?gatewayUrl= is also present
- * and stores both in localStorage for subsequent visits.
+ * Returns both the full URL and the individual components for iframe embedding.
  */
-async function agentUrl(subdomain: string, userId: string, server?: Server | null): Promise<string> {
+async function agentUrlParts(subdomain: string, userId: string, server?: Server | null): Promise<AgentUrlParts> {
   const domain = process.env.DOMAIN || 'yourdomain.com';
-  const base = `https://${subdomain}.${domain}`;
+  const baseUrl = `https://${subdomain}.${domain}`;
 
   let token: string | null = null;
 
-  // Try DB first
   const row = await db.getOne<{ gateway_token: string }>(
     'SELECT gateway_token FROM users WHERE id = $1',
     [userId]
@@ -77,7 +85,6 @@ async function agentUrl(subdomain: string, userId: string, server?: Server | nul
     token = row.gateway_token;
   }
 
-  // Fallback: retrieve from the running container via SSH
   if (!token && server) {
     try {
       const containerName = (await db.getOne<User>('SELECT container_name FROM users WHERE id = $1', [userId]))
@@ -96,12 +103,18 @@ async function agentUrl(subdomain: string, userId: string, server?: Server | nul
     }
   }
 
+  const gatewayUrl = `wss://${subdomain}.${domain}`;
+
   if (token) {
-    const wsUrl = encodeURIComponent(`wss://${subdomain}.${domain}`);
-    return `${base}/?gatewayUrl=${wsUrl}&token=${token}`;
+    const wsUrl = encodeURIComponent(gatewayUrl);
+    return { url: `${baseUrl}/?gatewayUrl=${wsUrl}&token=${token}`, baseUrl, gatewayUrl, gatewayToken: token };
   }
 
-  return base;
+  return { url: baseUrl, baseUrl, gatewayUrl: null, gatewayToken: null };
+}
+
+async function agentUrl(subdomain: string, userId: string, server?: Server | null): Promise<string> {
+  return (await agentUrlParts(subdomain, userId, server)).url;
 }
 
 // Get agent status
@@ -152,6 +165,43 @@ router.get('/status', async (req: AuthRequest, res: Response, next: NextFunction
 });
 
 /**
+ * Fast embed URL lookup — returns the gateway URL + token for iframe embedding
+ * without triggering provisioning or wake. Returns null fields if unavailable.
+ */
+router.get('/embed-url', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const user = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [req.userId]);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    if (!user.subdomain) {
+      return res.json({ available: false, reason: 'not_provisioned', subscriptionStatus: user.status });
+    }
+
+    if (user.status === 'cancelled') {
+      return res.json({ available: false, reason: 'cancelled', subscriptionStatus: user.status });
+    }
+    if (user.status === 'paused') {
+      return res.json({ available: false, reason: 'paused', subscriptionStatus: user.status });
+    }
+
+    const server = user.server_id
+      ? await db.getOne<Server>('SELECT * FROM servers WHERE id = $1', [user.server_id])
+      : null;
+
+    const parts = await agentUrlParts(user.subdomain, user.id, server);
+    return res.json({
+      available: true,
+      url: parts.url,
+      gatewayUrl: parts.gatewayUrl,
+      gatewayToken: parts.gatewayToken,
+      subscriptionStatus: user.status,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
  * Ensure the user's agent is provisioned and running, then return its URL.
  * - No container yet → full provision (creates worker if needed, builds image, starts container)
  * - Sleeping → wake it
@@ -168,17 +218,32 @@ router.post('/open', authenticate, async (req: AuthRequest, res: Response, next:
       return res.status(403).json({ error: 'Agent paused — you need more tokens.' });
     }
 
+    const respond = (parts: AgentUrlParts, status: string) =>
+      res.json({ url: parts.url, status, gatewayUrl: parts.gatewayUrl, gatewayToken: parts.gatewayToken });
+
     // Case 1: never provisioned (no server assigned)
     if (!user.server_id || !user.subdomain) {
-      console.log(`[agent/open] User ${user.id} not provisioned — starting provisioning`);
-      const provisioned = await provisionUser({
+      if (provisioningInFlight.has(user.id)) {
+        return res.status(202).json({ status: 'provisioning', message: 'Agent is being set up — this takes a few minutes for a new server...' });
+      }
+
+      console.log(`[agent/open] User ${user.id} not provisioned — starting background provisioning`);
+      await db.query(`UPDATE users SET status = 'provisioning' WHERE id = $1`, [user.id]);
+
+      const promise = provisionUser({
         userId: user.id,
         email: user.email,
         plan: user.plan,
         stripeCustomerId: user.stripe_customer_id || undefined,
+      }).catch((err) => {
+        console.error(`[agent/open] Background provisioning failed for ${user.id}:`, err.message);
+        throw err;
+      }).finally(() => {
+        provisioningInFlight.delete(user.id);
       });
-      const url = await agentUrl(provisioned.subdomain!, user.id);
-      return res.json({ url, status: 'active' });
+      provisioningInFlight.set(user.id, promise);
+
+      return res.status(202).json({ status: 'provisioning', message: 'Agent is being set up — this takes a few minutes for a new server...' });
     }
 
     // Resolve the server once for token retrieval
@@ -203,8 +268,7 @@ router.post('/open', authenticate, async (req: AuthRequest, res: Response, next:
     if (user.status === 'sleeping') {
       console.log(`[agent/open] Waking container for ${user.id}`);
       await wakeContainer(user.id);
-      const url = await agentUrl(user.subdomain!, user.id, server);
-      return res.json({ url, status: 'active' });
+      return respond(await agentUrlParts(user.subdomain!, user.id, server), 'active');
     }
 
     // Case 3: still provisioning from a previous attempt — verify the container actually exists
@@ -214,19 +278,31 @@ router.post('/open', authenticate, async (req: AuthRequest, res: Response, next:
         const check = await sshExec(server.ip, `docker inspect ${containerName} --format='{{.State.Running}}' 2>/dev/null`).catch(() => null);
         if (check && check.stdout.includes('true')) {
           await db.query(`UPDATE users SET status = 'active', last_active = NOW() WHERE id = $1`, [user.id]);
-          const url = await agentUrl(user.subdomain!, user.id, server);
-          return res.json({ url, status: 'active' });
+          return respond(await agentUrlParts(user.subdomain!, user.id, server), 'active');
         }
       }
-      console.log(`[agent/open] User ${user.id} stuck in provisioning — re-provisioning`);
-      const provisioned = await provisionUser({
+
+      // Already being provisioned in background — tell dashboard to keep polling
+      if (provisioningInFlight.has(user.id)) {
+        return res.status(202).json({ status: 'provisioning', message: 'Agent is being set up — this takes a few minutes for a new server...' });
+      }
+
+      // Stuck in provisioning with no background job — re-provision
+      console.log(`[agent/open] User ${user.id} stuck in provisioning — starting background re-provision`);
+      const promise = provisionUser({
         userId: user.id,
         email: user.email,
         plan: user.plan,
         stripeCustomerId: user.stripe_customer_id || undefined,
+      }).catch((err) => {
+        console.error(`[agent/open] Background re-provisioning failed for ${user.id}:`, err.message);
+        throw err;
+      }).finally(() => {
+        provisioningInFlight.delete(user.id);
       });
-      const url = await agentUrl(provisioned.subdomain!, user.id);
-      return res.json({ url, status: 'active' });
+      provisioningInFlight.set(user.id, promise);
+
+      return res.status(202).json({ status: 'provisioning', message: 'Agent is being set up — this takes a few minutes for a new server...' });
     }
 
     // Case 4: active or grace_period — verify the container is actually running
@@ -237,22 +313,31 @@ router.post('/open', authenticate, async (req: AuthRequest, res: Response, next:
         console.log(`[agent/open] Container for ${user.id} not running — restarting`);
         const startResult = await sshExec(server.ip, `docker start ${containerName} 2>/dev/null`).catch(() => null);
         if (!startResult || startResult.code !== 0) {
-          console.log(`[agent/open] Container missing — re-provisioning`);
-          const provisioned = await provisionUser({
+          if (provisioningInFlight.has(user.id)) {
+            return res.status(202).json({ status: 'provisioning', message: 'Agent is being re-created...' });
+          }
+
+          console.log(`[agent/open] Container missing — background re-provisioning`);
+          const promise = provisionUser({
             userId: user.id,
             email: user.email,
             plan: user.plan,
             stripeCustomerId: user.stripe_customer_id || undefined,
+          }).catch((err) => {
+            console.error(`[agent/open] Re-provisioning failed for ${user.id}:`, err.message);
+            throw err;
+          }).finally(() => {
+            provisioningInFlight.delete(user.id);
           });
-          const url = await agentUrl(provisioned.subdomain!, user.id);
-          return res.json({ url, status: 'active' });
+          provisioningInFlight.set(user.id, promise);
+
+          return res.status(202).json({ status: 'provisioning', message: 'Agent is being re-created...' });
         }
       }
     }
 
     await touchActivity(user.id);
-    const url = await agentUrl(user.subdomain!, user.id, server);
-    return res.json({ url, status: 'active' });
+    return respond(await agentUrlParts(user.subdomain!, user.id, server), 'active');
   } catch (err) {
     next(err);
   }

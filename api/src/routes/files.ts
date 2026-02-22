@@ -1,91 +1,197 @@
+/**
+ * Files routes — manages files in the user's OpenClaw container workspace.
+ *
+ * This wraps the container's workspace directory (~/.openclaw/workspace)
+ * which is mounted at /opt/openclaw/instances/<userId>/workspace on the host.
+ * Files placed here are accessible to the agent via its file tools.
+ */
 import { Router, Response, NextFunction } from 'express';
 import { AuthRequest, authenticate, requireActiveSubscription } from '../middleware/auth';
-import db from '../lib/db';
-import { listUserFiles, getPresignedUrl, getUploadUrl, getBucketName } from '../services/s3';
+import { getUserContainer } from '../services/containerConfig';
+import { sshExec } from '../services/ssh';
 
 const router = Router();
 router.use(authenticate);
 router.use(requireActiveSubscription);
 
-// List files
+const INSTANCE_DIR = '/opt/openclaw/instances';
+
+interface WorkspaceFile {
+  name: string;
+  size: number;
+  modified: string;
+  type: 'file' | 'directory';
+}
+
+function guessMimeType(name: string): string {
+  const ext = name.split('.').pop()?.toLowerCase() || '';
+  const map: Record<string, string> = {
+    txt: 'text/plain', md: 'text/markdown', json: 'application/json',
+    js: 'text/javascript', ts: 'text/typescript', py: 'text/x-python',
+    html: 'text/html', css: 'text/css', csv: 'text/csv',
+    png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif',
+    pdf: 'application/pdf', xml: 'application/xml', yaml: 'application/yaml',
+    yml: 'application/yaml', sh: 'text/x-shellscript',
+  };
+  return map[ext] || 'application/octet-stream';
+}
+
 router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const files = await listUserFiles(req.userId!);
+    const { serverIp } = await getUserContainer(req.userId!);
+    const wsDir = `${INSTANCE_DIR}/${req.userId}/workspace`;
 
-    // Also get DB records for metadata
-    const dbFiles = await db.getMany(
-      'SELECT * FROM user_files WHERE user_id = $1 ORDER BY created_at DESC',
-      [req.userId]
+    // Ensure workspace exists
+    await sshExec(serverIp, `mkdir -p ${wsDir}`);
+
+    // List files with size and modification time
+    const result = await sshExec(
+      serverIp,
+      `find ${wsDir} -maxdepth 2 -not -path '*/\\.*' -not -name '.*' -printf '%y %s %T@ %P\\n' 2>/dev/null | head -200`
     );
 
-    res.json({ files: dbFiles.length ? dbFiles : files });
+    const files: WorkspaceFile[] = [];
+    for (const line of result.stdout.split('\n').filter(Boolean)) {
+      const parts = line.split(' ');
+      if (parts.length < 4) continue;
+      const [typeChar, sizeStr, timestampStr, ...nameParts] = parts;
+      const name = nameParts.join(' ');
+      if (!name) continue;
+      files.push({
+        name,
+        size: parseInt(sizeStr) || 0,
+        modified: new Date(parseFloat(timestampStr) * 1000).toISOString(),
+        type: typeChar === 'd' ? 'directory' : 'file',
+      });
+    }
+
+    // Sort: directories first, then by modified time descending
+    files.sort((a, b) => {
+      if (a.type !== b.type) return a.type === 'directory' ? -1 : 1;
+      return new Date(b.modified).getTime() - new Date(a.modified).getTime();
+    });
+
+    res.json({
+      files: files.map(f => ({
+        id: f.name,
+        name: f.name,
+        size: f.size,
+        createdAt: f.modified,
+        mimeType: f.type === 'directory' ? 'inode/directory' : guessMimeType(f.name),
+        isDirectory: f.type === 'directory',
+      })),
+    });
   } catch (err) {
     next(err);
   }
 });
 
-// Get download URL
-router.get('/:fileId/download', async (req: AuthRequest, res: Response, next: NextFunction) => {
+// Download / read file content
+router.get('/:fileName/download', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const file = await db.getOne<any>(
-      'SELECT * FROM user_files WHERE id = $1 AND user_id = $2',
-      [req.params.fileId, req.userId]
+    const { serverIp } = await getUserContainer(req.userId!);
+    const fileName = decodeURIComponent(req.params.fileName);
+    const safeFile = fileName.replace(/\.\./g, '').replace(/^\//, '');
+    const filePath = `${INSTANCE_DIR}/${req.userId}/workspace/${safeFile}`;
+
+    const result = await sshExec(
+      serverIp,
+      `test -f '${filePath}' && base64 '${filePath}' || echo 'FILE_NOT_FOUND'`
     );
 
-    if (!file) return res.status(404).json({ error: 'File not found' });
+    if (result.stdout.trim() === 'FILE_NOT_FOUND') {
+      return res.status(404).json({ error: 'File not found in workspace' });
+    }
 
-    const url = await getPresignedUrl(req.userId!, file.s3_key);
-    res.json({ url });
+    const content = Buffer.from(result.stdout.trim(), 'base64');
+    const mime = guessMimeType(fileName);
+
+    res.setHeader('Content-Type', mime);
+    res.setHeader('Content-Disposition', `attachment; filename="${safeFile.split('/').pop()}"`);
+    res.send(content);
   } catch (err) {
     next(err);
   }
 });
 
-// Get upload URL
+// Upload file to workspace
 router.post('/upload', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { filename, contentType } = req.body;
-    if (!filename) return res.status(400).json({ error: 'Filename required' });
+    const { serverIp } = await getUserContainer(req.userId!);
+    const { filename, content } = req.body;
 
-    const sanitized = filename
-      .replace(/[^a-zA-Z0-9._-]/g, '_')
-      .replace(/\.{2,}/g, '.')
-      .slice(0, 200);
-    const key = `uploads/${Date.now()}-${sanitized}`;
-    const url = await getUploadUrl(req.userId!, key, contentType || 'application/octet-stream');
+    if (!filename || !content) {
+      return res.status(400).json({ error: 'filename and content (base64) are required' });
+    }
 
-    await db.query(
-      `INSERT INTO user_files (user_id, filename, s3_key, mime_type) VALUES ($1, $2, $3, $4)`,
-      [req.userId, filename, key, contentType]
+    const safeFilename = filename.replace(/\.\./g, '').replace(/^\//, '').replace(/[^a-zA-Z0-9._\-\/]/g, '_');
+    const wsDir = `${INSTANCE_DIR}/${req.userId}/workspace`;
+    const filePath = `${wsDir}/${safeFilename}`;
+
+    // Ensure parent directory exists
+    const parentDir = filePath.substring(0, filePath.lastIndexOf('/'));
+    await sshExec(serverIp, `mkdir -p '${parentDir}'`);
+
+    // Write file
+    const result = await sshExec(
+      serverIp,
+      `echo '${content}' | base64 -d > '${filePath}'`
     );
 
-    res.json({ uploadUrl: url, key });
+    if (result.code !== 0) {
+      return res.status(500).json({ error: `Failed to write file: ${result.stderr}` });
+    }
+
+    // Get file info
+    const stat = await sshExec(serverIp, `stat -c '%s %Y' '${filePath}' 2>/dev/null`);
+    const [sizeStr, mtimeStr] = (stat.stdout.trim() || '0 0').split(' ');
+
+    res.json({
+      file: {
+        id: safeFilename,
+        name: safeFilename,
+        size: parseInt(sizeStr) || 0,
+        createdAt: new Date(parseInt(mtimeStr) * 1000).toISOString(),
+        mimeType: guessMimeType(safeFilename),
+      },
+      message: 'File uploaded to your agent workspace. The agent can now access it.',
+    });
   } catch (err) {
     next(err);
   }
 });
 
-// Delete file
-router.delete('/:fileId', async (req: AuthRequest, res: Response, next: NextFunction) => {
+// Delete file from workspace
+router.delete('/:fileName', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    await db.query(
-      'DELETE FROM user_files WHERE id = $1 AND user_id = $2',
-      [req.params.fileId, req.userId]
-    );
+    const { serverIp } = await getUserContainer(req.userId!);
+    const fileName = decodeURIComponent(req.params.fileName);
+    const safeFile = fileName.replace(/\.\./g, '').replace(/^\//, '');
+
+    // Prevent deleting critical OpenClaw files
+    const protected_files = ['SOUL.md', 'AGENTS.md', 'USER.md', 'IDENTITY.md'];
+    if (protected_files.includes(safeFile)) {
+      return res.status(403).json({ error: 'Cannot delete OpenClaw system files' });
+    }
+
+    const filePath = `${INSTANCE_DIR}/${req.userId}/workspace/${safeFile}`;
+    await sshExec(serverIp, `rm -f '${filePath}'`);
     res.json({ ok: true });
   } catch (err) {
     next(err);
   }
 });
 
-// Storage usage
+// Workspace storage usage
 router.get('/usage', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const result = await db.getOne<{ total: string }>(
-      'SELECT COALESCE(SUM(size_bytes), 0) as total FROM user_files WHERE user_id = $1',
-      [req.userId]
-    );
-    res.json({ usedBytes: parseInt(result?.total || '0') });
+    const { serverIp } = await getUserContainer(req.userId!);
+    const wsDir = `${INSTANCE_DIR}/${req.userId}/workspace`;
+
+    const result = await sshExec(serverIp, `du -sb ${wsDir} 2>/dev/null || echo '0'`);
+    const usedBytes = parseInt(result.stdout.split('\t')[0]) || 0;
+
+    res.json({ usedBytes });
   } catch (err) {
     next(err);
   }

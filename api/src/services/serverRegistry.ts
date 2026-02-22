@@ -105,7 +105,7 @@ export async function registerServer(ip: string, ramTotal: number, hostname: str
 }
 
 export async function updateServerRam(serverId: string): Promise<void> {
-  // Sum RAM of all active/sleeping containers
+  // Each user gets ONE container with plan-level RAM (agents share it)
   const result = await db.getOne<{ total: string }>(
     `SELECT COALESCE(SUM(
       CASE u.plan

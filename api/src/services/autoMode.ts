@@ -1,3 +1,16 @@
+/**
+ * DEPRECATED — DO NOT USE FOR NEW FEATURES.
+ *
+ * This service calls OpenAI/Anthropic directly, bypassing the OpenClaw container.
+ * It violates the platform architecture (see AGENTS.md).
+ *
+ * All user AI interactions must go through the user's OpenClaw container.
+ * Cron jobs use sendContainerMessage() from containerConfig.ts.
+ * Chat uses the Control UI iframe on the dashboard home page.
+ *
+ * This file is kept only for reference during the migration period.
+ * It should be deleted once all references are removed.
+ */
 import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
 import db from '../lib/db';

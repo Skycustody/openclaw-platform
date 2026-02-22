@@ -1,3 +1,16 @@
+/**
+ * OPENCLAW SAAS PLATFORM — API SERVER
+ *
+ * This is NOT a standalone AI service. This is the control plane for a hosted
+ * OpenClaw platform. Every user gets their own OpenClaw container. The API:
+ *  - Provisions and manages containers on worker servers
+ *  - Proxies AI calls from containers and tracks token usage
+ *  - Syncs settings/skills/channels to container config (openclaw.json)
+ *  - Serves auth, billing, and admin endpoints
+ *
+ * ALL user AI interactions go through the OpenClaw container, never direct.
+ * See AGENTS.md and .cursor/rules/openclaw-saas-mission.mdc for full details.
+ */
 import path from 'path';
 import { config } from 'dotenv';
 
@@ -47,6 +60,7 @@ import adminRoutes from './routes/admin';
 import proxyRoutes from './routes/proxy';
 import autoRoutes from './routes/auto';
 import agentsRoutes from './routes/agents';
+import skillsRoutes from './routes/skills';
 
 import { startScheduler } from './jobs/scheduler';
 import redis from './lib/redis';
@@ -90,9 +104,13 @@ app.set('io', io);
 // Raw body for Stripe webhooks
 app.use('/webhooks/stripe', express.raw({ type: 'application/json' }));
 
-// HTTPS redirect in production
+// HTTPS redirect in production (skip for internal webhooks and health checks —
+// workers call back via curl and may not have x-forwarded-proto set)
 if (process.env.NODE_ENV === 'production') {
   app.use((req, res, next) => {
+    if (req.path.startsWith('/webhooks/') || req.path === '/health') {
+      return next();
+    }
     if (req.headers['x-forwarded-proto'] !== 'https') {
       return res.redirect(301, `https://${req.hostname}${req.url}`);
     }
@@ -135,6 +153,7 @@ app.use('/admin', adminRoutes);
 app.use('/proxy', proxyRoutes);
 app.use('/auto', autoRoutes);
 app.use('/agents', agentsRoutes);
+app.use('/skills', skillsRoutes);
 
 // Health check
 app.get('/health', (_req, res) => {

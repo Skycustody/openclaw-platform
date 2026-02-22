@@ -1,35 +1,17 @@
 'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Badge, StatusBadge } from '@/components/ui/Badge';
+import { StatusBadge } from '@/components/ui/Badge';
 import api from '@/lib/api';
 import { formatTokens } from '@/lib/utils';
 import { useStore } from '@/lib/store';
 import {
-  Send, Sparkles, Loader2, Bot, CheckCircle,
-  Cpu, Key, Zap, Settings, Moon, AlertTriangle,
+  Bot, Sparkles, Loader2, Cpu, Zap,
+  AlertTriangle, ExternalLink, RefreshCw, Paperclip,
 } from 'lucide-react';
 
-interface ChatMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  model?: string;
-  tokens?: number;
-  usedOwnKey?: boolean;
-  timestamp: Date;
-}
-
-interface AutoStep {
-  step: number;
-  action: string;
-  model: string;
-  reasoning: string;
-  result: string;
-  tokensUsed: number;
-}
+type AgentDisplayStatus = 'active' | 'online' | 'sleeping' | 'paused' | 'provisioning' | 'cancelled' | 'offline' | 'grace_period';
 
 interface UserSettings {
   brain_mode: 'auto' | 'manual';
@@ -39,20 +21,25 @@ interface UserSettings {
   agent_name: string;
 }
 
-type AgentDisplayStatus = 'active' | 'online' | 'sleeping' | 'paused' | 'provisioning' | 'cancelled' | 'offline' | 'grace_period';
+type Phase = 'loading' | 'starting' | 'provisioning' | 'polling' | 'ready' | 'error';
 
 export default function DashboardHome() {
   const { user } = useStore();
 
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [chatInput, setChatInput] = useState('');
-  const [chatLoading, setChatLoading] = useState(false);
-  const [chatSteps, setChatSteps] = useState<AutoStep[]>([]);
-  const chatEndRef = useRef<HTMLDivElement>(null);
+  const [phase, setPhase] = useState<Phase>('loading');
+  const [agentUrl, setAgentUrl] = useState<string | null>(null);
+  const [statusMsg, setStatusMsg] = useState('Connecting to agent...');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const [settings, setSettings] = useState<UserSettings | null>(null);
   const [tokenBalance, setTokenBalance] = useState<number>(0);
   const [agentStatus, setAgentStatus] = useState<AgentDisplayStatus>('offline');
+
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [uploadMsg, setUploadMsg] = useState<string | null>(null);
+
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const pollAbort = useRef<AbortController | null>(null);
 
   const fetchContext = useCallback(async () => {
     try {
@@ -69,13 +56,211 @@ export default function DashboardHome() {
     } catch {}
   }, []);
 
+  const pollUntilReady = useCallback(async () => {
+    setPhase('polling');
+    setStatusMsg('Waiting for agent to come online...');
+
+    for (let i = 0; i < 40; i++) {
+      if (pollAbort.current?.signal.aborted) return;
+      const delay = i < 5 ? 2000 : 4000;
+      await new Promise(r => setTimeout(r, delay));
+
+      try {
+        const check = await api.get<{ ready: boolean; detail?: string }>('/agent/ready');
+        if (check.ready) {
+          setPhase('ready');
+          return;
+        }
+        setStatusMsg(check.detail || 'Starting up...');
+      } catch {}
+    }
+
+    setPhase('error');
+    setErrorMsg('Agent took too long to start. Try refreshing.');
+  }, []);
+
+  const startAgent = useCallback(async () => {
+    setPhase('starting');
+    setStatusMsg('Starting agent...');
+
+    try {
+      const data = await api.post<{
+        url: string;
+        status: string;
+        message?: string;
+        gatewayUrl: string | null;
+        gatewayToken: string | null;
+      }>('/agent/open');
+
+      if (data.status === 'provisioning') {
+        setPhase('provisioning');
+        setAgentStatus('provisioning');
+        setStatusMsg(data.message || 'Setting up your agent...');
+
+        for (let i = 0; i < 60; i++) {
+          if (pollAbort.current?.signal.aborted) return;
+          await new Promise(r => setTimeout(r, 10000));
+
+          try {
+            const retry = await api.post<{
+              url: string;
+              status: string;
+              message?: string;
+              gatewayUrl: string | null;
+              gatewayToken: string | null;
+            }>('/agent/open');
+
+            if (retry.status === 'provisioning') {
+              setStatusMsg(retry.message || 'Setting up your agent...');
+              continue;
+            }
+
+            if (retry.url) {
+              setAgentUrl(retry.url);
+              setAgentStatus('active');
+              await pollUntilReady();
+              return;
+            }
+          } catch {
+            // Transient error during provisioning, keep polling
+          }
+        }
+
+        setPhase('error');
+        setErrorMsg('Agent setup timed out. Please try refreshing the page.');
+        return;
+      }
+
+      if (!data.url) {
+        setPhase('error');
+        setErrorMsg('Could not get agent URL.');
+        return;
+      }
+
+      setAgentUrl(data.url);
+      setAgentStatus('active');
+      await pollUntilReady();
+    } catch (err: any) {
+      setPhase('error');
+      const msg = err.message || 'Failed to start agent.';
+      if (msg.includes('No worker servers') || msg.includes('Register your server')) {
+        setErrorMsg(
+          'No worker servers available. A separate worker server must be registered before agents can be created. ' +
+          'Register a worker using: POST /webhooks/servers/register with your worker server IP and RAM.'
+        );
+      } else if (msg.includes('HETZNER')) {
+        setErrorMsg('Auto-provisioning not configured. Register a worker server manually or set HETZNER_API_TOKEN.');
+      } else if (msg.includes('SSH')) {
+        setErrorMsg('Cannot connect to worker server. Check SSH keys and network connectivity.');
+      } else {
+        setErrorMsg(msg);
+      }
+    }
+  }, [pollUntilReady]);
+
+  // Poll token balance every 30s while the iframe is active
   useEffect(() => {
-    fetchContext();
-  }, [fetchContext]);
+    if (phase !== 'ready') return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await api.get<any>('/tokens/balance');
+        if (res.balance !== undefined) setTokenBalance(res.balance);
+      } catch {}
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [phase]);
 
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, chatSteps]);
+    pollAbort.current = new AbortController();
+    fetchContext();
+
+    (async () => {
+      try {
+        const embed = await api.get<{
+          available: boolean;
+          url?: string;
+          gatewayUrl?: string;
+          gatewayToken?: string;
+          subscriptionStatus?: string;
+          reason?: string;
+        }>('/agent/embed-url');
+
+        const subStatus = (embed.subscriptionStatus || 'offline') as AgentDisplayStatus;
+        setAgentStatus(subStatus);
+
+        if (!embed.available) {
+          if (embed.reason === 'paused') {
+            setPhase('error');
+            setErrorMsg('Agent paused — you are out of tokens.');
+            return;
+          }
+          if (embed.reason === 'cancelled') {
+            setPhase('error');
+            setErrorMsg('Subscription cancelled. Please resubscribe.');
+            return;
+          }
+          await startAgent();
+          return;
+        }
+
+        setAgentUrl(embed.url!);
+
+        if (subStatus === 'sleeping') {
+          await startAgent();
+          return;
+        }
+
+        if (subStatus === 'provisioning') {
+          await startAgent();
+          return;
+        }
+
+        const readyCheck = await api.get<{ ready: boolean }>('/agent/ready');
+        if (readyCheck.ready) {
+          setPhase('ready');
+        } else {
+          await startAgent();
+        }
+      } catch {
+        await startAgent();
+      }
+    })();
+
+    return () => {
+      pollAbort.current?.abort();
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleFileUpload = useCallback(async () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      setUploadingFile(true);
+      setUploadMsg(null);
+      try {
+        const reader = new FileReader();
+        const content = await new Promise<string>((resolve, reject) => {
+          reader.onload = () => {
+            const result = reader.result as string;
+            resolve(result.split(',')[1] || '');
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+        await api.post('/files/upload', { filename: file.name, content });
+        setUploadMsg(`${file.name} uploaded to workspace`);
+        setTimeout(() => setUploadMsg(null), 4000);
+      } catch (err: any) {
+        setUploadMsg(`Upload failed: ${err.message}`);
+        setTimeout(() => setUploadMsg(null), 5000);
+      } finally {
+        setUploadingFile(false);
+      }
+    };
+    input.click();
+  }, []);
 
   const getModeLabel = () => {
     if (!settings) return { label: 'Auto', icon: Cpu, desc: 'Smart model routing', variant: 'green' as const };
@@ -101,120 +286,19 @@ export default function DashboardHome() {
 
   const mode = getModeLabel();
 
-  const sendMessage = async () => {
-    if (!chatInput.trim() || chatLoading) return;
-    const userMsg: ChatMessage = {
-      id: `msg_${Date.now()}`,
-      role: 'user',
-      content: chatInput.trim(),
-      timestamp: new Date(),
-    };
-    setMessages(prev => [...prev, userMsg]);
-    setChatInput('');
-    setChatLoading(true);
-    setChatSteps([]);
-
-    try {
-      const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE}/auto/run`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ task: userMsg.content }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        setMessages(prev => [...prev, {
-          id: `err_${Date.now()}`, role: 'assistant',
-          content: err.error?.message || err.error || 'Something went wrong. Please try again.',
-          timestamp: new Date(),
-        }]);
-        setChatLoading(false);
-        return;
-      }
-
-      const reader = res.body?.getReader();
-      if (!reader) throw new Error('No reader');
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let finalAnswer = '';
-      let totalTokens = 0;
-      let modelUsed = '';
-      let usedOwnKey = false;
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          try {
-            const event = JSON.parse(line);
-            if (event.type === 'step') {
-              setChatSteps(prev => [...prev, event.step]);
-              if (event.balance !== undefined) setTokenBalance(event.balance);
-              if (event.step?.usedOwnKey) usedOwnKey = true;
-            } else if (event.type === 'result') {
-              finalAnswer = event.finalAnswer || '';
-              totalTokens = event.totalTokens || 0;
-              modelUsed = event.steps?.[event.steps.length - 1]?.model || 'auto';
-              if (event.usedOwnKey) usedOwnKey = true;
-            }
-          } catch {}
-        }
-      }
-      if (buffer.trim()) {
-        try {
-          const event = JSON.parse(buffer);
-          if (event.type === 'result') {
-            finalAnswer = event.finalAnswer || '';
-            totalTokens = event.totalTokens || 0;
-          }
-        } catch {}
-      }
-
-      setMessages(prev => [...prev, {
-        id: `resp_${Date.now()}`, role: 'assistant',
-        content: finalAnswer || 'No response generated.',
-        model: modelUsed, tokens: totalTokens, usedOwnKey,
-        timestamp: new Date(),
-      }]);
-      setChatSteps([]);
-      fetchContext();
-    } catch (err: any) {
-      setMessages(prev => [...prev, {
-        id: `err_${Date.now()}`, role: 'assistant',
-        content: err.message || 'Connection failed. Please try again.',
-        timestamp: new Date(),
-      }]);
-    }
-    setChatLoading(false);
+  const handleRetry = () => {
+    setErrorMsg(null);
+    setPhase('loading');
+    startAgent();
   };
 
-  const getModelBadge = (msg: ChatMessage) => {
-    if (!msg.model) return null;
-    const isOwnKey = msg.usedOwnKey;
-    return (
-      <div className="flex items-center gap-2 mt-1.5 text-[10px] text-white/20">
-        {isOwnKey && (
-          <span className="flex items-center gap-0.5 text-amber-400/60">
-            <Key className="h-2.5 w-2.5" /> Your key
-          </span>
-        )}
-        <span>{msg.model}</span>
-        {msg.tokens ? <span>{msg.tokens.toLocaleString()} tokens</span> : null}
-      </div>
-    );
+  const handleOpenExternal = () => {
+    if (agentUrl) window.open(agentUrl, '_blank');
   };
 
   return (
     <div className="flex flex-col h-[calc(100vh-48px)]">
+      {/* Paused banner */}
       {agentStatus === 'paused' && (
         <div className="border border-red-500/20 bg-red-500/5 rounded-xl px-4 py-3 flex items-center gap-3 mb-3 shrink-0">
           <AlertTriangle className="h-4 w-4 text-red-400 shrink-0" />
@@ -247,6 +331,25 @@ export default function DashboardHome() {
         </div>
 
         <div className="flex items-center gap-3">
+          {agentUrl && phase === 'ready' && (
+            <>
+              <button onClick={handleFileUpload} disabled={uploadingFile}
+                className="flex items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-1.5 hover:border-white/15 hover:bg-white/[0.04] transition-all disabled:opacity-40"
+                title="Upload file to agent workspace">
+                {uploadingFile
+                  ? <Loader2 className="h-3.5 w-3.5 text-white/30 animate-spin" />
+                  : <Paperclip className="h-3.5 w-3.5 text-white/30" />}
+                <span className="text-[11px] text-white/40">Attach</span>
+              </button>
+              <button onClick={handleOpenExternal}
+                className="flex items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-1.5 hover:border-white/15 hover:bg-white/[0.04] transition-all"
+                title="Open in new tab">
+                <ExternalLink className="h-3.5 w-3.5 text-white/30" />
+                <span className="text-[11px] text-white/40">Pop out</span>
+              </button>
+            </>
+          )}
+
           <button onClick={() => window.location.href = '/dashboard/router'}
             className="flex items-center gap-2 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-1.5 hover:border-white/15 hover:bg-white/[0.04] transition-all"
             title="Change model settings">
@@ -268,92 +371,70 @@ export default function DashboardHome() {
         </div>
       </div>
 
-      {/* Chat area — full height, no Card wrapper to avoid double borders */}
-      <div className="flex-1 flex flex-col rounded-xl border border-white/[0.06] bg-white/[0.01] overflow-hidden">
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4 custom-scrollbar">
-          {messages.length === 0 && !chatLoading && (
-            <div className="flex flex-col items-center justify-center h-full text-center">
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/[0.04] mb-4">
-                <Bot className="h-8 w-8 text-white/10" />
-              </div>
-              <p className="text-[17px] font-medium text-white/30">What can I help you with?</p>
-              <p className="text-[13px] text-white/15 mt-1.5 max-w-md">
-                Ask anything — your AI uses{' '}
-                {settings?.brain_mode === 'manual'
-                  ? `${settings.manual_model || 'your chosen model'}`
-                  : 'the auto pipeline to pick the best model'
-                }
-                {(settings?.has_own_openai_key || settings?.has_own_anthropic_key) && ' with your own API key'}
-              </p>
-              <div className="flex items-center gap-3 mt-6">
-                {[
-                  'Summarize my emails',
-                  'Research competitors',
-                  'Draft a blog post',
-                ].map(suggestion => (
-                  <button key={suggestion}
-                    onClick={() => { setChatInput(suggestion); }}
-                    className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-4 py-2.5 text-[13px] text-white/30 hover:text-white/50 hover:border-white/15 transition-all">
-                    {suggestion}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {messages.map(msg => (
-            <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[75%] rounded-2xl px-4 py-3 ${
-                msg.role === 'user'
-                  ? 'bg-white/10 text-white'
-                  : 'bg-white/[0.03] border border-white/[0.06] text-white/70'
-              }`}>
-                <div className="text-[14px] whitespace-pre-wrap leading-relaxed">{msg.content}</div>
-                {msg.role === 'assistant' && getModelBadge(msg)}
-              </div>
-            </div>
-          ))}
-
-          {chatLoading && chatSteps.length > 0 && (
-            <div className="space-y-1.5 pl-1">
-              {chatSteps.map((s, i) => (
-                <div key={i} className="flex items-center gap-2 text-[11px] text-white/30">
-                  <CheckCircle className="h-3 w-3 text-green-400/50" />
-                  <span>{s.action}</span>
-                  <Badge className="!text-[9px] !py-0 !px-1.5">{s.model.length > 18 ? s.model.slice(0, 15) + '...' : s.model}</Badge>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {chatLoading && (
-            <div className="flex items-center gap-2 text-[13px] text-white/30 pl-1">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span>Thinking...</span>
-            </div>
-          )}
-          <div ref={chatEndRef} />
+      {/* Upload feedback */}
+      {uploadMsg && (
+        <div className={`mb-2 px-4 py-2 rounded-lg text-[13px] shrink-0 animate-fade-up ${
+          uploadMsg.includes('failed') ? 'border border-red-500/20 bg-red-500/5 text-red-400' : 'border border-green-500/20 bg-green-500/5 text-green-400'
+        }`}>
+          {uploadMsg}
         </div>
+      )}
 
-        {/* Input */}
-        <div className="px-5 py-4 border-t border-white/[0.06] shrink-0">
-          <div className="flex gap-3">
-            <input
-              type="text"
-              value={chatInput}
-              onChange={e => setChatInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendMessage()}
-              placeholder="Ask your AI anything..."
-              disabled={chatLoading}
-              className="flex-1 rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-[14px] text-white placeholder:text-white/20 focus:border-white/25 focus:outline-none disabled:opacity-40"
-            />
-            <Button variant="primary" size="sm" onClick={sendMessage} loading={chatLoading}
-              disabled={!chatInput.trim() || chatLoading} className="!rounded-xl !px-4">
-              <Send className="h-4 w-4" />
-            </Button>
+      {/* Main content area */}
+      <div className="flex-1 rounded-xl border border-white/[0.06] bg-white/[0.01] overflow-hidden relative">
+        {/* Loading / Starting / Provisioning / Polling states */}
+        {(phase === 'loading' || phase === 'starting' || phase === 'provisioning' || phase === 'polling') && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-center z-10">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/[0.04] mb-5">
+              <Loader2 className="h-8 w-8 animate-spin text-white/20" />
+            </div>
+            <p className="text-[15px] font-medium text-white/40">{statusMsg}</p>
+            <p className="text-[12px] text-white/20 mt-2 max-w-sm">
+              {phase === 'provisioning'
+                ? 'A new server is being created for your agent. This usually takes 3–5 minutes.'
+                : phase === 'starting'
+                  ? 'Your OpenClaw agent is being prepared. This may take a moment.'
+                  : phase === 'polling'
+                    ? 'Almost there — waiting for the agent to finish booting.'
+                    : 'Checking agent status...'}
+            </p>
           </div>
-        </div>
+        )}
+
+        {/* Error state */}
+        {phase === 'error' && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-center z-10">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-red-500/10 mb-5">
+              <AlertTriangle className="h-8 w-8 text-red-400/60" />
+            </div>
+            <p className="text-[15px] font-medium text-white/50">{errorMsg}</p>
+            <div className="flex items-center gap-3 mt-5">
+              <Button variant="primary" size="sm" onClick={handleRetry}>
+                <RefreshCw className="h-4 w-4 mr-1.5" />
+                Retry
+              </Button>
+              {agentStatus === 'paused' && (
+                <Button variant="danger" size="sm" onClick={() => window.location.href = '/dashboard/tokens'}>
+                  Top Up Tokens
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Iframe — rendered once we have a URL; visibility toggled by phase */}
+        {agentUrl && (
+          <iframe
+            ref={iframeRef}
+            src={agentUrl}
+            className={`w-full h-full border-0 transition-opacity duration-300 ${
+              phase === 'ready' ? 'opacity-100' : 'opacity-0 pointer-events-none'
+            }`}
+            allow="clipboard-write; clipboard-read"
+            sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals"
+            title="OpenClaw Agent"
+          />
+        )}
       </div>
     </div>
   );

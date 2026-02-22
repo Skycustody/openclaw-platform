@@ -74,19 +74,6 @@ function groupByDay(entries: ActivityEntry[]): { label: string; items: ActivityE
 
 const LIMIT = 50;
 
-const MOCK_ENTRIES: ActivityEntry[] = [
-  { id: '1', type: 'message', summary: 'Replied to Sarah on Telegram about the meeting time', timestamp: new Date(Date.now() - 300000).toISOString(), status: 'completed' },
-  { id: '2', type: 'browsing', summary: 'Searched for the best flight deals to Tokyo for March', timestamp: new Date(Date.now() - 900000).toISOString(), status: 'completed' },
-  { id: '3', type: 'email', summary: 'Sent your weekly summary email to the team', timestamp: new Date(Date.now() - 1800000).toISOString(), status: 'completed' },
-  { id: '4', type: 'task', summary: 'Completed the daily news briefing', timestamp: new Date(Date.now() - 3600000).toISOString(), status: 'completed' },
-  { id: '5', type: 'message', summary: 'Couldn\'t reply to Discord message — channel disconnected', timestamp: new Date(Date.now() - 5400000).toISOString(), status: 'attention', detail: 'Reconnect Discord to fix this' },
-  { id: '6', type: 'shopping', summary: 'Found 3 price drops on your Amazon watchlist', timestamp: new Date(Date.now() - 7200000).toISOString(), status: 'completed' },
-  { id: '7', type: 'email', summary: 'Failed to send email — recipient address bounced', timestamp: new Date(Date.now() - 10800000).toISOString(), status: 'failed', detail: 'Check the email address and try again' },
-  { id: '8', type: 'browsing', summary: 'Checked competitor pricing on 12 product pages', timestamp: new Date(Date.now() - 86400000 - 3600000).toISOString(), status: 'completed' },
-  { id: '9', type: 'task', summary: 'Generated your end-of-day report', timestamp: new Date(Date.now() - 86400000 - 7200000).toISOString(), status: 'completed' },
-  { id: '10', type: 'message', summary: 'Forwarded a WhatsApp photo to your Slack workspace', timestamp: new Date(Date.now() - 86400000 - 10800000).toISOString(), status: 'completed' },
-];
-
 export default function ActivityFeed() {
   const [entries, setEntries] = useState<ActivityEntry[]>([]);
   const [filter, setFilter] = useState('all');

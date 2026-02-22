@@ -44,52 +44,6 @@ const BEHAVIOR_OPTIONS = [
   { value: 'continue', label: 'Continue anyway', description: 'Keep going even if there are minor issues' },
 ];
 
-const MOCK_TASKS: CronTask[] = [
-  {
-    id: '1',
-    name: 'Morning Briefing',
-    description: 'Summarize my emails, calendar, and news every morning at 8am',
-    scheduleLabel: 'Every day at 8:00 AM',
-    enabled: true,
-    nextRun: new Date(Date.now() + 3600000 * 3).toISOString(),
-    tokenBudget: 100000,
-    lastRun: {
-      timestamp: new Date(Date.now() - 3600000 * 16).toISOString(),
-      status: 'success',
-      tokensUsed: 42300,
-    },
-  },
-  {
-    id: '2',
-    name: 'Price Alert Check',
-    description: 'Check prices on my Amazon watchlist and notify me of any drops',
-    scheduleLabel: 'Every 6 hours',
-    enabled: true,
-    nextRun: new Date(Date.now() + 3600000 * 2).toISOString(),
-    tokenBudget: 50000,
-    lastRun: {
-      timestamp: new Date(Date.now() - 3600000 * 4).toISOString(),
-      status: 'success',
-      tokensUsed: 18200,
-    },
-  },
-  {
-    id: '3',
-    name: 'Weekly Newsletter Draft',
-    description: 'Compile content from the week and draft my newsletter',
-    scheduleLabel: 'Every Monday at 9:00 AM',
-    enabled: false,
-    nextRun: new Date(Date.now() + 86400000 * 3).toISOString(),
-    tokenBudget: 300000,
-    lastRun: {
-      timestamp: new Date(Date.now() - 86400000 * 4).toISOString(),
-      status: 'error',
-      tokensUsed: 12400,
-      message: 'Ran out of tokens before finishing — try increasing the budget',
-    },
-  },
-];
-
 function getTimeUntil(dateStr: string) {
   const diff = new Date(dateStr).getTime() - Date.now();
   if (diff < 0) return 'Overdue';

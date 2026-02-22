@@ -1,6 +1,5 @@
 import db from '../lib/db';
 import { sshExec, waitForReady } from './ssh';
-import { createUserBucket } from './s3';
 import { findBestServer, updateServerRam } from './serverRegistry';
 import { PLAN_LIMITS, Plan, User } from '../types';
 import { sendWelcomeEmail } from './email';
@@ -32,21 +31,17 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
   const server = await findBestServer(limits.ramMb);
   console.log(`[provision] Using server ${server.ip} (${server.id})`);
 
-  // Step 2: Create S3 bucket
-  const s3Bucket = await createUserBucket(userId);
-
-  // Step 3: Update user record
+  // Step 2: Update user record (S3 removed — files live in container workspace)
   await db.query(
     `UPDATE users SET
       server_id = $1,
       container_name = $2,
       subdomain = $3,
-      s3_bucket = $4,
-      stripe_customer_id = $5,
-      referral_code = $6,
+      stripe_customer_id = $4,
+      referral_code = $5,
       status = 'provisioning'
-    WHERE id = $7`,
-    [server.id, containerName, subdomain, s3Bucket, stripeCustomerId || null, referralCode, userId]
+    WHERE id = $6`,
+    [server.id, containerName, subdomain, stripeCustomerId || null, referralCode, userId]
   );
 
   // Step 4: Initialize user settings, channels, and token balance
@@ -210,7 +205,6 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
     `--cpus ${limits.cpus}`,
     `-e "NODE_OPTIONS=--max-old-space-size=${heapMb}"`,
     `-e USER_ID=${userId}`,
-    `-e S3_BUCKET=${s3Bucket}`,
     `-e PLATFORM_API=${apiUrl}`,
     `-e INTERNAL_SECRET=${internalSecret}`,
     `-e "BROWSERLESS_URL=wss://production-sfo.browserless.io?token=${browserlessToken}"`,
@@ -227,6 +221,10 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
     `--label 'traefik.http.routers.${containerName}-secure.entrypoints=websecure'`,
     `--label 'traefik.http.routers.${containerName}-secure.tls=true'`,
     `--label traefik.http.services.${containerName}.loadbalancer.server.port=18789`,
+    `--label 'traefik.http.middlewares.${containerName}-iframe.headers.customResponseHeaders.X-Frame-Options='`,
+    `--label 'traefik.http.middlewares.${containerName}-iframe.headers.customResponseHeaders.Content-Security-Policy=frame-ancestors self https://${domain} https://*.${domain}'`,
+    `--label 'traefik.http.routers.${containerName}.middlewares=${containerName}-iframe'`,
+    `--label 'traefik.http.routers.${containerName}-secure.middlewares=${containerName}-iframe'`,
     image,
     startScript,
   ].join(' ');

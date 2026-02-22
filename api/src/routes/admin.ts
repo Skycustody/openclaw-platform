@@ -1,5 +1,6 @@
 import { Router, Response, NextFunction } from 'express';
-import { AuthRequest, authenticate, requireAdmin, internalAuth } from '../middleware/auth';
+import { AuthRequest, authenticate, requireAdmin } from '../middleware/auth';
+import { rateLimitAdmin } from '../middleware/rateLimit';
 import db from '../lib/db';
 import { getServerLoad, checkCapacity, getAllWorkersStats } from '../services/serverRegistry';
 import { provisionUser } from '../services/provisioning';
@@ -9,9 +10,27 @@ import { injectApiKeys, ensureProxyKey } from '../services/apiKeys';
 
 const router = Router();
 
-// All admin routes require JWT auth + admin role
+router.use(rateLimitAdmin);
 router.use(authenticate);
 router.use(requireAdmin);
+
+// Plan price in EUR cents
+const PLAN_PRICE_EUR: Record<string, number> = {
+  starter: 1000,
+  pro: 2000,
+  business: 5000,
+};
+
+// Token package price in EUR cents
+const TOKEN_PACKAGE_PRICES: Record<string, number> = {
+  tokens_500k: 500,
+  tokens_1200k: 1000,
+  tokens_3500k: 2500,
+  tokens_8m: 5000,
+};
+
+// Approximate cost per 1M tokens to us (weighted average of provider costs) in EUR cents
+const COST_PER_1M_TOKENS_EUR_CENTS = 300;
 
 // ── Platform Overview ──
 router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunction) => {
@@ -40,7 +59,8 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
       db.getOne<any>(`
         SELECT
           COALESCE(SUM(CASE WHEN type = 'purchase' AND created_at > DATE_TRUNC('month', NOW()) THEN amount ELSE 0 END), 0) as month_token_purchases,
-          COALESCE(SUM(CASE WHEN type = 'purchase' THEN amount ELSE 0 END), 0) as total_token_purchases
+          COALESCE(SUM(CASE WHEN type = 'purchase' THEN amount ELSE 0 END), 0) as total_token_purchases,
+          COALESCE(COUNT(*) FILTER (WHERE type = 'purchase' AND created_at > DATE_TRUNC('month', NOW())), 0) as month_purchase_count
         FROM token_transactions
       `),
       db.getOne<any>(`
@@ -63,16 +83,48 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
       `),
     ]);
 
-    res.json({ users, servers, revenue, tokens, recentSignups, plans });
+    // Calculate monthly subscription revenue in EUR
+    const starterCount = parseInt(plans?.starter || '0');
+    const proCount = parseInt(plans?.pro || '0');
+    const businessCount = parseInt(plans?.business || '0');
+    const monthlySubscriptionRevenue = (
+      starterCount * PLAN_PRICE_EUR.starter +
+      proCount * PLAN_PRICE_EUR.pro +
+      businessCount * PLAN_PRICE_EUR.business
+    );
+
+    // Server costs
+    const serverCount = parseInt(servers?.total || '0');
+    const serverCostPerMonth = parseInt(process.env.SERVER_COST_EUR_CENTS || '1999');
+    const monthlyServerCosts = serverCount * serverCostPerMonth;
+
+    // Token costs (what we pay providers)
+    const totalUsed = parseInt(tokens?.total_used || '0');
+    const monthlyTokenCosts = Math.round((totalUsed / 1_000_000) * COST_PER_1M_TOKENS_EUR_CENTS);
+
+    const financials = {
+      currency: 'EUR',
+      monthlySubscriptionRevenue,
+      monthlyServerCosts,
+      monthlyTokenCosts,
+      monthlyProfit: monthlySubscriptionRevenue - monthlyServerCosts - monthlyTokenCosts,
+      perPlan: {
+        starter: { count: starterCount, revenueEurCents: starterCount * PLAN_PRICE_EUR.starter },
+        pro: { count: proCount, revenueEurCents: proCount * PLAN_PRICE_EUR.pro },
+        business: { count: businessCount, revenueEurCents: businessCount * PLAN_PRICE_EUR.business },
+      },
+    };
+
+    res.json({ users, servers, revenue, tokens, recentSignups, plans, financials });
   } catch (err) {
     next(err);
   }
 });
 
-// ── Revenue & Billing Stats ──
+// ── Revenue & Billing Stats (EUR) ──
 router.get('/revenue', async (_req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const [monthlyRevenue, dailyRevenue, topSpenders] = await Promise.all([
+    const [monthlyRevenue, dailyRevenue, topSpenders, extraTokenPurchases] = await Promise.all([
       db.getMany<any>(`
         SELECT
           DATE_TRUNC('month', created_at) as month,
@@ -104,9 +156,42 @@ router.get('/revenue', async (_req: AuthRequest, res: Response, next: NextFuncti
         ORDER BY tb.total_purchased DESC NULLS LAST
         LIMIT 20
       `),
+      db.getOne<any>(`
+        SELECT
+          COUNT(*) as count,
+          COALESCE(SUM(amount), 0) as total_tokens
+        FROM token_transactions
+        WHERE type = 'purchase'
+          AND description NOT LIKE '%signup bonus%'
+          AND description NOT LIKE '%subscription%'
+      `),
     ]);
 
-    res.json({ monthlyRevenue, dailyRevenue, topSpenders });
+    // Subscription revenue per month
+    const subscriptions = await db.getMany<any>(`
+      SELECT plan, COUNT(*) as count
+      FROM users WHERE status != 'cancelled'
+      GROUP BY plan
+    `);
+
+    const subscriptionRevenue: Record<string, number> = {};
+    for (const s of subscriptions) {
+      subscriptionRevenue[s.plan] = parseInt(s.count) * (PLAN_PRICE_EUR[s.plan] || 0);
+    }
+    const totalSubscriptionRevenueEurCents = Object.values(subscriptionRevenue).reduce((a, b) => a + b, 0);
+
+    res.json({
+      currency: 'EUR',
+      monthlyRevenue,
+      dailyRevenue,
+      topSpenders,
+      extraTokenPurchases: {
+        count: parseInt(extraTokenPurchases?.count || '0'),
+        totalTokens: parseInt(extraTokenPurchases?.total_tokens || '0'),
+      },
+      subscriptionRevenue,
+      totalSubscriptionRevenueEurCents,
+    });
   } catch (err) {
     next(err);
   }
@@ -332,7 +417,6 @@ router.post('/inject-keys', async (req: AuthRequest, res: Response, next: NextFu
       return res.json({ message: 'No users with containers found', results: [] });
     }
 
-    const apiUrl = (process.env.API_URL || 'https://api.yourdomain.com').replace(/\/$/, '');
     const results = [];
 
     for (const user of users) {

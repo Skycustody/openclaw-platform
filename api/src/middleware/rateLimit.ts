@@ -86,3 +86,21 @@ export function rateLimitSensitive(req: Request, res: Response, next: NextFuncti
       res.status(429).json({ error: { code: 'RATE_LIMIT', message: 'Too many requests' } });
     });
 }
+
+const adminLimiter = new RateLimiterRedis({
+  storeClient: redis,
+  keyPrefix: 'rl:admin',
+  points: 5,
+  duration: 60,
+  blockDuration: 300,
+});
+
+export function rateLimitAdmin(req: Request, res: Response, next: NextFunction) {
+  const key = req.ip || 'unknown';
+  adminLimiter
+    .consume(key)
+    .then(() => next())
+    .catch(() => {
+      res.status(429).json({ error: { code: 'RATE_LIMIT', message: 'Too many admin requests. Locked for 5 minutes.' } });
+    });
+}
