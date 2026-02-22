@@ -103,9 +103,8 @@ async function agentUrlParts(subdomain: string, userId: string, server?: Server 
     }
   }
 
-  const gatewayUrl = `wss://${subdomain}.${domain}`;
-
   if (token) {
+    const gatewayUrl = `wss://${subdomain}.${domain}?token=${token}`;
     const wsUrl = encodeURIComponent(gatewayUrl);
     return { url: `${baseUrl}/?gatewayUrl=${wsUrl}&token=${token}`, baseUrl, gatewayUrl, gatewayToken: token };
   }
