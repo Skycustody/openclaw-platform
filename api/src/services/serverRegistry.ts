@@ -1,3 +1,26 @@
+/**
+ * Server Registry — manages worker server allocation and capacity.
+ *
+ * ┌─────────────────────────────────────────────────────────────────────────┐
+ * │ ARCHITECTURE DECISIONS — DO NOT CHANGE WITHOUT UNDERSTANDING           │
+ * │                                                                        │
+ * │ 1. ATOMIC RAM RESERVATION: findBestServer() uses UPDATE...FOR UPDATE  │
+ * │    SKIP LOCKED to atomically reserve RAM. This prevents two concurrent │
+ * │    provisioning requests from selecting the same server and            │
+ * │    overcommitting its RAM. Do not replace with SELECT then UPDATE.    │
+ * │                                                                        │
+ * │ 2. PACKING STRATEGY: ORDER BY ram_used DESC picks the busiest server  │
+ * │    first (bin-packing). This keeps one server full before spilling to │
+ * │    the next, allowing idle servers to be decommissioned.              │
+ * │                                                                        │
+ * │ 3. CONTROL_PLANE_IP EXCLUSION: The control plane server is excluded   │
+ * │    from worker selection. User containers never run on the control    │
+ * │    plane — it only runs the API, dashboard, and database.             │
+ * │                                                                        │
+ * │ 4. SINGLE-FLIGHT PROVISIONING: provisionInProgress ensures only one   │
+ * │    Hetzner server is created at a time, even under concurrent demand. │
+ * └─────────────────────────────────────────────────────────────────────────┘
+ */
 import db from '../lib/db';
 import { Server } from '../types';
 import { cloudProvider } from './cloudProvider';

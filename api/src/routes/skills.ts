@@ -1,3 +1,17 @@
+/**
+ * Skills routes — manages agent tool configs in openclaw.json.
+ *
+ * ┌─────────────────────────────────────────────────────────────────────────┐
+ * │ SECURITY — DO NOT CHANGE WITHOUT UNDERSTANDING                         │
+ * │                                                                        │
+ * │ 1. PROTOTYPE POLLUTION: toolName is validated against __proto__,       │
+ * │    constructor, prototype. Without this, PUT /__proto__ would pollute │
+ * │    the config object and potentially the process.                     │
+ * │                                                                        │
+ * │ 2. TOOL NAME FORMAT: Only alphanumeric chars and hyphens/underscores. │
+ * │    This prevents shell injection when the name is used in file paths. │
+ * └─────────────────────────────────────────────────────────────────────────┘
+ */
 import { Router, Response, NextFunction } from 'express';
 import { AuthRequest, authenticate, requireActiveSubscription } from '../middleware/auth';
 import {

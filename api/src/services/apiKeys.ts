@@ -1,3 +1,38 @@
+/**
+ * API Key & Config Injection — writes proxy keys and openclaw.json to containers.
+ *
+ * ┌─────────────────────────────────────────────────────────────────────────┐
+ * │ ARCHITECTURE DECISIONS — DO NOT CHANGE WITHOUT UNDERSTANDING           │
+ * │                                                                        │
+ * │ 1. PROXY KEYS (val_sk_*): Containers NEVER get real OpenAI/Anthropic   │
+ * │    keys. They get proxy keys that only work against our /proxy/*       │
+ * │    endpoints. The proxy validates the key, deducts tokens, then        │
+ * │    forwards with the real provider key. If a container is compromised, │
+ * │    the attacker only gets a proxy key scoped to one user.              │
+ * │                                                                        │
+ * │ 2. MODEL FORMAT: OpenClaw requires models as objects with `id` field:  │
+ * │    { id: "gpt-4o", name: "GPT-4o" }. Plain strings crash the gateway. │
+ * │    normalizeModel() handles legacy string→object conversion.           │
+ * │                                                                        │
+ * │ 3. BASE URL CASING: OpenClaw expects `baseUrl` (camelCase), NOT       │
+ * │    `baseURL`. The wrong casing silently fails.                         │
+ * │                                                                        │
+ * │ 4. GATEWAY CONFIG (buildOpenclawConfig):                               │
+ * │    - allowInsecureAuth: REQUIRED. TLS terminates at Cloudflare/Traefik │
+ * │      so the Traefik→container hop is plain WS. Without this, the      │
+ * │      gateway rejects token auth over non-TLS.                          │
+ * │    - dangerouslyDisableDeviceAuth: REQUIRED. OpenClaw's device pairing │
+ * │      requires browser crypto + operator approval. In a SaaS the       │
+ * │      gateway token IS the security — device pairing adds nothing.     │
+ * │      See: github.com/openclaw/openclaw/issues/1679                    │
+ * │    - trustedProxies: REQUIRED. Without it, the gateway sees Traefik's │
+ * │      Docker IP as untrusted and rejects connections.                   │
+ * │    DO NOT REMOVE THESE — the dashboard will show "pairing required".  │
+ * │                                                                        │
+ * │ 5. KEY LOGGING: Only log last 4 chars of proxy keys (key=...xxxx).    │
+ * │    Never log full keys or first N chars.                               │
+ * └─────────────────────────────────────────────────────────────────────────┘
+ */
 import crypto from 'crypto';
 import { sshExec } from './ssh';
 import db from '../lib/db';
@@ -93,7 +128,7 @@ export async function injectApiKeys(
   ];
   const defaultAnthropicModels = [
     { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4' },
-    { id: 'claude-3-5-haiku-20241022', name: 'Claude 3.5 Haiku' },
+    { id: 'claude-3-5-haiku-latest', name: 'Claude 3.5 Haiku' },
   ];
 
   function normalizeModel(m: any): { id: string; name: string } {

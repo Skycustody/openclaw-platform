@@ -1,4 +1,5 @@
 import { Client } from 'ssh2';
+import { EventEmitter } from 'events';
 import fs from 'fs';
 
 const SSH_TIMEOUT = 30000;
@@ -109,6 +110,96 @@ function execOnce(ip: string, command: string): Promise<SSHExecResult> {
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+export interface SSHStream extends EventEmitter {
+  /** Write data to stdin of the remote command */
+  write(data: string): void;
+  /** Close stdin and let the command finish */
+  closeStdin(): void;
+  /** Kill the SSH connection */
+  kill(): void;
+}
+
+/**
+ * Execute a command over SSH and stream stdout/stderr chunks as they arrive.
+ * Returns an EventEmitter that fires:
+ *   'data'  (chunk: string) — stdout chunk
+ *   'error' (err: Error)    — connection or exec error
+ *   'close' (code: number)  — command finished
+ *
+ * Also exposes write() to send data to the remote command's stdin.
+ */
+export function sshExecStream(ip: string, command: string, stdinData?: string): SSHStream {
+  const emitter = new EventEmitter() as SSHStream;
+  const conn = new Client();
+
+  const STREAM_TIMEOUT = 180_000;
+  const timeout = setTimeout(() => {
+    conn.end();
+    emitter.emit('error', new Error(`SSH stream timeout for ${ip}`));
+  }, STREAM_TIMEOUT);
+
+  const controlPlaneIp = process.env.CONTROL_PLANE_IP?.trim();
+  const host = controlPlaneIp && ip === controlPlaneIp ? '127.0.0.1' : ip;
+
+  conn
+    .on('ready', () => {
+      conn.exec(command, (err, stream) => {
+        if (err) {
+          clearTimeout(timeout);
+          conn.end();
+          emitter.emit('error', err);
+          return;
+        }
+
+        emitter.write = (data: string) => {
+          stream.write(data);
+        };
+        emitter.closeStdin = () => {
+          stream.end();
+        };
+        emitter.kill = () => {
+          clearTimeout(timeout);
+          stream.close();
+          conn.end();
+        };
+
+        stream.on('data', (data: Buffer) => {
+          emitter.emit('data', data.toString());
+        });
+        stream.stderr.on('data', (data: Buffer) => {
+          emitter.emit('data', data.toString());
+        });
+        stream.on('close', (code: number) => {
+          clearTimeout(timeout);
+          conn.end();
+          emitter.emit('close', code);
+        });
+
+        if (stdinData) {
+          stream.write(stdinData);
+          stream.end();
+        }
+      });
+    })
+    .on('error', (err) => {
+      clearTimeout(timeout);
+      emitter.emit('error', err);
+    })
+    .connect({
+      host,
+      port: 22,
+      username: 'root',
+      privateKey: getPrivateKey(),
+      readyTimeout: SSH_TIMEOUT,
+    });
+
+  emitter.write = () => {};
+  emitter.closeStdin = () => {};
+  emitter.kill = () => { conn.end(); };
+
+  return emitter;
 }
 
 export async function waitForReady(ip: string, containerName: string, timeoutMs = 60000): Promise<void> {

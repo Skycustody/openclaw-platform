@@ -1,3 +1,19 @@
+/**
+ * Settings routes — user preferences and encrypted API key storage.
+ *
+ * ┌─────────────────────────────────────────────────────────────────────────┐
+ * │ SECURITY — DO NOT CHANGE WITHOUT UNDERSTANDING                         │
+ * │                                                                        │
+ * │ 1. ENCRYPTION: Uses AES-256-GCM with random IV + auth tag. Encrypted  │
+ * │    values are stored as "iv:authTag:ciphertext" (3 parts). If you     │
+ * │    see 2-part format ("iv:ciphertext"), it's legacy and vulnerable —  │
+ * │    the decrypt function intentionally throws for those.               │
+ * │    DO NOT re-add the 2-part decryption path.                          │
+ * │                                                                        │
+ * │ 2. INPUT VALIDATION: Personality fields have length limits to prevent │
+ * │    abuse (e.g. customInstructions max 5000 chars). Don't remove.      │
+ * └─────────────────────────────────────────────────────────────────────────┘
+ */
 import { Router, Response, NextFunction } from 'express';
 import { AuthRequest, authenticate, requireActiveSubscription } from '../middleware/auth';
 import crypto from 'crypto';

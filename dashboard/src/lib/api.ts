@@ -82,6 +82,38 @@ class ApiClient {
   post<T>(path: string, body?: unknown) { return this.request<T>('POST', path, body); }
   put<T>(path: string, body?: unknown) { return this.request<T>('PUT', path, body); }
   delete<T>(path: string) { return this.request<T>('DELETE', path); }
+
+  /**
+   * POST with SSE streaming response. Returns the raw Response so the caller
+   * can consume the ReadableStream. Handles auth header injection.
+   */
+  async stream(path: string, body?: unknown, signal?: AbortSignal): Promise<Response> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json', ...this.extraHeaders };
+    const token = this.getToken();
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const res = await fetch(`${API_BASE}${path}`, {
+      method: 'POST',
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+      signal,
+    });
+
+    if (res.status === 401) {
+      this.clearToken();
+      if (typeof window !== 'undefined') window.location.href = '/auth/login';
+      throw new Error('Session expired');
+    }
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error?.message || data.message || (typeof data.error === 'string' ? data.error : `Request failed (${res.status})`));
+    }
+
+    return res;
+  }
+
+  getBaseUrl() { return API_BASE; }
 }
 
 const api = new ApiClient();

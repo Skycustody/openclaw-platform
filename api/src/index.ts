@@ -107,8 +107,10 @@ app.set('trust proxy', 1);
 // Raw body for Stripe webhooks
 app.use('/webhooks/stripe', express.raw({ type: 'application/json' }));
 
-// HTTPS redirect in production (skip for internal webhooks and health checks —
-// workers call back via curl and may not have x-forwarded-proto set)
+// HTTPS redirect in production.
+// CRITICAL: /webhooks/* and /health MUST be skipped. Workers call back via
+// HTTP POST to /webhooks/servers/register. A 301 redirect converts POST→GET,
+// losing the body and silently failing worker registration.
 if (process.env.NODE_ENV === 'production') {
   app.use((req, res, next) => {
     if (req.path.startsWith('/webhooks/') || req.path === '/health') {

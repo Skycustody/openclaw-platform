@@ -1,3 +1,24 @@
+/**
+ * Auth middleware — JWT verification, role checks, internal auth.
+ *
+ * ┌─────────────────────────────────────────────────────────────────────────┐
+ * │ SECURITY — DO NOT CHANGE WITHOUT UNDERSTANDING                         │
+ * │                                                                        │
+ * │ 1. TRUST PROXY: app.set('trust proxy', 1) is set in index.ts so       │
+ * │    req.ip returns the real client IP (from X-Forwarded-For via         │
+ * │    Nginx/Cloudflare). requireAdmin uses req.ip for the IP allowlist.  │
+ * │    Never use X-Forwarded-For directly — it's spoofable.               │
+ * │                                                                        │
+ * │ 2. INTERNAL AUTH (internalAuth): Checks x-internal-secret header      │
+ * │    against INTERNAL_SECRET. Used for server registration only.        │
+ * │    Container webhooks should use verifyContainerAuth() in webhooks.ts │
+ * │    which validates per-user HMAC tokens.                               │
+ * │                                                                        │
+ * │ 3. TOKEN REFRESH: Expired tokens can only be refreshed within 24h.    │
+ * │    This prevents indefinite session extension with stolen refresh      │
+ * │    tokens.                                                             │
+ * └─────────────────────────────────────────────────────────────────────────┘
+ */
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';

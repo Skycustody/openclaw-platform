@@ -1,3 +1,27 @@
+/**
+ * Webhook endpoints — receive callbacks from Stripe, worker servers, and containers.
+ *
+ * ┌─────────────────────────────────────────────────────────────────────────┐
+ * │ ARCHITECTURE DECISIONS — DO NOT CHANGE WITHOUT UNDERSTANDING           │
+ * │                                                                        │
+ * │ 1. CONTAINER AUTH (verifyContainerAuth):                               │
+ * │    - Container webhooks (/container/*) verify the caller matches the   │
+ * │      userId they claim using HMAC(INTERNAL_SECRET, userId).            │
+ * │    - This prevents container A from sending webhooks as user B.        │
+ * │    - Legacy containers may still send x-internal-secret (global        │
+ * │      secret). This is accepted but should be migrated.                 │
+ * │                                                                        │
+ * │ 2. SERVER REGISTRATION (/servers/register):                            │
+ * │    - Uses internalAuth (global INTERNAL_SECRET) because worker servers │
+ * │      are not bound to a userId. Only cloud-init scripts call this.     │
+ * │                                                                        │
+ * │ 3. STRIPE WEBHOOK:                                                     │
+ * │    - Uses Stripe's signature verification (constructEvent), NOT our    │
+ * │      internal auth. Requires raw body (express.raw middleware in       │
+ * │      index.ts). The HTTPS redirect in index.ts MUST skip /webhooks/*  │
+ * │      or POST bodies are lost during 301 redirect.                     │
+ * └─────────────────────────────────────────────────────────────────────────┘
+ */
 import crypto from 'crypto';
 import { Router, Request, Response, NextFunction } from 'express';
 import Stripe from 'stripe';

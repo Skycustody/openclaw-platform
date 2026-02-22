@@ -4,6 +4,25 @@
  * This wraps the container's workspace directory (~/.openclaw/workspace)
  * which is mounted at /opt/openclaw/instances/<userId>/workspace on the host.
  * Files placed here are accessible to the agent via its file tools.
+ *
+ * ┌─────────────────────────────────────────────────────────────────────────┐
+ * │ SECURITY — DO NOT CHANGE WITHOUT UNDERSTANDING                         │
+ * │                                                                        │
+ * │ 1. SHELL ESCAPING: Every value interpolated into SSH commands MUST go  │
+ * │    through shellEscape(). Filenames and content can contain quotes,    │
+ * │    semicolons, backticks — without escaping this is RCE as root.      │
+ * │                                                                        │
+ * │ 2. PATH TRAVERSAL: resolveWorkspacePath() uses path.resolve() and     │
+ * │    verifies the result stays within the user's workspace. The old     │
+ * │    .replace(/\.\./g, '') approach was bypassable. Do not revert.      │
+ * │                                                                        │
+ * │ 3. UPLOAD LIMITS: MAX_UPLOAD_SIZE_B64 (10MB base64 ≈ 7.5MB decoded)   │
+ * │    prevents disk-fill attacks against shared worker servers.           │
+ * │                                                                        │
+ * │ 4. BASE64 VALIDATION: Upload content is validated against BASE64_RE   │
+ * │    before being passed to shell. Without this, content containing     │
+ * │    single quotes would break out of the echo command.                 │
+ * └─────────────────────────────────────────────────────────────────────────┘
  */
 import { Router, Response, NextFunction } from 'express';
 import path from 'path';

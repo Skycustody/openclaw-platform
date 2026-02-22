@@ -1,11 +1,32 @@
+/**
+ * Agent routes — container lifecycle, status, logs, embed URL.
+ *
+ * ┌─────────────────────────────────────────────────────────────────────────┐
+ * │ ARCHITECTURE DECISIONS — DO NOT CHANGE WITHOUT UNDERSTANDING           │
+ * │                                                                        │
+ * │ 1. EMBED URL: The /agent/embed-url endpoint returns a URL that the    │
+ * │    dashboard opens in an iframe. The URL includes the gateway token   │
+ * │    in the query string so the Control UI can connect to the WebSocket.│
+ * │    The gateway token is per-user and acts as the auth credential.     │
+ * │                                                                        │
+ * │ 2. LOG REDACTION: /agent/logs redacts API keys, INTERNAL_SECRET,      │
+ * │    CONTAINER_SECRET, and GATEWAY_TOKEN patterns from output. Without  │
+ * │    this, the dashboard shows secrets in container logs. Max 500 lines.│
+ * │                                                                        │
+ * │ 3. BACKGROUND PROVISIONING: POST /agent/open returns 202 immediately │
+ * │    and provisions in the background. The dashboard polls /agent/status │
+ * │    until status changes from 'provisioning' to 'active'.              │
+ * └─────────────────────────────────────────────────────────────────────────┘
+ */
 import { Router, Response, NextFunction } from 'express';
 import { AuthRequest, authenticate, requireActiveSubscription } from '../middleware/auth';
 import db from '../lib/db';
 import { wakeContainer, sleepContainer, getContainerStatus, touchActivity } from '../services/sleepWake';
 import { restartContainer, provisionUser } from '../services/provisioning';
 import { User, Server } from '../types';
-import { sshExec } from '../services/ssh';
+import { sshExec, sshExecStream } from '../services/ssh';
 import { injectApiKeys } from '../services/apiKeys';
+import { getUserContainer } from '../services/containerConfig';
 
 const router = Router();
 router.use(authenticate);
@@ -493,6 +514,143 @@ router.post('/heartbeat', requireActiveSubscription, async (req: AuthRequest, re
   try {
     await touchActivity(req.userId!);
     res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── Chat ──────────────────────────────────────────────────────────────────
+
+router.post('/chat', requireActiveSubscription, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { message, sessionId } = req.body;
+    if (!message || typeof message !== 'string' || message.trim().length === 0) {
+      return res.status(400).json({ error: 'message is required' });
+    }
+    if (message.length > 32_000) {
+      return res.status(400).json({ error: 'message too long (max 32000 chars)' });
+    }
+
+    const userId = req.userId!;
+
+    const { serverIp, containerName, user } = await getUserContainer(userId);
+
+    if (user.status === 'sleeping') {
+      try {
+        await wakeContainer(userId);
+        await new Promise(r => setTimeout(r, 5000));
+      } catch {
+        return res.status(409).json({ error: 'Agent is waking up. Please try again in a few seconds.' });
+      }
+    }
+
+    const running = await sshExec(
+      serverIp,
+      `docker inspect ${containerName} --format='{{.State.Running}}' 2>/dev/null`
+    ).catch(() => null);
+
+    if (!running?.stdout.includes('true')) {
+      return res.status(409).json({ error: 'Agent is not running. Please open your agent first.' });
+    }
+
+    await touchActivity(userId);
+
+    const chatSession = sessionId || 'dashboard';
+    await db.query(
+      `INSERT INTO conversations (user_id, channel, role, content, metadata)
+       VALUES ($1, 'dashboard', 'user', $2, $3)`,
+      [userId, message.trim(), JSON.stringify({ sessionId: chatSession })]
+    );
+
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    });
+
+    const msgB64 = Buffer.from(message.trim()).toString('base64');
+    const cmd = `echo '${msgB64}' | base64 -d | timeout 120 docker exec -i ${containerName} openclaw run --stdin 2>&1`;
+
+    const stream = sshExecStream(serverIp, cmd);
+    let fullResponse = '';
+    let closed = false;
+
+    const cleanup = () => {
+      if (closed) return;
+      closed = true;
+      stream.kill();
+    };
+
+    req.on('close', cleanup);
+
+    stream.on('data', (chunk: string) => {
+      if (closed) return;
+      fullResponse += chunk;
+      const payload = JSON.stringify({ type: 'chunk', text: chunk });
+      res.write(`data: ${payload}\n\n`);
+    });
+
+    stream.on('error', (err: Error) => {
+      if (closed) return;
+      const payload = JSON.stringify({ type: 'error', message: err.message });
+      res.write(`data: ${payload}\n\n`);
+      res.write('data: [DONE]\n\n');
+      res.end();
+      closed = true;
+    });
+
+    stream.on('close', async () => {
+      if (closed) { res.end(); return; }
+      closed = true;
+
+      const trimmed = fullResponse.trim();
+      if (trimmed.length > 0) {
+        await db.query(
+          `INSERT INTO conversations (user_id, channel, role, content, metadata)
+           VALUES ($1, 'dashboard', 'assistant', $2, $3)`,
+          [userId, trimmed, JSON.stringify({ sessionId: chatSession })]
+        ).catch(() => {});
+      }
+
+      const payload = JSON.stringify({ type: 'done', fullText: trimmed });
+      res.write(`data: ${payload}\n\n`);
+      res.write('data: [DONE]\n\n');
+      res.end();
+    });
+  } catch (err: any) {
+    if (res.headersSent) {
+      res.end();
+    } else {
+      const status = err.statusCode || 500;
+      res.status(status).json({ error: err.message || 'Chat failed' });
+    }
+  }
+});
+
+router.get('/chat/history', requireActiveSubscription, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
+    const offset = parseInt(req.query.offset as string) || 0;
+
+    const conversations = await db.getMany(
+      `SELECT id, role, content, model_used, tokens_used, created_at, metadata
+       FROM conversations
+       WHERE user_id = $1 AND channel = 'dashboard'
+       ORDER BY created_at DESC
+       LIMIT $2 OFFSET $3`,
+      [req.userId, limit, offset]
+    );
+
+    const countResult = await db.getOne<{ count: string }>(
+      `SELECT COUNT(*) as count FROM conversations WHERE user_id = $1 AND channel = 'dashboard'`,
+      [req.userId]
+    );
+
+    res.json({
+      messages: conversations.reverse(),
+      total: parseInt(countResult?.count || '0'),
+    });
   } catch (err) {
     next(err);
   }

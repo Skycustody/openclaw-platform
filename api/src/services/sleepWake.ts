@@ -1,3 +1,19 @@
+/**
+ * Sleep/Wake — idle containers are stopped to free RAM, then restarted on demand.
+ *
+ * ┌─────────────────────────────────────────────────────────────────────────┐
+ * │ ARCHITECTURE DECISIONS — DO NOT CHANGE WITHOUT UNDERSTANDING           │
+ * │                                                                        │
+ * │ 1. ATOMIC WAKE: wakeContainer() uses UPDATE...WHERE status='sleeping' │
+ * │    RETURNING * to prevent duplicate wakes. Multiple concurrent POST   │
+ * │    /agent/open requests all trigger wake — without the atomic check,  │
+ * │    the container would restart multiple times and sometimes crash.    │
+ * │                                                                        │
+ * │ 2. API KEY RE-INJECTION: After waking, injectApiKeys() re-writes     │
+ * │    proxy keys and config. Docker stop/start preserves volumes, but    │
+ * │    config may have changed while sleeping (e.g. user changed models). │
+ * └─────────────────────────────────────────────────────────────────────────┘
+ */
 import db from '../lib/db';
 import redis from '../lib/redis';
 import { sshExec, waitForReady } from './ssh';

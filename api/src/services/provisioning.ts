@@ -1,3 +1,36 @@
+/**
+ * Container Provisioning — creates and manages OpenClaw containers on worker servers.
+ *
+ * ┌─────────────────────────────────────────────────────────────────────────┐
+ * │ ARCHITECTURE DECISIONS — DO NOT CHANGE WITHOUT UNDERSTANDING           │
+ * │                                                                        │
+ * │ 1. DOCKER NETWORKING:                                                  │
+ * │    - Containers start on `openclaw-net` (Traefik's discovery network). │
+ * │      Traefik config has `network: openclaw-net` — if a container is    │
+ * │      NOT on this network, Traefik returns 404 for all requests.        │
+ * │    - Each container also gets `{name}-net` (isolation network) so      │
+ * │      containers can't reach each other's ports directly.               │
+ * │    DO NOT remove openclaw-net from docker run — Traefik routing breaks.│
+ * │                                                                        │
+ * │ 2. CONTAINER_SECRET (not INTERNAL_SECRET):                             │
+ * │    - Containers get CONTAINER_SECRET = HMAC(INTERNAL_SECRET, userId).  │
+ * │    - This prevents a compromised container from impersonating other    │
+ * │      users on webhook endpoints. Never pass raw INTERNAL_SECRET.       │
+ * │                                                                        │
+ * │ 3. SHELL INJECTION PREVENTION:                                         │
+ * │    - All user-derived values in SSH commands must be escaped or base64 │
+ * │      encoded. updateContainerConfig() uses base64 piping.             │
+ * │    - userIds are UUIDs (safe) but always validate before shell use.    │
+ * │                                                                        │
+ * │ 4. RESOURCE LIMITS:                                                    │
+ * │    - --memory, --memory-swap, --cpus from PLAN_LIMITS                  │
+ * │    - --pids-limit 256 prevents fork bombs                              │
+ * │                                                                        │
+ * │ 5. DOCKERFILE BUILD TOOLS:                                             │
+ * │    - The Dockerfile must include `python3 make g++` for native module  │
+ * │      compilation (@discordjs/opus). Without these, npm install fails.  │
+ * └─────────────────────────────────────────────────────────────────────────┘
+ */
 import crypto from 'crypto';
 import db from '../lib/db';
 import { sshExec, waitForReady } from './ssh';

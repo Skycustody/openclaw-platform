@@ -1,3 +1,23 @@
+/**
+ * Auth routes — signup, login, Google OAuth, token refresh.
+ *
+ * ┌─────────────────────────────────────────────────────────────────────────┐
+ * │ SECURITY — DO NOT CHANGE WITHOUT UNDERSTANDING                         │
+ * │                                                                        │
+ * │ 1. RATE LIMITING: /auth/* uses rateLimitAuth (stricter than default).  │
+ * │    Without it, password brute-force is trivial.                        │
+ * │                                                                        │
+ * │ 2. GOOGLE OAUTH: Failures log `hasClientId: true/false`, never the    │
+ * │    actual Client ID. Previous version logged the Client ID itself.    │
+ * │                                                                        │
+ * │ 3. PASSWORD RULES: min 8, max 128 chars. The max prevents bcrypt      │
+ * │    denial-of-service (bcrypt truncates at 72 bytes, but hashing very  │
+ * │    long strings is slow).                                              │
+ * │                                                                        │
+ * │ 4. REFRESH TOKEN: Can only be used within 24h of expiry. After that   │
+ * │    the user must re-authenticate. This limits stolen-token window.    │
+ * └─────────────────────────────────────────────────────────────────────────┘
+ */
 import { Router, Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';

@@ -6,6 +6,7 @@ import { StatusBadge } from '@/components/ui/Badge';
 import api from '@/lib/api';
 import { formatTokens } from '@/lib/utils';
 import { useStore } from '@/lib/store';
+import ChatPanel from '@/components/dashboard/ChatPanel';
 import {
   Bot, Sparkles, Loader2, Cpu, Zap,
   AlertTriangle, ExternalLink, RefreshCw, Paperclip,
@@ -38,7 +39,6 @@ export default function DashboardHome() {
   const [uploadingFile, setUploadingFile] = useState(false);
   const [uploadMsg, setUploadMsg] = useState<string | null>(null);
 
-  const iframeRef = useRef<HTMLIFrameElement>(null);
   const pollAbort = useRef<AbortController | null>(null);
 
   const fetchContext = useCallback(async () => {
@@ -158,7 +158,6 @@ export default function DashboardHome() {
     }
   }, [pollUntilReady]);
 
-  // Poll token balance every 30s while the iframe is active
   useEffect(() => {
     if (phase !== 'ready') return;
     const interval = setInterval(async () => {
@@ -331,7 +330,7 @@ export default function DashboardHome() {
         </div>
 
         <div className="flex items-center gap-3">
-          {agentUrl && phase === 'ready' && (
+          {phase === 'ready' && (
             <>
               <button onClick={handleFileUpload} disabled={uploadingFile}
                 className="flex items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-1.5 hover:border-white/15 hover:bg-white/[0.04] transition-all disabled:opacity-40"
@@ -341,12 +340,14 @@ export default function DashboardHome() {
                   : <Paperclip className="h-3.5 w-3.5 text-white/30" />}
                 <span className="text-[11px] text-white/40">Attach</span>
               </button>
-              <button onClick={handleOpenExternal}
-                className="flex items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-1.5 hover:border-white/15 hover:bg-white/[0.04] transition-all"
-                title="Open in new tab">
-                <ExternalLink className="h-3.5 w-3.5 text-white/30" />
-                <span className="text-[11px] text-white/40">Pop out</span>
-              </button>
+              {agentUrl && (
+                <button onClick={handleOpenExternal}
+                  className="flex items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-1.5 hover:border-white/15 hover:bg-white/[0.04] transition-all"
+                  title="Open OpenClaw Control UI in new tab">
+                  <ExternalLink className="h-3.5 w-3.5 text-white/30" />
+                  <span className="text-[11px] text-white/40">Control UI</span>
+                </button>
+              )}
             </>
           )}
 
@@ -391,11 +392,11 @@ export default function DashboardHome() {
             <p className="text-[15px] font-medium text-white/40">{statusMsg}</p>
             <p className="text-[12px] text-white/20 mt-2 max-w-sm">
               {phase === 'provisioning'
-                ? 'A new server is being created for your agent. This usually takes 3–5 minutes.'
+                ? 'A new server is being created for your agent. This usually takes 3-5 minutes.'
                 : phase === 'starting'
                   ? 'Your OpenClaw agent is being prepared. This may take a moment.'
                   : phase === 'polling'
-                    ? 'Almost there — waiting for the agent to finish booting.'
+                    ? 'Almost there - waiting for the agent to finish booting.'
                     : 'Checking agent status...'}
             </p>
           </div>
@@ -422,19 +423,8 @@ export default function DashboardHome() {
           </div>
         )}
 
-        {/* Iframe — rendered once we have a URL; visibility toggled by phase */}
-        {agentUrl && (
-          <iframe
-            ref={iframeRef}
-            src={agentUrl}
-            className={`w-full h-full border-0 transition-opacity duration-300 ${
-              phase === 'ready' ? 'opacity-100' : 'opacity-0 pointer-events-none'
-            }`}
-            allow="clipboard-write; clipboard-read"
-            sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals"
-            title="OpenClaw Agent"
-          />
-        )}
+        {/* Chat — replaces the old iframe embed */}
+        {phase === 'ready' && <ChatPanel />}
       </div>
     </div>
   );

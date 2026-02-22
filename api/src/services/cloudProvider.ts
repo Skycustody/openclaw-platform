@@ -1,3 +1,23 @@
+/**
+ * Cloud Provider (Hetzner) — auto-provisions worker servers when capacity is needed.
+ *
+ * ┌─────────────────────────────────────────────────────────────────────────┐
+ * │ ARCHITECTURE DECISIONS — DO NOT CHANGE WITHOUT UNDERSTANDING           │
+ * │                                                                        │
+ * │ 1. CLOUD-INIT SECRET: The INTERNAL_SECRET is injected into worker     │
+ * │    cloud-init scripts so workers can call POST /webhooks/servers/     │
+ * │    register to self-register. There is NO fallback value — if         │
+ * │    INTERNAL_SECRET is not set, server creation throws.                │
+ * │                                                                        │
+ * │ 2. SSH KEY MANAGEMENT: Creates/reuses an SSH key in Hetzner's API for │
+ * │    root access to workers. The private key is stored at               │
+ * │    /root/.ssh/openclaw_worker on the control plane.                   │
+ * │                                                                        │
+ * │ 3. CLEANUP SAFETY: deleteServer() deletes both the Hetzner server     │
+ * │    and the DB record. It does NOT delete user data from the volume.   │
+ * │    Data lives at /opt/openclaw/instances/<userId>/ on the worker.     │
+ * └─────────────────────────────────────────────────────────────────────────┘
+ */
 import axios, { AxiosInstance } from 'axios';
 
 class CloudProvider {
