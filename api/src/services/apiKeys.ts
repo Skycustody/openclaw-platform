@@ -83,12 +83,19 @@ function getProxyBaseUrls(): { openai: string; anthropic: string } {
  * Inject the user's proxy key into their OpenClaw container.
  *
  * NO real API keys are written anywhere in the container.
- * Instead, the container gets:
- *   - auth-profiles.json with the proxy key (val_sk_xxx)
- *   - openclaw.json with baseURL pointing to the platform proxy
  *
- * When OpenClaw calls OpenAI/Anthropic, it hits our proxy which
- * validates the key and forwards with the real provider key.
+ * Uses OpenClaw's CUSTOM PROVIDER mechanism:
+ *   - Built-in "anthropic" provider ignores baseUrl (hardcoded to api.anthropic.com).
+ *   - Custom providers with `api: "anthropic-messages"` DO respect baseUrl.
+ *   - We register "anthropic-proxy" and "openai-proxy" as custom providers
+ *     pointing to the platform proxy, with the per-user proxy key as apiKey.
+ *   - The default model is set to "anthropic-proxy/claude-sonnet-4-20250514"
+ *     so the gateway routes through our proxy automatically.
+ *
+ * See: https://docs.openclaw.ai/gateway/configuration-reference#custom-providers-and-base-urls
+ *
+ * When OpenClaw calls the AI, it hits our proxy which validates the
+ * proxy key, deducts tokens, then forwards with the real provider key.
  *
  * Idempotent — safe to call multiple times.
  */
@@ -100,7 +107,6 @@ export async function injectApiKeys(
   const proxyKey = await ensureProxyKey(userId);
   const baseUrls = getProxyBaseUrls();
 
-  // 1. Update openclaw.json with proxy base URLs (no actual keys)
   const configResult = await sshExec(
     serverIp,
     `cat ${INSTANCE_DIR}/${userId}/openclaw.json 2>/dev/null || echo '{}'`
@@ -113,45 +119,45 @@ export async function injectApiKeys(
     config = {};
   }
 
-  // Remove any real keys that may exist from previous versions
-  if (config.models?.providers?.openai?.apiKey) delete config.models.providers.openai.apiKey;
-  if (config.models?.providers?.anthropic?.apiKey) delete config.models.providers.anthropic.apiKey;
+  // Remove legacy built-in provider overrides and any real keys
+  if (config.models?.providers?.openai) delete config.models.providers.openai;
+  if (config.models?.providers?.anthropic) delete config.models.providers.anthropic;
 
-  // Set proxy base URLs so SDKs call our proxy instead of the real provider
-  // OpenClaw expects "baseUrl" (camelCase), NOT "baseURL"
   if (!config.models) config.models = {};
+  config.models.mode = 'merge';
   if (!config.models.providers) config.models.providers = {};
-  const defaultOpenaiModels = [
-    { id: 'gpt-4o', name: 'GPT-4o' },
-    { id: 'gpt-4o-mini', name: 'GPT-4o Mini' },
-    { id: 'o3-mini', name: 'O3 Mini' },
-  ];
-  const defaultAnthropicModels = [
-    { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4' },
-    { id: 'claude-3-5-haiku-latest', name: 'Claude 3.5 Haiku' },
-  ];
 
-  function normalizeModel(m: any): { id: string; name: string } {
-    if (typeof m === 'string') return { id: m, name: m };
-    return { id: m.id || m.name || m, name: m.name || m.id || m, ...m };
-  }
-
-  config.models.providers.openai = {
-    ...(config.models.providers.openai || {}),
+  // Custom provider: OpenClaw respects baseUrl on custom providers
+  // api: "openai-chat" tells OpenClaw to use OpenAI-compatible request format
+  config.models.providers['openai-proxy'] = {
     baseUrl: baseUrls.openai,
-    models: config.models.providers.openai?.models?.length
-      ? config.models.providers.openai.models.map(normalizeModel)
-      : defaultOpenaiModels,
+    apiKey: proxyKey,
+    api: 'openai-chat',
+    models: [
+      { id: 'gpt-4o', name: 'GPT-4o' },
+      { id: 'gpt-4o-mini', name: 'GPT-4o Mini' },
+      { id: 'o3-mini', name: 'O3 Mini' },
+    ],
   };
-  delete config.models.providers.openai.baseURL;
-  config.models.providers.anthropic = {
-    ...(config.models.providers.anthropic || {}),
+
+  // Custom provider: api: "anthropic-messages" tells OpenClaw to use Anthropic
+  // request format. baseUrl should OMIT /v1 — the client appends it.
+  config.models.providers['anthropic-proxy'] = {
     baseUrl: baseUrls.anthropic,
-    models: config.models.providers.anthropic?.models?.length
-      ? config.models.providers.anthropic.models.map(normalizeModel)
-      : defaultAnthropicModels,
+    apiKey: proxyKey,
+    api: 'anthropic-messages',
+    models: [
+      { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4' },
+      { id: 'claude-3-5-haiku-latest', name: 'Claude 3.5 Haiku' },
+    ],
   };
-  delete config.models.providers.anthropic.baseURL;
+
+  // Set default model to use the custom provider
+  if (!config.agents) config.agents = {};
+  if (!config.agents.defaults) config.agents.defaults = {};
+  config.agents.defaults.model = {
+    primary: 'anthropic-proxy/claude-sonnet-4-20250514',
+  };
 
   const configB64 = Buffer.from(JSON.stringify(config, null, 2)).toString('base64');
   await sshExec(
@@ -159,28 +165,13 @@ export async function injectApiKeys(
     `echo '${configB64}' | base64 -d > ${INSTANCE_DIR}/${userId}/openclaw.json`
   );
 
-  // 2. Write auth-profiles.json with the proxy key (not real key)
-  const authProfiles: Record<string, any> = {
-    'openai:platform': {
-      provider: 'openai',
-      mode: 'api_key',
-      apiKey: proxyKey,
-    },
-    'anthropic:platform': {
-      provider: 'anthropic',
-      mode: 'api_key',
-      apiKey: proxyKey,
-    },
-  };
-
-  const authB64 = Buffer.from(JSON.stringify(authProfiles, null, 2)).toString('base64');
-
+  // Remove legacy auth-profiles.json — credentials are now in the
+  // custom provider config, not in a separate auth profile store.
   await sshExec(
     serverIp,
     [
       `mkdir -p ${INSTANCE_DIR}/${userId}/agents/main/agent`,
-      `echo '${authB64}' | base64 -d > ${INSTANCE_DIR}/${userId}/agents/main/agent/auth-profiles.json`,
-      `chmod 600 ${INSTANCE_DIR}/${userId}/agents/main/agent/auth-profiles.json`,
+      `rm -f ${INSTANCE_DIR}/${userId}/agents/main/agent/auth-profiles.json`,
     ].join(' && ')
   );
 

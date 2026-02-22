@@ -39,7 +39,7 @@ import { PLAN_LIMITS, Plan, User } from '../types';
 import { sendWelcomeEmail } from './email';
 import { cloudflareDNS } from './cloudflare';
 import { v4 as uuid } from 'uuid';
-import { buildOpenclawConfig, injectApiKeys, ensureProxyKey } from './apiKeys';
+import { buildOpenclawConfig, injectApiKeys } from './apiKeys';
 
 /** Generate a per-container secret bound to a specific userId. */
 export function generateContainerSecret(userId: string): string {
@@ -231,11 +231,6 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
   // Give Node.js ~75% of the container memory for its heap
   const heapMb = Math.floor(limits.ramMb * 0.75);
 
-  // Generate per-user proxy key (real API keys never enter the container)
-  const proxyKey = await ensureProxyKey(userId);
-  const proxyOpenaiBase = `${apiUrl}/proxy/openai/v1`;
-  const proxyAnthropicBase = `${apiUrl}/proxy/anthropic`;
-
   // Mount the instance directory at /root/.openclaw so config + credentials persist
   const startScript = `sh -c 'openclaw doctor --fix 2>/dev/null || true; exec openclaw gateway --port 18789 --bind lan --allow-unconfigured run'`;
   const dockerRunCmd = [
@@ -254,10 +249,6 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
     `-e CONTAINER_SECRET=${generateContainerSecret(userId)}`,
     `-e "BROWSERLESS_URL=wss://production-sfo.browserless.io?token=${browserlessToken}"`,
     `-e OPENCLAW_GATEWAY_TOKEN=${gatewayToken}`,
-    `-e OPENAI_API_KEY=${proxyKey}`,
-    `-e "OPENAI_BASE_URL=${proxyOpenaiBase}"`,
-    `-e ANTHROPIC_API_KEY=${proxyKey}`,
-    `-e "ANTHROPIC_BASE_URL=${proxyAnthropicBase}"`,
     `-v /opt/openclaw/instances/${userId}:/root/.openclaw`,
     `--label traefik.enable=true`,
     `--label 'traefik.http.routers.${containerName}.rule=Host(\`${hostRule}\`)'`,
