@@ -1,16 +1,14 @@
 'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { StatusBadge } from '@/components/ui/Badge';
 import api from '@/lib/api';
 import { formatUsd } from '@/lib/utils';
 import { useStore } from '@/lib/store';
-import ChatPanel from '@/components/dashboard/ChatPanel';
 import {
   Bot, Sparkles, Loader2, Cpu, Zap,
-  AlertTriangle, ExternalLink, RefreshCw, Paperclip, Maximize2,
+  AlertTriangle, ExternalLink, RefreshCw, Paperclip,
 } from 'lucide-react';
 
 type AgentDisplayStatus = 'active' | 'online' | 'sleeping' | 'paused' | 'provisioning' | 'cancelled' | 'offline' | 'grace_period';
@@ -26,8 +24,6 @@ type Phase = 'loading' | 'starting' | 'provisioning' | 'polling' | 'ready' | 'er
 
 export default function DashboardHome() {
   const { user } = useStore();
-  const searchParams = useSearchParams();
-  const agentIdParam = searchParams.get('agent');
 
   const [phase, setPhase] = useState<Phase>('loading');
   const [agentUrl, setAgentUrl] = useState<string | null>(null);
@@ -40,7 +36,6 @@ export default function DashboardHome() {
 
   const [uploadingFile, setUploadingFile] = useState(false);
   const [uploadMsg, setUploadMsg] = useState<string | null>(null);
-  const [useIframe, setUseIframe] = useState(true);
 
   const pollAbort = useRef<AbortController | null>(null);
 
@@ -124,9 +119,7 @@ export default function DashboardHome() {
               await pollUntilReady();
               return;
             }
-          } catch {
-            // Transient error during provisioning, keep polling
-          }
+          } catch {}
         }
 
         setPhase('error');
@@ -207,12 +200,7 @@ export default function DashboardHome() {
 
         setAgentUrl(embed.url!);
 
-        if (subStatus === 'sleeping') {
-          await startAgent();
-          return;
-        }
-
-        if (subStatus === 'provisioning') {
+        if (subStatus === 'sleeping' || subStatus === 'provisioning') {
           await startAgent();
           return;
         }
@@ -292,13 +280,8 @@ export default function DashboardHome() {
     startAgent();
   };
 
-  const handleOpenExternal = () => {
-    if (agentUrl) window.open(agentUrl, '_blank');
-  };
-
   return (
     <div className="flex flex-col h-[calc(100vh-48px)]">
-      {/* Paused banner */}
       {agentStatus === 'paused' && (
         <div className="border border-red-500/20 bg-red-500/5 rounded-xl px-4 py-3 flex items-center gap-3 mb-3 shrink-0">
           <AlertTriangle className="h-4 w-4 text-red-400 shrink-0" />
@@ -309,7 +292,7 @@ export default function DashboardHome() {
         </div>
       )}
 
-      {/* Header bar */}
+      {/* Header */}
       <div className="flex items-center justify-between px-1 pb-3 shrink-0">
         <div className="flex items-center gap-3">
           <div className="relative">
@@ -330,7 +313,7 @@ export default function DashboardHome() {
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           {phase === 'ready' && (
             <>
               <button onClick={handleFileUpload} disabled={uploadingFile}
@@ -342,23 +325,11 @@ export default function DashboardHome() {
                 <span className="text-[11px] text-white/40">Attach</span>
               </button>
               {agentUrl && (
-                <>
-                  <button onClick={() => setUseIframe(!useIframe)}
-                    className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 transition-all ${
-                      useIframe
-                        ? 'border-white/15 bg-white/[0.06] text-white/60'
-                        : 'border-white/[0.06] bg-white/[0.02] text-white/30 hover:border-white/15 hover:bg-white/[0.04]'
-                    }`}
-                    title={useIframe ? 'Switch to simple chat' : 'Switch to full gateway UI'}>
-                    <Maximize2 className="h-3.5 w-3.5" />
-                    <span className="text-[11px]">{useIframe ? 'Gateway' : 'Simple'}</span>
-                  </button>
-                  <button onClick={handleOpenExternal}
-                    className="flex items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-1.5 hover:border-white/15 hover:bg-white/[0.04] transition-all"
-                    title="Open in new tab">
-                    <ExternalLink className="h-3.5 w-3.5 text-white/30" />
-                  </button>
-                </>
+                <button onClick={() => window.open(agentUrl, '_blank')}
+                  className="flex items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-1.5 hover:border-white/15 hover:bg-white/[0.04] transition-all"
+                  title="Open in new tab">
+                  <ExternalLink className="h-3.5 w-3.5 text-white/30" />
+                </button>
               )}
             </>
           )}
@@ -384,7 +355,6 @@ export default function DashboardHome() {
         </div>
       </div>
 
-      {/* Upload feedback */}
       {uploadMsg && (
         <div className={`mb-2 px-4 py-2 rounded-lg text-[13px] shrink-0 animate-fade-up ${
           uploadMsg.includes('failed') ? 'border border-red-500/20 bg-red-500/5 text-red-400' : 'border border-green-500/20 bg-green-500/5 text-green-400'
@@ -393,9 +363,8 @@ export default function DashboardHome() {
         </div>
       )}
 
-      {/* Main content area */}
+      {/* Main content — gateway iframe only */}
       <div className="flex-1 rounded-xl border border-white/[0.06] bg-white/[0.01] overflow-hidden relative">
-        {/* Loading / Starting / Provisioning / Polling states */}
         {(phase === 'loading' || phase === 'starting' || phase === 'provisioning' || phase === 'polling') && (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-center z-10">
             <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/[0.04] mb-5">
@@ -414,7 +383,6 @@ export default function DashboardHome() {
           </div>
         )}
 
-        {/* Error state */}
         {phase === 'error' && (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-center z-10">
             <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-red-500/10 mb-5">
@@ -435,17 +403,13 @@ export default function DashboardHome() {
           </div>
         )}
 
-        {/* Gateway iframe (primary) or simple ChatPanel (fallback) */}
-        {phase === 'ready' && agentUrl && useIframe && (
+        {phase === 'ready' && agentUrl && (
           <iframe
             src={agentUrl}
             className="absolute inset-0 w-full h-full border-0"
             allow="clipboard-write; clipboard-read"
-            title="OpenClaw Gateway"
+            title="OpenClaw Agent"
           />
-        )}
-        {phase === 'ready' && (!agentUrl || !useIframe) && (
-          <ChatPanel agentId={agentIdParam} />
         )}
       </div>
     </div>
