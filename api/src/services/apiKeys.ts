@@ -169,6 +169,11 @@ export async function injectApiKeys(
   if (!config.tools.image) config.tools.image = {};
   config.tools.image.enabled = true;
 
+  // Sub-agent configuration — allow spawning and model inheritance
+  if (!config.agents.defaults.subagents) config.agents.defaults.subagents = {};
+  config.agents.defaults.subagents.allowAgents = ['*'];
+  config.agents.defaults.subagents.maxConcurrent = 3;
+
   // Enforce gateway config every time — prevents "pairing required" drift
   const gatewayToken = config.gateway?.auth?.token;
   if (gatewayToken) {
@@ -179,7 +184,12 @@ export async function injectApiKeys(
     config.gateway.controlUi.enabled = true;
     config.gateway.controlUi.allowInsecureAuth = true;
     config.gateway.controlUi.dangerouslyDisableDeviceAuth = true;
-    config.gateway.auth = { mode: 'token', token: gatewayToken };
+    // Allow loopback connections without rate limiting (sub-agents connect internally)
+    config.gateway.auth = {
+      mode: 'token',
+      token: gatewayToken,
+      rateLimit: { exemptLoopback: true },
+    };
   }
 
   const configB64 = Buffer.from(JSON.stringify(config, null, 2)).toString('base64');
