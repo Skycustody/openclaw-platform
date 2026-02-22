@@ -11,6 +11,7 @@ import {
   Bot, Plus, Loader2, Trash2, Edit3,
   HardDrive, ArrowRight, ChevronRight,
   Sparkles, AlertTriangle, Crown, Info, X,
+  MessageSquare,
 } from 'lucide-react';
 import { useStore } from '@/lib/store';
 
@@ -294,21 +295,27 @@ export default function AgentsPage() {
                   </div>
                 </div>
 
-                {/* Actions — only for non-primary agents */}
-                {!agent.is_primary && (
-                  <div className="flex items-center gap-1.5">
-                    <button onClick={() => handleEdit(agent)}
-                      className="p-2 rounded-lg text-white/30 hover:text-white/60 hover:bg-white/[0.06] transition-colors"
-                      title="Edit personality">
-                      <Edit3 className="h-4 w-4" />
-                    </button>
-                    <button onClick={() => setDeleteAgent(agent)}
-                      className="p-2 rounded-lg text-white/30 hover:text-red-400 hover:bg-red-400/5 transition-colors"
-                      title="Delete">
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                )}
+                <div className="flex items-center gap-1.5">
+                  <button onClick={() => window.location.href = `/dashboard?agent=${agent.id}`}
+                    className="p-2 rounded-lg text-white/30 hover:text-blue-400 hover:bg-blue-400/5 transition-colors"
+                    title="Chat with this agent">
+                    <MessageSquare className="h-4 w-4" />
+                  </button>
+                  {!agent.is_primary && (
+                    <>
+                      <button onClick={() => handleEdit(agent)}
+                        className="p-2 rounded-lg text-white/30 hover:text-white/60 hover:bg-white/[0.06] transition-colors"
+                        title="Edit personality">
+                        <Edit3 className="h-4 w-4" />
+                      </button>
+                      <button onClick={() => setDeleteAgent(agent)}
+                        className="p-2 rounded-lg text-white/30 hover:text-red-400 hover:bg-red-400/5 transition-colors"
+                        title="Delete">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
             </Card>
           );

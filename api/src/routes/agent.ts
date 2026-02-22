@@ -524,7 +524,7 @@ router.post('/heartbeat', requireActiveSubscription, async (req: AuthRequest, re
 
 router.post('/chat', requireActiveSubscription, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { message, sessionId } = req.body;
+    const { message, sessionId, agentId } = req.body;
     if (!message || typeof message !== 'string' || message.trim().length === 0) {
       return res.status(400).json({ error: 'message is required' });
     }
@@ -533,6 +533,16 @@ router.post('/chat', requireActiveSubscription, async (req: AuthRequest, res: Re
     }
 
     const userId = req.userId!;
+
+    // Resolve the OpenClaw agent ID (defaults to "main" for primary agent)
+    let openclawAgentId = 'main';
+    if (agentId) {
+      const agent = await db.getOne<{ openclaw_agent_id: string }>(
+        'SELECT openclaw_agent_id FROM agents WHERE id = $1 AND user_id = $2',
+        [agentId, userId]
+      );
+      if (agent) openclawAgentId = agent.openclaw_agent_id;
+    }
 
     const { serverIp, containerName, user } = await getUserContainer(userId);
 
@@ -557,10 +567,11 @@ router.post('/chat', requireActiveSubscription, async (req: AuthRequest, res: Re
     await touchActivity(userId);
 
     const chatSession = sessionId || 'dashboard';
+    const meta = { sessionId: chatSession, agentId: agentId || null, openclawAgentId };
     await db.query(
       `INSERT INTO conversations (user_id, channel, role, content, metadata)
        VALUES ($1, 'dashboard', 'user', $2, $3)`,
-      [userId, message.trim(), JSON.stringify({ sessionId: chatSession })]
+      [userId, message.trim(), JSON.stringify(meta)]
     );
 
     res.writeHead(200, {
@@ -571,7 +582,8 @@ router.post('/chat', requireActiveSubscription, async (req: AuthRequest, res: Re
     });
 
     const msgB64 = Buffer.from(message.trim()).toString('base64');
-    const cmd = `echo '${msgB64}' | base64 -d | timeout 120 docker exec -i ${containerName} sh -c 'MSG="$(cat)"; exec openclaw agent --session-id ${chatSession} --message "$MSG"' 2>&1`;
+    const agentFlag = openclawAgentId !== 'main' ? ` --agent-id ${openclawAgentId}` : '';
+    const cmd = `echo '${msgB64}' | base64 -d | timeout 120 docker exec -i ${containerName} sh -c 'MSG="$(cat)"; exec openclaw agent${agentFlag} --session-id ${chatSession} --message "$MSG"' 2>&1`;
 
     const stream = sshExecStream(serverIp, cmd);
     let fullResponse = '';
@@ -610,7 +622,7 @@ router.post('/chat', requireActiveSubscription, async (req: AuthRequest, res: Re
         await db.query(
           `INSERT INTO conversations (user_id, channel, role, content, metadata)
            VALUES ($1, 'dashboard', 'assistant', $2, $3)`,
-          [userId, trimmed, JSON.stringify({ sessionId: chatSession })]
+          [userId, trimmed, JSON.stringify(meta)]
         ).catch(() => {});
       }
 
@@ -633,19 +645,31 @@ router.get('/chat/history', requireActiveSubscription, async (req: AuthRequest, 
   try {
     const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
     const offset = parseInt(req.query.offset as string) || 0;
+    const agentId = req.query.agentId as string | undefined;
+
+    const conditions = [`user_id = $1`, `channel = 'dashboard'`];
+    const params: any[] = [req.userId];
+    let idx = 2;
+
+    if (agentId) {
+      conditions.push(`metadata->>'agentId' = $${idx++}`);
+      params.push(agentId);
+    }
+
+    const where = conditions.join(' AND ');
 
     const conversations = await db.getMany(
       `SELECT id, role, content, model_used, tokens_used, created_at, metadata
        FROM conversations
-       WHERE user_id = $1 AND channel = 'dashboard'
+       WHERE ${where}
        ORDER BY created_at DESC
-       LIMIT $2 OFFSET $3`,
-      [req.userId, limit, offset]
+       LIMIT $${idx++} OFFSET $${idx++}`,
+      [...params, limit, offset]
     );
 
     const countResult = await db.getOne<{ count: string }>(
-      `SELECT COUNT(*) as count FROM conversations WHERE user_id = $1 AND channel = 'dashboard'`,
-      [req.userId]
+      `SELECT COUNT(*) as count FROM conversations WHERE ${where}`,
+      params
     );
 
     res.json({

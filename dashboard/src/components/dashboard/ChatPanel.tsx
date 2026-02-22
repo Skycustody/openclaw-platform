@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback, type FormEvent } from 'react';
-import { Loader2, Send, AlertTriangle, Bot, User as UserIcon } from 'lucide-react';
+import { Loader2, Send, AlertTriangle, Bot, User as UserIcon, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 
@@ -13,16 +13,32 @@ interface ChatMessage {
   streaming?: boolean;
 }
 
-export default function ChatPanel() {
+interface AgentOption {
+  id: string;
+  name: string;
+  is_primary: boolean;
+  status: string;
+}
+
+interface ChatPanelProps {
+  agentId?: string | null;
+}
+
+export default function ChatPanel({ agentId: initialAgentId }: ChatPanelProps = {}) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [historyLoaded, setHistoryLoaded] = useState(false);
 
+  const [agents, setAgents] = useState<AgentOption[]>([]);
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(initialAgentId ?? null);
+  const [showAgentPicker, setShowAgentPicker] = useState(false);
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const pickerRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
     requestAnimationFrame(() => {
@@ -31,8 +47,23 @@ export default function ChatPanel() {
   }, []);
 
   useEffect(() => {
+    api.get<{ agents: AgentOption[] }>('/agents')
+      .then((data) => {
+        const list = data.agents || [];
+        setAgents(list);
+        if (!selectedAgentId && list.length > 0) {
+          const primary = list.find(a => a.is_primary);
+          setSelectedAgentId(primary?.id || list[0].id);
+        }
+      })
+      .catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
     let cancelled = false;
-    api.get<{ messages: any[]; total: number }>('/agent/chat/history?limit=50')
+    setHistoryLoaded(false);
+    const qs = selectedAgentId ? `?limit=50&agentId=${selectedAgentId}` : '?limit=50';
+    api.get<{ messages: any[]; total: number }>(`/agent/chat/history${qs}`)
       .then((data) => {
         if (cancelled) return;
         const loaded: ChatMessage[] = (data.messages || []).map((m: any) => ({
@@ -47,7 +78,17 @@ export default function ChatPanel() {
       })
       .catch(() => setHistoryLoaded(true));
     return () => { cancelled = true; };
-  }, [scrollToBottom]);
+  }, [selectedAgentId, scrollToBottom]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setShowAgentPicker(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleSubmit = useCallback(async (e?: FormEvent) => {
     e?.preventDefault();
@@ -78,7 +119,10 @@ export default function ChatPanel() {
     abortRef.current = controller;
 
     try {
-      const res = await api.stream('/agent/chat', { message: text }, controller.signal);
+      const body: Record<string, any> = { message: text };
+      if (selectedAgentId) body.agentId = selectedAgentId;
+
+      const res = await api.stream('/agent/chat', body, controller.signal);
 
       const reader = res.body?.getReader();
       if (!reader) throw new Error('No response stream');
@@ -143,7 +187,7 @@ export default function ChatPanel() {
       setSending(false);
       abortRef.current = null;
     }
-  }, [input, sending, scrollToBottom]);
+  }, [input, sending, scrollToBottom, selectedAgentId]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -156,8 +200,57 @@ export default function ChatPanel() {
     if (!sending) inputRef.current?.focus();
   }, [sending]);
 
+  const selectedAgent = agents.find(a => a.id === selectedAgentId);
+
   return (
     <div className="flex flex-col h-full">
+      {/* Agent selector — only shown when multiple agents exist */}
+      {agents.length > 1 && (
+        <div className="shrink-0 px-4 py-2 border-b border-white/[0.06]">
+          <div className="relative" ref={pickerRef}>
+            <button
+              onClick={() => setShowAgentPicker(!showAgentPicker)}
+              className="flex items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 hover:border-white/15 hover:bg-white/[0.05] transition-all"
+            >
+              <Bot className="h-3.5 w-3.5 text-white/40" />
+              <span className="text-[13px] text-white/60">{selectedAgent?.name || 'Select Agent'}</span>
+              <ChevronDown className="h-3 w-3 text-white/30" />
+            </button>
+
+            {showAgentPicker && (
+              <div className="absolute top-full left-0 mt-1 w-56 rounded-xl border border-white/[0.08] bg-[#141414] shadow-xl z-50 py-1 overflow-hidden">
+                {agents.map(agent => (
+                  <button
+                    key={agent.id}
+                    onClick={() => { setSelectedAgentId(agent.id); setShowAgentPicker(false); }}
+                    className={cn(
+                      'flex items-center gap-2.5 w-full px-3 py-2 text-left hover:bg-white/[0.06] transition-colors',
+                      agent.id === selectedAgentId && 'bg-white/[0.04]'
+                    )}
+                  >
+                    <div className="relative">
+                      <Bot className="h-4 w-4 text-white/40" />
+                      {agent.status === 'active' && (
+                        <span className="absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-green-400" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] text-white/70 truncate">{agent.name}</p>
+                      {agent.is_primary && (
+                        <p className="text-[10px] text-amber-400/60">Primary</p>
+                      )}
+                    </div>
+                    {agent.id === selectedAgentId && (
+                      <span className="h-1.5 w-1.5 rounded-full bg-white/40" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-1">
         {!historyLoaded && (
@@ -173,7 +266,7 @@ export default function ChatPanel() {
             </div>
             <p className="text-[15px] text-white/30 font-medium">Start a conversation</p>
             <p className="text-[12px] text-white/15 mt-1 max-w-xs">
-              Type a message below to chat with your AI agent.
+              Type a message below to chat with {selectedAgent?.name || 'your AI agent'}.
             </p>
           </div>
         )}

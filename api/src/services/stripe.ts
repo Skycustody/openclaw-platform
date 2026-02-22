@@ -174,7 +174,14 @@ async function handleCreditPurchase(session: Stripe.Checkout.Session): Promise<v
   const packInfo = CREDIT_PACKS[pack];
   if (!packInfo) return;
 
-  // Pack price / 1.59 = actual OR budget. User sees displayUsd, OR gets orBudgetUsd.
+  const stripeCustomerId = session.customer as string;
+  if (stripeCustomerId) {
+    await db.query(
+      'UPDATE users SET stripe_customer_id = $1 WHERE id = $2 AND stripe_customer_id IS NULL',
+      [stripeCustomerId, userId]
+    );
+  }
+
   const orBudgetIncrease = packInfo.orBudgetUsd;
 
   await db.query(

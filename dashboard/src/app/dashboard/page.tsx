@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { StatusBadge } from '@/components/ui/Badge';
 import api from '@/lib/api';
@@ -25,6 +26,8 @@ type Phase = 'loading' | 'starting' | 'provisioning' | 'polling' | 'ready' | 'er
 
 export default function DashboardHome() {
   const { user } = useStore();
+  const searchParams = useSearchParams();
+  const agentIdParam = searchParams.get('agent');
 
   const [phase, setPhase] = useState<Phase>('loading');
   const [agentUrl, setAgentUrl] = useState<string | null>(null);
@@ -421,7 +424,7 @@ export default function DashboardHome() {
         )}
 
         {/* Chat — replaces the old iframe embed */}
-        {phase === 'ready' && <ChatPanel />}
+        {phase === 'ready' && <ChatPanel agentId={agentIdParam} />}
       </div>
     </div>
   );

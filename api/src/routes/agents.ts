@@ -293,11 +293,22 @@ router.put('/:agentId', async (req: AuthRequest, res: Response, next: NextFuncti
       [name || null, purpose || null, instructions || null, agentId]
     );
 
-    // Update the container's openclaw.json and workspace SOUL.md
-    if (!agent.is_primary) {
-      try {
-        const container = await getUserContainer(req.userId!);
-        const updatedAgent = await db.getOne<Agent>('SELECT * FROM agents WHERE id = $1', [agentId]);
+    try {
+      const container = await getUserContainer(req.userId!);
+      const updatedAgent = await db.getOne<Agent>('SELECT * FROM agents WHERE id = $1', [agentId]);
+
+      if (agent.is_primary) {
+        // For primary agent, write SOUL.md directly to the main workspace
+        const soulContent: string[] = [];
+        const agentName = updatedAgent?.name || agent.name;
+        if (agentName) soulContent.push(`# ${agentName}`);
+        if (updatedAgent?.purpose || agent.purpose) soulContent.push(`\n## Purpose\n${updatedAgent?.purpose || agent.purpose}`);
+        if (updatedAgent?.instructions || agent.instructions) soulContent.push(`\n## Instructions\n${updatedAgent?.instructions || agent.instructions}`);
+
+        const soulB64 = Buffer.from(soulContent.join('\n') || `# ${agentName}\n`).toString('base64');
+        const wsDir = `${INSTANCE_DIR}/${req.userId}`;
+        await sshExec(container.serverIp, `echo '${soulB64}' | base64 -d > ${wsDir}/SOUL.md`);
+      } else {
         const openclawId = (updatedAgent?.name || agent.name).toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 20)
           || `agent-${agentId.slice(0, 6)}`;
 
@@ -310,11 +321,11 @@ router.put('/:agentId', async (req: AuthRequest, res: Response, next: NextFuncti
             instructions: updatedAgent?.instructions || agent.instructions,
           }
         );
-
-        await restartContainerHelper(container.serverIp, container.containerName, 15000);
-      } catch (err) {
-        console.warn(`[agents] Config update failed for agent ${agentId}:`, err);
       }
+
+      await restartContainerHelper(container.serverIp, container.containerName, 15000);
+    } catch (err) {
+      console.warn(`[agents] Config update failed for agent ${agentId}:`, err);
     }
 
     res.json({ ok: true });
