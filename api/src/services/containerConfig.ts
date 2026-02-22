@@ -109,10 +109,12 @@ export async function reapplyGatewayConfig(
 
   const token = tokenRow.gateway_token;
 
-  // Set browser profile to embedded (no Chrome extension needed in containers)
+  // Set browser to headless embedded Chromium (no Chrome extension in containers)
   // and auto-approve the agent's device pairing request
   const commands = [
     `openclaw config set browser.defaultProfile openclaw`,
+    `openclaw config set browser.headless true`,
+    `openclaw config set browser.noSandbox true`,
     `openclaw devices approve --latest --token "${token}"`,
   ].join(' 2>/dev/null; ') + ' 2>/dev/null';
 

@@ -302,8 +302,8 @@ export async function injectApiKeys(
     };
   }
 
-  // Use embedded browser profile (no Chrome extension in containers)
-  config.browser = { defaultProfile: 'openclaw' };
+  // Use embedded browser: headless Chromium, no sandbox (Docker requires it)
+  config.browser = { defaultProfile: 'openclaw', headless: true, noSandbox: true };
 
   const configB64 = Buffer.from(JSON.stringify(config, null, 2)).toString('base64');
   await sshExec(
