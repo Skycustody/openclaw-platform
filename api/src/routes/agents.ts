@@ -271,12 +271,12 @@ async function syncBindingsToContainer(
       const allowed = allowMap[agentEntry.id];
       if (allowed && allowed.length > 0) {
         agentEntry.subagents = {
-          allowAgents: allowed,
+          allow: allowed,
           maxConcurrent: 3,
         };
       } else {
         agentEntry.subagents = {
-          allowAgents: [],
+          allow: [],
           maxConcurrent: 0,
         };
       }

@@ -1,0 +1,91 @@
+---
+description: OpenClaw gateway architecture, debugging, and container configuration guide
+alwaysApply: true
+---
+
+# OpenClaw Gateway — Architecture & Debugging
+
+## Server Architecture
+
+- **Control plane** (`72.62.1.134`): Runs the API (port 4000) and dashboard (port 3000) via PM2. Nginx reverse-proxies `valnaa.com` → dashboard, `api.valnaa.com` → API.
+- **Worker server** (`167.235.31.202`): Runs user Docker containers + Traefik. Each user gets their own container.
+- The API SSHes into the worker using `~/.ssh/openclaw_worker` key to manage containers.
+- Traefik on the **worker** routes `*.valnaa.com` subdomains to containers via Docker labels.
+- DNS (Cloudflare) points `*.valnaa.com` to the worker IP.
+
+## Container Details
+
+- Image: `openclaw/openclaw:latest` (Node 22 + `openclaw` CLI)
+- Internal port: `18789` (gateway)
+- Config: `/opt/openclaw/instances/{userId}/openclaw.json` on worker, mounted at `/root/.openclaw/` inside container
+- CMD: `openclaw doctor --fix; exec openclaw gateway --port 18789 --bind lan --allow-unconfigured run`
+- Container name pattern: `openclaw-{userId first 12 chars}`
+
+## openclaw.json — VALID Keys Only
+
+OpenClaw has a strict config schema. Writing unrecognized keys causes the container to crash-loop. **Never write these invalid keys:**
+
+```
+tools.exec.enabled, tools.browser, tools.read, tools.write, tools.edit,
+tools.memory_search, tools.memory_get, tools.sessions_spawn, tools.sessions_list,
+tools.sessions_send, tools.session_status, tools.cron, tools.image, personality,
+agents.defaults.subagents.allowAgents
+```
+
+**Valid top-level keys** (confirmed working):
+```json
+{
+  "gateway": { "bind", "trustedProxies", "controlUi", "auth" },
+  "models": { "providers" },
+  "agents": { "defaults": { "model" }, "list": [] },
+  "channels": {},
+  "env": {},
+  "tools": { "web": { "search", "fetch" } },
+  "skills": { "entries": {} },
+  "server": { "port", "host" },
+  "browser": { "enabled", "profiles" },
+  "memory": { "enabled", "maxItems" },
+  "hooks": {}
+}
+```
+
+## Common Issues & Fixes
+
+### Container crash-looping
+1. Check logs: `ssh -i ~/.ssh/openclaw_worker root@167.235.31.202 "docker logs CONTAINER --tail 30 2>&1"`
+2. If "Config invalid" / "Unrecognized key" → clean `openclaw.json` on the worker, remove invalid keys
+3. Restart: `docker restart CONTAINER`
+
+### "pairing required" on gateway dashboard
+- `gateway.auth.token` in `openclaw.json` must match the `gateway_token` in the `users` DB table
+- `trustedProxies` must include `["0.0.0.0/0"]`
+- `dangerouslyDisableDeviceAuth: true` must be set in `gateway.controlUi`
+
+### Traefik not routing (404 on subdomains)
+- Check Traefik is running on worker: `ssh -i ~/.ssh/openclaw_worker root@167.235.31.202 "docker ps --filter name=traefik"`
+- Check for API version error: `docker logs traefik --tail 10`
+- Fix: recreate with `-e DOCKER_API_VERSION=$(docker version --format '{{.Server.APIVersion}}')`
+
+### Container missing entirely
+- The platform auto-provisions via `POST /agent/open` when it detects a missing container
+- Check worker: `ssh -i ~/.ssh/openclaw_worker root@167.235.31.202 "docker ps -a | grep openclaw"`
+- DB holds user→container mapping: `SELECT container_name, subdomain, server_id FROM users`
+
+## Debugging Commands
+
+```bash
+# Check all containers on worker
+ssh -i ~/.ssh/openclaw_worker root@167.235.31.202 "docker ps -a --format 'table {{.Names}}\t{{.Status}}'"
+
+# View container logs
+ssh -i ~/.ssh/openclaw_worker root@167.235.31.202 "docker logs CONTAINER --tail 30 2>&1"
+
+# View container's openclaw.json
+ssh -i ~/.ssh/openclaw_worker root@167.235.31.202 "cat /opt/openclaw/instances/USERID/openclaw.json | python3 -m json.tool"
+
+# API logs on control plane
+pm2 logs openclaw-api --lines 30 --nostream
+
+# Check Traefik health on worker
+ssh -i ~/.ssh/openclaw_worker root@167.235.31.202 "docker logs traefik --tail 10 2>&1"
+```

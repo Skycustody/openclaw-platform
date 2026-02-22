@@ -154,11 +154,12 @@ export async function injectApiKeys(
   }
 
   // ── Tools configuration ──
-  // Enable all tools that work with our OpenRouter key / existing services.
-  // Users can toggle individual tools via the dashboard Skills page.
+  // Only set keys that OpenClaw's config schema recognizes.
+  // Invalid keys cause the container to crash-loop.
+  // Valid tool keys under `tools`: web (with search/fetch sub-keys).
+  // All other tools (exec, read, write, memory, sessions, cron, image)
+  // are enabled by default in OpenClaw — no config needed.
   if (!config.tools) config.tools = {};
-
-  // Web search via Perplexity Sonar through OpenRouter (uses same API key)
   if (!config.tools.web) config.tools.web = {};
   config.tools.web.search = {
     enabled: true,
@@ -171,59 +172,32 @@ export async function injectApiKeys(
   };
   config.tools.web.fetch = { enabled: true };
 
-  // Browser — available when BROWSERLESS_TOKEN is set
-  if (!config.tools.browser) config.tools.browser = {};
-  config.tools.browser.enabled = !!process.env.BROWSERLESS_TOKEN;
-
-  // Shell / exec — sandboxed inside the container
-  if (!config.tools.exec) config.tools.exec = {};
-  config.tools.exec.enabled = true;
-
-  // File system tools
-  if (!config.tools.read) config.tools.read = {};
-  config.tools.read.enabled = true;
-  if (!config.tools.write) config.tools.write = {};
-  config.tools.write.enabled = true;
-  if (!config.tools.edit) config.tools.edit = {};
-  config.tools.edit.enabled = true;
-
-  // Memory
-  if (!config.tools.memory_search) config.tools.memory_search = {};
-  config.tools.memory_search.enabled = true;
-  if (!config.tools.memory_get) config.tools.memory_get = {};
-  config.tools.memory_get.enabled = true;
-
-  // Sessions & sub-agents
-  if (!config.tools.sessions_spawn) config.tools.sessions_spawn = {};
-  config.tools.sessions_spawn.enabled = true;
-  if (!config.tools.sessions_list) config.tools.sessions_list = {};
-  config.tools.sessions_list.enabled = true;
-  if (!config.tools.sessions_send) config.tools.sessions_send = {};
-  config.tools.sessions_send.enabled = true;
-  if (!config.tools.session_status) config.tools.session_status = {};
-  config.tools.session_status.enabled = true;
-
-  // Cron / automation
-  if (!config.tools.cron) config.tools.cron = {};
-  config.tools.cron.enabled = true;
-
-  // Image analysis (uses the configured model's vision capability)
-  if (!config.tools.image) config.tools.image = {};
-  config.tools.image.enabled = true;
-
-  // ── Bundled skills — enable the ones that work without extra setup ──
-  if (!config.skills) config.skills = {};
-  if (!config.skills.entries) config.skills.entries = {};
-  const defaultSkills = ['weather', 'healthcheck', 'skill-creator', 'coding-agent', 'summarize', 'session-logs'];
-  for (const sk of defaultSkills) {
-    if (!config.skills.entries[sk]) config.skills.entries[sk] = {};
-    config.skills.entries[sk].enabled = true;
+  // Remove any invalid tool keys that may exist from previous versions
+  const validToolKeys = ['web'];
+  for (const key of Object.keys(config.tools)) {
+    if (!validToolKeys.includes(key)) delete config.tools[key];
   }
 
-  // Sub-agent defaults (overridden per-agent by communication permissions)
-  if (!config.agents.defaults.subagents) config.agents.defaults.subagents = {};
-  config.agents.defaults.subagents.allowAgents = ['*'];
-  config.agents.defaults.subagents.maxConcurrent = 3;
+  // Browser config — top-level key in OpenClaw (not under tools)
+  if (process.env.BROWSERLESS_TOKEN) {
+    config.browser = {
+      enabled: true,
+      defaultProfile: 'browserless',
+      profiles: {
+        browserless: {
+          type: 'cdp',
+          cdpUrl: `wss://production-sfo.browserless.io?token=${process.env.BROWSERLESS_TOKEN}`,
+        },
+      },
+    };
+  }
+
+  // Memory — top-level key
+  config.memory = { enabled: true, maxItems: 2000 };
+
+  // Remove any stale invalid top-level keys from previous versions
+  delete config.personality;
+  delete config.bindings;
 
   // ── Per-agent channel bindings ──
   // Merge channel connections from agent_channels table into config
@@ -309,7 +283,7 @@ export async function injectApiKeys(
       for (const entry of config.agents.list) {
         const allowed = allowMap[entry.id];
         if (allowed) {
-          entry.subagents = { allowAgents: allowed, maxConcurrent: 3 };
+          entry.subagents = { allow: allowed, maxConcurrent: 3 };
         }
       }
     }
