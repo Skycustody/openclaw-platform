@@ -127,7 +127,8 @@ async function agentUrlParts(subdomain: string, userId: string, server?: Server 
   if (token) {
     const gatewayUrl = `wss://${subdomain}.${domain}?token=${token}`;
     const wsUrl = encodeURIComponent(gatewayUrl);
-    return { url: `${baseUrl}/?gatewayUrl=${wsUrl}&token=${token}`, baseUrl, gatewayUrl, gatewayToken: token };
+    // #chat opens the Control UI on the chat tab only (when the gateway UI uses hash routing)
+    return { url: `${baseUrl}/?gatewayUrl=${wsUrl}&token=${token}#chat`, baseUrl, gatewayUrl, gatewayToken: token };
   }
 
   return { url: baseUrl, baseUrl, gatewayUrl: null, gatewayToken: null };
