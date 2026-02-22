@@ -109,7 +109,7 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
 // PUT /skills/tool/:name — toggle a built-in tool
 router.put('/tool/:toolName', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const toolName = req.params.toolName;
+    const toolName = req.params.toolName as string;
     if (!isValidName(toolName)) return res.status(400).json({ error: 'Invalid tool name' });
     const { enabled, settings } = req.body;
 
@@ -137,7 +137,7 @@ router.put('/tool/:toolName', async (req: AuthRequest, res: Response, next: Next
 // PUT /skills/bundled/:name — toggle a bundled skill + set API keys
 router.put('/bundled/:skillName', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const skillName = req.params.skillName;
+    const skillName = req.params.skillName as string;
     if (!isValidName(skillName)) return res.status(400).json({ error: 'Invalid skill name' });
     const { enabled, apiKey, envKey } = req.body;
 
@@ -168,7 +168,7 @@ router.put('/bundled/:skillName', async (req: AuthRequest, res: Response, next: 
 // Legacy: PUT /skills/:toolName — backwards compatible tool toggle
 router.put('/:toolName', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const toolName = req.params.toolName;
+    const toolName = req.params.toolName as string;
     if (!isValidName(toolName)) return res.status(400).json({ error: 'Invalid tool name' });
     const { enabled, settings } = req.body;
 
@@ -195,7 +195,7 @@ router.put('/:toolName', async (req: AuthRequest, res: Response, next: NextFunct
 
 router.delete('/:toolName', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const toolName = req.params.toolName;
+    const toolName = req.params.toolName as string;
     if (!isValidName(toolName)) return res.status(400).json({ error: 'Invalid tool name' });
 
     const { serverIp, containerName } = await getUserContainer(req.userId!);
