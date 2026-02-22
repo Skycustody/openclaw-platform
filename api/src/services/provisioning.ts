@@ -227,9 +227,24 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
   const nexosKey = await ensureNexosKey(userId);
 
   // Mount the instance directory at /root/.openclaw so config + credentials persist.
-  // DO NOT run `openclaw doctor --fix` — it strips gateway auth keys
-  // (dangerouslyDisableDeviceAuth, allowInsecureAuth) causing "pairing required".
-  const startScript = `sh -c 'exec openclaw gateway --port 18789 --bind lan --allow-unconfigured run'`;
+  // The startup script launches the gateway in the background, waits for it to
+  // initialize (which may strip auth config via implicit doctor/validation),
+  // then re-applies the gateway auth settings using `openclaw config set`.
+  // This ensures dangerouslyDisableDeviceAuth survives gateway startup.
+  const startScript = [
+    `sh -c '`,
+    `openclaw gateway --port 18789 --bind lan --allow-unconfigured run &`,
+    `GW_PID=$!;`,
+    `sleep 8;`,
+    `openclaw config set gateway.mode local 2>/dev/null;`,
+    `openclaw config set gateway.auth.mode token 2>/dev/null;`,
+    `openclaw config set gateway.auth.token "$OPENCLAW_GATEWAY_TOKEN" 2>/dev/null;`,
+    `openclaw config set gateway.controlUi.enabled true 2>/dev/null;`,
+    `openclaw config set gateway.controlUi.dangerouslyDisableDeviceAuth true 2>/dev/null;`,
+    `openclaw config set gateway.controlUi.allowInsecureAuth true 2>/dev/null;`,
+    `wait $GW_PID`,
+    `'`,
+  ].join(' ');
   const dockerRunCmd = [
     'docker run -d',
     `--name ${containerName}`,
@@ -369,9 +384,11 @@ export async function restartContainer(userId: string): Promise<void> {
   const containerName = user.container_name || `openclaw-${userId}`;
   await sshExec(server.ip, `docker restart ${containerName}`);
 
-  // Wait for container to be running, then re-apply gateway config
-  // (existing containers run `openclaw doctor --fix` which strips auth keys)
-  await new Promise(r => setTimeout(r, 3000));
+  // Wait for the gateway process to finish its startup initialization
+  // (which may strip auth config), then re-apply gateway auth settings.
+  // The startup script already does this via config set commands (8s delay),
+  // but we also apply from the platform side for containers with older scripts.
+  await new Promise(r => setTimeout(r, 10000));
   await reapplyGatewayConfig(server.ip, userId, containerName);
 }
 

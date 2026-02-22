@@ -107,31 +107,37 @@ export async function reapplyGatewayConfig(
   );
   if (!tokenRow?.gateway_token) return;
 
-  const gatewayConfig = {
-    gateway: {
-      mode: 'local',
-      bind: 'lan',
-      trustedProxies: ['0.0.0.0/0'],
-      controlUi: {
-        enabled: true,
-        allowInsecureAuth: true,
-        dangerouslyDisableDeviceAuth: true,
-      },
-      auth: {
-        mode: 'token',
-        token: tokenRow.gateway_token,
-      },
-    },
-  };
+  // Use individual `openclaw config set` commands instead of `config merge`.
+  // `config set` updates both the in-memory running gateway AND the config file,
+  // whereas `config merge` may only update the file without reloading the gateway.
+  const setCommands = [
+    `openclaw config set gateway.mode local`,
+    `openclaw config set gateway.auth.mode token`,
+    `openclaw config set gateway.auth.token "${tokenRow.gateway_token}"`,
+    `openclaw config set gateway.controlUi.enabled true`,
+    `openclaw config set gateway.controlUi.dangerouslyDisableDeviceAuth true`,
+    `openclaw config set gateway.controlUi.allowInsecureAuth true`,
+  ].join(' 2>/dev/null; ') + ' 2>/dev/null';
 
-  const b64 = Buffer.from(JSON.stringify(gatewayConfig)).toString('base64');
-
-  // Merge into running gateway — updates both in-memory config and config file
   await sshExec(
     serverIp,
-    `echo '${b64}' | base64 -d | docker exec -i ${containerName} openclaw config merge - 2>/dev/null`
+    `docker exec ${containerName} sh -c '${setCommands}'`
   ).catch((err) => {
-    console.warn(`[reapplyGatewayConfig] merge failed for ${containerName}:`, err.message);
+    console.warn(`[reapplyGatewayConfig] config set failed for ${containerName}:`, err.message);
+
+    // Fallback: write directly to the config file on the host
+    const gatewayConfig = {
+      gateway: {
+        mode: 'local', bind: 'lan', trustedProxies: ['0.0.0.0/0'],
+        controlUi: { enabled: true, allowInsecureAuth: true, dangerouslyDisableDeviceAuth: true },
+        auth: { mode: 'token', token: tokenRow.gateway_token },
+      },
+    };
+    const b64 = Buffer.from(JSON.stringify(gatewayConfig)).toString('base64');
+    return sshExec(
+      serverIp,
+      `echo '${b64}' | base64 -d | docker exec -i ${containerName} openclaw config merge - 2>/dev/null`
+    ).catch(() => {});
   });
 }
 

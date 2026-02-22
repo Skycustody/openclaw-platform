@@ -280,6 +280,7 @@ router.post('/open', authenticate, async (req: AuthRequest, res: Response, next:
     const cn = user.container_name || `openclaw-${user.id.slice(0, 12)}`;
     if (server) {
       injectApiKeys(server.ip, user.id, cn, user.plan as any)
+        .then(() => new Promise(r => setTimeout(r, 5000)))
         .then(() => reapplyGatewayConfig(server.ip, user.id, cn))
         .catch((err) =>
           console.warn(`[agent/open] Key injection failed for ${user.id}:`, err.message)
@@ -290,9 +291,11 @@ router.post('/open', authenticate, async (req: AuthRequest, res: Response, next:
     if (user.status === 'sleeping') {
       console.log(`[agent/open] Waking container for ${user.id}`);
       await wakeContainer(user.id);
-      // Re-apply gateway config after wake (doctor --fix may have stripped it)
+      // Wait for gateway to finish startup init, then re-apply auth config
       if (server) {
-        reapplyGatewayConfig(server.ip, user.id, cn).catch(() => {});
+        setTimeout(() => {
+          reapplyGatewayConfig(server.ip, user.id, cn).catch(() => {});
+        }, 10000);
       }
       return respond(await agentUrlParts(user.subdomain!, user.id, server), 'active');
     }
@@ -359,8 +362,10 @@ router.post('/open', authenticate, async (req: AuthRequest, res: Response, next:
 
           return res.status(202).json({ status: 'provisioning', message: 'Agent is being re-created...' });
         }
-        // Container was stopped and just started — re-apply gateway config
-        reapplyGatewayConfig(server.ip, user.id, containerName).catch(() => {});
+        // Container was stopped and just started — wait for gateway init, then re-apply auth
+        setTimeout(() => {
+          reapplyGatewayConfig(server.ip, user.id, containerName).catch(() => {});
+        }, 10000);
       }
     }
 
