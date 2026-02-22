@@ -84,6 +84,7 @@ interface AgentUrlParts {
   baseUrl: string;
   gatewayUrl: string | null;
   gatewayToken: string | null;
+  gatewayWsUrl: string | null;
 }
 
 /**
@@ -125,13 +126,13 @@ async function agentUrlParts(subdomain: string, userId: string, server?: Server 
   }
 
   if (token) {
-    const gatewayUrl = `wss://${subdomain}.${domain}?token=${token}`;
+    const gatewayWsUrl = `wss://${subdomain}.${domain}`;
+    const gatewayUrl = `${gatewayWsUrl}?token=${token}`;
     const wsUrl = encodeURIComponent(gatewayUrl);
-    // #chat opens the Control UI on the chat tab only (when the gateway UI uses hash routing)
-    return { url: `${baseUrl}/?gatewayUrl=${wsUrl}&token=${token}#chat`, baseUrl, gatewayUrl, gatewayToken: token };
+    return { url: `${baseUrl}/?gatewayUrl=${wsUrl}&token=${token}`, baseUrl, gatewayUrl, gatewayToken: token, gatewayWsUrl };
   }
 
-  return { url: baseUrl, baseUrl, gatewayUrl: null, gatewayToken: null };
+  return { url: baseUrl, baseUrl, gatewayUrl: null, gatewayToken: null, gatewayWsUrl: null };
 }
 
 async function agentUrl(subdomain: string, userId: string, server?: Server | null): Promise<string> {
@@ -214,6 +215,7 @@ router.get('/embed-url', async (req: AuthRequest, res: Response, next: NextFunct
       available: true,
       url: parts.url,
       gatewayUrl: parts.gatewayUrl,
+      gatewayWsUrl: parts.gatewayWsUrl,
       gatewayToken: parts.gatewayToken,
       subscriptionStatus: user.status,
     });
@@ -240,7 +242,7 @@ router.post('/open', authenticate, async (req: AuthRequest, res: Response, next:
     }
 
     const respond = (parts: AgentUrlParts, status: string) =>
-      res.json({ url: parts.url, status, gatewayUrl: parts.gatewayUrl, gatewayToken: parts.gatewayToken });
+      res.json({ url: parts.url, status, gatewayUrl: parts.gatewayUrl, gatewayWsUrl: parts.gatewayWsUrl, gatewayToken: parts.gatewayToken });
 
     // Case 1: never provisioned (no server assigned)
     if (!user.server_id || !user.subdomain) {

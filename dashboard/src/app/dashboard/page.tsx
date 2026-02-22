@@ -6,6 +6,7 @@ import { StatusBadge } from '@/components/ui/Badge';
 import api from '@/lib/api';
 import { formatUsd } from '@/lib/utils';
 import { useStore } from '@/lib/store';
+import GatewayChat from '@/components/dashboard/GatewayChat';
 import {
   Bot, Sparkles, Loader2, Cpu, Zap,
   AlertTriangle, ExternalLink, RefreshCw, Paperclip,
@@ -27,6 +28,8 @@ export default function DashboardHome() {
 
   const [phase, setPhase] = useState<Phase>('loading');
   const [agentUrl, setAgentUrl] = useState<string | null>(null);
+  const [gatewayWsUrl, setGatewayWsUrl] = useState<string | null>(null);
+  const [gatewayToken, setGatewayToken] = useState<string | null>(null);
   const [statusMsg, setStatusMsg] = useState('Connecting to agent...');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -77,6 +80,12 @@ export default function DashboardHome() {
     setErrorMsg('Agent took too long to start. Try refreshing.');
   }, []);
 
+  const storeGatewayInfo = useCallback((data: { gatewayWsUrl?: string | null; gatewayToken?: string | null; url?: string }) => {
+    if (data.url) setAgentUrl(data.url);
+    if (data.gatewayWsUrl) setGatewayWsUrl(data.gatewayWsUrl);
+    if (data.gatewayToken) setGatewayToken(data.gatewayToken);
+  }, []);
+
   const startAgent = useCallback(async () => {
     setPhase('starting');
     setStatusMsg('Starting agent...');
@@ -86,7 +95,7 @@ export default function DashboardHome() {
         url: string;
         status: string;
         message?: string;
-        gatewayUrl: string | null;
+        gatewayWsUrl: string | null;
         gatewayToken: string | null;
       }>('/agent/open');
 
@@ -104,7 +113,7 @@ export default function DashboardHome() {
               url: string;
               status: string;
               message?: string;
-              gatewayUrl: string | null;
+              gatewayWsUrl: string | null;
               gatewayToken: string | null;
             }>('/agent/open');
 
@@ -114,7 +123,7 @@ export default function DashboardHome() {
             }
 
             if (retry.url) {
-              setAgentUrl(retry.url);
+              storeGatewayInfo(retry);
               setAgentStatus('active');
               await pollUntilReady();
               return;
@@ -133,7 +142,7 @@ export default function DashboardHome() {
         return;
       }
 
-      setAgentUrl(data.url);
+      storeGatewayInfo(data);
       setAgentStatus('active');
       await pollUntilReady();
     } catch (err: any) {
@@ -152,7 +161,7 @@ export default function DashboardHome() {
         setErrorMsg(msg);
       }
     }
-  }, [pollUntilReady]);
+  }, [pollUntilReady, storeGatewayInfo]);
 
   useEffect(() => {
     if (phase !== 'ready') return;
@@ -174,7 +183,7 @@ export default function DashboardHome() {
         const embed = await api.get<{
           available: boolean;
           url?: string;
-          gatewayUrl?: string;
+          gatewayWsUrl?: string;
           gatewayToken?: string;
           subscriptionStatus?: string;
           reason?: string;
@@ -198,7 +207,7 @@ export default function DashboardHome() {
           return;
         }
 
-        setAgentUrl(embed.url!);
+        storeGatewayInfo(embed);
 
         if (subStatus === 'sleeping' || subStatus === 'provisioning') {
           await startAgent();
@@ -327,7 +336,7 @@ export default function DashboardHome() {
               {agentUrl && (
                 <button onClick={() => window.open(agentUrl, '_blank')}
                   className="flex items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-1.5 hover:border-white/15 hover:bg-white/[0.04] transition-all"
-                  title="Open in new tab">
+                  title="Open full gateway UI">
                   <ExternalLink className="h-3.5 w-3.5 text-white/30" />
                 </button>
               )}
@@ -363,7 +372,7 @@ export default function DashboardHome() {
         </div>
       )}
 
-      {/* Main content — gateway iframe only */}
+      {/* Main content */}
       <div className="flex-1 rounded-xl border border-white/[0.06] bg-white/[0.01] overflow-hidden relative">
         {(phase === 'loading' || phase === 'starting' || phase === 'provisioning' || phase === 'polling') && (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-center z-10">
@@ -403,13 +412,8 @@ export default function DashboardHome() {
           </div>
         )}
 
-        {phase === 'ready' && agentUrl && (
-          <iframe
-            src={agentUrl}
-            className="absolute inset-0 w-full h-full border-0"
-            allow="clipboard-write; clipboard-read"
-            title="OpenClaw Agent"
-          />
+        {phase === 'ready' && gatewayWsUrl && gatewayToken && (
+          <GatewayChat gatewayUrl={gatewayWsUrl} token={gatewayToken} />
         )}
       </div>
     </div>

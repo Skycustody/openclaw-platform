@@ -302,7 +302,7 @@ export default function SkillsPage() {
                             onClick={() => toggleTool(name, !isEnabled)}
                           >
                             {isEnabled ? <><PowerOff className="h-3.5 w-3.5" /> Disable</> : <><Power className="h-3.5 w-3.5" /> Enable</>}
-                          </Button>
+                        </Button>
                         )}
                     </Card>
                   );
