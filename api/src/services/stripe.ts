@@ -172,6 +172,17 @@ async function handleCreditPurchase(session: Stripe.Checkout.Session): Promise<v
   const packInfo = CREDIT_PACKS[pack];
   if (!packInfo) return;
 
+  // Prevent duplicate processing — Stripe retries webhooks and each retry
+  // would add credits again without this guard.
+  const existing = await db.getOne<{ id: string }>(
+    `SELECT id FROM credit_purchases WHERE stripe_session_id = $1`,
+    [session.id]
+  );
+  if (existing) {
+    console.log(`[stripe] Duplicate webhook for session ${session.id} — skipping`);
+    return;
+  }
+
   const stripeCustomerId = session.customer as string;
   if (stripeCustomerId) {
     await db.query(
