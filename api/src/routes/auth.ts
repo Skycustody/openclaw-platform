@@ -46,6 +46,16 @@ router.post('/signup', rateLimitAuth, async (req: Request, res: Response, next: 
       throw new BadRequestError('Email and password are required');
     }
 
+    if (typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new BadRequestError('Invalid email format');
+    }
+    if (typeof password !== 'string' || password.length < 8) {
+      throw new BadRequestError('Password must be at least 8 characters');
+    }
+    if (password.length > 128) {
+      throw new BadRequestError('Password too long');
+    }
+
     const existing = await db.getOne('SELECT id FROM users WHERE email = $1', [email]);
     if (existing) throw new BadRequestError('Email already registered');
 
@@ -125,7 +135,7 @@ router.post('/google', rateLimitAuth, async (req: Request, res: Response, next: 
       payload = ticket.getPayload();
     } catch (verifyErr: any) {
       console.error('Google token verification failed:', verifyErr.message);
-      console.error('Server GOOGLE_CLIENT_ID:', process.env.GOOGLE_CLIENT_ID?.slice(0, 20) + '...');
+      console.error('Server GOOGLE_CLIENT_ID configured:', !!process.env.GOOGLE_CLIENT_ID);
       const msg = verifyErr.message || '';
       if (msg.includes('Token used too late') || msg.includes('expired')) {
         throw new BadRequestError('Google sign-in expired. Please try again.');
@@ -184,7 +194,7 @@ router.post('/google', rateLimitAuth, async (req: Request, res: Response, next: 
   }
 });
 
-// ── Token Refresh (accepts current JWT in Authorization; works even if expired) ──
+// ── Token Refresh (accepts current JWT; must not be expired more than 24 hours) ──
 router.post('/refresh', rateLimitAuth, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const header = req.headers.authorization;
@@ -194,7 +204,21 @@ router.post('/refresh', rateLimitAuth, async (req: Request, res: Response, next:
     const currentToken = header.slice(7);
     const payload = jwt.verify(currentToken, process.env.JWT_SECRET!, {
       ignoreExpiration: true,
-    }) as { userId: string };
+    }) as { userId: string; exp?: number };
+
+    // Reject tokens expired more than 24 hours ago
+    if (payload.exp) {
+      const expiredAgoMs = Date.now() - payload.exp * 1000;
+      if (expiredAgoMs > 24 * 60 * 60 * 1000) {
+        throw new UnauthorizedError('Token too old to refresh. Please sign in again.');
+      }
+    }
+
+    const user = await db.getOne<{ status: string }>('SELECT status FROM users WHERE id = $1', [payload.userId]);
+    if (!user || user.status === 'cancelled') {
+      throw new UnauthorizedError('Account not found or cancelled');
+    }
+
     const token = await issueRefreshToken(payload.userId);
     res.json({ token });
   } catch (err) {

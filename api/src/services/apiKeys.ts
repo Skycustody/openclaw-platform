@@ -130,7 +130,7 @@ export async function injectApiKeys(
     ].join(' && ')
   );
 
-  console.log(`[apiKeys] Proxy key injected for user ${userId} (key=${proxyKey.slice(0, 12)}...)`);
+  console.log(`[apiKeys] Proxy key injected for user ${userId} (key=...${proxyKey.slice(-4)})`);
 }
 
 /**
@@ -138,10 +138,11 @@ export async function injectApiKeys(
  * No API keys are included. Those go through the proxy system.
  */
 export function buildOpenclawConfig(gatewayToken: string): Record<string, any> {
+  const isProd = process.env.NODE_ENV === 'production';
   return {
     gateway: {
       bind: 'lan',
-      controlUi: { enabled: true, allowInsecureAuth: true },
+      controlUi: { enabled: true, ...(isProd ? {} : { allowInsecureAuth: true }) },
       auth: { mode: 'token', token: gatewayToken },
     },
   };

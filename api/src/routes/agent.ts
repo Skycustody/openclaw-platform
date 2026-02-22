@@ -388,9 +388,19 @@ router.get('/logs', requireActiveSubscription, async (req: AuthRequest, res: Res
     const server = await db.getOne<Server>('SELECT * FROM servers WHERE id = $1', [user.server_id]);
     if (!server) return res.json({ logs: '' });
 
-    const lines = parseInt(req.query.lines as string) || 100;
+    const lines = Math.min(parseInt(req.query.lines as string) || 100, 500);
     const containerName = user.container_name || `openclaw-${req.userId}`;
     const result = await sshExec(server.ip, `docker logs --tail ${lines} ${containerName} 2>&1`);
+
+    // Redact secrets from log output
+    result.stdout = result.stdout
+      .replace(/sk-[a-zA-Z0-9]{20,}/g, '[REDACTED]')
+      .replace(/val_sk_[a-zA-Z0-9]+/g, '[REDACTED]')
+      .replace(/INTERNAL_SECRET=[^\s]+/g, 'INTERNAL_SECRET=[REDACTED]')
+      .replace(/CONTAINER_SECRET=[^\s]+/g, 'CONTAINER_SECRET=[REDACTED]')
+      .replace(/GATEWAY_TOKEN=[^\s]+/g, 'GATEWAY_TOKEN=[REDACTED]')
+      .replace(/OPENAI_API_KEY=[^\s]+/g, 'OPENAI_API_KEY=[REDACTED]')
+      .replace(/ANTHROPIC_API_KEY=[^\s]+/g, 'ANTHROPIC_API_KEY=[REDACTED]');
 
     res.json({ logs: result.stdout });
   } catch (err) {

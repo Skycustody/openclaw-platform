@@ -13,7 +13,6 @@ const ENC_KEY = process.env.ENCRYPTION_KEY;
 const ENC_ALGO = 'aes-256-gcm';
 
 function encrypt(text: string): string {
-  const key = crypto.scryptSync(ENC_KEY, crypto.randomBytes(16).toString('hex'), 32);
   const iv = crypto.randomBytes(16);
   const salt = crypto.randomBytes(16);
   const derivedKey = crypto.scryptSync(ENC_KEY, salt, 32);
@@ -121,6 +120,22 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
 router.put('/personality', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { agentName, agentTone, responseLength, language, customInstructions } = req.body;
+
+    if (agentName !== undefined && (typeof agentName !== 'string' || agentName.length > 100)) {
+      return res.status(400).json({ error: 'Agent name must be a string under 100 characters' });
+    }
+    if (agentTone !== undefined && (typeof agentTone !== 'string' || agentTone.length > 50)) {
+      return res.status(400).json({ error: 'Invalid agent tone' });
+    }
+    if (responseLength !== undefined && (typeof responseLength !== 'string' || responseLength.length > 20)) {
+      return res.status(400).json({ error: 'Invalid response length' });
+    }
+    if (language !== undefined && (typeof language !== 'string' || language.length > 50)) {
+      return res.status(400).json({ error: 'Invalid language' });
+    }
+    if (customInstructions !== undefined && (typeof customInstructions !== 'string' || customInstructions.length > 5000)) {
+      return res.status(400).json({ error: 'Custom instructions must be under 5000 characters' });
+    }
 
     await db.query(
       `UPDATE user_settings

@@ -6,6 +6,7 @@
  * Files placed here are accessible to the agent via its file tools.
  */
 import { Router, Response, NextFunction } from 'express';
+import path from 'path';
 import { AuthRequest, authenticate, requireActiveSubscription } from '../middleware/auth';
 import { getUserContainer } from '../services/containerConfig';
 import { sshExec } from '../services/ssh';
@@ -15,6 +16,33 @@ router.use(authenticate);
 router.use(requireActiveSubscription);
 
 const INSTANCE_DIR = '/opt/openclaw/instances';
+const MAX_UPLOAD_SIZE_B64 = 10_000_000; // ~7.5MB decoded
+const MAX_FILENAME_LENGTH = 255;
+const BASE64_RE = /^[A-Za-z0-9+/\n\r]+=*$/;
+const UUID_RE = /^[a-f0-9\-]{36}$/;
+
+/** Escape a string for safe use inside single-quoted shell arguments. */
+function shellEscape(s: string): string {
+  return s.replace(/'/g, "'\\''");
+}
+
+/**
+ * Resolve and validate a filename within the user's workspace.
+ * Prevents path traversal by resolving to an absolute path and
+ * confirming it stays within the workspace directory.
+ */
+function resolveWorkspacePath(userId: string, fileName: string): string {
+  if (!UUID_RE.test(userId)) throw new Error('Invalid user ID');
+
+  const wsDir = `${INSTANCE_DIR}/${userId}/workspace`;
+  const decoded = decodeURIComponent(fileName);
+  const resolved = path.resolve(wsDir, decoded);
+
+  if (!resolved.startsWith(wsDir + '/') && resolved !== wsDir) {
+    throw new Error('Path traversal detected');
+  }
+  return resolved;
+}
 
 interface WorkspaceFile {
   name: string;
@@ -39,15 +67,13 @@ function guessMimeType(name: string): string {
 router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { serverIp } = await getUserContainer(req.userId!);
-    const wsDir = `${INSTANCE_DIR}/${req.userId}/workspace`;
+    const wsDir = shellEscape(`${INSTANCE_DIR}/${req.userId}/workspace`);
 
-    // Ensure workspace exists
-    await sshExec(serverIp, `mkdir -p ${wsDir}`);
+    await sshExec(serverIp, `mkdir -p '${wsDir}'`);
 
-    // List files with size and modification time
     const result = await sshExec(
       serverIp,
-      `find ${wsDir} -maxdepth 2 -not -path '*/\\.*' -not -name '.*' -printf '%y %s %T@ %P\\n' 2>/dev/null | head -200`
+      `find '${wsDir}' -maxdepth 2 -not -path '*/\\.*' -not -name '.*' -printf '%y %s %T@ %P\\n' 2>/dev/null | head -200`
     );
 
     const files: WorkspaceFile[] = [];
@@ -65,7 +91,6 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
       });
     }
 
-    // Sort: directories first, then by modified time descending
     files.sort((a, b) => {
       if (a.type !== b.type) return a.type === 'directory' ? -1 : 1;
       return new Date(b.modified).getTime() - new Date(a.modified).getTime();
@@ -86,17 +111,15 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
   }
 });
 
-// Download / read file content
 router.get('/:fileName/download', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { serverIp } = await getUserContainer(req.userId!);
-    const fileName = decodeURIComponent(req.params.fileName as string);
-    const safeFile = fileName.replace(/\.\./g, '').replace(/^\//, '');
-    const filePath = `${INSTANCE_DIR}/${req.userId}/workspace/${safeFile}`;
+    const filePath = resolveWorkspacePath(req.userId!, req.params.fileName as string);
+    const escaped = shellEscape(filePath);
 
     const result = await sshExec(
       serverIp,
-      `test -f '${filePath}' && base64 '${filePath}' || echo 'FILE_NOT_FOUND'`
+      `test -f '${escaped}' && base64 '${escaped}' || echo 'FILE_NOT_FOUND'`
     );
 
     if (result.stdout.trim() === 'FILE_NOT_FOUND') {
@@ -104,17 +127,19 @@ router.get('/:fileName/download', async (req: AuthRequest, res: Response, next: 
     }
 
     const content = Buffer.from(result.stdout.trim(), 'base64');
-    const mime = guessMimeType(fileName);
+    const safeName = path.basename(filePath).replace(/[^a-zA-Z0-9._\-]/g, '_');
 
-    res.setHeader('Content-Type', mime);
-    res.setHeader('Content-Disposition', `attachment; filename="${safeFile.split('/').pop()}"`);
+    res.setHeader('Content-Type', guessMimeType(filePath));
+    res.setHeader('Content-Disposition', `attachment; filename="${safeName}"`);
     res.send(content);
-  } catch (err) {
+  } catch (err: any) {
+    if (err.message === 'Path traversal detected') {
+      return res.status(400).json({ error: 'Invalid file path' });
+    }
     next(err);
   }
 });
 
-// Upload file to workspace
 router.post('/upload', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { serverIp } = await getUserContainer(req.userId!);
@@ -123,27 +148,34 @@ router.post('/upload', async (req: AuthRequest, res: Response, next: NextFunctio
     if (!filename || !content) {
       return res.status(400).json({ error: 'filename and content (base64) are required' });
     }
+    if (typeof filename !== 'string' || filename.length > MAX_FILENAME_LENGTH) {
+      return res.status(400).json({ error: 'Invalid filename' });
+    }
+    if (typeof content !== 'string' || content.length > MAX_UPLOAD_SIZE_B64) {
+      return res.status(400).json({ error: 'File too large (max ~7.5MB)' });
+    }
+    if (!BASE64_RE.test(content.replace(/\s/g, ''))) {
+      return res.status(400).json({ error: 'Content must be valid base64' });
+    }
 
     const safeFilename = filename.replace(/\.\./g, '').replace(/^\//, '').replace(/[^a-zA-Z0-9._\-\/]/g, '_');
-    const wsDir = `${INSTANCE_DIR}/${req.userId}/workspace`;
-    const filePath = `${wsDir}/${safeFilename}`;
+    const filePath = resolveWorkspacePath(req.userId!, safeFilename);
+    const escaped = shellEscape(filePath);
+    const parentDir = shellEscape(path.dirname(filePath));
+    const escapedContent = shellEscape(content);
 
-    // Ensure parent directory exists
-    const parentDir = filePath.substring(0, filePath.lastIndexOf('/'));
     await sshExec(serverIp, `mkdir -p '${parentDir}'`);
 
-    // Write file
     const result = await sshExec(
       serverIp,
-      `echo '${content}' | base64 -d > '${filePath}'`
+      `echo '${escapedContent}' | base64 -d > '${escaped}'`
     );
 
     if (result.code !== 0) {
       return res.status(500).json({ error: `Failed to write file: ${result.stderr}` });
     }
 
-    // Get file info
-    const stat = await sshExec(serverIp, `stat -c '%s %Y' '${filePath}' 2>/dev/null`);
+    const stat = await sshExec(serverIp, `stat -c '%s %Y' '${escaped}' 2>/dev/null`);
     const [sizeStr, mtimeStr] = (stat.stdout.trim() || '0 0').split(' ');
 
     res.json({
@@ -156,39 +188,42 @@ router.post('/upload', async (req: AuthRequest, res: Response, next: NextFunctio
       },
       message: 'File uploaded to your agent workspace. The agent can now access it.',
     });
-  } catch (err) {
+  } catch (err: any) {
+    if (err.message === 'Path traversal detected') {
+      return res.status(400).json({ error: 'Invalid file path' });
+    }
     next(err);
   }
 });
 
-// Delete file from workspace
 router.delete('/:fileName', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { serverIp } = await getUserContainer(req.userId!);
-    const fileName = decodeURIComponent(req.params.fileName as string);
-    const safeFile = fileName.replace(/\.\./g, '').replace(/^\//, '');
+    const filePath = resolveWorkspacePath(req.userId!, req.params.fileName as string);
+    const baseName = path.basename(filePath);
 
-    // Prevent deleting critical OpenClaw files
-    const protected_files = ['SOUL.md', 'AGENTS.md', 'USER.md', 'IDENTITY.md'];
-    if (protected_files.includes(safeFile)) {
+    const protectedFiles = ['SOUL.md', 'AGENTS.md', 'USER.md', 'IDENTITY.md'];
+    if (protectedFiles.includes(baseName)) {
       return res.status(403).json({ error: 'Cannot delete OpenClaw system files' });
     }
 
-    const filePath = `${INSTANCE_DIR}/${req.userId}/workspace/${safeFile}`;
-    await sshExec(serverIp, `rm -f '${filePath}'`);
+    const escaped = shellEscape(filePath);
+    await sshExec(serverIp, `rm -f '${escaped}'`);
     res.json({ ok: true });
-  } catch (err) {
+  } catch (err: any) {
+    if (err.message === 'Path traversal detected') {
+      return res.status(400).json({ error: 'Invalid file path' });
+    }
     next(err);
   }
 });
 
-// Workspace storage usage
 router.get('/usage', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { serverIp } = await getUserContainer(req.userId!);
-    const wsDir = `${INSTANCE_DIR}/${req.userId}/workspace`;
+    const wsDir = shellEscape(`${INSTANCE_DIR}/${req.userId}/workspace`);
 
-    const result = await sshExec(serverIp, `du -sb ${wsDir} 2>/dev/null || echo '0'`);
+    const result = await sshExec(serverIp, `du -sb '${wsDir}' 2>/dev/null || echo '0'`);
     const usedBytes = parseInt(result.stdout.split('\t')[0]) || 0;
 
     res.json({ usedBytes });

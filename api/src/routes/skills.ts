@@ -65,6 +65,9 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
 router.put('/:toolName', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const toolName = req.params.toolName as string;
+    if (!toolName || /^(__proto__|constructor|prototype)$/.test(toolName) || !/^[a-zA-Z0-9_\-.:]+$/.test(toolName)) {
+      return res.status(400).json({ error: 'Invalid tool name' });
+    }
     const { enabled, settings } = req.body;
 
     const { serverIp, containerName } = await getUserContainer(req.userId!);
@@ -92,6 +95,9 @@ router.put('/:toolName', async (req: AuthRequest, res: Response, next: NextFunct
 router.delete('/:toolName', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const toolName = req.params.toolName as string;
+    if (!toolName || /^(__proto__|constructor|prototype)$/.test(toolName) || !/^[a-zA-Z0-9_\-.:]+$/.test(toolName)) {
+      return res.status(400).json({ error: 'Invalid tool name' });
+    }
 
     const { serverIp, containerName } = await getUserContainer(req.userId!);
     const config = await readContainerConfig(serverIp, req.userId!);

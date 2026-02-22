@@ -101,6 +101,9 @@ io.on('connection', (socket) => {
 app.set('io', io);
 
 // ── Middleware ──
+// Trust the first reverse proxy (nginx/Cloudflare) for req.ip
+app.set('trust proxy', 1);
+
 // Raw body for Stripe webhooks
 app.use('/webhooks/stripe', express.raw({ type: 'application/json' }));
 

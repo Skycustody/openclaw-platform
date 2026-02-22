@@ -63,11 +63,19 @@ export async function sleepContainer(user: User & { server_ip?: string }): Promi
 }
 
 export async function wakeContainer(userId: string): Promise<void> {
-  const user = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [userId]);
-  if (!user) throw new Error(`User not found: ${userId}`);
-  if (user.status === 'active') return; // Already awake
-  if (user.status === 'cancelled' || user.status === 'paused') {
-    throw new Error(`Cannot wake ${user.status} container`);
+  // Atomic status transition: only proceed if currently sleeping
+  const user = await db.getOne<User>(
+    `UPDATE users SET status = 'active' WHERE id = $1 AND status = 'sleeping' RETURNING *`,
+    [userId]
+  );
+  if (!user) {
+    const current = await db.getOne<User>('SELECT status FROM users WHERE id = $1', [userId]);
+    if (!current) throw new Error(`User not found: ${userId}`);
+    if (current.status === 'active') return;
+    if (current.status === 'cancelled' || current.status === 'paused') {
+      throw new Error(`Cannot wake ${current.status} container`);
+    }
+    return; // Already being woken by another request
   }
 
   const server = await db.getOne<Server>('SELECT * FROM servers WHERE id = $1', [user.server_id]);

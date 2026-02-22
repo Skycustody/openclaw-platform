@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import db from '../lib/db';
 import { sshExec, waitForReady } from './ssh';
 import { findBestServer, updateServerRam } from './serverRegistry';
@@ -6,6 +7,13 @@ import { sendWelcomeEmail } from './email';
 import { cloudflareDNS } from './cloudflare';
 import { v4 as uuid } from 'uuid';
 import { buildOpenclawConfig, injectApiKeys, ensureProxyKey } from './apiKeys';
+
+/** Generate a per-container secret bound to a specific userId. */
+export function generateContainerSecret(userId: string): string {
+  const secret = process.env.INTERNAL_SECRET;
+  if (!secret) throw new Error('INTERNAL_SECRET required');
+  return crypto.createHmac('sha256', secret).update(userId).digest('hex');
+}
 
 interface ProvisionParams {
   userId: string;
@@ -76,8 +84,11 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
   // Remove any existing container with same name first
   await sshExec(server.ip, `docker rm -f ${containerName} 2>/dev/null || true`);
 
-  // Ensure Docker network and Traefik reverse proxy are running on the worker
+  // Ensure shared Traefik network exists (Traefik connects to each user's network)
   await sshExec(server.ip, `docker network create openclaw-net 2>/dev/null || true`);
+
+  // Per-user isolated network (containers can't see each other)
+  await sshExec(server.ip, `docker network create ${containerName}-net 2>/dev/null || true`);
   // Always verify Traefik has DOCKER_API_VERSION set; recreate if missing
   const traefikCheck = await sshExec(server.ip, `docker inspect traefik --format='{{.State.Running}}' 2>/dev/null`).catch(() => null);
   const traefikEnvCheck = await sshExec(server.ip, `docker inspect traefik --format='{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null`).catch(() => null);
@@ -118,7 +129,7 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
   if (!internalSecret) throw new Error('INTERNAL_SECRET env var is required');
 
   // Generate gateway auth token early so it goes into the config JSON
-  const gatewayToken = uuid().replace(/-/g, '') + uuid().replace(/-/g, '').slice(0, 16);
+  const gatewayToken = crypto.randomBytes(32).toString('hex');
   await db.query(
     `UPDATE users SET gateway_token = $1 WHERE id = $2`,
     [gatewayToken, userId]
@@ -161,7 +172,7 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
     console.log(`[provision] Image ${image} not on ${server.ip} — building it now`);
     const dockerfile = [
       'FROM node:22-slim',
-      'RUN apt-get update && apt-get install -y curl git python3 make g++ libopus-dev && rm -rf /var/lib/apt/lists/*',
+      'RUN apt-get update && apt-get install -y curl git python3 make g++ && rm -rf /var/lib/apt/lists/*',
       'RUN npm install -g openclaw@latest',
       'WORKDIR /data',
       'EXPOSE 18789',
@@ -199,14 +210,15 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
     `--name ${containerName}`,
     '--restart unless-stopped',
     '--no-healthcheck',
-    '--network openclaw-net',
+    `--network ${containerName}-net`,
+    '--pids-limit 256',
     `--memory ${limits.ramMb}m`,
     `--memory-swap ${limits.ramMb}m`,
     `--cpus ${limits.cpus}`,
     `-e "NODE_OPTIONS=--max-old-space-size=${heapMb}"`,
     `-e USER_ID=${userId}`,
     `-e PLATFORM_API=${apiUrl}`,
-    `-e INTERNAL_SECRET=${internalSecret}`,
+    `-e CONTAINER_SECRET=${generateContainerSecret(userId)}`,
     `-e "BROWSERLESS_URL=wss://production-sfo.browserless.io?token=${browserlessToken}"`,
     `-e OPENCLAW_GATEWAY_TOKEN=${gatewayToken}`,
     `-e OPENAI_API_KEY=${proxyKey}`,
@@ -238,6 +250,9 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
   }
 
   console.log(`[provision] Container ${containerName} started: ${runResult.stdout.slice(0, 20)}`);
+
+  // Connect Traefik to this user's network so it can route to the container
+  await sshExec(server.ip, `docker network connect ${containerName}-net traefik 2>/dev/null || true`);
 
   // Step 6: Quick alive check — give the container 5s to start, then verify
   await new Promise(r => setTimeout(r, 5000));
@@ -337,11 +352,11 @@ export async function updateContainerConfig(userId: string, config: Record<strin
   const server = await db.getOne<any>('SELECT * FROM servers WHERE id = $1', [user.server_id]);
   if (!server) throw new Error('Server not found');
 
-  const configJson = JSON.stringify(config).replace(/"/g, '\\"');
   const containerName = user.container_name || `openclaw-${userId}`;
+  const configB64 = Buffer.from(JSON.stringify(config)).toString('base64');
 
   await sshExec(
     server.ip,
-    `docker exec ${containerName} sh -c 'echo "${configJson}" | openclaw config merge -'`
+    `echo '${configB64}' | base64 -d | docker exec -i ${containerName} openclaw config merge -`
   );
 }

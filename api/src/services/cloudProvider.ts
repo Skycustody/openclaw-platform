@@ -102,7 +102,8 @@ class CloudProvider {
     const hostname = `openclaw-worker-${Date.now()}`;
 
     const apiUrl = process.env.API_URL || 'https://api.yourdomain.com';
-    const internalSecret = process.env.INTERNAL_SECRET || 'changeme';
+    const internalSecret = process.env.INTERNAL_SECRET;
+    if (!internalSecret) throw new Error('INTERNAL_SECRET is required for worker provisioning');
     const adminEmail = process.env.EMAIL_FROM?.replace('noreply@', '') || 'admin@yourdomain.com';
     const sshPubKey = process.env.WORKER_SSH_PUBLIC_KEY || '';
 

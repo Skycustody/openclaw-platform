@@ -80,14 +80,12 @@ export async function requireAdmin(req: AuthRequest, _res: Response, next: NextF
       throw new UnauthorizedError('Authentication required');
     }
 
-    // IP allowlist check
+    // IP allowlist check — use req.ip (respects Express trust proxy)
     const allowedIps = (process.env.ADMIN_ALLOWED_IPS || '').split(',').map(s => s.trim()).filter(Boolean);
     if (allowedIps.length > 0) {
-      const clientIp = req.headers['x-forwarded-for']?.toString().split(',')[0]?.trim()
-        || req.socket.remoteAddress || '';
-      const normalizedIp = clientIp.replace('::ffff:', '');
-      if (!allowedIps.includes(normalizedIp) && !allowedIps.includes(clientIp)) {
-        console.warn(`[admin] Blocked IP: ${clientIp} (allowed: ${allowedIps.join(', ')})`);
+      const clientIp = (req.ip || req.socket.remoteAddress || '').replace('::ffff:', '');
+      if (!allowedIps.some(allowed => allowed === clientIp)) {
+        console.warn(`[admin] Blocked IP: ${clientIp}`);
         const err: any = new Error('Access denied from this IP');
         err.statusCode = 403;
         return next(err);

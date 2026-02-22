@@ -11,13 +11,20 @@ let provisionInProgress: Promise<Server> | null = null;
 
 export async function findBestServer(requiredRamMb = 2048): Promise<Server> {
   const cpIp = controlPlaneIp();
+
+  // Atomically reserve RAM on the best server to prevent double-booking
   let server = await db.getOne<Server>(
-    `SELECT * FROM servers
-     WHERE status = 'active'
-       AND (ram_total - ram_used) >= $1
-       AND ($2::text IS NULL OR ip != $2)
-     ORDER BY ram_used DESC
-     LIMIT 1`,
+    `UPDATE servers SET ram_used = ram_used + $1
+     WHERE id = (
+       SELECT id FROM servers
+       WHERE status = 'active'
+         AND (ram_total - ram_used) >= $1
+         AND ($2::text IS NULL OR ip != $2)
+       ORDER BY ram_used DESC
+       LIMIT 1
+       FOR UPDATE SKIP LOCKED
+     )
+     RETURNING *`,
     [requiredRamMb, cpIp]
   );
 
@@ -34,12 +41,17 @@ export async function findBestServer(requiredRamMb = 2048): Promise<Server> {
   provisionInProgress = (async () => {
     try {
       server = await db.getOne<Server>(
-        `SELECT * FROM servers
-         WHERE status = 'active'
-           AND (ram_total - ram_used) >= $1
-           AND ($2::text IS NULL OR ip != $2)
-         ORDER BY ram_used DESC
-         LIMIT 1`,
+        `UPDATE servers SET ram_used = ram_used + $1
+         WHERE id = (
+           SELECT id FROM servers
+           WHERE status = 'active'
+             AND (ram_total - ram_used) >= $1
+             AND ($2::text IS NULL OR ip != $2)
+           ORDER BY ram_used DESC
+           LIMIT 1
+           FOR UPDATE SKIP LOCKED
+         )
+         RETURNING *`,
         [requiredRamMb, cpIp]
       );
       if (server) return server;
