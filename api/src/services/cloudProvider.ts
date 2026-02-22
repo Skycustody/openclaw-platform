@@ -117,7 +117,7 @@ class CloudProvider {
       throw new Error('HETZNER_API_TOKEN not set. Get one from https://console.hetzner.cloud → project → API tokens');
     }
 
-    const serverType = process.env.HETZNER_SERVER_TYPE || 'cpx42';
+    const serverType = process.env.HETZNER_SERVER_TYPE || 'ccx33';
     const location = process.env.HETZNER_LOCATION || 'nbg1';
     const hostname = `openclaw-worker-${Date.now()}`;
 
