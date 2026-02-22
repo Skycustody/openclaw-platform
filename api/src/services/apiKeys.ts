@@ -83,16 +83,21 @@ export async function injectApiKeys(
   if (config.models?.providers?.anthropic?.apiKey) delete config.models.providers.anthropic.apiKey;
 
   // Set proxy base URLs so SDKs call our proxy instead of the real provider
+  // OpenClaw expects "baseUrl" (camelCase), NOT "baseURL"
   if (!config.models) config.models = {};
   if (!config.models.providers) config.models.providers = {};
   config.models.providers.openai = {
     ...(config.models.providers.openai || {}),
-    baseURL: baseUrls.openai,
+    baseUrl: baseUrls.openai,
+    models: config.models.providers.openai?.models || ['gpt-4o', 'gpt-4o-mini', 'o3-mini'],
   };
+  delete config.models.providers.openai.baseURL;
   config.models.providers.anthropic = {
     ...(config.models.providers.anthropic || {}),
-    baseURL: baseUrls.anthropic,
+    baseUrl: baseUrls.anthropic,
+    models: config.models.providers.anthropic?.models || ['claude-sonnet-4-20250514', 'claude-3-5-haiku-20241022'],
   };
+  delete config.models.providers.anthropic.baseURL;
 
   const configB64 = Buffer.from(JSON.stringify(config, null, 2)).toString('base64');
   await sshExec(
