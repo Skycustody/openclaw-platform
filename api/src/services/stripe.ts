@@ -80,12 +80,12 @@ export async function createCreditCheckoutSession(
   stripeCustomerId?: string,
 ): Promise<string> {
   const packInfo = CREDIT_PACKS[pack];
-  if (!packInfo) throw new Error(`Invalid token pack: ${pack}. Valid packs: ${Object.keys(CREDIT_PACKS).join(', ')}`);
+  if (!packInfo) throw new Error(`Invalid credit pack: ${pack}. Valid packs: ${Object.keys(CREDIT_PACKS).join(', ')}`);
 
   const priceId = process.env[packInfo.envKey];
   if (!priceId) {
     throw new Error(
-      `Token pack not configured. Set ${packInfo.envKey} in your .env file with the Stripe price ID.`
+      `Credit pack not configured. Set ${packInfo.envKey} in your .env file with the Stripe price ID.`
     );
   }
 
@@ -190,7 +190,7 @@ async function handleCreditPurchase(session: Stripe.Checkout.Session): Promise<v
 
   await addCreditsToKey(userId, orBudgetIncrease);
 
-  console.log(`[stripe] Top-up: user=${userId} pack=${packInfo.label} tokens=${packInfo.tokens} orBudget=$${orBudgetIncrease}`);
+  console.log(`[stripe] Top-up: user=${userId} pack=${packInfo.label} orBudget=$${orBudgetIncrease}`);
 }
 
 async function handleSubscriptionCancelled(subscription: Stripe.Subscription): Promise<void> {

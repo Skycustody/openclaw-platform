@@ -41,10 +41,10 @@ interface Invoice {
 type TabId = 'overview' | 'billing';
 
 const TOPUP_PACKS = [
-  { id: '500k',  price: '€5',  tokens: '500K',  desc: 'Quick tasks & chats' },
-  { id: '1200k', price: '€10', tokens: '1.2M',  desc: 'Research & writing' },
-  { id: '3500k', price: '€20', tokens: '3.5M',  desc: 'Heavy workflows' },
-  { id: '8m',    price: '€40', tokens: '8M',    desc: 'Power user pack' },
+  { id: '500k',  price: '€5',  desc: 'Quick tasks & chats' },
+  { id: '1200k', price: '€10', desc: 'Research & writing' },
+  { id: '3500k', price: '€25', desc: 'Heavy workflows' },
+  { id: '8m',    price: '€50', desc: 'Power user pack' },
 ];
 
 export default function TokensPage() {
@@ -193,8 +193,7 @@ export default function TokensPage() {
                   className="flex flex-col items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.02] p-5 hover:border-indigo-500/30 hover:bg-indigo-500/[0.04] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <span className="text-[24px] font-bold text-white">{pack.price}</span>
-                  <span className="text-[15px] font-semibold text-emerald-400">+{pack.tokens} tokens</span>
-                  <span className="text-[11px] text-white/30">{pack.desc}</span>
+                  <span className="text-[13px] text-white/50">{pack.desc}</span>
                   {buyingPack === pack.id ? (
                     <Loader2 className="h-4 w-4 animate-spin text-indigo-400 mt-1" />
                   ) : (
@@ -204,7 +203,7 @@ export default function TokensPage() {
               ))}
             </div>
             <p className="mt-4 text-[11px] text-white/20">
-              One-time purchase. Tokens never expire and carry over every month. Smart routing stretches your tokens further.
+              One-time purchase. Credits never expire and carry over every month. Smart routing stretches your credits further.
             </p>
           </Card>
 

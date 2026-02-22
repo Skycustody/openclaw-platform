@@ -86,7 +86,7 @@ router.post('/buy-credits', async (req: AuthRequest, res: Response, next: NextFu
   try {
     const { pack } = req.body as { pack?: string };
     if (!pack || !CREDIT_PACKS[pack]) {
-      throw new BadRequestError(`Invalid token pack. Choose one of: ${Object.keys(CREDIT_PACKS).join(', ')}`);
+      throw new BadRequestError(`Invalid credit pack. Choose one of: ${Object.keys(CREDIT_PACKS).join(', ')}`);
     }
 
     const user = await db.getOne<User>('SELECT id, email, stripe_customer_id FROM users WHERE id = $1', [req.userId]);

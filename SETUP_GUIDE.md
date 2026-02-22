@@ -620,10 +620,10 @@ These are one-time purchases (not subscriptions) for users who want to buy extra
 
 | Product Name | Price | Save Price ID As |
 |-------------|-------|-----------------|
-| 500K Tokens | $5.00 (one time) | `STRIPE_PRICE_TOKENS_500K` |
-| 1.2M Tokens | $10.00 (one time) | `STRIPE_PRICE_TOKENS_1200K` |
-| 3.5M Tokens | $25.00 (one time) | `STRIPE_PRICE_TOKENS_3500K` |
-| 8M Tokens | $50.00 (one time) | `STRIPE_PRICE_TOKENS_8M` |
+| €5 Credits  | €5.00 (one time)  | `STRIPE_PRICE_CREDITS_500K`  |
+| €10 Credits | €10.00 (one time) | `STRIPE_PRICE_CREDITS_1200K` |
+| €25 Credits | €25.00 (one time) | `STRIPE_PRICE_CREDITS_3500K` |
+| €50 Credits | €50.00 (one time) | `STRIPE_PRICE_CREDITS_8M`    |
 
 For each product: "+ Add product" → set name, set price as "one time", save, then copy the Price ID.
 
@@ -872,10 +872,10 @@ STRIPE_WEBHOOK_SECRET=whsec_FILL_THIS_IN_STEP_20
 STRIPE_PRICE_STARTER=price_YOUR_STARTER_ID
 STRIPE_PRICE_PRO=price_YOUR_PRO_ID
 STRIPE_PRICE_BUSINESS=price_YOUR_BUSINESS_ID
-STRIPE_PRICE_TOKENS_500K=price_YOUR_500K_ID
-STRIPE_PRICE_TOKENS_1200K=price_YOUR_1200K_ID
-STRIPE_PRICE_TOKENS_3500K=price_YOUR_3500K_ID
-STRIPE_PRICE_TOKENS_8M=price_YOUR_8M_ID
+STRIPE_PRICE_CREDITS_500K=price_YOUR_500K_ID
+STRIPE_PRICE_CREDITS_1200K=price_YOUR_1200K_ID
+STRIPE_PRICE_CREDITS_3500K=price_YOUR_3500K_ID
+STRIPE_PRICE_CREDITS_8M=price_YOUR_8M_ID
 
 # ── AI Keys ──
 OPENAI_API_KEY=sk-YOUR_OPENAI_KEY
