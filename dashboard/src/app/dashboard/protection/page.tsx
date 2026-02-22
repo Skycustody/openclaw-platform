@@ -93,17 +93,17 @@ export default function ProtectionPage() {
           <div className="rounded-2xl bg-white/[0.06] p-3">
             <Shield className="h-6 w-6 text-white/40" />
           </div>
-          <h1 className="text-[28px] font-bold text-white tracking-tight">Protect Your Tokens</h1>
+          <h1 className="text-[28px] font-bold text-white tracking-tight">Protect Your Budget</h1>
         </div>
         <p className="text-[15px] text-white/50 ml-[52px]">
-          Stop your agent from using too many tokens accidentally.
+          Stop your agent from overspending accidentally.
         </p>
       </div>
 
       <Card className="animate-fade-up">
-        <CardTitle>Token limits per task type</CardTitle>
+        <CardTitle>Budget limits per task type</CardTitle>
         <CardDescription>
-          Set how many tokens your agent can use for different kinds of tasks
+          Set spending limits for different kinds of tasks
         </CardDescription>
         <div className="mt-6 space-y-8">
           <Slider
@@ -113,7 +113,7 @@ export default function ProtectionPage() {
             min={100}
             max={5000}
             step={100}
-            valueLabel={`${settings.tokenBudgets.simple.toLocaleString()} tokens`}
+            valueLabel={`${settings.tokenBudgets.simple.toLocaleString()} tokens max`}
             hint={tokensToCents(settings.tokenBudgets.simple) + ' per task'}
           />
           <hr className="glass-divider" />
@@ -124,7 +124,7 @@ export default function ProtectionPage() {
             min={1000}
             max={30000}
             step={500}
-            valueLabel={`${settings.tokenBudgets.medium.toLocaleString()} tokens`}
+            valueLabel={`${settings.tokenBudgets.medium.toLocaleString()} tokens max`}
             hint={tokensToCents(settings.tokenBudgets.medium) + ' per task'}
           />
           <hr className="glass-divider" />
@@ -135,7 +135,7 @@ export default function ProtectionPage() {
             min={5000}
             max={100000}
             step={1000}
-            valueLabel={`${settings.tokenBudgets.complex.toLocaleString()} tokens`}
+            valueLabel={`${settings.tokenBudgets.complex.toLocaleString()} tokens max`}
             hint={tokensToCents(settings.tokenBudgets.complex) + ' per task'}
           />
         </div>
@@ -143,7 +143,7 @@ export default function ProtectionPage() {
 
       <Card className="animate-fade-up">
         <CardTitle>If a task hits its limit</CardTitle>
-        <CardDescription>What should your agent do when it reaches the token limit?</CardDescription>
+        <CardDescription>What should your agent do when it reaches the budget limit?</CardDescription>
         <div className="mt-5 space-y-3">
           {LIMIT_OPTIONS.map((opt) => {
             const selected = settings.limitBehavior === opt.id;
@@ -244,7 +244,7 @@ export default function ProtectionPage() {
           <AlertTriangle className="h-5 w-5 text-red-400" />
           <div>
             <CardTitle>Low Balance Warning</CardTitle>
-            <CardDescription>Get notified when your tokens are running out</CardDescription>
+            <CardDescription>Get notified when your balance is running low</CardDescription>
           </div>
         </div>
         <div className="space-y-4">
@@ -274,8 +274,8 @@ export default function ProtectionPage() {
           <div className="flex items-center gap-3">
             <Zap className="h-5 w-5 text-white/40" />
             <div>
-              <p className="text-[14px] text-white/70">Want tokens to refill automatically?</p>
-              <p className="text-[13px] text-white/40">Set up Auto Top-Up in your token settings</p>
+              <p className="text-[14px] text-white/70">Want your balance to refill automatically?</p>
+              <p className="text-[13px] text-white/40">Set up Auto Top-Up in your balance settings</p>
             </div>
           </div>
           <Button
@@ -283,7 +283,7 @@ export default function ProtectionPage() {
             size="sm"
             onClick={() => window.location.href = '/dashboard/tokens'}
           >
-            Go to Tokens
+            Go to Balance
             <ArrowRight className="h-4 w-4" />
           </Button>
         </div>

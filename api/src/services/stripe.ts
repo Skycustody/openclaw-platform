@@ -2,7 +2,7 @@ import Stripe from 'stripe';
 import db from '../lib/db';
 import { provisionUser, deprovisionUser } from './provisioning';
 import { handlePaymentFailure } from './gracePeriod';
-import { addCreditsToKey, updateKeyLimit, RETAIL_MARKUP, USD_TO_EUR_CENTS, PURCHASE_SPLIT } from './nexos';
+import { addCreditsToKey, updateKeyLimit, RETAIL_MARKUP, USD_TO_EUR_CENTS } from './nexos';
 import { Plan, User, CREDIT_PACKS } from '../types';
 import { v4 as uuid } from 'uuid';
 
@@ -174,9 +174,8 @@ async function handleCreditPurchase(session: Stripe.Checkout.Session): Promise<v
   const packInfo = CREDIT_PACKS[pack];
   if (!packInfo) return;
 
-  // 6/50/44 split: 6% → OpenRouter budget, 50% → platform, 44% → user credit display
-  const purchaseUsd = Math.round((packInfo.priceEurCents / USD_TO_EUR_CENTS) * 100) / 100;
-  const orBudgetIncrease = Math.round(purchaseUsd * PURCHASE_SPLIT.openrouter * 100) / 100;
+  // Pack price / 1.59 = actual OR budget. User sees displayUsd, OR gets orBudgetUsd.
+  const orBudgetIncrease = packInfo.orBudgetUsd;
 
   await db.query(
     `INSERT INTO credit_purchases (user_id, amount_eur_cents, credits_usd, stripe_session_id)
@@ -186,7 +185,7 @@ async function handleCreditPurchase(session: Stripe.Checkout.Session): Promise<v
 
   await addCreditsToKey(userId, orBudgetIncrease);
 
-  console.log(`[stripe] Credit top-up: user=${userId} pack=€${pack} orBudget=$${orBudgetIncrease} (6/50/44 split)`);
+  console.log(`[stripe] Top-up: user=${userId} pack=€${pack} display=$${packInfo.displayUsd} orBudget=$${orBudgetIncrease}`);
 }
 
 async function handleSubscriptionCancelled(subscription: Stripe.Subscription): Promise<void> {

@@ -236,11 +236,12 @@ export interface CreditPurchase {
 }
 
 /**
- * Top-up packs. Revenue split: 6% → OR budget increase, 50% → platform, 44% → margin.
- * `addsUsd` is the dollar amount added to the user's AI balance (the 6% OR portion).
+ * Top-up packs. Pricing: pack USD / 1.59 = actual OR budget increase.
+ * `displayUsd` = what user sees as balance added (EUR→USD conversion).
+ * `orBudgetUsd` = actual OR API limit increase (displayUsd / DISPLAY_FACTOR).
  */
-export const CREDIT_PACKS: Record<string, { priceEurCents: number; label: string; addsUsd: number }> = {
-  '5':  { priceEurCents: 500,  label: '€5 Top-Up',  addsUsd: 0.33  },
-  '10': { priceEurCents: 1000, label: '€10 Top-Up', addsUsd: 0.65  },
-  '20': { priceEurCents: 2000, label: '€20 Top-Up', addsUsd: 1.30  },
+export const CREDIT_PACKS: Record<string, { priceEurCents: number; label: string; displayUsd: number; orBudgetUsd: number }> = {
+  '5':  { priceEurCents: 500,  label: '€5 Top-Up',  displayUsd: 5.43,  orBudgetUsd: 3.42  },
+  '10': { priceEurCents: 1000, label: '€10 Top-Up', displayUsd: 10.87, orBudgetUsd: 6.84  },
+  '20': { priceEurCents: 2000, label: '€20 Top-Up', displayUsd: 21.74, orBudgetUsd: 13.67 },
 };

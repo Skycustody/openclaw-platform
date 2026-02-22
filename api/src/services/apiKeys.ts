@@ -87,16 +87,16 @@ const OPENROUTER_MODELS = [
  */
 const PLAN_MODEL_CONFIG: Record<Plan, { primary: string; fallbacks: string[] }> = {
   starter: {
-    primary: 'openrouter/openai/gpt-4o-mini',
-    fallbacks: ['openrouter/google/gemini-2.0-flash-001', 'openrouter/anthropic/claude-3.5-haiku'],
+    primary: 'openai/gpt-4o-mini',
+    fallbacks: ['google/gemini-2.0-flash-001', 'anthropic/claude-3.5-haiku'],
   },
   pro: {
-    primary: 'openrouter/anthropic/claude-sonnet-4-20250514',
-    fallbacks: ['openrouter/openai/gpt-4o', 'openrouter/openai/gpt-4o-mini', 'openrouter/google/gemini-2.0-flash-001'],
+    primary: 'anthropic/claude-sonnet-4-20250514',
+    fallbacks: ['openai/gpt-4o', 'openai/gpt-4o-mini', 'google/gemini-2.0-flash-001'],
   },
   business: {
-    primary: 'openrouter/anthropic/claude-sonnet-4-20250514',
-    fallbacks: ['openrouter/openai/gpt-4.1', 'openrouter/openai/gpt-4o', 'openrouter/openai/gpt-4o-mini', 'openrouter/google/gemini-2.0-flash-001'],
+    primary: 'anthropic/claude-sonnet-4-20250514',
+    fallbacks: ['openai/gpt-4.1', 'openai/gpt-4o', 'openai/gpt-4o-mini', 'google/gemini-2.0-flash-001'],
   },
 };
 
@@ -137,35 +137,29 @@ export async function injectApiKeys(
     config = {};
   }
 
-  // Remove legacy providers (old proxy, old nexos, direct openai/anthropic)
-  if (config.models?.providers?.openai) delete config.models.providers.openai;
-  if (config.models?.providers?.anthropic) delete config.models.providers.anthropic;
-  if (config.models?.providers?.nexos) delete config.models.providers.nexos;
-  if (config.models?.providers?.['openai-proxy']) delete config.models.providers['openai-proxy'];
-  if (config.models?.providers?.['anthropic-proxy']) delete config.models.providers['anthropic-proxy'];
+  // Remove legacy custom providers — OpenRouter is a built-in provider,
+  // it only needs OPENROUTER_API_KEY env var (set on docker run).
+  if (config.models?.providers) {
+    delete config.models.providers.openai;
+    delete config.models.providers.anthropic;
+    delete config.models.providers.nexos;
+    delete config.models.providers['openai-proxy'];
+    delete config.models.providers['anthropic-proxy'];
+    delete config.models.providers.openrouter;
+  }
 
-  if (!config.models) config.models = {};
-  config.models.mode = 'merge';
-  if (!config.models.providers) config.models.providers = {};
+  // Set the API key in config.env so OpenClaw picks it up as built-in provider
+  if (!config.env) config.env = {};
+  config.env.OPENROUTER_API_KEY = apiKey;
 
-  // OpenRouter is OpenAI-compatible — "openai-chat" api type works.
-  // Model IDs use "provider/model" format (e.g. "anthropic/claude-sonnet-4-20250514")
-  config.models.providers.openrouter = {
-    baseUrl: OPENROUTER_BASE_URL,
-    apiKey,
-    api: 'openai-chat',
-    models: OPENROUTER_MODELS,
-  };
-
-  // Configure OpenClaw's built-in multi-model router per plan tier.
-  // Cheaper plans get cheaper default models; fallbacks descend to
-  // the cheapest available so API spend stays low.
   const modelConfig = PLAN_MODEL_CONFIG[plan] || PLAN_MODEL_CONFIG.starter;
 
   if (!config.agents) config.agents = {};
   if (!config.agents.defaults) config.agents.defaults = {};
-  config.agents.defaults.model = { primary: modelConfig.primary };
-  config.agents.defaults.fallbacks = modelConfig.fallbacks;
+  config.agents.defaults.model = {
+    primary: modelConfig.primary,
+    fallbacks: modelConfig.fallbacks,
+  };
 
   const configB64 = Buffer.from(JSON.stringify(config, null, 2)).toString('base64');
   await sshExec(

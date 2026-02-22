@@ -45,7 +45,7 @@ const features = [
   },
   {
     icon: Shield,
-    title: 'Token Protection',
+    title: 'Budget Protection',
     desc: 'Smart budgets prevent surprise costs. You stay in control.',
   },
   {
@@ -64,10 +64,10 @@ const plans = [
   {
     name: 'Starter',
     price: 10,
-    tokens: '500K',
+    tokens: '$3.18',
     features: [
       'Personal AI agent',
-      '500K tokens/month',
+      '$3.18/mo AI budget',
       '10 skills',
       'Telegram only',
       'Email support',
@@ -77,10 +77,10 @@ const plans = [
     name: 'Pro',
     price: 20,
     popular: true,
-    tokens: '1.5M',
+    tokens: '$11.13',
     features: [
       'Everything in Starter',
-      '1.5M tokens/month',
+      '$11.13/mo AI budget',
       'All 53 skills',
       'All messaging apps',
       'Browser access',
@@ -90,11 +90,10 @@ const plans = [
   {
     name: 'Business',
     price: 50,
-    tokens: '5M',
+    tokens: '$19.08',
     features: [
       'Everything in Pro',
-      '5M tokens/month',
-      'Community templates',
+      '$19.08/mo AI budget',
       'Maximum agent power',
       '100 scheduled tasks',
       'Direct support line',
@@ -330,7 +329,7 @@ function PricingSection() {
                   <span className="text-sm text-muted-foreground">/month</span>
                 </p>
                 <p className="mt-1 text-[13px] text-muted-foreground">
-                  {plan.tokens} tokens included
+                  {plan.tokens}/mo AI budget included
                 </p>
                 <ul className="mt-6 flex-1 space-y-3">
                   {plan.features.map((f) => (

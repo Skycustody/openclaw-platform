@@ -2,7 +2,7 @@ import cron from 'node-cron';
 import { runSleepCycle } from '../services/sleepWake';
 import { runDueCronJobs } from '../services/cronScheduler';
 import { checkCapacity } from '../services/serverRegistry';
-import { resetMonthlyAddons } from '../services/nexos';
+
 
 export function startScheduler() {
   // Sleep/wake cycle — every 5 minutes
@@ -38,18 +38,8 @@ export function startScheduler() {
     }
   });
 
-  // Monthly add-on credit reset — 1st of each month at 00:05 UTC
-  // (OpenRouter resets key usage monthly at midnight UTC)
-  cron.schedule('5 0 1 * *', async () => {
-    try {
-      const reset = await resetMonthlyAddons();
-      if (reset.length > 0) {
-        console.log(`Monthly credit reset: ${reset.length} users`);
-      }
-    } catch (err) {
-      console.error('Monthly credit reset error:', err);
-    }
-  });
+  // Purchased credits are permanent — no monthly reset.
+  // This cron is kept as a no-op placeholder for future billing tasks.
 
   console.log('Scheduler started');
 }

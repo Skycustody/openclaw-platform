@@ -670,7 +670,7 @@ export default function AdminPanel() {
               </div>
             </div>
 
-            {/* Extra token purchases */}
+            {/* Extra top-up purchases */}
             <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
               <h3 className="text-[14px] font-semibold text-white mb-4">Extra Top-Up Purchases</h3>
               <div className="grid grid-cols-2 gap-4">

@@ -56,7 +56,15 @@ interface ListKeysResponse {
 /** Retail price multiplier over OpenRouter wholesale cost. 1.5 = 50% margin. */
 export const RETAIL_MARKUP = 1.5;
 
-/** Revenue split for top-up purchases: 6% → OR limit, 50% → platform, 44% → margin. */
+/**
+ * Display markup factor: converts raw OR dollar amounts to "retail" display values.
+ * Formula: OR charges 6% fee → then 50% platform profit on top.
+ * So: base × 1.06 (OR fee) × 1.50 (50% margin) = base × 1.59
+ * User pays $1.59 for every $1.00 of actual OR API budget.
+ */
+export const DISPLAY_FACTOR = 1.59;
+
+/** Revenue split for top-up purchases. */
 export const PURCHASE_SPLIT = { openrouter: 0.06, platform: 0.50, userCredit: 0.44 } as const;
 
 /**
@@ -85,11 +93,11 @@ export const AVG_COST_PER_1M_USD = 1.80;
 export const USD_TO_EUR_CENTS = 92;
 
 export interface OpenRouterUsage {
-  /** Dollar amount spent this billing period */
+  /** Display dollar amount spent (what user "paid for" — scaled by DISPLAY_FACTOR) */
   usedUsd: number;
-  /** Dollar amount remaining (limit - used) */
+  /** Display dollar amount remaining (scaled) */
   remainingUsd: number;
-  /** Total OR limit on this key */
+  /** Display total budget (scaled) */
   limitUsd: number;
   lastUpdated: string;
 }
@@ -250,10 +258,11 @@ export async function getNexosUsage(userId: string): Promise<OpenRouterUsage | n
         if (userKey) {
           const used = userKey.usage_monthly ?? userKey.usage ?? 0;
           const limit = userKey.limit ?? 0;
+          const remaining = Math.max(0, limit - used);
           return {
-            usedUsd: Math.round(used * 100) / 100,
-            remainingUsd: Math.round(Math.max(0, limit - used) * 100) / 100,
-            limitUsd: Math.round(limit * 100) / 100,
+            usedUsd: Math.round(used * DISPLAY_FACTOR * 100) / 100,
+            remainingUsd: Math.round(remaining * DISPLAY_FACTOR * 100) / 100,
+            limitUsd: Math.round(limit * DISPLAY_FACTOR * 100) / 100,
             lastUpdated: new Date().toISOString(),
           };
         }
@@ -329,26 +338,11 @@ export async function addCreditsToKey(userId: string, creditsUsd: number): Promi
 }
 
 /**
- * Reset all add-on credits back to 0 (called on monthly billing cycle).
- * Returns user IDs that were reset so their key limits can be updated.
+ * @deprecated Purchased credits are permanent — they never reset.
+ * Kept as a no-op so existing imports don't break.
  */
 export async function resetMonthlyAddons(): Promise<string[]> {
-  const rows = await db.getMany<{ id: string; plan: string }>(
-    `UPDATE users SET api_budget_addon_usd = 0
-     WHERE api_budget_addon_usd > 0
-     RETURNING id, plan`
-  );
-
-  for (const row of rows) {
-    await updateKeyLimit(row.id, (row.plan || 'starter') as Plan, 0).catch(err =>
-      console.warn(`[openrouter] Failed to reset key limit for ${row.id}:`, err)
-    );
-  }
-
-  if (rows.length > 0) {
-    console.log(`[openrouter] Reset add-on credits for ${rows.length} users`);
-  }
-  return rows.map(r => r.id);
+  return [];
 }
 
 /** Look up a user's OpenRouter key hash for Management API operations. */

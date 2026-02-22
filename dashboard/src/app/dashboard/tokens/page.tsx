@@ -41,9 +41,9 @@ interface Invoice {
 type TabId = 'overview' | 'billing';
 
 const TOPUP_PACKS = [
-  { id: '5',  price: '€5',  adds: '+$0.33',  desc: 'Small top-up' },
-  { id: '10', price: '€10', adds: '+$0.65',  desc: 'Medium top-up' },
-  { id: '20', price: '€20', adds: '+$1.30', desc: 'Large top-up' },
+  { id: '5',  price: '€5',  adds: '+$5.43',   desc: 'Small top-up' },
+  { id: '10', price: '€10', adds: '+$10.87',  desc: 'Medium top-up' },
+  { id: '20', price: '€20', adds: '+$21.74',  desc: 'Large top-up' },
 ];
 
 export default function TokensPage() {
@@ -170,7 +170,7 @@ export default function TokensPage() {
             )}
 
             <div className="mt-5">
-              <p className="text-[12px] text-white/20">Balance resets monthly with your subscription</p>
+              <p className="text-[12px] text-white/20">Your plan includes a monthly AI budget. Purchased top-ups never expire.</p>
             </div>
           </Card>
 
@@ -203,7 +203,7 @@ export default function TokensPage() {
               ))}
             </div>
             <p className="mt-4 text-[11px] text-white/20">
-              One-time purchase. Balance is added to your current month and resets on your next billing cycle.
+              One-time purchase. Top-up balance never expires and carries over every month.
             </p>
           </Card>
 
