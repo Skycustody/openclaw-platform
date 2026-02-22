@@ -157,13 +157,19 @@ export async function injectApiKeys(
  * No API keys are included. Those go through the proxy system.
  */
 export function buildOpenclawConfig(gatewayToken: string): Record<string, any> {
-  // allowInsecureAuth is safe here: TLS terminates at Cloudflare/Traefik,
-  // so the Traefik→container hop is plain WS on the same machine.
-  // Without it the gateway rejects token auth and demands pairing.
+  // In a SaaS deployment behind Traefik/Cloudflare:
+  //   - allowInsecureAuth: allows token auth over the non-TLS Traefik→container hop
+  //   - dangerouslyDisableDeviceAuth: skips device pairing (the token IS the security)
+  //   - trustedProxies: tells the gateway to trust Traefik's Docker network IPs
   return {
     gateway: {
       bind: 'lan',
-      controlUi: { enabled: true, allowInsecureAuth: true },
+      trustedProxies: ['172.16.0.0/12', '10.0.0.0/8', '192.168.0.0/16'],
+      controlUi: {
+        enabled: true,
+        allowInsecureAuth: true,
+        dangerouslyDisableDeviceAuth: true,
+      },
       auth: { mode: 'token', token: gatewayToken },
     },
   };
