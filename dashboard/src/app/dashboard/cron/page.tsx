@@ -154,7 +154,7 @@ export default function SchedulePage() {
     }
   }
 
-  const costHint = `~${formatDollars(Math.round(newTokenBudget / 1000 * 0.15))} per run`;
+  const costHint = `~${formatUsd(newBudgetUsd)} per run`;
 
   return (
     <div className="space-y-6">
