@@ -103,7 +103,10 @@ export default function GatewayChat({ gatewayUrl, token }: GatewayChatProps) {
     setWsState('connecting');
     setError(null);
 
-    const ws = new WebSocket(gatewayUrl);
+    const wsUrlWithToken = gatewayUrl.includes('?')
+      ? `${gatewayUrl}&token=${encodeURIComponent(token)}`
+      : `${gatewayUrl}?token=${encodeURIComponent(token)}`;
+    const ws = new WebSocket(wsUrlWithToken);
     wsRef.current = ws;
 
     ws.onopen = () => {
@@ -217,14 +220,20 @@ export default function GatewayChat({ gatewayUrl, token }: GatewayChatProps) {
 
     ws.onerror = () => {
       setWsState('error');
-      setError('Connection error');
+      setError('Connection error — check browser console');
     };
 
     ws.onclose = (e) => {
-      setWsState('disconnected');
       wsRef.current = null;
+      if (e.code === 1008) {
+        setWsState('error');
+        setError(`Gateway rejected: ${e.reason || 'pairing required'}`);
+      } else {
+        setWsState('disconnected');
+      }
       if (!isUnmounted.current && e.code !== 1000) {
-        reconnectTimer.current = setTimeout(connect, 3000);
+        const delay = e.code === 1008 ? 10000 : 3000;
+        reconnectTimer.current = setTimeout(connect, delay);
       }
     };
   }, [gatewayUrl, token, loadHistory, scrollToBottom]);
