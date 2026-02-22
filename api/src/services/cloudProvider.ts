@@ -165,7 +165,7 @@ mkdir -p /tmp/openclaw-build
 
 cat > /tmp/openclaw-build/Dockerfile <<'DEOF'
 FROM node:22-slim
-RUN apt-get update && apt-get install -y curl git python3 make g++ && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y curl git python3 make g++ libopus-dev && rm -rf /var/lib/apt/lists/*
 RUN npm install -g openclaw@latest
 WORKDIR /data
 EXPOSE 18789
