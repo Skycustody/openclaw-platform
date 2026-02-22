@@ -92,12 +92,14 @@ export const AVG_COST_PER_1M_USD = 1.80;
 export const USD_TO_EUR_CENTS = 92;
 
 export interface OpenRouterUsage {
-  /** Display dollar amount spent (what user "paid for" — scaled by DISPLAY_FACTOR) */
+  /** Display: amount used (reduces proportionally with real usage) */
   usedUsd: number;
-  /** Display dollar amount remaining (scaled) */
+  /** Display: amount remaining (what user "bought" minus proportional consumption) */
   remainingUsd: number;
-  /** Display total budget (scaled) */
+  /** Display: total amount bought (plan base + credit purchases, shown as paid) */
   limitUsd: number;
+  /** Total display amount from credit purchases only (for UI) */
+  displayAmountBought: number;
   lastUpdated: string;
 }
 
@@ -237,13 +239,24 @@ export async function deleteNexosKey(userId: string): Promise<void> {
 /**
  * Query OpenRouter for a user's credit/usage info.
  * Uses the Management API to look up key usage stats.
+ * Returns display-scaled values: user sees amount paid (€5 → $5), consumption reduces proportionally.
  */
 export async function getNexosUsage(userId: string): Promise<OpenRouterUsage | null> {
-  const row = await db.getOne<{ nexos_api_key: string | null }>(
-    'SELECT nexos_api_key FROM users WHERE id = $1',
+  const row = await db.getOne<{ nexos_api_key: string | null; plan: string }>(
+    'SELECT nexos_api_key, plan FROM users WHERE id = $1',
     [userId]
   );
   if (!row?.nexos_api_key) return null;
+
+  const plan = (row.plan || 'starter') as Plan;
+  const planBase = PLAN_SPEND_LIMITS_USD[plan] || PLAN_SPEND_LIMITS_USD.starter;
+
+  const creditSum = await db.getOne<{ total: string }>(
+    'SELECT COALESCE(SUM(amount_eur_cents / 100.0), 0) as total FROM credit_purchases WHERE user_id = $1',
+    [userId]
+  );
+  const creditDisplayTotal = parseFloat(creditSum?.total || '0');
+  const totalDisplay = planBase + creditDisplayTotal;
 
   if (OPENROUTER_MGMT_KEY) {
     try {
@@ -255,13 +268,30 @@ export async function getNexosUsage(userId: string): Promise<OpenRouterUsage | n
         const keys = listData.data || [];
         const userKey = keys.find((k) => k.name === `openclaw-${userId.slice(0, 8)}`);
         if (userKey) {
-          const used = userKey.usage_monthly ?? userKey.usage ?? 0;
-          const limit = userKey.limit ?? 0;
-          const remaining = Math.max(0, limit - used);
+          const realUsed = userKey.usage_monthly ?? userKey.usage ?? 0;
+          const realLimit = userKey.limit ?? 0;
+          const realRemaining = Math.max(0, realLimit - realUsed);
+
+          let usedUsd: number;
+          let remainingUsd: number;
+          let limitUsd: number;
+
+          if (realLimit > 0) {
+            const ratio = realRemaining / realLimit;
+            remainingUsd = Math.round(totalDisplay * ratio * 100) / 100;
+            usedUsd = Math.round((totalDisplay - remainingUsd) * 100) / 100;
+            limitUsd = Math.round(totalDisplay * 100) / 100;
+          } else {
+            usedUsd = 0;
+            remainingUsd = totalDisplay;
+            limitUsd = totalDisplay;
+          }
+
           return {
-            usedUsd: Math.round(used * DISPLAY_FACTOR * 100) / 100,
-            remainingUsd: Math.round(remaining * DISPLAY_FACTOR * 100) / 100,
-            limitUsd: Math.round(limit * DISPLAY_FACTOR * 100) / 100,
+            usedUsd,
+            remainingUsd,
+            limitUsd,
+            displayAmountBought: Math.round(creditDisplayTotal * 100) / 100,
             lastUpdated: new Date().toISOString(),
           };
         }
@@ -271,8 +301,13 @@ export async function getNexosUsage(userId: string): Promise<OpenRouterUsage | n
     }
   }
 
-  // Fallback: no detailed usage available
-  return null;
+  return {
+    usedUsd: 0,
+    remainingUsd: totalDisplay,
+    limitUsd: totalDisplay,
+    displayAmountBought: creditDisplayTotal,
+    lastUpdated: new Date().toISOString(),
+  };
 }
 
 /**
@@ -323,11 +358,10 @@ export async function updateKeyLimit(userId: string, plan: Plan, extraCreditsUsd
  * accumulated errors from previous bugs.
  */
 export async function addCreditsToKey(userId: string, creditsUsd: number): Promise<void> {
-  // Recalculate addon from actual purchase records.
-  // Use amount_eur_cents / 100 as the true credit value (1:1 EUR→USD).
-  // This corrects any old records that stored inflated credits_usd values.
+  // Recalculate addon from actual purchase records (credits_usd = orBudgetUsd at purchase time).
+  // Prevents accumulation bugs from duplicate webhooks or stale api_budget_addon_usd.
   const sum = await db.getOne<{ total: string }>(
-    'SELECT COALESCE(SUM(amount_eur_cents / 100.0), 0) as total FROM credit_purchases WHERE user_id = $1',
+    'SELECT COALESCE(SUM(credits_usd), 0) as total FROM credit_purchases WHERE user_id = $1',
     [userId]
   );
   const totalAddon = Math.round(parseFloat(sum?.total || '0') * 100) / 100;

@@ -236,19 +236,28 @@ export interface CreditPurchase {
 }
 
 /**
- * Credit top-up packs. Each pack increases the user's OpenRouter spending limit.
- * `orBudgetUsd` = exact dollar amount added to the user's API budget.
- * Simple 1:1 EUR→USD: €5 = $5 API budget. No hidden splits or multipliers.
- * Platform margin comes from EUR>USD spread (~8%) + subscription fees.
+ * Credit top-up packs. Backend split: 6% OpenRouter, 25% platform, rest → API limit.
+ * orBudgetUsd = (1 - 0.06 - 0.25) * eur * 1.08 = 0.69 * eur * 1.08
+ * Frontend shows amount paid (€5 → "$5 bought") and consumption reduces proportionally.
  */
+const EUR_TO_USD = 1.08;
+const OPENROUTER_FEE = 0.06;
+const PLATFORM_FEE = 0.25;
+const TO_API_FRACTION = 1 - OPENROUTER_FEE - PLATFORM_FEE; // 0.69
+
+function orBudgetFromEur(eur: number): number {
+  return Math.round(eur * TO_API_FRACTION * EUR_TO_USD * 100) / 100;
+}
+
 export const CREDIT_PACKS: Record<string, {
   priceEurCents: number;
   label: string;
   orBudgetUsd: number;
+  displayAmount: number;
   envKey: string;
 }> = {
-  '500k':  { priceEurCents: 500,  label: '€5 Credits',  orBudgetUsd: 5,   envKey: 'STRIPE_PRICE_CREDITS_500K'  },
-  '1200k': { priceEurCents: 1000, label: '€10 Credits', orBudgetUsd: 10,  envKey: 'STRIPE_PRICE_CREDITS_1200K' },
-  '3500k': { priceEurCents: 2500, label: '€25 Credits', orBudgetUsd: 25,  envKey: 'STRIPE_PRICE_CREDITS_3500K' },
-  '8m':    { priceEurCents: 5000, label: '€50 Credits', orBudgetUsd: 50,  envKey: 'STRIPE_PRICE_CREDITS_8M'    },
+  '500k':  { priceEurCents: 500,  label: '€5 Credits',  orBudgetUsd: orBudgetFromEur(5),  displayAmount: 5,  envKey: 'STRIPE_PRICE_CREDITS_500K'  },
+  '1200k': { priceEurCents: 1000, label: '€10 Credits', orBudgetUsd: orBudgetFromEur(10), displayAmount: 10, envKey: 'STRIPE_PRICE_CREDITS_1200K' },
+  '3500k': { priceEurCents: 2500, label: '€25 Credits', orBudgetUsd: orBudgetFromEur(25), displayAmount: 25, envKey: 'STRIPE_PRICE_CREDITS_3500K' },
+  '8m':    { priceEurCents: 5000, label: '€50 Credits', orBudgetUsd: orBudgetFromEur(50), displayAmount: 50, envKey: 'STRIPE_PRICE_CREDITS_8M'    },
 };
