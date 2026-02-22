@@ -62,14 +62,14 @@ const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
  * OpenRouter charges no markup — these are direct provider costs.
  */
 const OPENROUTER_MODELS = [
-  { id: 'google/gemini-2.0-flash-001', name: 'Gemini 2.0 Flash' },
-  { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini' },
-  { id: 'openai/gpt-4.1-mini', name: 'GPT-4.1 Mini' },
-  { id: 'anthropic/claude-3.5-haiku', name: 'Claude 3.5 Haiku' },
-  { id: 'openai/gpt-4o', name: 'GPT-4o' },
-  { id: 'openai/gpt-4.1', name: 'GPT-4.1' },
-  { id: 'anthropic/claude-sonnet-4-20250514', name: 'Claude Sonnet 4' },
-  { id: 'openai/o3-mini', name: 'O3 Mini' },
+  { id: 'openrouter/google/gemini-2.0-flash-001', name: 'Gemini 2.0 Flash' },
+  { id: 'openrouter/openai/gpt-4o-mini', name: 'GPT-4o Mini' },
+  { id: 'openrouter/openai/gpt-4.1-mini', name: 'GPT-4.1 Mini' },
+  { id: 'openrouter/anthropic/claude-3.5-haiku', name: 'Claude 3.5 Haiku' },
+  { id: 'openrouter/openai/gpt-4o', name: 'GPT-4o' },
+  { id: 'openrouter/openai/gpt-4.1', name: 'GPT-4.1' },
+  { id: 'openrouter/anthropic/claude-sonnet-4-20250514', name: 'Claude Sonnet 4' },
+  { id: 'openrouter/openai/o3-mini', name: 'O3 Mini' },
 ];
 
 /**
@@ -77,26 +77,29 @@ const OPENROUTER_MODELS = [
  * OpenClaw uses the fallback chain when the primary model is unavailable
  * or rate-limited. Cheaper models listed first to minimise API spend.
  *
- * ┌───────────┬─────────────────────────────────┬──────────────────────────────────┐
- * │ Plan      │ Default                         │ Fallbacks (tried in order)       │
- * ├───────────┼─────────────────────────────────┼──────────────────────────────────┤
- * │ starter   │ openai/gpt-4o-mini (~$0.15/1M)  │ gemini-flash, haiku             │
- * │ pro       │ anthropic/claude-sonnet-4        │ gpt-4o, gpt-4o-mini, flash      │
- * │ business  │ anthropic/claude-sonnet-4        │ gpt-4.1, gpt-4o, flash          │
- * └───────────┴─────────────────────────────────┴──────────────────────────────────┘
+ * Model IDs use the "openrouter/" prefix so OpenClaw routes through
+ * OpenRouter (using OPENROUTER_API_KEY) instead of direct provider APIs.
+ *
+ * ┌───────────┬──────────────────────────────────────────┬──────────────────────────────────┐
+ * │ Plan      │ Default                                  │ Fallbacks (tried in order)       │
+ * ├───────────┼──────────────────────────────────────────┼──────────────────────────────────┤
+ * │ starter   │ openrouter/openai/gpt-4o-mini (~$0.15/1M)│ gemini-flash, haiku             │
+ * │ pro       │ openrouter/anthropic/claude-sonnet-4      │ gpt-4o, gpt-4o-mini, flash      │
+ * │ business  │ openrouter/anthropic/claude-sonnet-4      │ gpt-4.1, gpt-4o, flash          │
+ * └───────────┴──────────────────────────────────────────┴──────────────────────────────────┘
  */
 const PLAN_MODEL_CONFIG: Record<Plan, { primary: string; fallbacks: string[] }> = {
   starter: {
-    primary: 'openai/gpt-4o-mini',
-    fallbacks: ['google/gemini-2.0-flash-001', 'anthropic/claude-3.5-haiku'],
+    primary: 'openrouter/openai/gpt-4o-mini',
+    fallbacks: ['openrouter/google/gemini-2.0-flash-001', 'openrouter/anthropic/claude-3.5-haiku'],
   },
   pro: {
-    primary: 'anthropic/claude-sonnet-4-20250514',
-    fallbacks: ['openai/gpt-4o', 'openai/gpt-4o-mini', 'google/gemini-2.0-flash-001'],
+    primary: 'openrouter/anthropic/claude-sonnet-4-20250514',
+    fallbacks: ['openrouter/openai/gpt-4o', 'openrouter/openai/gpt-4o-mini', 'openrouter/google/gemini-2.0-flash-001'],
   },
   business: {
-    primary: 'anthropic/claude-sonnet-4-20250514',
-    fallbacks: ['openai/gpt-4.1', 'openai/gpt-4o', 'openai/gpt-4o-mini', 'google/gemini-2.0-flash-001'],
+    primary: 'openrouter/anthropic/claude-sonnet-4-20250514',
+    fallbacks: ['openrouter/openai/gpt-4.1', 'openrouter/openai/gpt-4o', 'openrouter/openai/gpt-4o-mini', 'openrouter/google/gemini-2.0-flash-001'],
   },
 };
 
