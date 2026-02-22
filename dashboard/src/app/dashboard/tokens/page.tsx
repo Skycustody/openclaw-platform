@@ -41,9 +41,10 @@ interface Invoice {
 type TabId = 'overview' | 'billing';
 
 const TOPUP_PACKS = [
-  { id: '5',  price: '€5',  adds: '+$5.43',   desc: 'Small top-up' },
-  { id: '10', price: '€10', adds: '+$10.87',  desc: 'Medium top-up' },
-  { id: '20', price: '€20', adds: '+$21.74',  desc: 'Large top-up' },
+  { id: '500k',  price: '€5',  tokens: '500K',  desc: 'Quick tasks & chats' },
+  { id: '1200k', price: '€10', tokens: '1.2M',  desc: 'Research & writing' },
+  { id: '3500k', price: '€20', tokens: '3.5M',  desc: 'Heavy workflows' },
+  { id: '8m',    price: '€40', tokens: '8M',    desc: 'Power user pack' },
 ];
 
 export default function TokensPage() {
@@ -183,7 +184,7 @@ export default function TokensPage() {
             <CardDescription className="mb-5">
               Your subscription includes a monthly AI budget. Top up to increase your balance for the current billing period.
             </CardDescription>
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {TOPUP_PACKS.map(pack => (
                 <button
                   key={pack.id}
@@ -192,7 +193,7 @@ export default function TokensPage() {
                   className="flex flex-col items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.02] p-5 hover:border-indigo-500/30 hover:bg-indigo-500/[0.04] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <span className="text-[24px] font-bold text-white">{pack.price}</span>
-                  <span className="text-[13px] font-medium text-emerald-400">{pack.adds}</span>
+                  <span className="text-[15px] font-semibold text-emerald-400">+{pack.tokens} tokens</span>
                   <span className="text-[11px] text-white/30">{pack.desc}</span>
                   {buyingPack === pack.id ? (
                     <Loader2 className="h-4 w-4 animate-spin text-indigo-400 mt-1" />
@@ -203,7 +204,7 @@ export default function TokensPage() {
               ))}
             </div>
             <p className="mt-4 text-[11px] text-white/20">
-              One-time purchase. Top-up balance never expires and carries over every month.
+              One-time purchase. Tokens never expire and carry over every month. Smart routing stretches your tokens further.
             </p>
           </Card>
 

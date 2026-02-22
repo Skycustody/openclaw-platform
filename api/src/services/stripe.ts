@@ -190,7 +190,7 @@ async function handleCreditPurchase(session: Stripe.Checkout.Session): Promise<v
 
   await addCreditsToKey(userId, orBudgetIncrease);
 
-  console.log(`[stripe] Top-up: user=${userId} pack=€${pack} display=$${packInfo.displayUsd} orBudget=$${orBudgetIncrease}`);
+  console.log(`[stripe] Top-up: user=${userId} pack=${packInfo.label} tokens=${packInfo.tokens} orBudget=$${orBudgetIncrease}`);
 }
 
 async function handleSubscriptionCancelled(subscription: Stripe.Subscription): Promise<void> {
