@@ -74,11 +74,9 @@ function formatNum(n: string | number): string {
   return Number(n).toLocaleString();
 }
 
-function formatCredits(n: number | string | null): string {
+function formatUsdVal(n: number | string | null): string {
   const v = Number(n || 0);
-  if (v >= 1_000_000) return (v / 1_000_000).toFixed(1) + 'M';
-  if (v >= 1_000) return (v / 1_000).toFixed(0) + 'K';
-  return v.toString();
+  return `$${v.toFixed(2)}`;
 }
 
 function formatEur(cents: number): string {
@@ -393,8 +391,8 @@ export default function AdminPanel() {
                 sub="Subscriptions" color="green" />
               <StatCard icon={HardDrive} label="Server Costs" value={formatEur(f.monthlyServerCosts)}
                 sub={`${o.servers.total} server${Number(o.servers.total) !== 1 ? 's' : ''}`} color="red" />
-              <StatCard icon={Coins} label="Credit Costs" value={formatEur(f.monthlyCreditCosts)}
-                sub={`${formatCredits(o.credits.total_used)} used`} color="amber" />
+              <StatCard icon={Coins} label="AI Costs" value={formatEur(f.monthlyCreditCosts)}
+                sub={`${formatUsdVal(o.credits.total_used)} used`} color="amber" />
               <StatCard icon={TrendingUp} label="Monthly Profit"
                 value={formatEur(f.monthlyProfit)}
                 sub={f.monthlyProfit >= 0 ? 'Profitable' : 'Loss'}
@@ -407,8 +405,8 @@ export default function AdminPanel() {
                 sub={`+${o.users.new_24h} today`} color="blue" />
               <StatCard icon={Activity} label="Active" value={formatNum(o.users.active)}
                 sub={`${o.users.sleeping} sleeping`} color="green" />
-              <StatCard icon={Coins} label="Credits Remaining" value={formatCredits(o.credits.total_balance)}
-                sub={`${formatCredits(o.credits.total_purchased)} purchased total`} color="purple" />
+              <StatCard icon={Coins} label="Balance Remaining" value={formatUsdVal(o.credits.total_balance)}
+                sub={`${formatUsdVal(o.credits.total_purchased)} purchased total`} color="purple" />
               <StatCard icon={Zap} label="New (30d)" value={formatNum(o.users.new_30d)}
                 sub={`${o.users.new_7d} this week`} color="amber" />
             </div>
@@ -489,8 +487,8 @@ export default function AdminPanel() {
                       <span className="text-green-400">{formatEur(f.monthlySubscriptionRevenue)}</span>
                     </div>
                     <div className="flex justify-between text-[13px]">
-                      <span className="text-white/50">Extra Credit Purchases</span>
-                      <span className="text-green-400">{formatCredits(o.revenue.month_credit_purchases)} cr</span>
+                      <span className="text-white/50">Extra Top-Up Purchases</span>
+                      <span className="text-green-400">{formatUsdVal(o.revenue.month_credit_purchases)}</span>
                     </div>
                   </div>
                 </div>
@@ -502,7 +500,7 @@ export default function AdminPanel() {
                       <span className="text-red-400">-{formatEur(f.monthlyServerCosts)}</span>
                     </div>
                     <div className="flex justify-between text-[13px]">
-                      <span className="text-white/50">AI Provider Credits</span>
+                      <span className="text-white/50">AI Provider Costs</span>
                       <span className="text-red-400">-{formatEur(f.monthlyCreditCosts)}</span>
                     </div>
                   </div>
@@ -574,7 +572,7 @@ export default function AdminPanel() {
                     <th className="px-4 py-3 text-left text-[11px] font-medium text-white/30 uppercase tracking-wider">User</th>
                     <th className="px-4 py-3 text-left text-[11px] font-medium text-white/30 uppercase tracking-wider">Plan</th>
                     <th className="px-4 py-3 text-left text-[11px] font-medium text-white/30 uppercase tracking-wider">Status</th>
-                    <th className="px-4 py-3 text-left text-[11px] font-medium text-white/30 uppercase tracking-wider">Credits</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-medium text-white/30 uppercase tracking-wider">Balance</th>
                     <th className="px-4 py-3 text-left text-[11px] font-medium text-white/30 uppercase tracking-wider">Revenue</th>
                     <th className="px-4 py-3 text-left text-[11px] font-medium text-white/30 uppercase tracking-wider">Server</th>
                     <th className="px-4 py-3 text-left text-[11px] font-medium text-white/30 uppercase tracking-wider">Joined</th>
@@ -607,8 +605,8 @@ export default function AdminPanel() {
                           </span>
                         </td>
                         <td className="px-4 py-3">
-                          <p className="text-[12px] text-white/50 tabular-nums">{formatCredits(u.credit_balance)}</p>
-                          <p className="text-[10px] text-white/20">used: {formatCredits(u.total_used)}</p>
+                          <p className="text-[12px] text-white/50 tabular-nums">{formatUsdVal(u.credit_balance)}</p>
+                          <p className="text-[10px] text-white/20">used: {formatUsdVal(u.total_used)}</p>
                         </td>
                         <td className="px-4 py-3">
                           <p className="text-[12px] text-green-400/70 tabular-nums">{formatEur(planPrice[u.plan] || 0)}/mo</p>
@@ -674,22 +672,22 @@ export default function AdminPanel() {
 
             {/* Extra token purchases */}
             <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
-              <h3 className="text-[14px] font-semibold text-white mb-4">Extra Credit Purchases</h3>
+              <h3 className="text-[14px] font-semibold text-white mb-4">Extra Top-Up Purchases</h3>
               <div className="grid grid-cols-2 gap-4">
                 <div className="rounded-lg border border-white/[0.04] bg-white/[0.01] p-3">
                   <p className="text-[11px] text-white/30 mb-1">Total Purchases</p>
                   <p className="text-[18px] font-bold text-white">{revenueData.extraCreditPurchases.count}</p>
                 </div>
                 <div className="rounded-lg border border-white/[0.04] bg-white/[0.01] p-3">
-                  <p className="text-[11px] text-white/30 mb-1">Credits Sold</p>
-                  <p className="text-[18px] font-bold text-white">{formatCredits(revenueData.extraCreditPurchases.totalCredits)}</p>
+                  <p className="text-[11px] text-white/30 mb-1">Budget Added</p>
+                  <p className="text-[18px] font-bold text-white">{formatUsdVal(revenueData.extraCreditPurchases.totalCredits)}</p>
                 </div>
               </div>
             </div>
 
             {/* Daily activity */}
             <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
-              <h3 className="text-[14px] font-semibold text-white mb-4">Daily Credit Purchases (Last 30 days)</h3>
+              <h3 className="text-[14px] font-semibold text-white mb-4">Daily Top-Up Purchases (Last 30 days)</h3>
               {revenueData.dailyRevenue.length === 0 ? (
                 <p className="text-[13px] text-white/30 text-center py-8">No purchase data yet</p>
               ) : (
@@ -706,7 +704,7 @@ export default function AdminPanel() {
                           <div className="h-full bg-green-500/30 rounded" style={{ width: `${pct}%` }} />
                         </div>
                         <span className="text-[11px] text-white/40 w-20 text-right tabular-nums">
-                          {formatCredits(d.total_tokens)} ({d.transaction_count})
+                          {formatUsdVal(d.total_tokens)} ({d.transaction_count})
                         </span>
                       </div>
                     );
@@ -717,7 +715,7 @@ export default function AdminPanel() {
 
             {/* Top Spenders */}
             <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
-              <h3 className="text-[14px] font-semibold text-white mb-4">Top Users by Credit Purchases</h3>
+              <h3 className="text-[14px] font-semibold text-white mb-4">Top Users by Purchases</h3>
               <div className="space-y-1">
                 {revenueData.topSpenders.map((u, i) => (
                   <div key={u.email} className="flex items-center justify-between py-2.5 border-b border-white/[0.04] last:border-0">
@@ -729,8 +727,8 @@ export default function AdminPanel() {
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-[13px] text-white/60 tabular-nums">{formatCredits(u.total_purchased)} purchased</p>
-                      <p className="text-[11px] text-white/20">{formatCredits(u.balance)} remaining</p>
+                      <p className="text-[13px] text-white/60 tabular-nums">{formatUsdVal(u.total_purchased)} purchased</p>
+                      <p className="text-[11px] text-white/20">{formatUsdVal(u.balance)} remaining</p>
                     </div>
                   </div>
                 ))}
@@ -817,7 +815,7 @@ export default function AdminPanel() {
                 </select>
               </div>
               <div>
-                <label className="text-[12px] text-white/30 block mb-1">Credit Balance</label>
+                <label className="text-[12px] text-white/30 block mb-1">AI Balance ($)</label>
                 <input type="number" value={editForm.credit_balance}
                   onChange={e => setEditForm({ ...editForm, credit_balance: e.target.value })}
                   className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[13px] text-white focus:border-white/20 focus:outline-none"

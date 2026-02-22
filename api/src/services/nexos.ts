@@ -56,10 +56,7 @@ interface ListKeysResponse {
 /** Retail price multiplier over OpenRouter wholesale cost. 1.5 = 50% margin. */
 export const RETAIL_MARKUP = 1.5;
 
-/** 1 credit = $0.01 of OpenRouter API spend (100 credits = $1). */
-export const USD_PER_CREDIT = 0.01;
-
-/** Revenue split for credit top-up purchases. */
+/** Revenue split for top-up purchases: 6% → OR limit, 50% → platform, 44% → margin. */
 export const PURCHASE_SPLIT = { openrouter: 0.06, platform: 0.50, userCredit: 0.44 } as const;
 
 /**
@@ -88,8 +85,12 @@ export const AVG_COST_PER_1M_USD = 1.80;
 export const USD_TO_EUR_CENTS = 92;
 
 export interface OpenRouterUsage {
-  creditsUsed: number;
-  creditsRemaining: number;
+  /** Dollar amount spent this billing period */
+  usedUsd: number;
+  /** Dollar amount remaining (limit - used) */
+  remainingUsd: number;
+  /** Total OR limit on this key */
+  limitUsd: number;
   lastUpdated: string;
 }
 
@@ -250,8 +251,9 @@ export async function getNexosUsage(userId: string): Promise<OpenRouterUsage | n
           const used = userKey.usage_monthly ?? userKey.usage ?? 0;
           const limit = userKey.limit ?? 0;
           return {
-            creditsUsed: Math.round(used / USD_PER_CREDIT),
-            creditsRemaining: Math.round(Math.max(0, limit - used) / USD_PER_CREDIT),
+            usedUsd: Math.round(used * 100) / 100,
+            remainingUsd: Math.round(Math.max(0, limit - used) * 100) / 100,
+            limitUsd: Math.round(limit * 100) / 100,
             lastUpdated: new Date().toISOString(),
           };
         }

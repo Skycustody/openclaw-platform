@@ -88,7 +88,7 @@ export default function RouterPage() {
   };
 
   const deleteOwnKey = async () => {
-    if (!confirm('Remove your OpenRouter key? Your agent will switch back to using the included platform credits.')) return;
+    if (!confirm('Remove your OpenRouter key? Your agent will switch back to using the included AI budget.')) return;
     try {
       await api.delete('/settings/own-openrouter-key');
       fetchData();
@@ -206,7 +206,7 @@ export default function RouterPage() {
           <Badge variant="default">Optional</Badge>
         </div>
         <CardDescription className="mb-4">
-          Bring your own OpenRouter key for unlimited AI usage. You pay OpenRouter directly — no platform credit limits apply.
+          Bring your own OpenRouter key for unlimited AI usage. You pay OpenRouter directly — no platform budget limits apply.
           {' '}
           <a href="https://openrouter.ai/keys" target="_blank" rel="noreferrer"
             className="inline-flex items-center gap-1 text-indigo-400 hover:text-indigo-300 transition-colors">
@@ -225,7 +225,7 @@ export default function RouterPage() {
                 {settings.has_own_openrouter_key ? (
                   <p className="text-[11px] text-indigo-400 font-mono">{settings.own_openrouter_key_masked}</p>
                 ) : (
-                  <p className="text-[11px] text-white/30">No key set — using included platform credits</p>
+                  <p className="text-[11px] text-white/30">No key set — using included AI budget</p>
                 )}
               </div>
             </div>

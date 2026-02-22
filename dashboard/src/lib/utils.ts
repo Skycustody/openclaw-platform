@@ -5,24 +5,14 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function formatCredits(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return n.toString();
+/** Format a USD amount for display: $1.30, $7.00, etc. */
+export function formatUsd(usd: number): string {
+  return `$${usd.toFixed(2)}`;
 }
 
-/** @deprecated Use formatCredits */
+/** @deprecated Alias for backwards compat */
+export const formatCredits = (n: number) => formatUsd(n);
 export const formatTokens = formatCredits;
-
-export function formatCreditsWithDays(balance: number, dailyRate: number): string {
-  const formatted = formatCredits(balance);
-  if (dailyRate <= 0) return formatted;
-  const days = Math.floor(balance / dailyRate);
-  return `${formatted} (~${days} days)`;
-}
-
-/** @deprecated Use formatCreditsWithDays */
-export const formatTokensWithDays = formatCreditsWithDays;
 
 export function formatDollars(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;

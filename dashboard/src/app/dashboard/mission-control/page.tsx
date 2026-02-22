@@ -5,7 +5,7 @@ import { Card, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { StatusBadge, Badge } from '@/components/ui/Badge';
 import api from '@/lib/api';
-import { formatCredits, timeAgo, formatTime } from '@/lib/utils';
+import { formatUsd, timeAgo, formatTime } from '@/lib/utils';
 import { useStore } from '@/lib/store';
 import {
   ExternalLink, RotateCcw, Square, MessageSquare,
@@ -26,7 +26,7 @@ interface ApiStatus {
   createdAt: string;
   stats: {
     messagesToday: number;
-    creditsToday: number;
+    spendToday: number;
     activeSkills: number;
   };
 }
@@ -37,7 +37,7 @@ interface ActivityEntry {
   summary: string;
   created_at: string;
   status?: string;
-  credits_used?: number;
+  cost_usd?: number;
   model_used?: string;
   channel?: string;
   details?: any;
@@ -59,7 +59,7 @@ const STATUS_CONFIG: Record<string, { message: string; color: string; bgColor: s
   active:       { message: 'Running and ready',          color: 'text-green-400',  bgColor: 'bg-green-500/10' },
   online:       { message: 'Running and ready',          color: 'text-green-400',  bgColor: 'bg-green-500/10' },
   sleeping:     { message: 'Sleeping — wakes on message', color: 'text-blue-400',   bgColor: 'bg-blue-500/10' },
-  paused:       { message: 'Paused — top up credits',     color: 'text-red-400',    bgColor: 'bg-red-500/10' },
+  paused:       { message: 'Paused — top up balance',      color: 'text-red-400',    bgColor: 'bg-red-500/10' },
   provisioning: { message: 'Setting up...',              color: 'text-amber-400',  bgColor: 'bg-amber-500/10' },
   cancelled:    { message: 'Subscription cancelled',     color: 'text-red-400',    bgColor: 'bg-red-500/10' },
   offline:      { message: 'Offline',                    color: 'text-white/30',   bgColor: 'bg-white/5' },
@@ -79,7 +79,7 @@ const channelLabel: Record<string, string> = {
 
 export default function MissionControlPage() {
   const [apiData, setApiData] = useState<ApiStatus | null>(null);
-  const [creditBalance, setCreditBalance] = useState<number>(0);
+  const [balanceUsd, setBalanceUsd] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [provisionMsg, setProvisionMsg] = useState<string | null>(null);
@@ -98,7 +98,7 @@ export default function MissionControlPage() {
         api.get<{ jobs: CronJob[] }>('/cron'),
       ]);
       if (statusRes.status === 'fulfilled') setApiData(statusRes.value);
-      if (tokensRes.status === 'fulfilled') setCreditBalance(tokensRes.value.balance ?? 0);
+      if (tokensRes.status === 'fulfilled') setBalanceUsd(tokensRes.value.balance ?? 0);
       if (activityRes.status === 'fulfilled') setRecentActivity(activityRes.value.activities || []);
       if (cronRes.status === 'fulfilled') {
         const jobs = (cronRes.value.jobs || cronRes.value || []) as CronJob[];
@@ -119,7 +119,7 @@ export default function MissionControlPage() {
 
   const displayStatus = (apiData?.subscriptionStatus || apiData?.status || 'offline') as AgentDisplayStatus;
   const statusConf = STATUS_CONFIG[displayStatus] || STATUS_CONFIG.offline;
-  const stats = apiData?.stats || { messagesToday: 0, creditsToday: 0, activeSkills: 0 };
+  const stats = apiData?.stats || { messagesToday: 0, spendToday: 0, activeSkills: 0 };
   const subdomain = apiData?.subdomain || user?.subdomain || 'your-agent';
   const isRunning = displayStatus === 'active' || displayStatus === 'online';
 
@@ -183,7 +183,7 @@ export default function MissionControlPage() {
       {displayStatus === 'paused' && (
         <div className="border border-red-500/20 bg-red-500/5 rounded-xl px-4 py-3 flex items-center gap-3 animate-fade-up">
           <AlertTriangle className="h-4 w-4 text-red-400 shrink-0" />
-          <p className="text-[13px] text-red-400 flex-1">Agent paused — you&apos;re out of credits</p>
+          <p className="text-[13px] text-red-400 flex-1">Agent paused — your AI balance is empty</p>
           <Button variant="danger" size="sm" onClick={() => window.location.href = '/dashboard/tokens'}>
             Top Up
           </Button>
@@ -254,9 +254,9 @@ export default function MissionControlPage() {
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-500/10">
               <Zap className="h-4 w-4 text-purple-400" />
             </div>
-            <span className="text-[12px] text-white/30">Credits Used</span>
+            <span className="text-[12px] text-white/30">Spent Today</span>
           </div>
-          <p className="text-[24px] font-bold text-white tabular-nums">{formatCredits(stats.creditsToday)}</p>
+          <p className="text-[24px] font-bold text-white tabular-nums">{formatUsd(stats.spendToday)}</p>
           <p className="text-[11px] text-white/20 mt-0.5">today</p>
         </Card>
 
@@ -268,10 +268,10 @@ export default function MissionControlPage() {
               </div>
               <span className="text-[12px] text-white/30">Balance</span>
             </div>
-            <p className={`text-[24px] font-bold tabular-nums ${creditBalance < 50 ? 'text-amber-400' : 'text-white'}`}>
-              {formatCredits(creditBalance)}
+            <p className={`text-[24px] font-bold tabular-nums ${balanceUsd < 0.50 ? 'text-amber-400' : 'text-white'}`}>
+              {formatUsd(balanceUsd)}
             </p>
-            <p className="text-[11px] text-white/20 mt-0.5">credits remaining</p>
+            <p className="text-[11px] text-white/20 mt-0.5">balance remaining</p>
           </Card>
         </button>
 
@@ -365,7 +365,7 @@ export default function MissionControlPage() {
                           <p className="text-[13px] text-white/70 truncate">{entry.summary}</p>
                           <div className="flex items-center gap-2 text-[11px] text-white/25">
                             <span>{timeAgo(entry.created_at)}</span>
-                            {entry.credits_used ? <span>{formatCredits(entry.credits_used)} credits</span> : null}
+                            {entry.cost_usd ? <span>{formatUsd(entry.cost_usd)}</span> : null}
                           </div>
                         </div>
                       </div>
@@ -397,7 +397,7 @@ export default function MissionControlPage() {
                         <div className="flex items-center gap-2 mt-0.5">
                           <span className="text-[11px] text-white/20">{timeAgo(entry.created_at)}</span>
                           {entry.channel && <Badge className="!text-[10px] !py-0 !px-1.5">{channelLabel[entry.channel] || entry.channel}</Badge>}
-                          {entry.credits_used ? <span className="text-[11px] text-white/20">{formatCredits(entry.credits_used)} cr</span> : null}
+                          {entry.cost_usd ? <span className="text-[11px] text-white/20">{formatUsd(entry.cost_usd)}</span> : null}
                           {entry.model_used && <span className="text-[10px] text-white/15">{entry.model_used}</span>}
                         </div>
                       </div>

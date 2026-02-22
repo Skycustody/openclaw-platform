@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/Button';
 import { StatusBadge } from '@/components/ui/Badge';
 import api from '@/lib/api';
-import { formatCredits } from '@/lib/utils';
+import { formatUsd } from '@/lib/utils';
 import { useStore } from '@/lib/store';
 import ChatPanel from '@/components/dashboard/ChatPanel';
 import {
@@ -32,7 +32,7 @@ export default function DashboardHome() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const [settings, setSettings] = useState<UserSettings | null>(null);
-  const [creditsRemaining, setCreditsRemaining] = useState<number | null>(null);
+  const [balanceUsd, setBalanceUsd] = useState<number | null>(null);
   const [agentStatus, setAgentStatus] = useState<AgentDisplayStatus>('offline');
 
   const [uploadingFile, setUploadingFile] = useState(false);
@@ -44,11 +44,11 @@ export default function DashboardHome() {
     try {
       const [settingsRes, usageRes, statusRes] = await Promise.allSettled([
         api.get<{ settings: UserSettings }>('/settings'),
-        api.get<{ usage?: { creditsRemaining: number } }>('/settings/nexos-usage'),
+        api.get<{ usage?: { remainingUsd: number } }>('/settings/nexos-usage'),
         api.get<any>('/agent/status'),
       ]);
       if (settingsRes.status === 'fulfilled') setSettings(settingsRes.value.settings);
-      if (usageRes.status === 'fulfilled' && usageRes.value.usage) setCreditsRemaining(usageRes.value.usage.creditsRemaining);
+      if (usageRes.status === 'fulfilled' && usageRes.value.usage) setBalanceUsd(usageRes.value.usage.remainingUsd);
       if (statusRes.status === 'fulfilled') {
         setAgentStatus((statusRes.value.subscriptionStatus || statusRes.value.status || 'offline') as AgentDisplayStatus);
       }
@@ -161,8 +161,8 @@ export default function DashboardHome() {
     if (phase !== 'ready') return;
     const interval = setInterval(async () => {
       try {
-        const res = await api.get<{ usage?: { creditsRemaining: number } }>('/settings/nexos-usage');
-        if (res.usage?.creditsRemaining !== undefined) setCreditsRemaining(res.usage.creditsRemaining);
+        const res = await api.get<{ usage?: { remainingUsd: number } }>('/settings/nexos-usage');
+        if (res.usage?.remainingUsd !== undefined) setBalanceUsd(res.usage.remainingUsd);
       } catch {}
     }, 30000);
     return () => clearInterval(interval);
@@ -360,10 +360,10 @@ export default function DashboardHome() {
 
           <button onClick={() => window.location.href = '/dashboard/tokens'}
             className="flex items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-1.5 hover:border-white/15 hover:bg-white/[0.04] transition-all"
-            title="Credits & billing">
+            title="AI Balance">
             <Sparkles className="h-3.5 w-3.5 text-white/20" />
-            <span className={`text-[12px] font-medium tabular-nums ${creditsRemaining != null && creditsRemaining < 50000 ? 'text-amber-400' : 'text-white/50'}`}>
-              {creditsRemaining != null ? `${formatCredits(creditsRemaining)} left` : 'Credits'}
+            <span className={`text-[12px] font-medium tabular-nums ${balanceUsd != null && balanceUsd < 0.50 ? 'text-amber-400' : 'text-white/50'}`}>
+              {balanceUsd != null ? `${formatUsd(balanceUsd)} left` : 'Balance'}
             </span>
           </button>
         </div>

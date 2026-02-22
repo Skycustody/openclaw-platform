@@ -144,8 +144,8 @@ export interface PlanLimits {
   maxSkills: number;
   maxCronJobs: number;
   storageGb: number;
-  /** Monthly credits included with plan (1 credit = $0.01 OR spend) */
-  includedCredits: number;
+  /** Monthly AI budget in USD (matches OpenRouter key limit) */
+  includedBudgetUsd: number;
   priceEurCents: number;
   hasBrowser: boolean;
   allChannels: boolean;
@@ -182,7 +182,7 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     maxSkills: 10,
     maxCronJobs: 3,
     storageGb: 1,
-    includedCredits: 200,
+    includedBudgetUsd: 2,
     priceEurCents: 1000,
     nexosCreditBudgetEurCents: 185,
     serverCostShareEurCents: 333,
@@ -196,7 +196,7 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     maxSkills: 53,
     maxCronJobs: 20,
     storageGb: 5,
-    includedCredits: 700,
+    includedBudgetUsd: 7,
     priceEurCents: 2000,
     nexosCreditBudgetEurCents: 650,
     serverCostShareEurCents: 667,
@@ -210,7 +210,7 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     maxSkills: 53,
     maxCronJobs: 100,
     storageGb: 20,
-    includedCredits: 1200,
+    includedBudgetUsd: 12,
     priceEurCents: 5000,
     nexosCreditBudgetEurCents: 1115,
     serverCostShareEurCents: 1000,
@@ -236,11 +236,11 @@ export interface CreditPurchase {
 }
 
 /**
- * Credit top-up packs. Revenue split: 6% OpenRouter, 50% platform, 44% user credit.
- * `credits` is the display amount (6% of EUR→USD converted to credits at $0.01 each).
+ * Top-up packs. Revenue split: 6% → OR budget increase, 50% → platform, 44% → margin.
+ * `addsUsd` is the dollar amount added to the user's AI balance (the 6% OR portion).
  */
-export const CREDIT_PACKS: Record<string, { priceEurCents: number; label: string; credits: number }> = {
-  '5':  { priceEurCents: 500,  label: '€5 — 33 Credits',  credits: 33  },
-  '10': { priceEurCents: 1000, label: '€10 — 65 Credits',  credits: 65  },
-  '20': { priceEurCents: 2000, label: '€20 — 130 Credits', credits: 130 },
+export const CREDIT_PACKS: Record<string, { priceEurCents: number; label: string; addsUsd: number }> = {
+  '5':  { priceEurCents: 500,  label: '€5 Top-Up',  addsUsd: 0.33  },
+  '10': { priceEurCents: 1000, label: '€10 Top-Up', addsUsd: 0.65  },
+  '20': { priceEurCents: 2000, label: '€20 Top-Up', addsUsd: 1.30  },
 };

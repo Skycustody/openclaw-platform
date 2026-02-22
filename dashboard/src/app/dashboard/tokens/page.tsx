@@ -19,8 +19,9 @@ import {
 } from 'lucide-react';
 
 interface NexosUsage {
-  creditsUsed: number;
-  creditsRemaining: number;
+  usedUsd: number;
+  remainingUsd: number;
+  limitUsd: number;
   lastUpdated: string;
 }
 
@@ -39,10 +40,10 @@ interface Invoice {
 
 type TabId = 'overview' | 'billing';
 
-const CREDIT_PACKS = [
-  { id: '5',  price: '€5',  credits: '33 credits',  desc: 'Small top-up' },
-  { id: '10', price: '€10', credits: '65 credits',  desc: 'Medium top-up' },
-  { id: '20', price: '€20', credits: '130 credits', desc: 'Large top-up' },
+const TOPUP_PACKS = [
+  { id: '5',  price: '€5',  adds: '+$0.33',  desc: 'Small top-up' },
+  { id: '10', price: '€10', adds: '+$0.65',  desc: 'Medium top-up' },
+  { id: '20', price: '€20', adds: '+$1.30', desc: 'Large top-up' },
 ];
 
 export default function TokensPage() {
@@ -58,7 +59,7 @@ export default function TokensPage() {
   useEffect(() => {
     fetchData();
     if (searchParams.get('credits') === 'success') {
-      setSuccessMsg('Credits added successfully! Your budget has been increased.');
+      setSuccessMsg('Top-up successful! Your AI balance has been increased.');
       setTimeout(() => setSuccessMsg(null), 6000);
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -112,7 +113,7 @@ export default function TokensPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-[28px] font-bold text-white tracking-tight">AI Credits & Billing</h1>
+          <h1 className="text-[28px] font-bold text-white tracking-tight">AI Balance & Billing</h1>
           <p className="mt-1 text-[15px] text-white/50">
             Your AI usage is powered by multi-model smart routing
           </p>
@@ -147,15 +148,15 @@ export default function TokensPage() {
       {/* OVERVIEW TAB */}
       {activeTab === 'overview' && (
         <div className="space-y-6">
-          {/* Credits Card */}
+          {/* Balance Card */}
           <Card glow>
             <div className="flex items-start justify-between mb-6">
               <div>
-                <p className="text-[14px] text-white/40 mb-2">AI Credits</p>
+                <p className="text-[14px] text-white/40 mb-2">AI Balance</p>
                 <p className="text-[42px] font-bold text-white tracking-tight leading-none">
-                  {nexosUsage ? nexosUsage.creditsRemaining.toLocaleString() : 'Unlimited*'}
+                  {nexosUsage ? `$${nexosUsage.remainingUsd.toFixed(2)}` : 'Unlimited*'}
                 </p>
-                <p className="text-[14px] text-white/40 mt-1">credits remaining this month</p>
+                <p className="text-[14px] text-white/40 mt-1">remaining this month</p>
               </div>
               <div className="rounded-2xl bg-white/[0.06] p-4">
                 <Zap className="h-7 w-7 text-white/40" />
@@ -164,26 +165,26 @@ export default function TokensPage() {
 
             {nexosUsage && (
               <p className="text-[14px] text-white/40">
-                {nexosUsage.creditsUsed.toLocaleString()} credits used
+                ${nexosUsage.usedUsd.toFixed(2)} used of ${nexosUsage.limitUsd.toFixed(2)} budget
               </p>
             )}
 
             <div className="mt-5">
-              <p className="text-[12px] text-white/20">Credits reset monthly with your subscription</p>
+              <p className="text-[12px] text-white/20">Balance resets monthly with your subscription</p>
             </div>
           </Card>
 
-          {/* Buy More Credits */}
+          {/* Top Up */}
           <Card>
             <div className="flex items-center gap-2 mb-1">
               <Plus className="h-4 w-4 text-white/40" />
-              <CardTitle>Need more credits?</CardTitle>
+              <CardTitle>Need more balance?</CardTitle>
             </div>
             <CardDescription className="mb-5">
-              Your subscription includes a small AI budget. Buy a credit pack to increase your limit for the current billing period.
+              Your subscription includes a monthly AI budget. Top up to increase your balance for the current billing period.
             </CardDescription>
             <div className="grid gap-3 sm:grid-cols-3">
-              {CREDIT_PACKS.map(pack => (
+              {TOPUP_PACKS.map(pack => (
                 <button
                   key={pack.id}
                   onClick={() => handleBuyCredits(pack.id)}
@@ -191,7 +192,7 @@ export default function TokensPage() {
                   className="flex flex-col items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.02] p-5 hover:border-indigo-500/30 hover:bg-indigo-500/[0.04] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <span className="text-[24px] font-bold text-white">{pack.price}</span>
-                  <span className="text-[13px] font-medium text-white/60">{pack.credits}</span>
+                  <span className="text-[13px] font-medium text-emerald-400">{pack.adds}</span>
                   <span className="text-[11px] text-white/30">{pack.desc}</span>
                   {buyingPack === pack.id ? (
                     <Loader2 className="h-4 w-4 animate-spin text-indigo-400 mt-1" />
@@ -202,7 +203,7 @@ export default function TokensPage() {
               ))}
             </div>
             <p className="mt-4 text-[11px] text-white/20">
-              One-time purchase. Credits are added to your current month and reset on your next billing cycle.
+              One-time purchase. Balance is added to your current month and resets on your next billing cycle.
             </p>
           </Card>
 
@@ -227,8 +228,8 @@ export default function TokensPage() {
                   <Coins className="h-4 w-4 text-white/40" />
                 </div>
                 <div>
-                  <p className="text-[14px] font-medium text-white/80">Credit-based pricing</p>
-                  <p className="text-[13px] text-white/40">Different models cost different amounts. Your plan includes a monthly credit budget. Lighter models stretch your credits further.</p>
+                  <p className="text-[14px] font-medium text-white/80">Pay-per-use pricing</p>
+                  <p className="text-[13px] text-white/40">Different models cost different amounts. Your plan includes a monthly AI budget in dollars. Lighter models stretch your balance further.</p>
                 </div>
               </div>
               <div className="flex items-start gap-4">
@@ -245,17 +246,17 @@ export default function TokensPage() {
 
           {/* Model pricing reference */}
           <Card>
-            <CardTitle>Model credit costs</CardTitle>
-            <CardDescription>Credits consumed per 1M tokens (approximate)</CardDescription>
+            <CardTitle>Model costs</CardTitle>
+            <CardDescription>Cost per 1M tokens (approximate, in USD)</CardDescription>
             <div className="mt-4 space-y-1">
               {[
-                { model: 'Gemini 2.0 Flash', input: '10',   output: '40',    tag: 'Cheapest' },
-                { model: 'GPT-4o Mini',      input: '15',   output: '60',    tag: 'Budget' },
-                { model: 'Claude 3.5 Haiku', input: '80',   output: '400',   tag: '' },
-                { model: 'GPT-4o',           input: '250',  output: '1,000', tag: '' },
-                { model: 'GPT-4.1',          input: '200',  output: '800',   tag: '' },
-                { model: 'Claude Sonnet 4',  input: '300',  output: '1,500', tag: 'Default (Pro)' },
-                { model: 'O3 Mini',          input: '110',  output: '440',   tag: 'Reasoning' },
+                { model: 'Gemini 2.0 Flash', input: '$0.10',  output: '$0.40',  tag: 'Cheapest' },
+                { model: 'GPT-4o Mini',      input: '$0.15',  output: '$0.60',  tag: 'Budget' },
+                { model: 'Claude 3.5 Haiku', input: '$0.80',  output: '$4.00',  tag: '' },
+                { model: 'GPT-4o',           input: '$2.50',  output: '$10.00', tag: '' },
+                { model: 'GPT-4.1',          input: '$2.00',  output: '$8.00',  tag: '' },
+                { model: 'Claude Sonnet 4',  input: '$3.00',  output: '$15.00', tag: 'Default (Pro)' },
+                { model: 'O3 Mini',          input: '$1.10',  output: '$4.40',  tag: 'Reasoning' },
               ].map(m => (
                 <div key={m.model} className="flex items-center justify-between py-2.5 border-b border-white/[0.04] last:border-0">
                   <div className="flex items-center gap-2">
@@ -269,7 +270,7 @@ export default function TokensPage() {
                 </div>
               ))}
             </div>
-            <p className="mt-3 text-[11px] text-white/20">Prices in credits per 1M tokens. Smart routing typically uses cheaper models, keeping average costs low.</p>
+            <p className="mt-3 text-[11px] text-white/20">Cost per 1M tokens in USD. Smart routing typically uses cheaper models, keeping average spend low.</p>
           </Card>
         </div>
       )}

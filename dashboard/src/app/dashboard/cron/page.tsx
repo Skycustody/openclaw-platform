@@ -9,7 +9,7 @@ import { Toggle } from '@/components/ui/Toggle';
 import { Slider } from '@/components/ui/Slider';
 import { Modal } from '@/components/ui/Modal';
 import api from '@/lib/api';
-import { cn, formatCredits, formatDollars, timeAgo } from '@/lib/utils';
+import { cn, formatUsd, formatDollars, timeAgo } from '@/lib/utils';
 import {
   Plus, Clock, CalendarClock, MoreVertical, Pencil, Pause,
   Play, Trash2, CheckCircle2, XCircle, AlertTriangle,
@@ -26,10 +26,10 @@ interface CronTask {
   lastRun?: {
     timestamp: string;
     status: 'success' | 'error';
-    creditsUsed: number;
+    costUsd: number;
     message?: string;
   };
-  creditBudget: number;
+  budgetUsd: number;
 }
 
 const FREQ_OPTIONS = [
@@ -67,7 +67,7 @@ export default function SchedulePage() {
   const [newDescription, setNewDescription] = useState('');
   const [newFrequency, setNewFrequency] = useState('daily');
   const [newTime, setNewTime] = useState('08:00');
-  const [newCreditBudget, setNewCreditBudget] = useState(100);
+  const [newBudgetUsd, setNewBudgetUsd] = useState(1.00);
   const [newBehavior, setNewBehavior] = useState('stop');
 
   useEffect(() => {
@@ -103,7 +103,7 @@ export default function SchedulePage() {
         description: newDescription.trim(),
         frequency: newFrequency,
         time: newTime,
-        tokenBudget: newCreditBudget,
+        tokenBudget: newBudgetUsd,
         behavior: newBehavior,
       });
       if (res.job) setTasks((prev) => [...prev, res.job]);
@@ -115,7 +115,7 @@ export default function SchedulePage() {
       setNewDescription('');
       setNewFrequency('daily');
       setNewTime('08:00');
-      setNewCreditBudget(100);
+      setNewBudgetUsd(1.00);
       setNewBehavior('stop');
     }
   }
@@ -208,7 +208,7 @@ export default function SchedulePage() {
                     </div>
                     <div className="flex items-center gap-1.5 text-white/35">
                       <Zap className="h-3.5 w-3.5" />
-                      <span>Budget: <span className="text-white">{formatCredits(task.creditBudget)} credits</span></span>
+                      <span>Budget: <span className="text-white">{formatUsd(task.budgetUsd)}</span></span>
                     </div>
                     {task.enabled && (
                       <div className="flex items-center gap-1.5 text-white/35">
@@ -234,7 +234,7 @@ export default function SchedulePage() {
                           </div>
                         )}
                         <span className="text-white/20">·</span>
-                        <span className="text-white/30">Used {formatCredits(task.lastRun.creditsUsed)} credits</span>
+                        <span className="text-white/30">Cost {formatUsd(task.lastRun.costUsd)}</span>
                       </div>
                       {task.lastRun.status === 'error' && task.lastRun.message && (
                         <div className="flex items-start gap-2 mt-2 p-2.5 rounded-xl bg-red-500/5 border border-red-500/10">
@@ -368,15 +368,15 @@ export default function SchedulePage() {
             </div>
           )}
 
-          {/* Credit budget */}
+          {/* Budget per run */}
           <Slider
-            label="Credit budget per run"
-            valueLabel={`${formatCredits(newCreditBudget)} credits`}
-            value={newCreditBudget}
-            onChange={setNewCreditBudget}
-            min={10}
-            max={500}
-            step={10}
+            label="Budget per run"
+            valueLabel={formatUsd(newBudgetUsd)}
+            value={newBudgetUsd}
+            onChange={setNewBudgetUsd}
+            min={0.10}
+            max={5.00}
+            step={0.10}
             hint="Higher budgets let your agent do more complex work per run"
           />
 
