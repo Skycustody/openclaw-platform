@@ -46,7 +46,12 @@ class ApiClient {
     });
 
     if (res.status === 401) {
-      // Try refresh once (except when we're already calling refresh)
+      const isAuthRoute = path.startsWith('/auth/');
+      if (isAuthRoute) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error?.message || data.message || (typeof data.error === 'string' ? data.error : 'Invalid email or password'));
+      }
+
       if (!isRetry && path !== '/auth/refresh' && token && typeof window !== 'undefined') {
         try {
           const refreshRes = await fetch(`${API_BASE}/auth/refresh`, {

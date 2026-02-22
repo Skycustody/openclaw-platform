@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { Card, CardTitle, CardDescription, GlassPanel } from '@/components/ui/Card';
+import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
@@ -24,6 +24,7 @@ import {
   Zap,
   AlertCircle,
   CheckCircle2,
+  RefreshCw,
 } from 'lucide-react';
 
 interface Template {
@@ -43,10 +44,10 @@ interface Template {
 const CATEGORIES = [
   { value: 'All', label: 'All', icon: Sparkles },
   { value: 'Productivity', label: 'Productivity', icon: Briefcase },
+  { value: 'Research', label: 'Research', icon: BookOpen },
   { value: 'Trading', label: 'Trading', icon: TrendingUp },
   { value: 'Email', label: 'Email', icon: Mail },
   { value: 'Social', label: 'Social', icon: Globe },
-  { value: 'Research', label: 'Research', icon: BookOpen },
 ];
 
 export default function TemplatesPage() {
@@ -81,6 +82,8 @@ export default function TemplatesPage() {
     return [...templates].sort((a, b) => b.installs - a.installs).slice(0, 3);
   }, [templates]);
 
+  const [installSuccess, setInstallSuccess] = useState<string | null>(null);
+
   async function handleInstall(template: Template) {
     setInstallingId(template.id);
     try {
@@ -91,6 +94,8 @@ export default function TemplatesPage() {
         )
       );
       setInstallModal(null);
+      setInstallSuccess(template.name);
+      setTimeout(() => setInstallSuccess(null), 4000);
     } catch {}
     setInstallingId(null);
   }
@@ -122,28 +127,25 @@ export default function TemplatesPage() {
     );
   }
 
-  if (loading) {
-    return (
-      <div className="flex h-96 items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-white/40" />
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div className="flex items-center justify-between animate-fade-up">
+      <div className="flex items-center justify-between">
         <div>
           <h1 className="text-[28px] font-bold text-white tracking-tight">Agent Templates</h1>
           <p className="mt-2 text-[15px] text-white/50 leading-relaxed">
-            Pre-built OpenClaw agent configurations. Install to apply personality, skills, tools, and automations in one click.
+            Pre-built agent configurations. Install to apply personality, skills, tools, and automations in one click.
           </p>
         </div>
-        <Button variant="glass" onClick={() => setShareModal(true)}>
-          <Share2 className="h-4 w-4" />
-          Share My Setup
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="glass" size="sm" onClick={() => { setLoading(true); api.get<{ templates: Template[] }>('/templates').then((res) => setTemplates(res.templates || [])).catch(() => {}).finally(() => setLoading(false)); }}>
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+          </Button>
+          <Button variant="glass" onClick={() => setShareModal(true)}>
+            <Share2 className="h-4 w-4" />
+            Share My Setup
+          </Button>
+        </div>
       </div>
 
       {/* Search & Category Pills */}
@@ -178,6 +180,16 @@ export default function TemplatesPage() {
           })}
         </div>
       </div>
+
+      {/* Success banner */}
+      {installSuccess && (
+        <div className="flex items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3">
+          <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+          <p className="text-[13px] text-emerald-400">
+            <span className="font-medium">{installSuccess}</span> installed successfully. Your agent is being reconfigured.
+          </p>
+        </div>
+      )}
 
       {/* Most Popular */}
       {category === 'All' && !search && popular.length > 0 && (
@@ -215,7 +227,30 @@ export default function TemplatesPage() {
       )}
 
       {/* Template Grid */}
-      {filtered.length === 0 ? (
+      {loading ? (
+        <div>
+          <div className="flex items-center gap-2 mb-4">
+            <h2 className="text-[15px] font-semibold text-white/60">Loading templates...</h2>
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Card key={i} className="animate-pulse">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="h-10 w-10 rounded-xl bg-white/[0.06]" />
+                  <div className="h-5 w-20 rounded-full bg-white/[0.04]" />
+                </div>
+                <div className="h-5 w-3/4 rounded bg-white/[0.06] mb-2" />
+                <div className="h-4 w-full rounded bg-white/[0.04] mb-1" />
+                <div className="h-4 w-2/3 rounded bg-white/[0.04]" />
+                <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-between">
+                  <div className="h-4 w-24 rounded bg-white/[0.04]" />
+                  <div className="h-8 w-24 rounded-lg bg-white/[0.06]" />
+                </div>
+              </Card>
+            ))}
+          </div>
+        </div>
+      ) : filtered.length === 0 ? (
         <Card className="py-16">
           <div className="flex flex-col items-center text-center">
             <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/[0.06] mb-5">

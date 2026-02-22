@@ -238,8 +238,9 @@ export interface CreditPurchase {
 /**
  * Credit top-up packs. Each pack increases the user's OpenRouter spending limit.
  * `orBudgetUsd` = actual OpenRouter API limit increase (real dollars added to the key).
- * Display value = orBudgetUsd × DISPLAY_FACTOR (from nexos.ts).
+ * Displayed as-is (no DISPLAY_FACTOR inflation).
  * We target ~40% margin: user pays €X, ~60% goes to API budget, ~40% is platform revenue.
+ * EUR→USD approx 1.08. E.g. €5 ≈ $5.40 → 60% = $3.25 API budget.
  */
 export const CREDIT_PACKS: Record<string, {
   priceEurCents: number;
@@ -247,8 +248,8 @@ export const CREDIT_PACKS: Record<string, {
   orBudgetUsd: number;
   envKey: string;
 }> = {
-  '500k':  { priceEurCents: 500,  label: '€5 Credits',  orBudgetUsd: 3.15,  envKey: 'STRIPE_PRICE_CREDITS_500K'  },
-  '1200k': { priceEurCents: 1000, label: '€10 Credits', orBudgetUsd: 6.30,  envKey: 'STRIPE_PRICE_CREDITS_1200K' },
-  '3500k': { priceEurCents: 2500, label: '€25 Credits', orBudgetUsd: 15.72, envKey: 'STRIPE_PRICE_CREDITS_3500K' },
-  '8m':    { priceEurCents: 5000, label: '€50 Credits', orBudgetUsd: 31.45, envKey: 'STRIPE_PRICE_CREDITS_8M'    },
+  '500k':  { priceEurCents: 500,  label: '€5 Credits',  orBudgetUsd: 3.25,  envKey: 'STRIPE_PRICE_CREDITS_500K'  },
+  '1200k': { priceEurCents: 1000, label: '€10 Credits', orBudgetUsd: 6.50,  envKey: 'STRIPE_PRICE_CREDITS_1200K' },
+  '3500k': { priceEurCents: 2500, label: '€25 Credits', orBudgetUsd: 16.25, envKey: 'STRIPE_PRICE_CREDITS_3500K' },
+  '8m':    { priceEurCents: 5000, label: '€50 Credits', orBudgetUsd: 32.50, envKey: 'STRIPE_PRICE_CREDITS_8M'    },
 };

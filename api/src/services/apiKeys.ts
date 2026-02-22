@@ -287,6 +287,7 @@ export async function injectApiKeys(
   const gatewayToken = tokenRow?.gateway_token || config.gateway?.auth?.token;
   if (gatewayToken) {
     config.gateway = {
+      mode: 'local',
       bind: 'lan',
       trustedProxies: ['0.0.0.0/0'],
       controlUi: {
@@ -297,7 +298,6 @@ export async function injectApiKeys(
       auth: {
         mode: 'token',
         token: gatewayToken,
-        rateLimit: { exemptLoopback: true },
       },
     };
   }
@@ -326,6 +326,7 @@ export async function injectApiKeys(
 export function buildOpenclawConfig(gatewayToken: string): Record<string, any> {
   return {
     gateway: {
+      mode: 'local',
       bind: 'lan',
       trustedProxies: ['0.0.0.0/0'],
       controlUi: {

@@ -57,12 +57,11 @@ interface ListKeysResponse {
 export const RETAIL_MARKUP = 1.5;
 
 /**
- * Display markup factor: converts raw OR dollar amounts to "retail" display values.
- * Formula: OR charges 6% fee → then 50% platform profit on top.
- * So: base × 1.06 (OR fee) × 1.50 (50% margin) = base × 1.59
- * User pays $1.59 for every $1.00 of actual OR API budget.
+ * Display factor: 1.0 = show real OpenRouter dollar amounts.
+ * Previously 1.59 which inflated displayed values and confused users.
+ * Now we show the actual API budget so users see real numbers.
  */
-export const DISPLAY_FACTOR = 1.59;
+export const DISPLAY_FACTOR = 1.0;
 
 /** Revenue split for top-up purchases. */
 export const PURCHASE_SPLIT = { openrouter: 0.06, platform: 0.50, userCredit: 0.44 } as const;

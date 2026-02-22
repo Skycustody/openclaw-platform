@@ -21,14 +21,14 @@ const INSTANCE_DIR = '/opt/openclaw/instances';
 router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { category, search, sort } = req.query;
-    const limit = parseInt(req.query.limit as string) || 20;
+    const limit = parseInt(req.query.limit as string) || 50;
     const offset = parseInt(req.query.offset as string) || 0;
 
     const conditions = ['published = true'];
     const params: any[] = [];
     let idx = 1;
 
-    if (category) {
+    if (category && category !== 'All') {
       conditions.push(`category = $${idx++}`);
       params.push(category);
     }
@@ -46,8 +46,9 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
     const orderBy = ALLOWED_SORTS[sort as string] || 'install_count DESC';
     const where = conditions.join(' AND ');
 
-    const templates = await db.getMany(
-      `SELECT t.*, u.email as creator_email
+    const templates = await db.getMany<any>(
+      `SELECT t.id, t.name, t.description, t.category, t.rating, t.config,
+              t.install_count, t.created_at, u.email as creator_email
        FROM agent_templates t
        LEFT JOIN users u ON u.id = t.creator_id
        WHERE ${where}
@@ -56,7 +57,29 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
       [...params, limit, offset]
     );
 
-    res.json({ templates });
+    const installed = req.userId
+      ? await db.getMany<{ template_id: string }>(
+          'SELECT template_id FROM template_installs WHERE user_id = $1',
+          [req.userId]
+        ).catch(() => [])
+      : [];
+    const installedSet = new Set(installed.map(i => i.template_id));
+
+    const mapped = templates.map(t => ({
+      id: t.id,
+      name: t.name,
+      description: t.description,
+      category: t.category,
+      rating: parseFloat(t.rating) || 0,
+      installs: t.install_count || 0,
+      author: t.creator_email ? t.creator_email.split('@')[0] : 'OpenClaw',
+      installed: installedSet.has(t.id),
+      icon: t.config?.icon || null,
+      requiredSkills: t.config?.requiredSkills || [],
+      setupActions: t.config?.setupActions || null,
+    }));
+
+    res.json({ templates: mapped });
   } catch (err) {
     next(err);
   }
@@ -188,6 +211,12 @@ router.post('/:id/install', async (req: AuthRequest, res: Response, next: NextFu
     await db.query(
       'UPDATE agent_templates SET install_count = install_count + 1 WHERE id = $1',
       [req.params.id]
+    );
+
+    await db.query(
+      `INSERT INTO template_installs (user_id, template_id)
+       VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+      [req.userId, req.params.id]
     );
 
     res.json({ installed: true });

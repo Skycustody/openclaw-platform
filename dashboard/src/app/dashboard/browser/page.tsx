@@ -83,17 +83,9 @@ export default function BrowserPage() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader2 className="h-6 w-6 animate-spin text-white/40" />
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
-      <div className="animate-fade-up">
+      <div>
         <h1 className="text-[26px] font-bold text-white tracking-tight">Browser Agent</h1>
         <p className="mt-1 text-[15px] text-white/40">
           Control your agent&apos;s web browsing capabilities
@@ -101,17 +93,19 @@ export default function BrowserPage() {
       </div>
 
       {/* Browser Tool Status */}
-      <Card className="!p-5 animate-fade-up">
+      <Card className="!p-5">
         <div className="flex items-start gap-4">
           <div className={`flex h-12 w-12 items-center justify-center rounded-2xl border border-white/[0.08] ${
-            browserEnabled ? 'bg-green-500/10' : 'bg-white/5'
+            loading ? 'bg-white/5 animate-pulse' : browserEnabled ? 'bg-green-500/10' : 'bg-white/5'
           }`}>
-            <Globe className={`h-6 w-6 ${browserEnabled ? 'text-green-400' : 'text-white/20'}`} />
+            <Globe className={`h-6 w-6 ${loading ? 'text-white/10' : browserEnabled ? 'text-green-400' : 'text-white/20'}`} />
           </div>
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
               <CardTitle>Browser Tool</CardTitle>
-              {browserEnabled !== null && (
+              {loading ? (
+                <div className="h-5 w-16 rounded-full bg-white/5 animate-pulse" />
+              ) : browserEnabled !== null ? (
                 <span className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full ${
                   browserEnabled
                     ? 'bg-green-500/10 text-green-400'
@@ -122,7 +116,7 @@ export default function BrowserPage() {
                     : <><XCircle className="h-3 w-3" /> Disabled</>
                   }
                 </span>
-              )}
+              ) : null}
             </div>
             <CardDescription>
               {browserEnabled

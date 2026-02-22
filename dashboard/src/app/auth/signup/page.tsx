@@ -62,11 +62,7 @@ function SignupContent() {
   );
 
   useEffect(() => {
-    const script = document.createElement('script');
-    script.src = 'https://accounts.google.com/gsi/client';
-    script.async = true;
-    script.defer = true;
-    script.onload = () => {
+    const initGoogle = () => {
       const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
       if (!clientId || !window.google) return;
 
@@ -89,7 +85,22 @@ function SignupContent() {
         }
       );
     };
-    document.head.appendChild(script);
+
+    if (window.google?.accounts) {
+      initGoogle();
+    } else {
+      const existing = document.querySelector('script[src="https://accounts.google.com/gsi/client"]');
+      if (existing) {
+        existing.addEventListener('load', initGoogle);
+      } else {
+        const script = document.createElement('script');
+        script.src = 'https://accounts.google.com/gsi/client';
+        script.async = true;
+        script.defer = true;
+        script.onload = initGoogle;
+        document.head.appendChild(script);
+      }
+    }
   }, [handleGoogleResponse]);
 
   const handleEmailSubmit = async (e: React.FormEvent) => {
@@ -120,7 +131,7 @@ function SignupContent() {
         className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(250,250,250,0.04),transparent_50%)]"
       />
 
-      <div className="relative w-full max-w-[420px] animate-fade-up">
+      <div className="relative w-full max-w-[420px]">
         <div className="mb-8 text-center">
           <Link
             href="/"

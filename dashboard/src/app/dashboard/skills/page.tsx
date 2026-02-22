@@ -175,14 +175,6 @@ export default function SkillsPage() {
     });
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader2 className="h-6 w-6 animate-spin text-white/40" />
-      </div>
-    );
-  }
-
   if (data?.notProvisioned) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
@@ -201,7 +193,9 @@ export default function SkillsPage() {
   const enabledSet = new Set(data?.enabled || []);
   const skillsConfig = data?.skillsConfig || {};
 
-  const allTools = [...new Set([...(data?.enabled || []), ...(data?.disabled || [])])];
+  const allTools = loading
+    ? Object.keys(TOOL_META)
+    : [...new Set([...(data?.enabled || []), ...(data?.disabled || [])])];
 
   const toolsByCat: Record<string, string[]> = {};
   for (const name of allTools) {
@@ -219,14 +213,18 @@ export default function SkillsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="animate-fade-up">
+      <div>
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-3">
             <h1 className="text-[26px] font-bold text-white tracking-tight">Skills & Tools</h1>
-            <Badge variant="accent">{data?.enabled?.length || 0} tools active</Badge>
+            {loading ? (
+              <Badge variant="default"><Loader2 className="h-3 w-3 animate-spin" /></Badge>
+            ) : (
+              <Badge variant="accent">{data?.enabled?.length || 0} tools active</Badge>
+            )}
           </div>
-          <Button variant="glass" size="sm" onClick={fetchSkills}>
-            <RefreshCw className="h-3.5 w-3.5" /> Refresh
+          <Button variant="glass" size="sm" onClick={fetchSkills} disabled={loading}>
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh
           </Button>
         </div>
         <p className="text-[15px] text-white/40">
@@ -280,26 +278,32 @@ export default function SkillsPage() {
                     const Icon = meta.icon;
                     const isEnabled = enabledSet.has(name);
                   return (
-                      <Card key={name} className={`transition-all ${isEnabled ? 'ring-1 ring-emerald-500/10' : ''}`}>
+                      <Card key={name} className={`transition-all ${loading ? 'animate-pulse' : ''} ${isEnabled ? 'ring-1 ring-emerald-500/10' : ''}`}>
                         <div className="flex items-start gap-3 mb-2">
-                          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${isEnabled ? 'bg-emerald-500/10' : 'bg-white/5'}`}>
-                            <Icon className={`h-4.5 w-4.5 ${isEnabled ? 'text-emerald-400' : 'text-white/40'}`} />
+                          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${loading ? 'bg-white/5' : isEnabled ? 'bg-emerald-500/10' : 'bg-white/5'}`}>
+                            <Icon className={`h-4.5 w-4.5 ${loading ? 'text-white/20' : isEnabled ? 'text-emerald-400' : 'text-white/40'}`} />
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                              <h3 className={`text-[14px] font-semibold ${isEnabled ? 'text-white' : 'text-white/70'}`}>{meta.label}</h3>
-                              {isEnabled ? <Badge variant="green" dot>Active</Badge> : <Badge variant="default">Off</Badge>}
+                              <h3 className={`text-[14px] font-semibold ${loading ? 'text-white/40' : isEnabled ? 'text-white' : 'text-white/70'}`}>{meta.label}</h3>
+                              {loading ? (
+                                <div className="h-5 w-12 rounded-full bg-white/5" />
+                              ) : isEnabled ? <Badge variant="green" dot>Active</Badge> : <Badge variant="default">Off</Badge>}
                             </div>
                           </div>
                         </div>
                         <p className="text-[12px] text-white/40 leading-relaxed mb-3">{meta.desc}</p>
-                        <Button
-                          variant={isEnabled ? 'glass' : 'primary'} size="sm"
-                          loading={toggling === name}
-                          onClick={() => toggleTool(name, !isEnabled)}
-                        >
-                          {isEnabled ? <><PowerOff className="h-3.5 w-3.5" /> Disable</> : <><Power className="h-3.5 w-3.5" /> Enable</>}
-                        </Button>
+                        {loading ? (
+                          <div className="h-8 w-20 rounded-lg bg-white/5" />
+                        ) : (
+                          <Button
+                            variant={isEnabled ? 'glass' : 'primary'} size="sm"
+                            loading={toggling === name}
+                            onClick={() => toggleTool(name, !isEnabled)}
+                          >
+                            {isEnabled ? <><PowerOff className="h-3.5 w-3.5" /> Disable</> : <><Power className="h-3.5 w-3.5" /> Enable</>}
+                          </Button>
+                        )}
                     </Card>
                   );
                 })}
@@ -379,7 +383,9 @@ export default function SkillsPage() {
                       </div>
                         )}
 
-                        {isMacOnly ? (
+                        {loading ? (
+                          <div className="h-8 w-20 rounded-lg bg-white/5" />
+                        ) : isMacOnly ? (
                           <div className="text-[11px] text-white/25">Not available in cloud containers</div>
                         ) : (
                           <Button

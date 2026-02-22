@@ -10,7 +10,7 @@ import { useStore } from '@/lib/store';
 import ChatPanel from '@/components/dashboard/ChatPanel';
 import {
   Bot, Sparkles, Loader2, Cpu, Zap,
-  AlertTriangle, ExternalLink, RefreshCw, Paperclip,
+  AlertTriangle, ExternalLink, RefreshCw, Paperclip, Maximize2,
 } from 'lucide-react';
 
 type AgentDisplayStatus = 'active' | 'online' | 'sleeping' | 'paused' | 'provisioning' | 'cancelled' | 'offline' | 'grace_period';
@@ -40,6 +40,7 @@ export default function DashboardHome() {
 
   const [uploadingFile, setUploadingFile] = useState(false);
   const [uploadMsg, setUploadMsg] = useState<string | null>(null);
+  const [useIframe, setUseIframe] = useState(true);
 
   const pollAbort = useRef<AbortController | null>(null);
 
@@ -341,12 +342,23 @@ export default function DashboardHome() {
                 <span className="text-[11px] text-white/40">Attach</span>
               </button>
               {agentUrl && (
-                <button onClick={handleOpenExternal}
-                  className="flex items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-1.5 hover:border-white/15 hover:bg-white/[0.04] transition-all"
-                  title="Open OpenClaw Control UI in new tab">
-                  <ExternalLink className="h-3.5 w-3.5 text-white/30" />
-                  <span className="text-[11px] text-white/40">Control UI</span>
-                </button>
+                <>
+                  <button onClick={() => setUseIframe(!useIframe)}
+                    className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 transition-all ${
+                      useIframe
+                        ? 'border-white/15 bg-white/[0.06] text-white/60'
+                        : 'border-white/[0.06] bg-white/[0.02] text-white/30 hover:border-white/15 hover:bg-white/[0.04]'
+                    }`}
+                    title={useIframe ? 'Switch to simple chat' : 'Switch to full gateway UI'}>
+                    <Maximize2 className="h-3.5 w-3.5" />
+                    <span className="text-[11px]">{useIframe ? 'Gateway' : 'Simple'}</span>
+                  </button>
+                  <button onClick={handleOpenExternal}
+                    className="flex items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-1.5 hover:border-white/15 hover:bg-white/[0.04] transition-all"
+                    title="Open in new tab">
+                    <ExternalLink className="h-3.5 w-3.5 text-white/30" />
+                  </button>
+                </>
               )}
             </>
           )}
@@ -423,8 +435,18 @@ export default function DashboardHome() {
           </div>
         )}
 
-        {/* Chat — replaces the old iframe embed */}
-        {phase === 'ready' && <ChatPanel agentId={agentIdParam} />}
+        {/* Gateway iframe (primary) or simple ChatPanel (fallback) */}
+        {phase === 'ready' && agentUrl && useIframe && (
+          <iframe
+            src={agentUrl}
+            className="absolute inset-0 w-full h-full border-0"
+            allow="clipboard-write; clipboard-read"
+            title="OpenClaw Gateway"
+          />
+        )}
+        {phase === 'ready' && (!agentUrl || !useIframe) && (
+          <ChatPanel agentId={agentIdParam} />
+        )}
       </div>
     </div>
   );

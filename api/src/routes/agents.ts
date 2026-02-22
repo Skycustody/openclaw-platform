@@ -458,18 +458,25 @@ router.post('/', async (req: AuthRequest, res: Response, next: NextFunction) => 
       });
     }
 
-    await syncAgentToContainer(
-      container.serverIp, req.userId!, container.containerName,
-      { openclawId, name: name.trim(), purpose: purpose || null, instructions: instructions || null }
-    );
-
-    await restartContainerHelper(container.serverIp, container.containerName, 15000);
-
+    // Write DB record first so injectApiKeys can discover the new agent
     await db.query(
       `INSERT INTO agents (id, user_id, name, purpose, instructions, status, ram_mb, is_primary, openclaw_agent_id)
        VALUES ($1, $2, $3, $4, $5, 'active', 0, false, $6)`,
       [agentId, req.userId, name.trim(), purpose || null, instructions || null, openclawId]
     );
+
+    // Create workspace + SOUL.md on disk
+    await syncAgentToContainer(
+      container.serverIp, req.userId!, container.containerName,
+      { openclawId, name: name.trim(), purpose: purpose || null, instructions: instructions || null }
+    );
+
+    // Full config sync: re-injects API keys, model routing, gateway config,
+    // channel bindings, and ALL agents from DB into openclaw.json.
+    // This ensures the gateway dashboard sees the new agent immediately.
+    await injectApiKeys(container.serverIp, req.userId!, container.containerName, plan as any);
+
+    await restartContainerHelper(container.serverIp, container.containerName, 15000);
 
     const agent = await db.getOne<Agent>('SELECT * FROM agents WHERE id = $1', [agentId]);
 
@@ -531,6 +538,10 @@ router.put('/:agentId', async (req: AuthRequest, res: Response, next: NextFuncti
         );
       }
 
+      // Full config sync so gateway picks up changes
+      const user = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [req.userId]);
+      await injectApiKeys(container.serverIp, req.userId!, container.containerName, (user?.plan || 'starter') as any);
+
       await restartContainerHelper(container.serverIp, container.containerName, 15000);
     } catch (err) {
       console.warn(`[agents] Config update failed for agent ${agentId}:`, err);
@@ -557,17 +568,22 @@ router.delete('/:agentId', async (req: AuthRequest, res: Response, next: NextFun
       return res.status(400).json({ error: 'Cannot delete your primary agent' });
     }
 
+    // Cascade deletes agent_channels and agent_communications via FK
+    await db.query('DELETE FROM agents WHERE id = $1', [agentId]);
+
     try {
       const container = await getUserContainer(req.userId!);
       const openclawId = getOpenclawId(agent);
       await removeAgentFromContainer(container.serverIp, req.userId!, openclawId);
+
+      // Full config sync: removes the agent from openclaw.json agents.list
+      const user = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [req.userId]);
+      await injectApiKeys(container.serverIp, req.userId!, container.containerName, (user?.plan || 'starter') as any);
+
       await restartContainerHelper(container.serverIp, container.containerName, 15000);
     } catch (err) {
       console.warn(`[agents] Container cleanup failed for agent ${agentId}:`, err);
     }
-
-    // Cascade deletes agent_channels and agent_communications via FK
-    await db.query('DELETE FROM agents WHERE id = $1', [agentId]);
 
     res.json({ ok: true, message: 'Agent removed from your OpenClaw instance' });
   } catch (err) {
