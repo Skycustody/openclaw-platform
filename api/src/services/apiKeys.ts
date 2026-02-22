@@ -137,15 +137,10 @@ export async function injectApiKeys(
     config = {};
   }
 
-  // Remove legacy custom providers — OpenRouter is a built-in provider,
-  // it only needs OPENROUTER_API_KEY env var (set on docker run).
-  if (config.models?.providers) {
-    delete config.models.providers.openai;
-    delete config.models.providers.anthropic;
-    delete config.models.providers.nexos;
-    delete config.models.providers['openai-proxy'];
-    delete config.models.providers['anthropic-proxy'];
-    delete config.models.providers.openrouter;
+  // Remove legacy keys that OpenClaw rejects as "Unrecognized"
+  delete config.models;
+  if (config.agents?.defaults) {
+    delete config.agents.defaults.fallbacks; // stale key from old code
   }
 
   // Set the API key in config.env so OpenClaw picks it up as built-in provider
