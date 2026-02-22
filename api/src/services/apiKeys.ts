@@ -36,9 +36,17 @@ import db from '../lib/db';
 
 const INSTANCE_DIR = '/opt/openclaw/instances';
 
-const PROXY_BASE_URL = process.env.API_URL
-  ? `${process.env.API_URL}/proxy/v1`
-  : 'https://api.valnaa.com/proxy/v1';
+// Containers must reach the proxy without going through Cloudflare/Nginx
+// (which returns 502 for server-to-server calls). When CONTROL_PLANE_IP is
+// set, containers call the API directly over HTTP on its port.
+const PROXY_BASE_URL = (() => {
+  if (process.env.CONTROL_PLANE_IP) {
+    const port = process.env.PORT || '4000';
+    return `http://${process.env.CONTROL_PLANE_IP}:${port}/proxy/v1`;
+  }
+  if (process.env.API_URL) return `${process.env.API_URL}/proxy/v1`;
+  return 'https://api.valnaa.com/proxy/v1';
+})();
 
 /**
  * Inject the user's OpenRouter API key into their OpenClaw container and
