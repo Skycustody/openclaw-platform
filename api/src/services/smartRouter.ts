@@ -191,11 +191,11 @@ export function selectModel(
     reason = 'Requires both internet access and vision capability';
   } else if (estimatedTokens > 100000) {
     model = 'openai/gpt-4.1';
-    reason = `Large context (${estimatedTokens} est. tokens) — cheapest large-context model`;
+    reason = `Large context (${estimatedTokens} est. tokens) - cheapest large-context model`;
   } else if (needsInternet) {
     if (complexity === 'simple') {
       model = 'openai/gpt-4o-mini';
-      reason = 'Simple internet task — cheapest capable model';
+      reason = 'Simple internet task - cheapest capable model';
     } else if (needsDeepAnalysis) {
       model = 'anthropic/claude-sonnet-4-20250514';
       reason = 'Complex internet research requiring deep analysis';
@@ -206,23 +206,23 @@ export function selectModel(
   } else if (needsVision) {
     if (complexity === 'simple') {
       model = 'google/gemini-2.0-flash-001';
-      reason = 'Simple vision task — cheapest model with vision';
+      reason = 'Simple vision task - cheapest model with vision';
     } else {
       model = 'openai/gpt-4o';
       reason = 'Complex vision task';
     }
   } else if (complexity === 'simple') {
     model = 'google/gemini-2.0-flash-001';
-    reason = 'Simple text task — cheapest model (Gemini Flash)';
+    reason = 'Simple text task - cheapest model (Gemini Flash)';
   } else if (needsCode) {
     model = 'anthropic/claude-sonnet-4-20250514';
-    reason = 'Code task — best code generation model';
+    reason = 'Code task - best code generation model';
   } else if (needsDeepAnalysis) {
     model = 'openai/o3-mini';
-    reason = 'Deep analysis — reasoning model at lower cost than Sonnet';
+    reason = 'Deep analysis - reasoning model at lower cost than Sonnet';
   } else {
     model = 'openai/gpt-4o-mini';
-    reason = 'Balanced fallback — cost-efficient for medium complexity';
+    reason = 'Balanced fallback - cost-efficient for medium complexity';
   }
 
   // Calculate savings vs always using the most expensive available model (Sonnet)

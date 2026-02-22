@@ -153,12 +153,14 @@ router.post('/v1/chat/completions', async (req: Request, res: Response) => {
       },
     },
     (proxyRes) => {
+      // HTTP headers must be ASCII-safe; strip non-ASCII from reason string
+      const safeReason = routingReason.slice(0, 100).replace(/[^\x20-\x7E]/g, '-');
       res.writeHead(proxyRes.statusCode || 200, {
         'Content-Type': proxyRes.headers['content-type'] || 'application/json',
         'Cache-Control': 'no-cache',
         ...(isStream ? { 'Transfer-Encoding': 'chunked' } : {}),
         'X-Model-Selected': selectedModel,
-        'X-Routing-Reason': routingReason.slice(0, 100),
+        'X-Routing-Reason': safeReason,
       });
       proxyRes.pipe(res);
     }
