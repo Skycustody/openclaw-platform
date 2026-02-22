@@ -108,6 +108,8 @@ router.post('/v1/chat/completions', async (req: Request, res: Response) => {
   const lastMessage = extractLastUserMessage(body.messages);
   const hasImage = hasImageContent(body.messages);
 
+  const classification = classifyTaskHeuristic(lastMessage, hasImage);
+
   let selectedModel: string;
   let routingReason: string;
   let tokensSaved = 0;
@@ -116,7 +118,6 @@ router.post('/v1/chat/completions', async (req: Request, res: Response) => {
     selectedModel = user.manual_model;
     routingReason = 'Manual model override';
   } else {
-    const classification = classifyTaskHeuristic(lastMessage, hasImage);
     const plan = user?.plan || 'starter';
     const decision = selectModel(classification, plan);
     selectedModel = decision.model;
@@ -133,6 +134,16 @@ router.post('/v1/chat/completions', async (req: Request, res: Response) => {
   }
 
   body.model = selectedModel;
+
+  // Cap max_tokens based on complexity to avoid 402 "can't afford" errors.
+  // OpenClaw sends the provider's maxTokens (4096) but simple tasks need far less.
+  if (!body.max_tokens || body.max_tokens > 2048) {
+    if (classification.complexity === 'simple') {
+      body.max_tokens = 512;
+    } else if (classification.complexity === 'medium') {
+      body.max_tokens = 2048;
+    }
+  }
 
   const payload = JSON.stringify(body);
   const isStream = body.stream !== false;
