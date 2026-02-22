@@ -90,7 +90,7 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
 router.get('/:fileName/download', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { serverIp } = await getUserContainer(req.userId!);
-    const fileName = decodeURIComponent(req.params.fileName);
+    const fileName = decodeURIComponent(req.params.fileName as string);
     const safeFile = fileName.replace(/\.\./g, '').replace(/^\//, '');
     const filePath = `${INSTANCE_DIR}/${req.userId}/workspace/${safeFile}`;
 
@@ -165,7 +165,7 @@ router.post('/upload', async (req: AuthRequest, res: Response, next: NextFunctio
 router.delete('/:fileName', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { serverIp } = await getUserContainer(req.userId!);
-    const fileName = decodeURIComponent(req.params.fileName);
+    const fileName = decodeURIComponent(req.params.fileName as string);
     const safeFile = fileName.replace(/\.\./g, '').replace(/^\//, '');
 
     // Prevent deleting critical OpenClaw files

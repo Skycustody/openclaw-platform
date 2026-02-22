@@ -64,7 +64,7 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
 
 router.put('/:toolName', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { toolName } = req.params;
+    const toolName = req.params.toolName as string;
     const { enabled, settings } = req.body;
 
     const { serverIp, containerName } = await getUserContainer(req.userId!);
@@ -91,7 +91,7 @@ router.put('/:toolName', async (req: AuthRequest, res: Response, next: NextFunct
 
 router.delete('/:toolName', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { toolName } = req.params;
+    const toolName = req.params.toolName as string;
 
     const { serverIp, containerName } = await getUserContainer(req.userId!);
     const config = await readContainerConfig(serverIp, req.userId!);
