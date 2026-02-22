@@ -83,17 +83,14 @@ export async function injectApiKeys(
     delete config.agents.defaults.fallbacks;
   }
 
-  // Set API key in env (used by the proxy for auth + forwarding to OpenRouter)
+  // ── Environment variables ──
   if (!config.env) config.env = {};
   config.env.OPENROUTER_API_KEY = apiKey;
   if (process.env.BROWSERLESS_TOKEN) {
     config.env.BROWSERLESS_TOKEN = process.env.BROWSERLESS_TOKEN;
   }
 
-  // Configure "platform" as a custom OpenAI-compatible provider pointing to our proxy.
-  // The proxy receives requests, classifies complexity, selects the real model,
-  // and forwards to OpenRouter. The "auto" model ID is a placeholder — the proxy
-  // replaces it with the actual model before forwarding.
+  // ── Smart model routing via platform proxy ──
   config.models = {
     providers: {
       platform: {
@@ -113,6 +110,64 @@ export async function injectApiKeys(
     primary: 'platform/auto',
     fallbacks: ['openrouter/openai/gpt-4o-mini'],
   };
+
+  // ── Tools configuration ──
+  // Enable all tools that work with our OpenRouter key / existing services.
+  // Users can toggle individual tools via the dashboard Skills page.
+  if (!config.tools) config.tools = {};
+
+  // Web search via Perplexity Sonar through OpenRouter (uses same API key)
+  if (!config.tools.web) config.tools.web = {};
+  config.tools.web.search = {
+    enabled: true,
+    provider: 'perplexity',
+    perplexity: {
+      apiKey: apiKey,
+      baseUrl: 'https://openrouter.ai/api/v1',
+      model: 'perplexity/sonar-pro',
+    },
+  };
+  config.tools.web.fetch = { enabled: true };
+
+  // Browser — available when BROWSERLESS_TOKEN is set
+  if (!config.tools.browser) config.tools.browser = {};
+  config.tools.browser.enabled = !!process.env.BROWSERLESS_TOKEN;
+
+  // Shell / exec — sandboxed inside the container
+  if (!config.tools.exec) config.tools.exec = {};
+  config.tools.exec.enabled = true;
+
+  // File system tools
+  if (!config.tools.read) config.tools.read = {};
+  config.tools.read.enabled = true;
+  if (!config.tools.write) config.tools.write = {};
+  config.tools.write.enabled = true;
+  if (!config.tools.edit) config.tools.edit = {};
+  config.tools.edit.enabled = true;
+
+  // Memory
+  if (!config.tools.memory_search) config.tools.memory_search = {};
+  config.tools.memory_search.enabled = true;
+  if (!config.tools.memory_get) config.tools.memory_get = {};
+  config.tools.memory_get.enabled = true;
+
+  // Sessions & sub-agents
+  if (!config.tools.sessions_spawn) config.tools.sessions_spawn = {};
+  config.tools.sessions_spawn.enabled = true;
+  if (!config.tools.sessions_list) config.tools.sessions_list = {};
+  config.tools.sessions_list.enabled = true;
+  if (!config.tools.sessions_send) config.tools.sessions_send = {};
+  config.tools.sessions_send.enabled = true;
+  if (!config.tools.session_status) config.tools.session_status = {};
+  config.tools.session_status.enabled = true;
+
+  // Cron / automation
+  if (!config.tools.cron) config.tools.cron = {};
+  config.tools.cron.enabled = true;
+
+  // Image analysis (uses the configured model's vision capability)
+  if (!config.tools.image) config.tools.image = {};
+  config.tools.image.enabled = true;
 
   // Enforce gateway config every time — prevents "pairing required" drift
   const gatewayToken = config.gateway?.auth?.token;

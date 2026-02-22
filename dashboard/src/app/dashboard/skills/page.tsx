@@ -11,14 +11,27 @@ import {
 } from 'lucide-react';
 
 const TOOL_META: Record<string, { label: string; description: string; icon: typeof Globe; category: string }> = {
-  web_search:   { label: 'Web Search',      description: 'Search the web for real-time information, news, and answers.',             icon: Search,   category: 'Research' },
-  browser:      { label: 'Web Browser',      description: 'Navigate websites, read pages, fill forms, and extract data.',             icon: Globe,    category: 'Research' },
-  code:         { label: 'Code Execution',   description: 'Write and execute code in a sandboxed environment.',                       icon: Code,     category: 'Development' },
-  code_exec:    { label: 'Code Execution',   description: 'Write and execute code in a sandboxed environment.',                       icon: Code,     category: 'Development' },
-  file:         { label: 'File Access',       description: 'Read, write, and manage files in the agent workspace.',                    icon: FileText, category: 'Productivity' },
-  files:        { label: 'File Access',       description: 'Read, write, and manage files in the agent workspace.',                    icon: FileText, category: 'Productivity' },
-  memory:       { label: 'Memory',            description: 'Store and recall information across conversations.',                       icon: Brain,    category: 'Intelligence' },
-  rag:          { label: 'Knowledge Base',    description: 'Search and retrieve from uploaded documents and knowledge.',               icon: Brain,    category: 'Intelligence' },
+  web_search:       { label: 'Web Search',       description: 'Search the web using AI-powered Perplexity Sonar via OpenRouter. Returns synthesized answers with citations.',    icon: Search,   category: 'Research' },
+  web_fetch:        { label: 'Web Fetch',         description: 'Fetch any URL and extract readable content (HTML to markdown). Great for reading articles and docs.',             icon: Globe,    category: 'Research' },
+  browser:          { label: 'Web Browser',       description: 'Full browser automation — navigate sites, click, type, fill forms, take screenshots, and extract data.',          icon: Globe,    category: 'Research' },
+  exec:             { label: 'Shell / Terminal',   description: 'Run shell commands in a sandboxed container. Install packages, run scripts, manage files.',                       icon: Code,     category: 'Development' },
+  code:             { label: 'Code Execution',     description: 'Write and execute code in a sandboxed environment.',                                                              icon: Code,     category: 'Development' },
+  code_exec:        { label: 'Code Execution',     description: 'Write and execute code in a sandboxed environment.',                                                              icon: Code,     category: 'Development' },
+  read:             { label: 'File Read',          description: 'Read file contents from the agent workspace.',                                                                    icon: FileText, category: 'Files' },
+  write:            { label: 'File Write',         description: 'Create and write files in the agent workspace.',                                                                  icon: FileText, category: 'Files' },
+  edit:             { label: 'File Edit',          description: 'Edit existing files with precise replacements.',                                                                   icon: FileText, category: 'Files' },
+  file:             { label: 'File Access',        description: 'Read, write, and manage files in the agent workspace.',                                                            icon: FileText, category: 'Files' },
+  files:            { label: 'File Access',        description: 'Read, write, and manage files in the agent workspace.',                                                            icon: FileText, category: 'Files' },
+  memory_search:    { label: 'Memory Search',      description: 'Search stored memories across conversations. The agent remembers what you tell it.',                               icon: Brain,    category: 'Intelligence' },
+  memory_get:       { label: 'Memory Recall',      description: 'Retrieve a specific memory entry by ID.',                                                                         icon: Brain,    category: 'Intelligence' },
+  memory:           { label: 'Memory',             description: 'Store and recall information across conversations.',                                                               icon: Brain,    category: 'Intelligence' },
+  image:            { label: 'Image Analysis',     description: 'Analyze images using the model\'s vision capability. Describe, extract text, understand charts.',                  icon: Search,   category: 'Intelligence' },
+  sessions_spawn:   { label: 'Sub-Agents',         description: 'Spawn sub-agent sessions for parallel tasks. The agent can delegate work to specialized sub-agents.',              icon: Brain,    category: 'Multi-Agent' },
+  sessions_list:    { label: 'Session List',       description: 'List all active agent sessions and their status.',                                                                 icon: Wrench,   category: 'Multi-Agent' },
+  sessions_send:    { label: 'Session Messaging',  description: 'Send messages between agent sessions for coordination.',                                                           icon: Wrench,   category: 'Multi-Agent' },
+  session_status:   { label: 'Session Status',     description: 'Check or update the current session status and model.',                                                            icon: Wrench,   category: 'Multi-Agent' },
+  cron:             { label: 'Cron / Scheduler',   description: 'Create scheduled tasks and automations. The agent can set reminders and recurring jobs.',                          icon: Wrench,   category: 'Automation' },
+  rag:              { label: 'Knowledge Base',     description: 'Search and retrieve from uploaded documents and knowledge.',                                                        icon: Brain,    category: 'Intelligence' },
 };
 
 function getToolMeta(name: string) {
