@@ -40,6 +40,7 @@ import { sendWelcomeEmail } from './email';
 import { cloudflareDNS } from './cloudflare';
 import { v4 as uuid } from 'uuid';
 import { buildOpenclawConfig, injectApiKeys } from './apiKeys';
+import { reapplyGatewayConfig } from './containerConfig';
 import { ensureNexosKey } from './nexos';
 
 /** Generate a per-container secret bound to a specific userId. */
@@ -200,7 +201,7 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
       'RUN npm install -g openclaw@latest',
       'WORKDIR /data',
       'EXPOSE 18789',
-      'CMD ["sh", "-c", "openclaw doctor --fix 2>/dev/null || true; exec openclaw gateway --port 18789 --bind lan --allow-unconfigured run"]',
+      'CMD ["sh", "-c", "exec openclaw gateway --port 18789 --bind lan --allow-unconfigured run"]',
     ].join('\n');
     const dockerfileB64 = Buffer.from(dockerfile).toString('base64');
     const defaultCfgB64 = Buffer.from(JSON.stringify(openclawConfig, null, 2)).toString('base64');
@@ -225,8 +226,10 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
   // Ensure user has an OpenRouter API key before container creation
   const nexosKey = await ensureNexosKey(userId);
 
-  // Mount the instance directory at /root/.openclaw so config + credentials persist
-  const startScript = `sh -c 'openclaw doctor --fix 2>/dev/null || true; exec openclaw gateway --port 18789 --bind lan --allow-unconfigured run'`;
+  // Mount the instance directory at /root/.openclaw so config + credentials persist.
+  // DO NOT run `openclaw doctor --fix` — it strips gateway auth keys
+  // (dangerouslyDisableDeviceAuth, allowInsecureAuth) causing "pairing required".
+  const startScript = `sh -c 'exec openclaw gateway --port 18789 --bind lan --allow-unconfigured run'`;
   const dockerRunCmd = [
     'docker run -d',
     `--name ${containerName}`,
@@ -290,6 +293,9 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
 
   // Step 6b: Inject OpenRouter key + configure model router per plan tier
   await injectApiKeys(server.ip, userId, containerName, plan);
+
+  // Step 6c: Re-apply gateway auth config (doctor --fix on existing images may strip it)
+  await reapplyGatewayConfig(server.ip, userId, containerName);
 
   // Step 7: Create DNS record pointing subdomain → worker IP
   await cloudflareDNS.upsertRecord(subdomain, server.ip);
@@ -362,6 +368,11 @@ export async function restartContainer(userId: string): Promise<void> {
 
   const containerName = user.container_name || `openclaw-${userId}`;
   await sshExec(server.ip, `docker restart ${containerName}`);
+
+  // Wait for container to be running, then re-apply gateway config
+  // (existing containers run `openclaw doctor --fix` which strips auth keys)
+  await new Promise(r => setTimeout(r, 3000));
+  await reapplyGatewayConfig(server.ip, userId, containerName);
 }
 
 export async function updateContainerConfig(userId: string, config: Record<string, any>): Promise<void> {

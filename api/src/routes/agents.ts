@@ -22,6 +22,7 @@ import { v4 as uuid } from 'uuid';
 import {
   getUserContainer, readContainerConfig, writeContainerConfig,
   restartContainer as restartContainerHelper,
+  reapplyGatewayConfig,
 } from '../services/containerConfig';
 import { sshExec } from '../services/ssh';
 import { encrypt } from '../lib/encryption';
@@ -477,6 +478,7 @@ router.post('/', async (req: AuthRequest, res: Response, next: NextFunction) => 
     await injectApiKeys(container.serverIp, req.userId!, container.containerName, plan as any);
 
     await restartContainerHelper(container.serverIp, container.containerName, 15000);
+    await reapplyGatewayConfig(container.serverIp, req.userId!, container.containerName);
 
     const agent = await db.getOne<Agent>('SELECT * FROM agents WHERE id = $1', [agentId]);
 
@@ -543,6 +545,7 @@ router.put('/:agentId', async (req: AuthRequest, res: Response, next: NextFuncti
       await injectApiKeys(container.serverIp, req.userId!, container.containerName, (user?.plan || 'starter') as any);
 
       await restartContainerHelper(container.serverIp, container.containerName, 15000);
+      await reapplyGatewayConfig(container.serverIp, req.userId!, container.containerName);
     } catch (err) {
       console.warn(`[agents] Config update failed for agent ${agentId}:`, err);
     }
@@ -581,6 +584,7 @@ router.delete('/:agentId', async (req: AuthRequest, res: Response, next: NextFun
       await injectApiKeys(container.serverIp, req.userId!, container.containerName, (user?.plan || 'starter') as any);
 
       await restartContainerHelper(container.serverIp, container.containerName, 15000);
+      await reapplyGatewayConfig(container.serverIp, req.userId!, container.containerName);
     } catch (err) {
       console.warn(`[agents] Container cleanup failed for agent ${agentId}:`, err);
     }
@@ -645,6 +649,7 @@ router.post('/:agentId/channels', async (req: AuthRequest, res: Response, next: 
       await injectApiKeys(container.serverIp, req.userId!, container.containerName, 'starter');
       await syncBindingsToContainer(container.serverIp, req.userId!);
       await restartContainerHelper(container.serverIp, container.containerName, 15000);
+      await reapplyGatewayConfig(container.serverIp, req.userId!, container.containerName);
     } catch (err) {
       console.warn(`[agents/channels] Container sync failed:`, err);
     }
@@ -684,6 +689,7 @@ router.delete('/:agentId/channels/:channelId', async (req: AuthRequest, res: Res
       const container = await getUserContainer(req.userId!);
       await syncBindingsToContainer(container.serverIp, req.userId!);
       await restartContainerHelper(container.serverIp, container.containerName, 15000);
+      await reapplyGatewayConfig(container.serverIp, req.userId!, container.containerName);
     } catch (err) {
       console.warn(`[agents/channels] Container sync failed:`, err);
     }
@@ -743,6 +749,7 @@ router.put('/:agentId/communications', async (req: AuthRequest, res: Response, n
       const container = await getUserContainer(req.userId!);
       await syncBindingsToContainer(container.serverIp, req.userId!);
       await restartContainerHelper(container.serverIp, container.containerName, 15000);
+      await reapplyGatewayConfig(container.serverIp, req.userId!, container.containerName);
     } catch (err) {
       console.warn(`[agents/comms] Container sync failed:`, err);
     }

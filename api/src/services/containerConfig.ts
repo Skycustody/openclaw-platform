@@ -86,6 +86,55 @@ export async function restartContainer(serverIp: string, containerName: string, 
   return false;
 }
 
+/**
+ * Re-apply gateway config to a RUNNING container via `openclaw config merge`.
+ *
+ * This is necessary because existing containers run `openclaw doctor --fix`
+ * at startup, which strips gateway auth keys (dangerouslyDisableDeviceAuth,
+ * allowInsecureAuth, etc.) from openclaw.json. Without these keys the gateway
+ * demands device pairing, breaking the browser tool and iframe embed.
+ *
+ * Call this AFTER the container has fully started (gateway is listening).
+ */
+export async function reapplyGatewayConfig(
+  serverIp: string,
+  userId: string,
+  containerName: string,
+): Promise<void> {
+  const tokenRow = await db.getOne<{ gateway_token: string }>(
+    'SELECT gateway_token FROM users WHERE id = $1',
+    [userId]
+  );
+  if (!tokenRow?.gateway_token) return;
+
+  const gatewayConfig = {
+    gateway: {
+      mode: 'local',
+      bind: 'lan',
+      trustedProxies: ['0.0.0.0/0'],
+      controlUi: {
+        enabled: true,
+        allowInsecureAuth: true,
+        dangerouslyDisableDeviceAuth: true,
+      },
+      auth: {
+        mode: 'token',
+        token: tokenRow.gateway_token,
+      },
+    },
+  };
+
+  const b64 = Buffer.from(JSON.stringify(gatewayConfig)).toString('base64');
+
+  // Merge into running gateway — updates both in-memory config and config file
+  await sshExec(
+    serverIp,
+    `echo '${b64}' | base64 -d | docker exec -i ${containerName} openclaw config merge - 2>/dev/null`
+  ).catch((err) => {
+    console.warn(`[reapplyGatewayConfig] merge failed for ${containerName}:`, err.message);
+  });
+}
+
 export async function sendContainerMessage(
   serverIp: string,
   containerName: string,

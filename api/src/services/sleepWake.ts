@@ -18,6 +18,7 @@ import db from '../lib/db';
 import redis from '../lib/redis';
 import { sshExec, waitForReady } from './ssh';
 import { updateServerRam } from './serverRegistry';
+import { reapplyGatewayConfig } from './containerConfig';
 import { User, Server } from '../types';
 
 const SLEEP_AFTER_MINUTES = 30;
@@ -107,6 +108,11 @@ export async function wakeContainer(userId: string): Promise<void> {
   } catch {
     console.warn(`Container ${containerName} started but health check timed out`);
   }
+
+  // Re-apply gateway auth config after wake. Existing containers run
+  // `openclaw doctor --fix` at startup which strips dangerouslyDisableDeviceAuth,
+  // causing "gateway closed (1008): pairing required" for tools like browser.
+  await reapplyGatewayConfig(server.ip, userId, containerName);
 
   await db.query(
     `UPDATE users SET status = 'active', last_active = NOW() WHERE id = $1`,

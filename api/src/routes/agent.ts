@@ -26,7 +26,7 @@ import { restartContainer, provisionUser } from '../services/provisioning';
 import { User, Server } from '../types';
 import { sshExec, sshExecStream } from '../services/ssh';
 import { injectApiKeys } from '../services/apiKeys';
-import { getUserContainer } from '../services/containerConfig';
+import { getUserContainer, reapplyGatewayConfig } from '../services/containerConfig';
 
 const router = Router();
 router.use(authenticate);
@@ -277,17 +277,23 @@ router.post('/open', authenticate, async (req: AuthRequest, res: Response, next:
     }
 
     // Ensure API keys + model router config are injected (fixes existing users)
+    const cn = user.container_name || `openclaw-${user.id.slice(0, 12)}`;
     if (server) {
-      const cn = user.container_name || `openclaw-${user.id.slice(0, 12)}`;
-      injectApiKeys(server.ip, user.id, cn, user.plan as any).catch((err) =>
-        console.warn(`[agent/open] Key injection failed for ${user.id}:`, err.message)
-      );
+      injectApiKeys(server.ip, user.id, cn, user.plan as any)
+        .then(() => reapplyGatewayConfig(server.ip, user.id, cn))
+        .catch((err) =>
+          console.warn(`[agent/open] Key injection failed for ${user.id}:`, err.message)
+        );
     }
 
     // Case 2: sleeping — wake it up
     if (user.status === 'sleeping') {
       console.log(`[agent/open] Waking container for ${user.id}`);
       await wakeContainer(user.id);
+      // Re-apply gateway config after wake (doctor --fix may have stripped it)
+      if (server) {
+        reapplyGatewayConfig(server.ip, user.id, cn).catch(() => {});
+      }
       return respond(await agentUrlParts(user.subdomain!, user.id, server), 'active');
     }
 
@@ -353,6 +359,8 @@ router.post('/open', authenticate, async (req: AuthRequest, res: Response, next:
 
           return res.status(202).json({ status: 'provisioning', message: 'Agent is being re-created...' });
         }
+        // Container was stopped and just started — re-apply gateway config
+        reapplyGatewayConfig(server.ip, user.id, containerName).catch(() => {});
       }
     }
 
