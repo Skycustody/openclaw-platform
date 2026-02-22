@@ -135,16 +135,6 @@ router.post('/v1/chat/completions', async (req: Request, res: Response) => {
 
   body.model = selectedModel;
 
-  // Cap max_tokens based on complexity to avoid 402 "can't afford" errors.
-  // OpenClaw sends the provider's maxTokens (4096) but simple tasks need far less.
-  if (!body.max_tokens || body.max_tokens > 2048) {
-    if (classification.complexity === 'simple') {
-      body.max_tokens = 512;
-    } else if (classification.complexity === 'medium') {
-      body.max_tokens = 2048;
-    }
-  }
-
   const payload = JSON.stringify(body);
   const isStream = body.stream !== false;
   const url = new URL(OPENROUTER_COMPLETIONS);
