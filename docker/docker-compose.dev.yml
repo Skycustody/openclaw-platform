@@ -7,16 +7,12 @@ services:
       POSTGRES_DB: openclaw
       POSTGRES_USER: openclaw
       POSTGRES_PASSWORD: localdev
-    ports:
-      - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ../migrations/001_initial_schema.sql:/docker-entrypoint-initdb.d/001_schema.sql
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
     volumes:
       - redisdata:/data
 
@@ -28,6 +24,7 @@ services:
       - "4000:4000"
     environment:
       DATABASE_URL: postgresql://openclaw:localdev@postgres:5432/openclaw
+      # Must use Docker service name; .env REDIS_URL=localhost breaks rate limiter inside container
       REDIS_URL: redis://redis:6379
       NODE_ENV: development
     env_file:

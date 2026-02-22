@@ -37,13 +37,22 @@ const sensitiveLimiter = new RateLimiterRedis({
   duration: 60,
 });
 
+// When Redis is down or wrong URL, consume() rejects — don't block all requests.
+function isRateLimitRejection(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && ('msBeforeNext' in err || 'remainingPoints' in err);
+}
+
 export function rateLimitGeneral(req: Request, res: Response, next: NextFunction) {
   const key = req.ip || 'unknown';
   generalLimiter
     .consume(key)
     .then(() => next())
-    .catch(() => {
-      res.status(429).json({ error: { code: 'RATE_LIMIT', message: 'Too many requests' } });
+    .catch((err) => {
+      if (isRateLimitRejection(err)) {
+        res.status(429).json({ error: { code: 'RATE_LIMIT', message: 'Too many requests' } });
+      } else {
+        next(); // Redis error — allow through so we don't lock everyone out
+      }
     });
 }
 
@@ -52,8 +61,12 @@ export function rateLimitAuth(req: Request, res: Response, next: NextFunction) {
   authLimiter
     .consume(key)
     .then(() => next())
-    .catch(() => {
-      res.status(429).json({ error: { code: 'RATE_LIMIT', message: 'Too many login attempts' } });
+    .catch((err) => {
+      if (isRateLimitRejection(err)) {
+        res.status(429).json({ error: { code: 'RATE_LIMIT', message: 'Too many login attempts' } });
+      } else {
+        next(); // Redis error — allow through so sign-in always works
+      }
     });
 }
 
@@ -62,8 +75,10 @@ export function rateLimitWebhook(req: Request, res: Response, next: NextFunction
   webhookLimiter
     .consume(key)
     .then(() => next())
-    .catch(() => {
-      res.status(429).json({ error: { code: 'RATE_LIMIT', message: 'Too many webhooks' } });
+    .catch((err) => {
+      if (isRateLimitRejection(err)) {
+        res.status(429).json({ error: { code: 'RATE_LIMIT', message: 'Too many webhooks' } });
+      } else next();
     });
 }
 
@@ -72,8 +87,10 @@ export function rateLimitProxy(req: Request, res: Response, next: NextFunction) 
   proxyLimiter
     .consume(key)
     .then(() => next())
-    .catch(() => {
-      res.status(429).json({ error: { code: 'RATE_LIMIT', message: 'Too many AI requests' } });
+    .catch((err) => {
+      if (isRateLimitRejection(err)) {
+        res.status(429).json({ error: { code: 'RATE_LIMIT', message: 'Too many AI requests' } });
+      } else next();
     });
 }
 
@@ -82,8 +99,10 @@ export function rateLimitSensitive(req: Request, res: Response, next: NextFuncti
   sensitiveLimiter
     .consume(key)
     .then(() => next())
-    .catch(() => {
-      res.status(429).json({ error: { code: 'RATE_LIMIT', message: 'Too many requests' } });
+    .catch((err) => {
+      if (isRateLimitRejection(err)) {
+        res.status(429).json({ error: { code: 'RATE_LIMIT', message: 'Too many requests' } });
+      } else next();
     });
 }
 
@@ -100,7 +119,9 @@ export function rateLimitAdmin(req: Request, res: Response, next: NextFunction) 
   adminLimiter
     .consume(key)
     .then(() => next())
-    .catch(() => {
-      res.status(429).json({ error: { code: 'RATE_LIMIT', message: 'Too many admin requests. Locked for 5 minutes.' } });
+    .catch((err) => {
+      if (isRateLimitRejection(err)) {
+        res.status(429).json({ error: { code: 'RATE_LIMIT', message: 'Too many admin requests. Locked for 5 minutes.' } });
+      } else next();
     });
 }
