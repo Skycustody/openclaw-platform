@@ -93,9 +93,9 @@ export interface OpenRouterUsage {
  * Must align with PLAN_LIMITS.nexosCreditBudgetEurCents (after EUR→USD conversion).
  */
 const PLAN_SPEND_LIMITS_USD: Record<Plan, number> = {
-  starter: 3,
+  starter: 2,
   pro: 7,
-  business: 15,
+  business: 12,
 };
 
 /**
