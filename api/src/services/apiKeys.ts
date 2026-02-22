@@ -302,6 +302,9 @@ export async function injectApiKeys(
     };
   }
 
+  // Use embedded browser profile (no Chrome extension in containers)
+  config.browser = { defaultProfile: 'openclaw' };
+
   const configB64 = Buffer.from(JSON.stringify(config, null, 2)).toString('base64');
   await sshExec(
     serverIp,
