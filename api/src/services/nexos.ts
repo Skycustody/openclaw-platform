@@ -41,6 +41,18 @@ const OPENROUTER_BASE = 'https://openrouter.ai/api/v1';
 const OPENROUTER_MGMT_KEY = process.env.OPENROUTER_MGMT_KEY || '';
 const OPENROUTER_FALLBACK_KEY = process.env.OPENROUTER_API_KEY || '';
 
+/** OpenRouter Management API: create-key response shape */
+interface CreateKeyResponse {
+  data?: { key?: string; hash?: string };
+  key?: string;
+  hash?: string;
+}
+
+/** OpenRouter Management API: list-keys response shape */
+interface ListKeysResponse {
+  data?: Array<{ name?: string; hash?: string; usage_monthly?: number; usage?: number; limit?: number }>;
+}
+
 /** Retail price multiplier over OpenRouter wholesale cost. 1.5 = 50% margin. */
 export const RETAIL_MARKUP = 1.5;
 
@@ -155,7 +167,7 @@ async function createOpenRouterKey(userId: string): Promise<string | null> {
       return null;
     }
 
-    const data = await res.json();
+    const data = (await res.json()) as CreateKeyResponse;
     const key = data.data?.key || data.key || null;
 
     if (key) {
@@ -225,9 +237,9 @@ export async function getNexosUsage(userId: string): Promise<OpenRouterUsage | n
         headers: { 'Authorization': `Bearer ${OPENROUTER_MGMT_KEY}` },
       });
       if (listRes.ok) {
-        const listData = await listRes.json();
+        const listData = (await listRes.json()) as ListKeysResponse;
         const keys = listData.data || [];
-        const userKey = keys.find((k: any) => k.name === `openclaw-${userId.slice(0, 8)}`);
+        const userKey = keys.find((k) => k.name === `openclaw-${userId.slice(0, 8)}`);
         if (userKey) {
           const used = userKey.usage_monthly ?? userKey.usage ?? 0;
           const limit = userKey.limit ?? 0;
@@ -339,9 +351,9 @@ async function findUserKeyHash(userId: string): Promise<string | null> {
     });
     if (!listRes.ok) return null;
 
-    const listData = await listRes.json();
+    const listData = (await listRes.json()) as ListKeysResponse;
     const keys = listData.data || [];
-    const userKey = keys.find((k: any) => k.name === `openclaw-${userId.slice(0, 8)}`);
+    const userKey = keys.find((k) => k.name === `openclaw-${userId.slice(0, 8)}`);
     return userKey?.hash || null;
   } catch {
     return null;
