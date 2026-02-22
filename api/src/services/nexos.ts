@@ -319,21 +319,31 @@ export async function updateKeyLimit(userId: string, plan: Plan, extraCreditsUsd
 
 /**
  * Add purchased credits to a user's OpenRouter spending limit.
- * Reads current addon from DB and PATCHes the key with the new total.
+ * Recalculates total addon from credit_purchases table to prevent
+ * accumulated errors from previous bugs.
  */
 export async function addCreditsToKey(userId: string, creditsUsd: number): Promise<void> {
+  // Recalculate addon from actual purchase records.
+  // Use amount_eur_cents / 100 as the true credit value (1:1 EUR→USD).
+  // This corrects any old records that stored inflated credits_usd values.
+  const sum = await db.getOne<{ total: string }>(
+    'SELECT COALESCE(SUM(amount_eur_cents / 100.0), 0) as total FROM credit_purchases WHERE user_id = $1',
+    [userId]
+  );
+  const totalAddon = Math.round(parseFloat(sum?.total || '0') * 100) / 100;
+
   await db.query(
-    'UPDATE users SET api_budget_addon_usd = api_budget_addon_usd + $1 WHERE id = $2',
-    [creditsUsd, userId]
+    'UPDATE users SET api_budget_addon_usd = $1 WHERE id = $2',
+    [totalAddon, userId]
   );
 
-  const user = await db.getOne<{ plan: string; api_budget_addon_usd: number }>(
-    'SELECT plan, api_budget_addon_usd FROM users WHERE id = $1',
+  const user = await db.getOne<{ plan: string }>(
+    'SELECT plan FROM users WHERE id = $1',
     [userId]
   );
   if (!user) return;
 
-  await updateKeyLimit(userId, (user.plan || 'starter') as Plan, user.api_budget_addon_usd);
+  await updateKeyLimit(userId, (user.plan || 'starter') as Plan, totalAddon);
 }
 
 /**

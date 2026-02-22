@@ -41,10 +41,10 @@ interface Invoice {
 type TabId = 'overview' | 'billing';
 
 const TOPUP_PACKS = [
-  { id: '500k',  price: '€5',  desc: 'Adds ~$3.25 API budget' },
-  { id: '1200k', price: '€10', desc: 'Adds ~$6.50 API budget' },
-  { id: '3500k', price: '€25', desc: 'Adds ~$16.25 API budget' },
-  { id: '8m',    price: '€50', desc: 'Adds ~$32.50 API budget' },
+  { id: '500k',  price: '€5',  desc: 'Adds $5 API budget' },
+  { id: '1200k', price: '€10', desc: 'Adds $10 API budget' },
+  { id: '3500k', price: '€25', desc: 'Adds $25 API budget' },
+  { id: '8m',    price: '€50', desc: 'Adds $50 API budget' },
 ];
 
 export default function TokensPage() {
