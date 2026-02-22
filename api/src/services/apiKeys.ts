@@ -104,7 +104,7 @@ export async function injectApiKeys(
         apiKey: apiKey,
         api: 'openai-completions',
         models: [
-          { id: 'auto', name: 'Smart Auto (picks best model per task)', contextWindow: 128000, maxTokens: 16000 },
+          { id: 'auto', name: 'Smart Auto (picks best model per task)', contextWindow: 128000, maxTokens: 4096 },
         ],
       },
     },
