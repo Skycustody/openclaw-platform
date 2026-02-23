@@ -11,12 +11,15 @@ import { Sidebar } from '@/components/dashboard/Sidebar';
 import { useStore } from '@/lib/store';
 import { cn } from '@/lib/utils';
 import { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import api from '@/lib/api';
 import { Loader2 } from 'lucide-react';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
   const { sidebarOpen, setUser } = useStore();
   const [checking, setChecking] = useState(true);
+  const isHome = pathname === '/dashboard' || pathname === '/dashboard/';
 
   useEffect(() => {
     const token = api.getToken();
@@ -67,7 +70,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           sidebarOpen ? 'ml-[220px]' : 'ml-[68px]'
         )}
       >
-        <div className="mx-auto max-w-6xl">{children}</div>
+        <div className={cn(isHome ? 'w-full' : 'mx-auto max-w-6xl')}>{children}</div>
       </main>
     </div>
   );

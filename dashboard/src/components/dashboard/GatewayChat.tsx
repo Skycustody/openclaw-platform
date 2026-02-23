@@ -23,6 +23,7 @@ interface AgentInfo {
   name: string;
   is_primary: boolean;
   status: string;
+  openclawAgentId?: string;
 }
 
 interface ModelInfo {
@@ -125,6 +126,20 @@ export default function GatewayChat({ gatewayUrl, token, agentName, modelName }:
       .catch(() => {});
   }, [agentName]);
 
+  // Load saved model (brain_mode + manual_model) so it reflects at top and persists on reload
+  useEffect(() => {
+    api.get<{ settings: { brain_mode?: string; manual_model?: string | null } }>('/settings')
+      .then(res => {
+        const s = res.settings;
+        if (s?.brain_mode === 'manual' && s?.manual_model) {
+          setSelectedModel(s.manual_model);
+        } else {
+          setSelectedModel('auto');
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   // Close dropdowns on click outside
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -205,11 +220,13 @@ export default function GatewayChat({ gatewayUrl, token, agentName, modelName }:
     setSelectedModel(model.id);
     setAgentModels(prev => ({ ...prev, [selectedAgent]: model.id }));
     setShowModelDropdown(false);
-    if (model.id === 'auto') {
-      try { await api.put('/settings', { brain_mode: 'auto' }); } catch {}
-    } else {
-      try { await api.put('/settings', { brain_mode: 'manual', manual_model: model.id }); } catch {}
-    }
+    try {
+      if (model.id === 'auto') {
+        await api.put('/settings/brain', { brainMode: 'auto', manualModel: null });
+      } else {
+        await api.put('/settings/brain', { brainMode: 'manual', manualModel: model.id });
+      }
+    } catch {}
   }, [selectedAgent]);
 
   const getModelLabel = () => {
@@ -241,9 +258,14 @@ export default function GatewayChat({ gatewayUrl, token, agentName, modelName }:
     });
   }, []);
 
+  const getSessionKey = useCallback((): string => {
+    return agents.find(a => a.name === selectedAgent)?.openclawAgentId ?? 'main';
+  }, [agents, selectedAgent]);
+
   const loadHistory = useCallback(async () => {
     try {
-      const res = await sendReq('chat.history', { sessionKey: 'main', limit: 50 });
+      const sessionKey = getSessionKey();
+      const res = await sendReq('chat.history', { sessionKey, limit: 50 });
       const entries: Message[] = [];
       const items = res?.messages || res?.entries || res?.data?.messages || (Array.isArray(res) ? res : []);
       if (Array.isArray(items)) {
@@ -265,7 +287,7 @@ export default function GatewayChat({ gatewayUrl, token, agentName, modelName }:
     } catch {
       // History might not be available yet
     }
-  }, [sendReq, scrollToBottom]);
+  }, [sendReq, scrollToBottom, getSessionKey]);
 
   const connect = useCallback(() => {
     if (isUnmounted.current) return;
@@ -500,10 +522,16 @@ export default function GatewayChat({ gatewayUrl, token, agentName, modelName }:
     };
   }, [connect]);
 
+  // When user switches agent, load that agent's conversation
+  useEffect(() => {
+    if (wsState === 'connected') loadHistory();
+  }, [selectedAgent]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Poll chat.history until we see a new assistant reply after sending
   const pollForReply = useCallback(async (sentMsgCount: number): Promise<boolean> => {
     try {
-      const res = await sendReq('chat.history', { sessionKey: 'main', limit: 50 });
+      const sessionKey = getSessionKey();
+      const res = await sendReq('chat.history', { sessionKey, limit: 50 });
       const items = res?.messages || res?.entries || res?.data?.messages || (Array.isArray(res) ? res : []);
       if (!Array.isArray(items)) return false;
       const newEntries: Message[] = [];
@@ -528,7 +556,7 @@ export default function GatewayChat({ gatewayUrl, token, agentName, modelName }:
     } catch {
       return false;
     }
-  }, [sendReq, scrollToBottom]);
+  }, [sendReq, scrollToBottom, getSessionKey]);
 
   const handleSend = useCallback(async () => {
     const text = input.trim();
@@ -549,8 +577,9 @@ export default function GatewayChat({ gatewayUrl, token, agentName, modelName }:
     const snapshotLen = lastHistoryLen.current;
 
     try {
+      const sessionKey = getSessionKey();
       const res = await sendReq('chat.send', {
-        sessionKey: 'main',
+        sessionKey,
         message: text,
         idempotencyKey: userMsg.id,
       });
@@ -580,7 +609,7 @@ export default function GatewayChat({ gatewayUrl, token, agentName, modelName }:
         content: `Failed to send: ${err.message}`,
       }]);
     }
-  }, [input, activeRunId, sendReq, scrollToBottom, pollForReply]);
+  }, [input, activeRunId, sendReq, scrollToBottom, pollForReply, getSessionKey]);
 
   const handleRefresh = useCallback(async () => {
     if (refreshing || wsState !== 'connected') return;
