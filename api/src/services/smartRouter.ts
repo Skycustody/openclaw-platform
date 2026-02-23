@@ -295,7 +295,10 @@ export interface RouterContext {
 
 /**
  * AI-powered model router with cascading fallback.
- * Uses the USER'S OWN API key so routing costs count against their budget.
+ * Uses the user's own API key for routing. Falls back to OPENROUTER_API_KEY
+ * (shared platform key) if no user key is provided. Never uses the management
+ * key (OPENROUTER_MGMT_KEY) — that key can create/delete keys and must never
+ * be sent to chat endpoints.
  *
  *   1. Gemini 2.5 Flash ($0.30/1M) — primary router, fast + smart
  *   2. GPT-4o-mini ($0.15/1M) — backup if Gemini fails
@@ -313,7 +316,7 @@ export async function pickModelWithAI(
   installedSkills?: string[],
   userId?: string,
 ): Promise<{ model: string; reason: string; routerUsed: string }> {
-  const key = apiKey || process.env.OPENROUTER_API_KEY || process.env.OPENROUTER_MGMT_KEY || '';
+  const key = apiKey || process.env.OPENROUTER_API_KEY || '';
   if (!key) {
     return { model: FINAL_FALLBACK_MODEL, reason: 'No API key available for router', routerUsed: 'fallback' };
   }
