@@ -78,11 +78,14 @@ const plans = [
     storage: '5 GB',
     features: [
       '$2 of AI credits every month',
-      '2 GB RAM',
-      '1 vCPU · 5 GB storage',
+      '2 GB RAM · 1 vCPU · 5 GB SSD',
       '1 AI agent',
+      'Smart AI routing & cost optimization',
+      '20+ AI models (Claude, GPT-4o, Gemini…)',
+      'All skills & tools',
+      'All messaging apps',
+      'Web browser & file storage',
     ],
-    excluded: [],
   },
   {
     name: 'Pro',
@@ -94,11 +97,14 @@ const plans = [
     storage: '25 GB',
     features: [
       '$7 of AI credits every month',
-      '4 GB RAM',
-      '2 vCPU · 25 GB storage',
+      '4 GB RAM · 2 vCPU · 25 GB SSD',
       '2 AI agents',
+      'Smart AI routing & cost optimization',
+      '20+ AI models (Claude, GPT-4o, Gemini…)',
+      'All skills & tools',
+      'All messaging apps',
+      'Web browser & file storage',
     ],
-    excluded: [],
   },
   {
     name: 'Business',
@@ -109,11 +115,14 @@ const plans = [
     storage: '50 GB',
     features: [
       '$12 of AI credits every month',
-      '8 GB RAM',
-      '4 vCPU · 50 GB storage',
+      '8 GB RAM · 4 vCPU · 50 GB SSD',
       '4 AI agents',
+      'Smart AI routing & cost optimization',
+      '20+ AI models (Claude, GPT-4o, Gemini…)',
+      'All skills & tools',
+      'All messaging apps',
+      'Web browser & file storage',
     ],
-    excluded: [],
   },
 ];
 
@@ -323,7 +332,7 @@ function PricingSection() {
           <Coins className="size-3" />
           Pricing
         </div>
-        <h2 className="text-3xl font-bold tracking-tight md:text-4xl">Pick your VPS</h2>
+        <h2 className="text-3xl font-bold tracking-tight md:text-4xl">Pick your plan</h2>
         <p className="mt-3 text-base text-muted-foreground">
           Every plan is a real dedicated server with OpenClaw, AI credits, and smart routing included.
         </p>

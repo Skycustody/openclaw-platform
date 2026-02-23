@@ -31,9 +31,11 @@ const PLANS: Array<{
     storage: '5 GB',
     features: [
       '$2 of AI credits every month',
-      '2 GB RAM',
-      '1 vCPU · 5 GB storage',
+      '2 GB RAM · 1 vCPU · 5 GB SSD',
       '1 AI agent',
+      'Smart AI routing & cost optimization',
+      '20+ AI models',
+      'All skills, tools & messaging apps',
     ],
   },
   {
@@ -47,9 +49,11 @@ const PLANS: Array<{
     storage: '25 GB',
     features: [
       '$7 of AI credits every month',
-      '4 GB RAM',
-      '2 vCPU · 25 GB storage',
+      '4 GB RAM · 2 vCPU · 25 GB SSD',
       '2 AI agents',
+      'Smart AI routing & cost optimization',
+      '20+ AI models',
+      'All skills, tools & messaging apps',
     ],
   },
   {
@@ -62,9 +66,11 @@ const PLANS: Array<{
     storage: '50 GB',
     features: [
       '$12 of AI credits every month',
-      '8 GB RAM',
-      '4 vCPU · 50 GB storage',
+      '8 GB RAM · 4 vCPU · 50 GB SSD',
       '4 AI agents',
+      'Smart AI routing & cost optimization',
+      '20+ AI models',
+      'All skills, tools & messaging apps',
     ],
   },
 ];
