@@ -310,7 +310,7 @@ export default function DashboardHome() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-48px)] w-full">
+    <div className="flex flex-col flex-1 min-h-0 w-full min-w-0">
       {agentStatus === 'paused' && (
         <div className="border border-red-500/20 bg-red-500/5 rounded-xl px-5 py-3 flex items-center gap-3 mb-3 shrink-0">
           <AlertTriangle className="h-4 w-4 text-red-400 shrink-0" />
@@ -365,7 +365,7 @@ export default function DashboardHome() {
       </div>
 
       {/* Main content — full width edge-to-edge */}
-      <div className="flex-1 min-w-0 rounded-none border-0 border-t border-white/[0.06] bg-white/[0.01] relative">
+      <div className="flex-1 min-h-0 min-w-0 rounded-none border-0 border-t border-white/[0.06] bg-white/[0.01] relative flex flex-col">
         {(phase === 'loading' || phase === 'starting' || phase === 'provisioning' || phase === 'polling') && (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-center z-10">
             <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/[0.04] mb-5">

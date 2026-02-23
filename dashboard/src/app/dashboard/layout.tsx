@@ -19,7 +19,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const { sidebarOpen, setUser } = useStore();
   const [checking, setChecking] = useState(true);
-  const isHome = pathname === '/dashboard' || pathname === '/dashboard/';
+  const isHome = pathname === '/dashboard' || pathname === '/dashboard/' || (pathname?.startsWith?.('/dashboard') && pathname.replace(/\/$/, '').split('/').length <= 2);
 
   useEffect(() => {
     const token = api.getToken();
@@ -66,12 +66,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <Sidebar />
       <main
         className={cn(
-          'min-h-screen transition-all duration-300 pt-6 pb-5',
+          'min-h-screen transition-all duration-300 pt-6 pb-5 flex flex-col',
           sidebarOpen ? 'ml-[220px]' : 'ml-[68px]',
-          isHome ? 'px-0' : 'px-5'
+          isHome ? 'px-0 w-full min-w-0' : 'px-5'
         )}
       >
-        <div className={cn(isHome ? 'w-full max-w-none' : 'mx-auto max-w-6xl')}>{children}</div>
+        <div className={cn('flex-1 flex flex-col min-h-0', isHome ? 'w-full max-w-none min-w-0' : 'mx-auto max-w-6xl')}>{children}</div>
       </main>
     </div>
   );
