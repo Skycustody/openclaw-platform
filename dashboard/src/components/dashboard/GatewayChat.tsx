@@ -104,9 +104,11 @@ export default function GatewayChat({ gatewayUrl, token, agentName, modelName, o
   const pendingCallbacks = useRef<Map<string, (res: any) => void>>(new Map());
   const streamBufferRef = useRef<string>('');
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pingTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastHistoryLen = useRef<number>(0);
   const isUnmounted = useRef(false);
+  const reconnectAttempts = useRef(0);
 
   const scrollToBottom = useCallback(() => {
     requestAnimationFrame(() => {
@@ -306,7 +308,7 @@ export default function GatewayChat({ gatewayUrl, token, agentName, modelName, o
     wsRef.current = ws;
 
     ws.onopen = () => {
-      // Wait for challenge then send connect
+      reconnectAttempts.current = 0;
     };
 
     ws.onmessage = (evt) => {
@@ -338,6 +340,12 @@ export default function GatewayChat({ gatewayUrl, token, agentName, modelName, o
       if (msg.type === 'res') {
         if (msg.payload?.type === 'hello-ok') {
           setWsState('connected');
+          if (pingTimer.current) clearInterval(pingTimer.current);
+          pingTimer.current = setInterval(() => {
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: 'ping', ts: Date.now() }));
+            }
+          }, 25000);
           loadHistory();
           return;
         }
@@ -496,11 +504,12 @@ export default function GatewayChat({ gatewayUrl, token, agentName, modelName, o
 
     ws.onerror = () => {
       setWsState('error');
-      setError('Connection error — check browser console');
+      setError('Connection error — retrying...');
     };
 
     ws.onclose = (e) => {
       wsRef.current = null;
+      if (pingTimer.current) { clearInterval(pingTimer.current); pingTimer.current = null; }
       if (e.code === 1008) {
         setWsState('error');
         setError(`Gateway rejected: ${e.reason || 'pairing required'}`);
@@ -508,7 +517,9 @@ export default function GatewayChat({ gatewayUrl, token, agentName, modelName, o
         setWsState('disconnected');
       }
       if (!isUnmounted.current && e.code !== 1000) {
-        const delay = e.code === 1008 ? 10000 : 3000;
+        reconnectAttempts.current += 1;
+        const base = e.code === 1008 ? 10000 : 1000;
+        const delay = Math.min(base * Math.pow(1.5, reconnectAttempts.current - 1), 30000);
         reconnectTimer.current = setTimeout(connect, delay);
       }
     };
@@ -517,9 +528,22 @@ export default function GatewayChat({ gatewayUrl, token, agentName, modelName, o
   useEffect(() => {
     isUnmounted.current = false;
     connect();
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        if (!wsRef.current || wsRef.current.readyState > 1) {
+          reconnectAttempts.current = 0;
+          connect();
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
     return () => {
       isUnmounted.current = true;
+      document.removeEventListener('visibilitychange', handleVisibility);
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+      if (pingTimer.current) clearInterval(pingTimer.current);
       if (pollTimer.current) clearInterval(pollTimer.current);
       if (wsRef.current) wsRef.current.close(1000);
     };
