@@ -347,8 +347,8 @@ export default function GatewayChat({ gatewayUrl, token }: GatewayChatProps) {
     };
   }, [connect]);
 
-  // Poll chat.history and surface any new assistant messages not yet in state
-  const pollForReply = useCallback(async (snapshotLen: number): Promise<boolean> => {
+  // Poll chat.history until we see a new assistant reply after sending
+  const pollForReply = useCallback(async (sentMsgCount: number): Promise<boolean> => {
     try {
       const res = await sendReq('chat.history', { sessionKey: 'main', limit: 50 });
       const items = res?.messages || res?.entries || res?.data?.messages || (Array.isArray(res) ? res : []);
@@ -360,7 +360,10 @@ export default function GatewayChat({ gatewayUrl, token }: GatewayChatProps) {
         if (!content) continue;
         newEntries.push({ id: entry.id || `h_${newEntries.length}`, role, content, timestamp: entry.ts || entry.timestamp });
       }
-      if (newEntries.length > snapshotLen) {
+      // Only stop when there's a new assistant message (not just the user's own message)
+      const hasNewAssistant = newEntries.length > sentMsgCount &&
+        newEntries.some((m, i) => i >= sentMsgCount && m.role === 'assistant');
+      if (hasNewAssistant) {
         flushSync(() => setMessages(newEntries));
         lastHistoryLen.current = newEntries.length;
         setActiveRunId(null);
@@ -400,13 +403,15 @@ export default function GatewayChat({ gatewayUrl, token }: GatewayChatProps) {
       });
       if (res?.runId) setActiveRunId(res.runId);
 
-      // Poll for reply: immediate, then 1s, 2s, then every 2s (gateway may not push events to our WS)
-      if (pollTimer.current) clearInterval(pollTimer.current);
-      pollForReply(snapshotLen);
-      const delays = [1000, 2000, 2000, 2000, 2000, 3000, 3000, 3000, 3000, 3000];
+      // Poll for assistant reply — wait a moment then check every 2s
+      if (pollTimer.current) { clearTimeout(pollTimer.current); pollTimer.current = null; }
+      const delays = [2000, 2000, 2000, 3000, 3000, 3000, 3000, 5000, 5000, 5000, 5000, 5000, 5000];
       let idx = 0;
       const scheduleNext = () => {
-        if (idx >= delays.length) return;
+        if (idx >= delays.length) {
+          setActiveRunId(null);
+          return;
+        }
         const delay = delays[idx++];
         pollTimer.current = setTimeout(async () => {
           const updated = await pollForReply(snapshotLen);
