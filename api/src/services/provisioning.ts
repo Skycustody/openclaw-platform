@@ -40,7 +40,7 @@ import { sendWelcomeEmail } from './email';
 import { cloudflareDNS } from './cloudflare';
 import { v4 as uuid } from 'uuid';
 import { buildOpenclawConfig, injectApiKeys } from './apiKeys';
-import { reapplyGatewayConfig } from './containerConfig';
+import { reapplyGatewayConfig, writeContainerConfig } from './containerConfig';
 import { ensureNexosKey } from './nexos';
 import { installDefaultSkills } from './defaultSkills';
 
@@ -187,22 +187,16 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
 
   const openclawConfig = buildOpenclawConfig(gatewayToken);
 
-  const configJson = JSON.stringify(openclawConfig, null, 2);
-  const configBase64 = Buffer.from(configJson).toString('base64');
-  // Write config under all filenames openclaw may look for
-  const writeConfigResult = await sshExec(
+  await writeContainerConfig(server.ip, userId, openclawConfig);
+  // Keep a backup copy so readContainerConfig can recover from corruption
+  await sshExec(
     server.ip,
     [
-      `echo '${configBase64}' | base64 -d > /opt/openclaw/instances/${userId}/openclaw.json`,
       `cp /opt/openclaw/instances/${userId}/openclaw.json /opt/openclaw/instances/${userId}/openclaw.default.json`,
       `cp /opt/openclaw/instances/${userId}/openclaw.json /opt/openclaw/instances/${userId}/config.json`,
     ].join(' && ')
   );
-  if (writeConfigResult.code !== 0) {
-    console.warn(`[provision] config write warning:`, writeConfigResult.stderr);
-  } else {
-    console.log(`[provision] Config written to /opt/openclaw/instances/${userId}/`);
-  }
+  console.log(`[provision] Config written to /opt/openclaw/instances/${userId}/`);
 
   // Pull image only if using a remote registry
   if (process.env.DOCKER_REGISTRY) {

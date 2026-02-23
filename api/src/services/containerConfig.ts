@@ -67,20 +67,44 @@ export async function readContainerConfig(serverIp: string, userId: string): Pro
     `cat ${INSTANCE_DIR}/${userId}/openclaw.json 2>/dev/null || echo '{}'`
   );
   try {
-    return JSON.parse(result.stdout);
+    const config = JSON.parse(result.stdout);
+    if (config && typeof config === 'object') return config;
   } catch {
-    return {};
+    console.error(`[readContainerConfig] Corrupted openclaw.json for ${userId}, attempting recovery from backup`);
   }
+
+  const backup = await sshExec(
+    serverIp,
+    `cat ${INSTANCE_DIR}/${userId}/openclaw.default.json 2>/dev/null || echo '{}'`
+  ).catch(() => null);
+  try {
+    const fallback = JSON.parse(backup?.stdout || '{}');
+    if (fallback && Object.keys(fallback).length > 0) {
+      console.warn(`[readContainerConfig] Recovered config from openclaw.default.json for ${userId}`);
+      return fallback;
+    }
+  } catch { /* backup also corrupted */ }
+
+  console.error(`[readContainerConfig] No valid config found for ${userId}, returning empty object`);
+  return {};
 }
 
 export async function writeContainerConfig(serverIp: string, userId: string, config: Record<string, any>): Promise<void> {
   validateUserId(userId);
-  const b64 = Buffer.from(JSON.stringify(config, null, 2)).toString('base64');
+  const json = JSON.stringify(config, null, 2);
+  if (!json || json === '{}' || json.length < 10) {
+    console.error(`[writeContainerConfig] Refusing to write empty/minimal config for ${userId} (${json.length} bytes)`);
+    throw new Error('Refusing to write empty config — this would break the container');
+  }
+  const b64 = Buffer.from(json).toString('base64');
+  const tmpFile = `${INSTANCE_DIR}/${userId}/.openclaw.json.tmp`;
+  const targetFile = `${INSTANCE_DIR}/${userId}/openclaw.json`;
   const result = await sshExec(
     serverIp,
-    `echo '${b64}' | base64 -d > ${INSTANCE_DIR}/${userId}/openclaw.json`
+    `echo '${b64}' | base64 -d > ${tmpFile} && mv ${tmpFile} ${targetFile}`
   );
   if (result.code !== 0) {
+    await sshExec(serverIp, `rm -f ${tmpFile}`).catch(() => {});
     throw new Error(`Failed to write config: ${result.stderr}`);
   }
 }

@@ -32,6 +32,7 @@
 import { sshExec } from './ssh';
 import { ensureNexosKey } from './nexos';
 import { Plan } from '../types';
+import { writeContainerConfig as writeConfigAtomic } from './containerConfig';
 import db from '../lib/db';
 
 const INSTANCE_DIR = '/opt/openclaw/instances';
@@ -397,11 +398,7 @@ export async function injectApiKeys(
   if (!config.skills.load) config.skills.load = {};
   config.skills.load.watch = true;
 
-  const configB64 = Buffer.from(JSON.stringify(config, null, 2)).toString('base64');
-  await sshExec(
-    serverIp,
-    `echo '${configB64}' | base64 -d > ${INSTANCE_DIR}/${userId}/openclaw.json`
-  );
+  await writeConfigAtomic(serverIp, userId, config);
 
   await sshExec(
     serverIp,

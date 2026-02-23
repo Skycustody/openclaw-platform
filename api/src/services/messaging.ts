@@ -3,6 +3,7 @@ import { encrypt } from '../lib/encryption';
 import { sshExec } from './ssh';
 import { User } from '../types';
 import { injectApiKeys } from './apiKeys';
+import { readContainerConfig, writeContainerConfig } from './containerConfig';
 
 // ── Helpers ──
 
@@ -48,38 +49,6 @@ async function getUserContainer(userId: string): Promise<{
   return { serverIp: server.ip, containerName, user };
 }
 
-/**
- * Read the openclaw.json config from the host-mounted volume.
- * Avoids fragile `docker exec` + Node one-liners.
- */
-async function readContainerConfig(serverIp: string, userId: string): Promise<Record<string, any>> {
-  validateUserId(userId);
-  const result = await sshExec(
-    serverIp,
-    `cat ${INSTANCE_DIR}/${userId}/openclaw.json 2>/dev/null || echo '{}'`
-  );
-  try {
-    return JSON.parse(result.stdout);
-  } catch {
-    return {};
-  }
-}
-
-/**
- * Write openclaw.json to the host-mounted volume.
- * Base64-encodes the entire JSON so no shell quoting issues can arise.
- */
-async function writeContainerConfig(serverIp: string, userId: string, config: Record<string, any>): Promise<void> {
-  validateUserId(userId);
-  const b64 = Buffer.from(JSON.stringify(config, null, 2)).toString('base64');
-  const result = await sshExec(
-    serverIp,
-    `echo '${b64}' | base64 -d > ${INSTANCE_DIR}/${userId}/openclaw.json`
-  );
-  if (result.code !== 0) {
-    throw new Error(`Failed to write config: ${result.stderr}`);
-  }
-}
 
 /**
  * Poll until a container is running, up to timeoutMs.
