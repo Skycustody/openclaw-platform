@@ -159,12 +159,13 @@ router.get('/status', async (req: AuthRequest, res: Response, next: NextFunction
          WHERE user_id = $1 AND type = 'message' AND created_at > CURRENT_DATE`,
         [req.userId]
       ),
-      db.getOne<{ count: string; spend: string }>(
-        `SELECT COUNT(*) as count,
-                COALESCE(SUM(tokens_saved), 0) as spend
+      db.getOne<{ total: string; distinct_msgs: string }>(
+        `SELECT COUNT(*) as total,
+                COUNT(DISTINCT message_preview) as distinct_msgs
          FROM routing_decisions
          WHERE user_id = $1 AND created_at > CURRENT_DATE
-           AND message_preview != '[mode switch]'`,
+           AND message_preview != '[mode switch]'
+           AND message_preview IS NOT NULL`,
         [req.userId]
       ),
       (async () => {
@@ -185,9 +186,10 @@ router.get('/status', async (req: AuthRequest, res: Response, next: NextFunction
 
     const convCount = parseInt(convResult?.count || '0');
     const activityMsgCount = parseInt(activityMsgResult?.count || '0');
-    const messagesToday = Math.max(convCount, activityMsgCount);
+    const distinctMsgs = parseInt(routingResult?.distinct_msgs || '0');
+    const messagesToday = Math.max(convCount, activityMsgCount, distinctMsgs);
 
-    const aiRequests = parseInt(routingResult?.count || '0');
+    const aiRequests = parseInt(routingResult?.total || '0');
 
     const containerSkills = typeof skillsCountResult === 'number' ? skillsCountResult : -1;
 
