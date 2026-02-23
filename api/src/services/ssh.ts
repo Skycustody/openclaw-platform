@@ -246,9 +246,8 @@ export async function sshUploadDir(
               p += '/' + part;
               chain.push(
                 new Promise((res, rej) => {
-                  sftp.mkdir(p, { mode: 0o755 }, (e) => {
-                    if (e && e.code !== 4) res(undefined); // 4 = already exists
-                    else if (e) rej(e);
+                  sftp.mkdir(p, { mode: 0o755 }, (e: NodeJS.ErrnoException | null) => {
+                    if (e && (e as { code?: number }).code !== 4) rej(e); // 4 = already exists, treat as success
                     else res(undefined);
                   });
                 })
