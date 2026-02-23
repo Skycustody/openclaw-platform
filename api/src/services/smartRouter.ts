@@ -4,8 +4,10 @@ import redis from '../lib/redis';
 import { TaskClassification, ModelCapability, RoutingDecision, Plan } from '../types';
 import { OPENROUTER_MODEL_COSTS, RETAIL_MARKUP } from './nexos';
 
+const ROUTER_API_KEY = process.env.OPENROUTER_API_KEY || process.env.OPENROUTER_MGMT_KEY || '';
+
 const routerClient = new OpenAI({
-  apiKey: process.env.OPENROUTER_API_KEY,
+  apiKey: ROUTER_API_KEY,
   baseURL: 'https://openrouter.ai/api/v1',
   timeout: 3500,
   defaultHeaders: {
@@ -13,6 +15,13 @@ const routerClient = new OpenAI({
     'X-Title': 'OpenClaw Router',
   },
 });
+
+if (!ROUTER_API_KEY) {
+  console.error('[router] WARNING: No OPENROUTER_API_KEY or OPENROUTER_MGMT_KEY set — router will always fall back to default model');
+} else {
+  const source = process.env.OPENROUTER_API_KEY ? 'OPENROUTER_API_KEY' : 'OPENROUTER_MGMT_KEY';
+  console.log(`[router] Using ${source} for AI model routing (key: ${ROUTER_API_KEY.slice(0, 12)}...)`);
+}
 
 const ROUTER_MODELS = [
   'google/gemini-2.5-flash',
