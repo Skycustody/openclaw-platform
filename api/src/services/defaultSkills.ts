@@ -10,6 +10,11 @@ import { PLATFORM_SKILLS } from '../data/platformSkills';
 import { cacheUserSkills } from './smartRouter';
 
 const INSTANCE_DIR = '/opt/openclaw/instances';
+const UUID_RE = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+
+function validateUserId(userId: string): void {
+  if (!UUID_RE.test(userId)) throw new Error('Invalid user ID format');
+}
 
 /** Path on the control plane where verified skills live (populated by install-skills-from-github.sh). */
 export const PLATFORM_SKILLS_DIR = process.env.PLATFORM_SKILLS_DIR || '/opt/openclaw-platform/skills';
@@ -29,6 +34,7 @@ export async function installDefaultSkills(
   }
 
   try {
+    validateUserId(userId);
     const remoteSkillsDir = `${INSTANCE_DIR}/${userId}/skills`;
     await sshUploadDir(serverIp, PLATFORM_SKILLS_DIR, remoteSkillsDir);
 

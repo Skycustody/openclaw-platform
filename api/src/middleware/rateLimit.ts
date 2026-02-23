@@ -83,7 +83,8 @@ export function rateLimitWebhook(req: Request, res: Response, next: NextFunction
 }
 
 export function rateLimitProxy(req: Request, res: Response, next: NextFunction) {
-  const key = req.ip || 'unknown';
+  const authHeader = req.headers.authorization;
+  const key = authHeader?.startsWith('Bearer ') ? authHeader.slice(7, 27) : (req.ip || 'unknown');
   proxyLimiter
     .consume(key)
     .then(() => next())

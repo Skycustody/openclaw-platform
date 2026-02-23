@@ -85,6 +85,7 @@ export default function GatewayChat({ gatewayUrl, token, agentName, modelName }:
   const [agents, setAgents] = useState<AgentInfo[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<string>(agentName || 'Agent');
   const [selectedModel, setSelectedModel] = useState<string>('auto');
+  const [agentModels, setAgentModels] = useState<Record<string, string>>({});
   const [showAgentDropdown, setShowAgentDropdown] = useState(false);
   const [showModelDropdown, setShowModelDropdown] = useState(false);
   const [modelSearch, setModelSearch] = useState('');

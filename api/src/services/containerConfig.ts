@@ -34,6 +34,7 @@ export async function getUserContainer(userId: string): Promise<{
   }
 
   const containerName = user.container_name || `openclaw-${userId}`;
+  validateContainerName(containerName);
 
   return { serverIp: server.ip, containerName, user };
 }
@@ -114,6 +115,9 @@ export async function reapplyGatewayConfig(
   userId: string,
   containerName: string,
 ): Promise<void> {
+  validateUserId(userId);
+  validateContainerName(containerName);
+
   const tokenRow = await db.getOne<{ gateway_token: string }>(
     'SELECT gateway_token FROM users WHERE id = $1',
     [userId]
@@ -122,8 +126,6 @@ export async function reapplyGatewayConfig(
 
   const token = tokenRow.gateway_token;
 
-  // Set browser to headless embedded Chromium (no Chrome extension in containers)
-  // and auto-approve the agent's device pairing request
   const commands = [
     `openclaw config set browser.defaultProfile openclaw`,
     `openclaw config set browser.headless true`,

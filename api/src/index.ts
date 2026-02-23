@@ -38,7 +38,7 @@ import { createServer } from 'http';
 import { Server as SocketServer } from 'socket.io';
 
 import { errorHandler } from './middleware/errorHandler';
-import { rateLimitGeneral } from './middleware/rateLimit';
+import { rateLimitGeneral, rateLimitProxy } from './middleware/rateLimit';
 import jwt from 'jsonwebtoken';
 
 import authRoutes from './routes/auth';
@@ -136,7 +136,7 @@ app.use(cors({
 app.use(helmet());
 app.use(morgan('short'));
 app.use((req, res, next) => {
-  if (req.path.startsWith('/proxy/')) return next();
+  if (req.path.startsWith('/proxy/')) return rateLimitProxy(req, res, next);
   rateLimitGeneral(req, res, next);
 });
 

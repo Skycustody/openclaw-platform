@@ -44,22 +44,12 @@ function verifyContainerAuth(req: Request, userId: string): boolean {
   const internalSecret = process.env.INTERNAL_SECRET;
   if (!internalSecret) return false;
 
-  // Prefer per-container secret (new containers use this)
   const containerSecret = req.headers['x-container-secret'] as string;
-  if (containerSecret) {
-    const expected = crypto.createHmac('sha256', internalSecret).update(userId).digest('hex');
-    if (containerSecret.length !== expected.length) return false;
-    return crypto.timingSafeEqual(Buffer.from(containerSecret), Buffer.from(expected));
-  }
+  if (!containerSecret) return false;
 
-  // Fall back to global INTERNAL_SECRET (for server-registration and legacy containers)
-  const globalSecret = req.headers['x-internal-secret'] as string;
-  if (globalSecret) {
-    if (globalSecret.length !== internalSecret.length) return false;
-    return crypto.timingSafeEqual(Buffer.from(globalSecret), Buffer.from(internalSecret));
-  }
-
-  return false;
+  const expected = crypto.createHmac('sha256', internalSecret).update(userId).digest('hex');
+  if (containerSecret.length !== expected.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(containerSecret), Buffer.from(expected));
 }
 
 // Stripe webhook — raw body required

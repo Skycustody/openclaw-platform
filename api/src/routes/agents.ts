@@ -39,6 +39,18 @@ const MAX_AGENTS: Record<string, number> = {
 };
 
 const INSTANCE_DIR = '/opt/openclaw/instances';
+const UUID_RE = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+const SAFE_PATH_SEGMENT_RE = /^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/;
+
+function validateUserId(userId: string): void {
+  if (!UUID_RE.test(userId)) throw new Error('Invalid user ID format');
+}
+
+function validatePathSegment(segment: string): void {
+  if (!SAFE_PATH_SEGMENT_RE.test(segment) || segment.includes('..')) {
+    throw new Error('Invalid path segment');
+  }
+}
 
 interface Agent {
   id: string;
@@ -201,6 +213,8 @@ async function syncAgentToContainer(
   containerName: string,
   agent: { openclawId: string; name: string; purpose: string | null; instructions: string | null },
 ): Promise<void> {
+  validateUserId(userId);
+  validatePathSegment(agent.openclawId);
   const config = await readContainerConfig(serverIp, userId);
 
   if (!config.agents) config.agents = {};
@@ -255,6 +269,8 @@ async function removeAgentFromContainer(
   userId: string,
   openclawId: string,
 ): Promise<void> {
+  validateUserId(userId);
+  validatePathSegment(openclawId);
   const config = await readContainerConfig(serverIp, userId);
 
   if (config.agents?.list) {

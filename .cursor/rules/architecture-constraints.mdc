@@ -18,8 +18,17 @@ These are hard-won lessons. Each one was discovered by a production outage or se
 ## Docker Networking
 
 - Containers MUST be on `openclaw-net` — Traefik's config has `network: openclaw-net`. Without it, Traefik returns 404.
-- Containers also get a per-user network (`{name}-net`) for isolation. Other containers can't reach each other.
+- `openclaw-net` is created with `--opt com.docker.network.bridge.enable_icc=false` — containers CANNOT communicate with each other.
+- Containers also get a per-user network (`{name}-net`) for isolation.
 - Never remove `openclaw-net` from `docker run`.
+
+## Container Security
+
+- Containers use `--cap-drop ALL --security-opt seccomp=unconfined --no-new-privileges`.
+- Do NOT add `--cap-add SYS_ADMIN` — it enables container escape. Chrome uses `--no-sandbox` instead.
+- All userIds MUST be validated with UUID regex before use in shell commands or file paths.
+- Container names MUST be validated with `CONTAINER_NAME_RE` before use in `docker exec` or `docker restart`.
+- Agent `openclawId` values MUST be validated as safe path segments before use in file paths.
 
 ## Container Secrets
 

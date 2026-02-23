@@ -32,6 +32,12 @@ import { cacheUserSkills } from '../services/smartRouter';
 
 const router = Router();
 const INSTANCE_DIR = '/opt/openclaw/instances';
+const UUID_RE = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+
+function validateUserId(userId: string): void {
+  if (!UUID_RE.test(userId)) throw new Error('Invalid user ID format');
+}
+
 router.use(authenticate);
 
 async function refreshSkillsCache(userId: string, config: any): Promise<void> {
@@ -64,6 +70,7 @@ router.post('/install', requireActiveSubscription, async (req: AuthRequest, res:
 
     const { serverIp, containerName } = await getUserContainer(req.userId!);
     const userId = req.userId!;
+    validateUserId(userId);
     const remoteSkillsDir = `${INSTANCE_DIR}/${userId}/skills`;
     const localSkillPath = `${PLATFORM_SKILLS_DIR}/${skill.id}`;
 

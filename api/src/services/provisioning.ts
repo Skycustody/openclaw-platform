@@ -44,6 +44,26 @@ import { reapplyGatewayConfig } from './containerConfig';
 import { ensureNexosKey } from './nexos';
 import { installDefaultSkills } from './defaultSkills';
 
+const UUID_RE = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+const CONTAINER_NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9_.-]+$/;
+
+function validateUserId(userId: string): void {
+  if (!UUID_RE.test(userId)) throw new Error('Invalid user ID format');
+}
+
+function validateContainerName(name: string): void {
+  if (!CONTAINER_NAME_RE.test(name)) throw new Error('Invalid container name format');
+}
+
+function redactSecrets(cmd: string): string {
+  return cmd
+    .replace(/CONTAINER_SECRET=[^\s"]+/g, 'CONTAINER_SECRET=[REDACTED]')
+    .replace(/BROWSERLESS_URL=[^\s"]+/g, 'BROWSERLESS_URL=[REDACTED]')
+    .replace(/OPENCLAW_GATEWAY_TOKEN=[^\s"]+/g, 'OPENCLAW_GATEWAY_TOKEN=[REDACTED]')
+    .replace(/OPENROUTER_API_KEY=[^\s"]+/g, 'OPENROUTER_API_KEY=[REDACTED]')
+    .replace(/token=[a-zA-Z0-9_-]+/gi, 'token=[REDACTED]');
+}
+
 /** Generate a per-container secret bound to a specific userId. */
 export function generateContainerSecret(userId: string): string {
   const secret = process.env.INTERNAL_SECRET;
@@ -60,6 +80,7 @@ interface ProvisionParams {
 
 export async function provisionUser(params: ProvisionParams): Promise<User> {
   const { userId, email, plan, stripeCustomerId } = params;
+  validateUserId(userId);
   const limits = PLAN_LIMITS[plan];
 
   const existing = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [userId]);
@@ -110,10 +131,11 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
   // Remove any existing container with same name first
   await sshExec(server.ip, `docker rm -f ${containerName} 2>/dev/null || true`);
 
-  // Ensure shared Traefik network exists (Traefik connects to each user's network)
-  await sshExec(server.ip, `docker network create openclaw-net 2>/dev/null || true`);
+  // Ensure shared Traefik network exists with ICC disabled so containers cannot reach each other
+  await sshExec(server.ip, `docker network create --opt com.docker.network.bridge.enable_icc=false openclaw-net 2>/dev/null || true`);
 
-  // Per-user isolated network (containers can't see each other)
+  // Per-user isolated network
+  validateContainerName(containerName);
   await sshExec(server.ip, `docker network create ${containerName}-net 2>/dev/null || true`);
   // Always verify Traefik has DOCKER_API_VERSION set; recreate if missing
   const traefikCheck = await sshExec(server.ip, `docker inspect traefik --format='{{.State.Running}}' 2>/dev/null`).catch(() => null);
@@ -254,7 +276,7 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
     '--network openclaw-net',
     '--cap-drop ALL',
     '--cap-add NET_BIND_SERVICE',
-    '--cap-add SYS_ADMIN',
+    '--security-opt seccomp=unconfined',
     '--no-new-privileges',
     '--pids-limit 256',
     `--memory ${limits.ramMb}m`,
@@ -283,7 +305,7 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
     startScript,
   ].join(' ');
 
-  console.log(`[provision] Running docker on ${server.ip}: ${dockerRunCmd.slice(0, 200)}...`);
+  console.log(`[provision] Running docker on ${server.ip}: ${redactSecrets(dockerRunCmd).slice(0, 300)}...`);
   const runResult = await sshExec(server.ip, dockerRunCmd);
 
   if (runResult.code !== 0) {
@@ -296,8 +318,11 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
   // Also connect container to its own isolated network (prevents cross-container access)
   await sshExec(server.ip, `docker network connect ${containerName}-net ${containerName} 2>/dev/null || true`);
 
-  // Block container access to cloud metadata endpoint (prevents INTERNAL_SECRET leak via user-data)
-  await sshExec(server.ip, `iptables -C FORWARD -s $(docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ${containerName} 2>/dev/null) -d 169.254.169.254 -j DROP 2>/dev/null || iptables -I FORWARD -s $(docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ${containerName} 2>/dev/null) -d 169.254.169.254 -j DROP 2>/dev/null || true`);
+  // Block ALL Docker containers from reaching cloud metadata endpoint (survives container restarts/IP changes)
+  await sshExec(server.ip, [
+    `iptables -C FORWARD -d 169.254.169.254 -j DROP 2>/dev/null || iptables -I FORWARD -d 169.254.169.254 -j DROP 2>/dev/null || true`,
+    `iptables -C OUTPUT -d 169.254.169.254 -m owner ! --uid-owner 0 -j DROP 2>/dev/null || iptables -I OUTPUT -d 169.254.169.254 -m owner ! --uid-owner 0 -j DROP 2>/dev/null || true`,
+  ].join(' && '));
 
   // Step 6: Quick alive check — give the container 5s to start, then verify
   await new Promise(r => setTimeout(r, 5000));
@@ -358,6 +383,7 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
 }
 
 export async function deprovisionUser(userId: string): Promise<void> {
+  validateUserId(userId);
   const user = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [userId]);
   if (!user || !user.server_id) return;
 
@@ -365,6 +391,7 @@ export async function deprovisionUser(userId: string): Promise<void> {
   if (!server) return;
 
   const containerName = user.container_name || `openclaw-${userId}`;
+  validateContainerName(containerName);
 
   try {
     await sshExec(server.ip, `docker stop ${containerName} && docker rm ${containerName}`);
@@ -386,6 +413,7 @@ export async function deprovisionUser(userId: string): Promise<void> {
 }
 
 export async function restartContainer(userId: string): Promise<void> {
+  validateUserId(userId);
   const user = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [userId]);
   if (!user?.server_id) throw new Error('User has no server assigned');
 
@@ -393,6 +421,7 @@ export async function restartContainer(userId: string): Promise<void> {
   if (!server) throw new Error('Server not found');
 
   const containerName = user.container_name || `openclaw-${userId}`;
+  validateContainerName(containerName);
   await sshExec(server.ip, `docker restart ${containerName}`);
 
   // Wait for the gateway process to finish its startup initialization
@@ -404,6 +433,7 @@ export async function restartContainer(userId: string): Promise<void> {
 }
 
 export async function updateContainerConfig(userId: string, config: Record<string, any>): Promise<void> {
+  validateUserId(userId);
   const user = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [userId]);
   if (!user?.server_id) throw new Error('User has no server assigned');
 
@@ -411,6 +441,7 @@ export async function updateContainerConfig(userId: string, config: Record<strin
   if (!server) throw new Error('Server not found');
 
   const containerName = user.container_name || `openclaw-${userId}`;
+  validateContainerName(containerName);
   const configB64 = Buffer.from(JSON.stringify(config)).toString('base64');
 
   await sshExec(

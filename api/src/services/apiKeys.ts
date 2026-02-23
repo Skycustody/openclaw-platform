@@ -35,6 +35,11 @@ import { Plan } from '../types';
 import db from '../lib/db';
 
 const INSTANCE_DIR = '/opt/openclaw/instances';
+const UUID_RE = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+
+function validateUserId(userId: string): void {
+  if (!UUID_RE.test(userId)) throw new Error('Invalid user ID format');
+}
 
 // Proxy URL that containers use to reach the smart router.
 // Goes through Nginx/Cloudflare (port 4000 is not directly accessible from workers).
@@ -59,6 +64,7 @@ export async function injectApiKeys(
   containerName: string,
   plan: Plan = 'starter'
 ): Promise<void> {
+  validateUserId(userId);
   const settings = await db.getOne<{ own_openrouter_key: string | null }>(
     'SELECT own_openrouter_key FROM user_settings WHERE user_id = $1',
     [userId]
