@@ -101,16 +101,21 @@ export async function requireAdmin(req: AuthRequest, _res: Response, next: NextF
       throw new UnauthorizedError('Authentication required');
     }
 
-    // IP allowlist check — use req.ip (respects Express trust proxy)
-    const allowedIps = (process.env.ADMIN_ALLOWED_IPS || '').split(',').map(s => s.trim()).filter(Boolean);
-    if (allowedIps.length > 0) {
-      const clientIp = (req.ip || req.socket.remoteAddress || '').replace('::ffff:', '');
-      if (!allowedIps.some(allowed => allowed === clientIp)) {
-        console.warn(`[admin] Blocked IP: ${clientIp}`);
-        const err: any = new Error('Access denied from this IP');
-        err.statusCode = 403;
-        return next(err);
-      }
+    // Admin panel lives on the control plane only. By default only localhost can access.
+    // Set ADMIN_ALLOWED_IPS to allow specific IPs (e.g. your VPN or office).
+    // When behind Cloudflare, req.ip can be the proxy IP; use X-Forwarded-For leftmost (real client).
+    const forwarded = req.headers['x-forwarded-for'];
+    const clientIpRaw = typeof forwarded === 'string'
+      ? forwarded.split(',')[0].trim()
+      : (req.ip || req.socket.remoteAddress || '');
+    const clientIp = String(clientIpRaw).replace('::ffff:', '');
+    const allowedIpsRaw = (process.env.ADMIN_ALLOWED_IPS || '').split(',').map(s => s.trim()).filter(Boolean);
+    const allowedIps = allowedIpsRaw.length > 0 ? allowedIpsRaw : ['127.0.0.1', '::1'];
+    if (!allowedIps.some(allowed => allowed === clientIp)) {
+      console.warn(`[admin] Blocked IP: ${clientIp} (allowed: ${allowedIps.join(', ')})`);
+      const err: any = new Error('Admin panel is only available from the control plane. Use SSH port-forward or set ADMIN_ALLOWED_IPS.');
+      err.statusCode = 403;
+      return next(err);
     }
 
     const user = await db.getOne<{ is_admin: boolean }>(
