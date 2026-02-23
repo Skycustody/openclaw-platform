@@ -10,7 +10,6 @@ import {
   MessageSquare,
   Globe,
   Shield,
-  Clock,
   Coins,
   ArrowRight,
   Check,
@@ -18,10 +17,8 @@ import {
   Bot,
   Cpu,
   HardDrive,
-  Users,
   Terminal,
   Brain,
-  Layers,
 } from 'lucide-react';
 import { GlowingEffect } from '@/components/ui/glowing-effect';
 import dynamic from 'next/dynamic';
@@ -33,42 +30,42 @@ const DotScreenShader = dynamic(
 
 const features = [
   {
+    icon: Zap,
+    title: '1-Click Deploy',
+    desc: 'Pick a plan, pay, and your OpenClaw instance is live on a dedicated VPS in under 2 minutes. No terminal needed.',
+  },
+  {
     icon: Brain,
     title: 'Smart AI Routing',
-    desc: 'Picks the best AI model for each task automatically. Simple questions use cheap models, complex work uses powerful ones. You save money without thinking about it.',
+    desc: 'Our router picks the cheapest model that can handle each task. Simple chat uses a $0.10 model, complex coding gets Claude or GPT-4o. You save 50-80% automatically.',
   },
   {
     icon: Globe,
-    title: 'Full Web Browser',
-    desc: 'Your agent browses the web, fills forms, applies to jobs, scrapes data, and researches topics — just like you would.',
+    title: 'Built-in Browser',
+    desc: 'Your agent browses the web, fills forms, scrapes data, and researches topics — all from inside OpenClaw.',
   },
   {
     icon: MessageSquare,
-    title: 'All Your Apps',
-    desc: 'Connect Telegram, WhatsApp, Discord, and Slack. Your agent responds on any channel, 24/7.',
-  },
-  {
-    icon: Clock,
-    title: 'Scheduled Tasks',
-    desc: 'Daily briefings, price alerts, email summaries, social media posts — set it and forget it.',
-  },
-  {
-    icon: Users,
-    title: 'Multiple Agents',
-    desc: 'Create specialized agents — one for research, one for support, one for coding. They can talk to each other.',
+    title: 'All Messaging Apps',
+    desc: 'Telegram, WhatsApp, Discord, Slack — connect any channel. Your agent responds 24/7.',
   },
   {
     icon: Shield,
-    title: 'Budget Protection',
-    desc: 'Set spending limits per day, week, or month. Smart routing keeps costs low. No surprise bills.',
+    title: 'Isolated & Secure',
+    desc: 'Each user gets their own container with private storage. No other user can access your data or your agent.',
+  },
+  {
+    icon: Coins,
+    title: 'Bring Your Own Key',
+    desc: 'Want unlimited usage? Plug in your own OpenRouter API key and use any model directly, no platform limits.',
   },
 ];
 
 const howItWorks = [
-  { step: '1', title: 'Sign up & pay', desc: 'Pick a plan. Payment takes 30 seconds.' },
-  { step: '2', title: 'Agent goes live', desc: 'Your AI agent is provisioned on a dedicated server automatically.' },
-  { step: '3', title: 'Start chatting', desc: 'Talk in the dashboard, or connect your Telegram, Discord, or WhatsApp.' },
-  { step: '4', title: 'It works for you', desc: 'Research, browse the web, write code, manage files, run scheduled tasks.' },
+  { step: '1', title: 'Pick a plan', desc: 'Choose the VPS size you need. Pay in 30 seconds.' },
+  { step: '2', title: 'OpenClaw deploys', desc: 'We provision a dedicated VPS with OpenClaw pre-installed and configured.' },
+  { step: '3', title: 'Use the dashboard', desc: 'Chat with your agent, connect messaging apps, configure skills — all from the web.' },
+  { step: '4', title: 'Save on AI costs', desc: 'Smart routing and cost optimization work automatically. Or bring your own API key.' },
 ];
 
 const plans = [
@@ -163,7 +160,7 @@ function HeroSection() {
           )}
         >
           <Bot className="size-3 text-muted-foreground" />
-          <span className="text-xs">Your own AI agent, hosted and ready</span>
+          <span className="text-xs">OpenClaw hosting — instant setup</span>
         </div>
 
         <h1
@@ -171,25 +168,25 @@ function HeroSection() {
             'fade-in slide-in-from-bottom-10 animate-in text-balance fill-mode-backwards text-center text-4xl font-bold tracking-tight delay-100 duration-500 ease-out md:text-5xl lg:text-6xl'
           )}
         >
-          An AI That Works
+          OpenClaw in 1 Click
           <br />
-          <span className="text-muted-foreground">While You Don&apos;t</span>
+          <span className="text-muted-foreground">Your Own VPS, Instantly</span>
         </h1>
 
         <p className="fade-in slide-in-from-bottom-10 mx-auto max-w-lg animate-in fill-mode-backwards text-center text-base tracking-wider text-foreground/70 delay-200 duration-500 ease-out sm:text-lg">
-          Valnaa gives you a personal AI agent on a dedicated server. It browses the web, manages your apps,
-          runs scheduled tasks, and picks the smartest AI model for every job.
+          Get a dedicated VPS running OpenClaw in under 2 minutes. Smart AI routing picks
+          the best model for each task and cuts your costs automatically.
         </p>
 
         <div className="fade-in slide-in-from-bottom-10 flex animate-in flex-row flex-wrap items-center justify-center gap-3 fill-mode-backwards pt-2 delay-300 duration-500 ease-out">
           <Link href="#pricing">
             <Button className="rounded-full" size="lg" variant="secondary">
-              View Plans
+              See Plans
             </Button>
           </Link>
           <Link href="/auth/signup">
             <Button className="rounded-full" size="lg">
-              Get Your Agent
+              Deploy OpenClaw
               <ArrowRight className="size-4" />
             </Button>
           </Link>
@@ -219,22 +216,22 @@ function WhatIsItSection() {
         <div className="grid grid-cols-1 gap-10 md:grid-cols-2 md:items-center">
           <div>
             <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
-              What is Valnaa?
+              Hosted OpenClaw
             </h2>
             <p className="mt-4 text-base leading-relaxed text-muted-foreground">
-              Valnaa is a hosted AI agent platform. You get your own AI assistant running on a dedicated server
-              with its own memory, browser, file storage, and connections to your messaging apps.
+              Valnaa is an OpenClaw SaaS. We give you a dedicated VPS with OpenClaw pre-installed
+              and ready to go — no server setup, no Docker, no config files.
             </p>
             <p className="mt-3 text-base leading-relaxed text-muted-foreground">
-              It&apos;s not a chatbot — it&apos;s an agent that takes action. It can browse websites, fill out forms,
-              write and run code, manage files, and execute tasks on a schedule.
+              On top of that, we add smart AI routing that automatically picks the cheapest model
+              that can handle each task, so you get great results without burning through credits.
             </p>
           </div>
           <div className="space-y-4">
             {[
-              { icon: Terminal, label: 'Dedicated server', desc: 'Your agent runs on its own container with guaranteed RAM and CPU' },
-              { icon: Layers, label: 'Persistent memory', desc: 'Remembers context across conversations and sessions' },
-              { icon: Cpu, label: '20+ AI models', desc: 'Claude, GPT-4o, Gemini, DeepSeek, Llama — auto-selected per task' },
+              { icon: Terminal, label: 'Your own VPS', desc: 'Dedicated container with guaranteed RAM, CPU, and isolated storage' },
+              { icon: Coins, label: 'Optimized AI costs', desc: 'Smart routing picks cheap models for simple tasks, powerful ones only when needed' },
+              { icon: Cpu, label: '20+ AI models', desc: 'Claude, GPT-4o, Gemini, DeepSeek, Llama — all available, auto-selected' },
             ].map(item => (
               <div key={item.label} className="flex items-start gap-3 rounded-xl border border-border bg-card p-4">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-secondary">
@@ -261,9 +258,9 @@ function FeaturesSection() {
           <Sparkles className="size-3" />
           Capabilities
         </div>
-        <h2 className="text-3xl font-bold tracking-tight md:text-4xl">What your agent can do</h2>
+        <h2 className="text-3xl font-bold tracking-tight md:text-4xl">What you get</h2>
         <p className="mt-3 text-base text-muted-foreground">
-          No coding required. Everything works out of the box.
+          Everything included. No server setup, no DevOps, no coding.
         </p>
       </div>
 
@@ -326,9 +323,9 @@ function PricingSection() {
           <Coins className="size-3" />
           Pricing
         </div>
-        <h2 className="text-3xl font-bold tracking-tight md:text-4xl">Simple pricing. Real servers.</h2>
+        <h2 className="text-3xl font-bold tracking-tight md:text-4xl">Pick your VPS</h2>
         <p className="mt-3 text-base text-muted-foreground">
-          Every plan includes a dedicated server, AI budget, and smart routing. Upgrade or cancel anytime.
+          Every plan is a real dedicated server with OpenClaw, AI credits, and smart routing included.
         </p>
       </div>
 
@@ -412,9 +409,9 @@ function CTASection() {
             <div className="mx-auto mb-6 flex h-12 w-12 items-center justify-center rounded-xl bg-secondary">
               <Bot className="h-6 w-6" />
             </div>
-            <h2 className="text-2xl font-bold tracking-tight md:text-3xl">Ready to get your AI agent?</h2>
+            <h2 className="text-2xl font-bold tracking-tight md:text-3xl">Ready to deploy OpenClaw?</h2>
             <p className="mt-3 text-base text-muted-foreground">
-              From payment to working agent in under 2 minutes. No setup, no coding, no hassle.
+              From payment to a live OpenClaw instance in under 2 minutes. No setup, no terminal, no hassle.
             </p>
             <Link href="/auth/signup">
               <Button size="lg" className="mt-8 rounded-full">
@@ -434,7 +431,7 @@ function Footer() {
       <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-4 px-6 py-8 sm:flex-row">
         <div className="flex items-center gap-2">
           <Zap className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm text-muted-foreground">Valnaa — Your AI, your server, your rules</span>
+          <span className="text-sm text-muted-foreground">Valnaa — Hosted OpenClaw, smart routing, your server</span>
         </div>
         <div className="flex items-center gap-6">
           <a href="#features" className="text-sm text-muted-foreground transition-colors hover:text-foreground">Features</a>
