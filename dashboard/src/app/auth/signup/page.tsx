@@ -245,6 +245,13 @@ function SignupContent() {
             Sign in
           </Link>
         </p>
+
+        <p className="mt-8 text-center text-xs text-muted-foreground">
+          By creating an account, you agree to our{' '}
+          <Link href="/terms" className="underline underline-offset-2 hover:text-foreground/80">Terms of Service</Link>
+          {' '}and{' '}
+          <Link href="/privacy" className="underline underline-offset-2 hover:text-foreground/80">Privacy Policy</Link>.
+        </p>
       </div>
     </div>
   );
