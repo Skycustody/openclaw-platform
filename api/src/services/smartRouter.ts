@@ -4,7 +4,17 @@ import redis from '../lib/redis';
 import { TaskClassification, ModelCapability, RoutingDecision, Plan } from '../types';
 import { OPENROUTER_MODEL_COSTS, RETAIL_MARKUP } from './nexos';
 
-const openai = new OpenAI({ apiKey: process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY });
+const routerClient = new OpenAI({
+  apiKey: process.env.OPENROUTER_API_KEY,
+  baseURL: 'https://openrouter.ai/api/v1',
+  timeout: 4000,
+  defaultHeaders: {
+    'HTTP-Referer': 'https://valnaa.com',
+    'X-Title': 'OpenClaw Router',
+  },
+});
+
+const ROUTER_MODEL_ID = 'google/gemini-2.0-flash-001';
 
 /**
  * Model capabilities + OpenRouter wholesale costs (no markup on provider pricing).
@@ -161,6 +171,119 @@ export const MODEL_MAP: Record<string, ModelCapability> = {
 
 const DEFAULT_COST_PER_1M = 1.00;
 
+function buildModelCatalog(): string {
+  return Object.entries(MODEL_MAP)
+    .sort((a, b) => a[1].costPer1MTokens - b[1].costPer1MTokens)
+    .map(([id, m]) => {
+      const caps: string[] = [];
+      if (m.vision) caps.push('vision');
+      if (m.deepAnalysis) caps.push('deep-analysis');
+      if (m.internet) caps.push('internet');
+      return `${id} | $${m.costPer1MTokens}/1M | ${m.displayName} | ${caps.join(', ') || 'basic'} | ${Math.round(m.maxContext / 1000)}k ctx`;
+    })
+    .join('\n');
+}
+
+const MODEL_CATALOG = buildModelCatalog();
+const VALID_MODEL_IDS = new Set(Object.keys(MODEL_MAP));
+
+const ROUTER_SYSTEM_PROMPT = `You are a model router for an AI agent platform. The agent has these tools: browser (navigate pages, click, type, fill forms, take screenshots), exec (run shell commands, install software), web_search, web_fetch, file read/write, memory, cron jobs, messaging.
+
+Your job: pick the CHEAPEST model that will handle the user's task well. Cost matters — don't pick expensive models for simple tasks.
+
+AVAILABLE MODELS (sorted cheapest first):
+${MODEL_CATALOG}
+
+ROUTING RULES (follow strictly):
+1. Simple greetings, thanks, basic Q&A, translations, short factual answers → google/gemini-2.0-flash-001 ($0.10)
+2. Browser automation, fill forms, visit websites, apply to jobs, sign up, login, click buttons, scrape pages, download files, any web interaction → anthropic/claude-sonnet-4-20250514 ($3.00) — ONLY model reliable at multi-step tool orchestration
+3. Coding, debugging, code review, build apps, fix bugs, write scripts → anthropic/claude-sonnet-4-20250514 ($3.00)
+4. Math, logic, proofs, complex reasoning, puzzles → openai/o3-mini ($1.10) or deepseek/deepseek-r1 ($0.55)
+5. Research, summarize, analyze documents, compare options → deepseek/deepseek-chat-v3-0324 ($0.50) or google/gemini-2.5-flash-preview ($0.15)
+6. Creative writing, stories, essays → openai/gpt-4o ($2.50)
+7. Image/vision analysis → openai/gpt-4o ($2.50) or google/gemini-2.5-pro-preview ($1.25)
+8. Very large documents (>50K tokens) → openai/gpt-4.1 ($2.00) or google/gemini-2.5-pro-preview ($1.25)
+9. General medium-complexity tasks → google/gemini-2.5-flash-preview ($0.15) or openai/gpt-4o-mini ($0.15)
+10. If conversation has active tool calls (agent is mid-task) → KEEP using anthropic/claude-sonnet-4-20250514, never downgrade mid-task
+11. Shell commands, install software, system administration → anthropic/claude-sonnet-4-20250514 ($3.00)
+12. Send messages, schedule tasks, manage files → anthropic/claude-sonnet-4-20250514 ($3.00)
+13. Only use claude-opus-4 ($15.00) for extremely complex multi-hour analysis tasks — almost never
+
+When in doubt between two models, pick the cheaper one.
+
+Return JSON: {"model":"<full_model_id>","reason":"<why in max 10 words>"}`;
+
+/**
+ * AI-powered model router — uses a cheap model (Gemini Flash, ~$0.00002/call)
+ * to intelligently pick the best model for each task. Falls back to null
+ * if the call fails, so the caller can use the heuristic fallback.
+ */
+export async function pickModelWithAI(
+  userMessage: string,
+  hasImage: boolean,
+  hasToolHistory: boolean,
+): Promise<{ model: string; reason: string } | null> {
+  const msgKey = userMessage.slice(0, 200);
+  const cacheKey = `aiRoute:${Buffer.from(msgKey).toString('base64')}:${hasImage}:${hasToolHistory}`;
+
+  try {
+    const cached = await redis.get(cacheKey);
+    if (cached) {
+      return JSON.parse(cached);
+    }
+  } catch { /* cache miss, proceed */ }
+
+  const contextLines: string[] = [];
+  if (hasImage) contextLines.push('Image attached: yes');
+  if (hasToolHistory) contextLines.push('Conversation has active tool calls: yes (agent is mid-task, keep strong model)');
+  contextLines.push(`User message: "${userMessage.slice(0, 600)}"`);
+
+  try {
+    const res = await routerClient.chat.completions.create({
+      model: ROUTER_MODEL_ID,
+      messages: [
+        { role: 'system', content: ROUTER_SYSTEM_PROMPT },
+        { role: 'user', content: contextLines.join('\n') },
+      ],
+      max_tokens: 80,
+      temperature: 0,
+      response_format: { type: 'json_object' },
+    });
+
+    const content = res.choices[0]?.message?.content?.trim();
+    if (!content) return null;
+
+    const result = parseRouterResponse(content);
+    if (!result) return null;
+
+    await redis.set(cacheKey, JSON.stringify(result), 'EX', 600).catch(() => {});
+    console.log(`[router] AI picked ${result.model} — ${result.reason}`);
+    return result;
+  } catch (err) {
+    console.warn('[router] AI model picker failed, will use heuristic fallback:', (err as Error).message);
+    return null;
+  }
+}
+
+function parseRouterResponse(content: string): { model: string; reason: string } | null {
+  try {
+    const parsed = JSON.parse(content);
+    if (parsed.model && typeof parsed.model === 'string') {
+      const model = parsed.model.trim();
+      if (VALID_MODEL_IDS.has(model) || model.includes('/')) {
+        return { model, reason: parsed.reason || 'AI router selection' };
+      }
+    }
+  } catch { /* not valid JSON */ }
+
+  const match = content.match(/([a-z][a-z0-9-]*\/[a-z0-9._-]+)/i);
+  if (match && (VALID_MODEL_IDS.has(match[1]) || match[1].includes('/'))) {
+    return { model: match[1], reason: 'AI router selection' };
+  }
+
+  return null;
+}
+
 /**
  * Retail price per 1M tokens (what we effectively charge users).
  * = OpenRouter wholesale cost × 1.5 (50% profit margin).
@@ -168,61 +291,6 @@ const DEFAULT_COST_PER_1M = 1.00;
 export const RETAIL_PRICES: Record<string, number> = Object.fromEntries(
   Object.entries(MODEL_MAP).map(([id, m]) => [id, Math.round(m.costPer1MTokens * RETAIL_MARKUP * 100) / 100])
 );
-
-export async function classifyTask(
-  message: string,
-  hasImage: boolean
-): Promise<TaskClassification> {
-  // Cache identical classifications for 10 minutes
-  const cacheKey = `classify:${Buffer.from(message.slice(0, 200)).toString('base64')}:${hasImage}`;
-  const cached = await redis.get(cacheKey);
-  if (cached) return JSON.parse(cached);
-
-  try {
-    const res = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        {
-          role: 'user',
-          content: `Classify this task. Return JSON only, no markdown.
-Message: "${message.slice(0, 500)}"
-Has image: ${hasImage}
-Return: {
-  "needsInternet": bool,
-  "needsVision": bool,
-  "needsDeepAnalysis": bool,
-  "needsCode": bool,
-  "complexity": "simple"|"medium"|"complex",
-  "estimatedTokens": number
-}`,
-        },
-      ],
-      max_tokens: 120,
-      response_format: { type: 'json_object' },
-      temperature: 0,
-    });
-
-    const classification = JSON.parse(
-      res.choices[0].message.content || '{}'
-    ) as TaskClassification;
-
-    // Override vision if image is attached
-    if (hasImage) classification.needsVision = true;
-
-    await redis.set(cacheKey, JSON.stringify(classification), 'EX', 600);
-    return classification;
-  } catch (err) {
-    console.error('Task classification failed, using defaults:', err);
-    return {
-      needsInternet: false,
-      needsVision: hasImage,
-      needsDeepAnalysis: false,
-      needsCode: false,
-      complexity: 'medium',
-      estimatedTokens: 2000,
-    };
-  }
-}
 
 export function selectModel(
   classification: TaskClassification,
@@ -316,27 +384,40 @@ export async function routeAndLog(
   brainMode: string,
   manualModel?: string | null
 ): Promise<RoutingDecision> {
-  const classification = await classifyTask(message, hasImage);
+  if (brainMode === 'manual' && manualModel) {
+    const decision = selectModel(
+      { needsInternet: false, needsVision: hasImage, needsDeepAnalysis: false, needsCode: false, complexity: 'medium', estimatedTokens: 2000 },
+      userPlan,
+      manualModel,
+    );
+    await db.query(
+      `INSERT INTO routing_decisions (user_id, message_preview, classification, model_selected, reason, tokens_saved)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [userId, message.slice(0, 200), '{"method":"manual"}', decision.model, decision.reason, 0]
+    );
+    return decision;
+  }
 
-  const decision =
-    brainMode === 'manual' && manualModel
-      ? selectModel(classification, userPlan, manualModel)
-      : selectModel(classification, userPlan);
+  const aiPick = await pickModelWithAI(message, hasImage, false);
+  if (aiPick) {
+    const cost = MODEL_MAP[aiPick.model]?.costPer1MTokens ?? DEFAULT_COST_PER_1M;
+    const decision: RoutingDecision = { model: aiPick.model, reason: `AI router: ${aiPick.reason}`, estimatedCost: cost, tokensSaved: 0 };
+    await db.query(
+      `INSERT INTO routing_decisions (user_id, message_preview, classification, model_selected, reason, tokens_saved)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [userId, message.slice(0, 200), '{"method":"ai"}', decision.model, decision.reason, 0]
+    );
+    return decision;
+  }
 
-  // Log routing decision
+  const { classifyTaskHeuristic } = await import('./heuristicClassifier');
+  const classification = classifyTaskHeuristic(message, hasImage);
+  const decision = selectModel(classification, userPlan);
   await db.query(
     `INSERT INTO routing_decisions (user_id, message_preview, classification, model_selected, reason, tokens_saved)
      VALUES ($1, $2, $3, $4, $5, $6)`,
-    [
-      userId,
-      message.slice(0, 200),
-      JSON.stringify(classification),
-      decision.model,
-      decision.reason,
-      decision.tokensSaved,
-    ]
+    [userId, message.slice(0, 200), JSON.stringify({ method: 'heuristic', ...classification }), decision.model, `Heuristic fallback: ${decision.reason}`, decision.tokensSaved]
   );
-
   return decision;
 }
 

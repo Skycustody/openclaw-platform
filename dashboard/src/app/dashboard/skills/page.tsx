@@ -293,7 +293,7 @@ export default function SkillsPage() {
         >
           Bundled Skills ({Object.keys(BUNDLED_SKILLS).length})
         </button>
-        <button
+            <button
           onClick={() => setTab('marketplace')}
           className={`px-4 py-2 rounded-lg text-[14px] font-medium transition-all ${
             tab === 'marketplace' ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/60'
@@ -301,7 +301,7 @@ export default function SkillsPage() {
         >
           <Package className="h-3.5 w-3.5 inline mr-1" />
           Skill Marketplace ({marketplaceSkills.length || '…'})
-        </button>
+            </button>
       </div>
 
       {/* Built-in tools tab */}

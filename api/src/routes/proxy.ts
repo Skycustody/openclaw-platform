@@ -3,11 +3,13 @@
  * OpenClaw containers and OpenRouter.
  *
  * Flow:
- *   Container → POST /proxy/v1/chat/completions → classify or passthrough → OpenRouter → stream back
+ *   Container → POST /proxy/v1/chat/completions → AI router picks model → OpenRouter → stream back
  *
- * Two modes:
- *   1. model = "auto" (default) → heuristic classification → pick best model per task
- *   2. model = "openai/gpt-4o" etc. → passthrough directly to OpenRouter (user chose a specific model)
+ * Routing priority:
+ *   1. Direct model selection (user chose a specific model via /model command)
+ *   2. Manual override (user settings brain_mode=manual)
+ *   3. AI router: cheap Gemini Flash reads the message, sees all available models, picks the best one
+ *   4. Heuristic fallback: keyword matching if AI router call fails
  *
  * Auth: Bearer token = the user's OpenRouter API key (sk-or-v1-xxx).
  * We look up the user by their nexos_api_key to determine their plan tier.
@@ -18,7 +20,7 @@ import { URL } from 'url';
 import db from '../lib/db';
 import { Plan } from '../types';
 import { classifyTaskHeuristic } from '../services/heuristicClassifier';
-import { selectModel } from '../services/smartRouter';
+import { selectModel, pickModelWithAI } from '../services/smartRouter';
 
 const router = Router();
 
@@ -115,7 +117,7 @@ router.post('/v1/chat/completions', async (req: Request, res: Response) => {
 
   let selectedModel: string;
   let routingReason: string;
-  let tokensSaved = 0;
+  let routingMethod = 'direct';
 
   if (!isAutoRouting) {
     selectedModel = incomingModel;
@@ -126,29 +128,40 @@ router.post('/v1/chat/completions', async (req: Request, res: Response) => {
   } else {
     const lastMessage = extractLastUserMessage(body.messages);
     const hasImage = hasImageContent(body.messages);
-    const hasTools = hasToolCallsInHistory(body.messages);
-
-    const classification = classifyTaskHeuristic(lastMessage, hasImage);
-
+    const hasToolHistory = hasToolCallsInHistory(body.messages);
     const requestHasTools = Array.isArray(body.tools) && body.tools.length > 0;
 
-    if ((hasTools || requestHasTools) && !classification.needsAgentic) {
-      classification.needsAgentic = true;
-      classification.complexity = 'complex';
-      classification.needsInternet = true;
-    }
+    const aiPick = await pickModelWithAI(
+      lastMessage,
+      hasImage,
+      hasToolHistory || requestHasTools,
+    );
 
-    const plan = user?.plan || 'starter';
-    const decision = selectModel(classification, plan);
-    selectedModel = decision.model;
-    routingReason = decision.reason;
-    tokensSaved = decision.tokensSaved;
+    if (aiPick) {
+      selectedModel = aiPick.model;
+      routingReason = `AI router: ${aiPick.reason}`;
+      routingMethod = 'ai';
+    } else {
+      const classification = classifyTaskHeuristic(lastMessage, hasImage);
+
+      if ((hasToolHistory || requestHasTools) && !classification.needsAgentic) {
+        classification.needsAgentic = true;
+        classification.complexity = 'complex';
+        classification.needsInternet = true;
+      }
+
+      const plan = user?.plan || 'starter';
+      const decision = selectModel(classification, plan);
+      selectedModel = decision.model;
+      routingReason = `Heuristic fallback: ${decision.reason}`;
+      routingMethod = 'heuristic';
+    }
 
     if (user) {
       db.query(
         `INSERT INTO routing_decisions (user_id, message_preview, classification, model_selected, reason, tokens_saved)
          VALUES ($1, $2, $3, $4, $5, $6)`,
-        [user.id, lastMessage.slice(0, 200), JSON.stringify(classification), selectedModel, routingReason, tokensSaved]
+        [user.id, lastMessage.slice(0, 200), JSON.stringify({ method: routingMethod }), selectedModel, routingReason, 0]
       ).catch(() => {});
     }
   }
