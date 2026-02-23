@@ -126,7 +126,7 @@ interface PlatformSkill {
 export default function SkillsPage() {
   const [data, setData] = useState<SkillsData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [toggling, setToggling] = useState<string | null>(null);
+  const [toggling, setToggling] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set(CATEGORY_ORDER.slice(0, 6)));
   const [apiKeyInputs, setApiKeyInputs] = useState<Record<string, string>>({});
@@ -172,19 +172,36 @@ export default function SkillsPage() {
   };
 
   const toggleTool = async (name: string, enable: boolean) => {
-    setToggling(name);
+    setToggling(prev => new Set(prev).add(name));
+    setData(prev => {
+      if (!prev) return prev;
+      const enabled = enable
+        ? [...prev.enabled.filter(t => t !== name), name]
+        : prev.enabled.filter(t => t !== name);
+      const disabled = enable
+        ? prev.disabled.filter(t => t !== name)
+        : [...prev.disabled.filter(t => t !== name), name];
+      return { ...prev, enabled, disabled };
+    });
     try {
       await api.put(`/skills/tool/${name}`, { enabled: enable });
-      await fetchSkills();
+      fetchSkills();
     } catch (err: any) {
       setError(err.message || 'Failed to update');
+      fetchSkills();
     } finally {
-      setToggling(null);
+      setToggling(prev => { const next = new Set(prev); next.delete(name); return next; });
     }
   };
 
   const toggleSkill = async (name: string, enable: boolean, envKey?: string) => {
-    setToggling(name);
+    setToggling(prev => new Set(prev).add(name));
+    setData(prev => {
+      if (!prev) return prev;
+      const skillsConfig = { ...prev.skillsConfig };
+      skillsConfig[name] = { ...skillsConfig[name], enabled: enable };
+      return { ...prev, skillsConfig };
+    });
     try {
       const body: any = { enabled: enable };
       const keyVal = apiKeyInputs[name];
@@ -193,12 +210,13 @@ export default function SkillsPage() {
         body.envKey = envKey;
       }
       await api.put(`/skills/bundled/${name}`, body);
-      await fetchSkills();
+      fetchSkills();
       if (keyVal) setApiKeyInputs(prev => ({ ...prev, [name]: '' }));
     } catch (err: any) {
       setError(err.message || 'Failed to update skill');
+      fetchSkills();
     } finally {
-      setToggling(null);
+      setToggling(prev => { const next = new Set(prev); next.delete(name); return next; });
     }
   };
 
@@ -341,7 +359,7 @@ export default function SkillsPage() {
                         ) : (
                           <Button
                             variant={isEnabled ? 'glass' : 'primary'} size="sm"
-                            loading={toggling === name}
+                            loading={toggling.has(name)}
                             onClick={() => toggleTool(name, !isEnabled)}
                           >
                             {isEnabled ? <><PowerOff className="h-3.5 w-3.5" /> Disable</> : <><Power className="h-3.5 w-3.5" /> Enable</>}
@@ -433,7 +451,7 @@ export default function SkillsPage() {
                         ) : (
                           <Button
                             variant={isEnabled ? 'glass' : 'primary'} size="sm"
-                            loading={toggling === name}
+                            loading={toggling.has(name)}
                             onClick={() => toggleSkill(name, !isEnabled, meta.envKey)}
                             disabled={needsKey && !hasKey && !isEnabled && !apiKeyInputs[name]}
                           >

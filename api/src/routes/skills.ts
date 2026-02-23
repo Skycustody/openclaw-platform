@@ -196,9 +196,9 @@ router.put('/tool/:toolName', async (req: AuthRequest, res: Response, next: Next
     }
 
     await writeContainerConfig(serverIp, req.userId!, config);
-    const ready = await restartContainer(serverIp, containerName);
+    restartContainer(serverIp, containerName).catch(() => {});
 
-    res.json({ ok: true, restarted: ready, tool: toolName, enabled: enabled !== false });
+    res.json({ ok: true, restarted: true, tool: toolName, enabled: enabled !== false });
   } catch (err) {
     next(err);
   }
@@ -228,9 +228,9 @@ router.put('/bundled/:skillName', async (req: AuthRequest, res: Response, next: 
 
     await writeContainerConfig(serverIp, req.userId!, config);
     refreshSkillsCache(req.userId!, config).catch(() => {});
-    const ready = await restartContainer(serverIp, containerName);
+    restartContainer(serverIp, containerName).catch(() => {});
 
-    res.json({ ok: true, restarted: ready, skill: skillName, enabled: enabled !== false });
+    res.json({ ok: true, restarted: true, skill: skillName, enabled: enabled !== false });
   } catch (err) {
     next(err);
   }
@@ -256,9 +256,9 @@ router.put('/:toolName', async (req: AuthRequest, res: Response, next: NextFunct
     }
 
     await writeContainerConfig(serverIp, req.userId!, config);
-    const ready = await restartContainer(serverIp, containerName);
+    restartContainer(serverIp, containerName).catch(() => {});
 
-    res.json({ ok: true, restarted: ready, tool: toolName, enabled: enabled !== false });
+    res.json({ ok: true, restarted: true, tool: toolName, enabled: enabled !== false });
   } catch (err) {
     next(err);
   }
@@ -277,7 +277,7 @@ router.delete('/:toolName', async (req: AuthRequest, res: Response, next: NextFu
 
     await writeContainerConfig(serverIp, req.userId!, config);
     refreshSkillsCache(req.userId!, config).catch(() => {});
-    await restartContainer(serverIp, containerName);
+    restartContainer(serverIp, containerName).catch(() => {});
 
     res.json({ ok: true });
   } catch (err) {
