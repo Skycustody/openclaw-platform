@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { flushSync } from 'react-dom';
 import {
   Send, Square, Loader2, Bot, User, AlertCircle, WifiOff, RefreshCw,
-  ChevronDown, ChevronRight, Paperclip, Image as ImageIcon, Mic,
+  ChevronDown, ChevronRight, Image as ImageIcon, Mic,
 } from 'lucide-react';
 
 interface Message {
@@ -18,6 +18,8 @@ interface Message {
 interface GatewayChatProps {
   gatewayUrl: string;
   token: string;
+  agentName?: string;
+  modelName?: string;
 }
 
 type WsState = 'connecting' | 'connected' | 'disconnected' | 'error';
@@ -41,7 +43,7 @@ function extractContent(entry: Record<string, unknown>): string {
   return '';
 }
 
-export default function GatewayChat({ gatewayUrl, token }: GatewayChatProps) {
+export default function GatewayChat({ gatewayUrl, token, agentName, modelName }: GatewayChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [wsState, setWsState] = useState<WsState>('connecting');
@@ -544,116 +546,127 @@ export default function GatewayChat({ gatewayUrl, token }: GatewayChatProps) {
       </div>
 
       {/* Bottom input area — Cursor-style */}
-      <div className="shrink-0 border-t border-[#333] bg-[#1e1e1e]">
-        {/* Collapsible files / context section */}
-        <button
-          onClick={() => setFilesOpen(!filesOpen)}
-          className="w-full flex items-center gap-1.5 px-4 py-1.5 text-[11px] text-white/30 hover:text-white/50 transition-colors"
-        >
-          {filesOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-          <span>{messages.length} Messages</span>
-          {wsState === 'connected' && (
-            <button
-              onClick={(e) => { e.stopPropagation(); handleRefresh(); }}
-              disabled={refreshing}
-              className="ml-auto px-2 py-0.5 rounded text-[10px] text-white/30 hover:text-white/60 hover:bg-white/5 transition-colors"
-            >
-              {refreshing ? <RefreshCw className="h-3 w-3 animate-spin inline" /> : 'Refresh'}
-            </button>
-          )}
-        </button>
-
-        {filesOpen && messages.length > 0 && (
-          <div className="px-4 pb-2 max-h-[120px] overflow-y-auto">
-            {messages.slice(-8).map((m) => (
-              <div key={m.id} className="flex items-center gap-2 py-0.5 text-[11px] text-white/25">
-                <span className={m.role === 'user' ? 'text-[#569cd6]/60' : m.role === 'assistant' ? 'text-white/40' : 'text-red-400/40'}>
-                  {m.role === 'user' ? 'You' : m.role === 'assistant' ? 'Agent' : 'System'}
+      <div className="shrink-0 bg-[#1e1e1e]">
+        <div className="mx-3 mb-3 rounded-xl border border-[#3c3c3c] bg-[#252526] focus-within:border-[#505050] transition-colors overflow-hidden">
+          {/* Collapsible context header */}
+          <button
+            onClick={() => setFilesOpen(!filesOpen)}
+            className="w-full flex items-center gap-1.5 px-3 py-[6px] text-[12px] text-white/35 hover:text-white/55 border-b border-[#333] transition-colors"
+          >
+            {filesOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+            <span>{messages.length} Messages</span>
+            <span className="ml-auto flex items-center gap-2">
+              {wsState === 'connected' && (
+                <span
+                  onClick={(e) => { e.stopPropagation(); handleRefresh(); }}
+                  className="text-[11px] text-white/25 hover:text-white/50 cursor-pointer"
+                >
+                  {refreshing ? 'Syncing...' : 'Refresh'}
                 </span>
-                <span className="text-white/15 truncate">{m.content.slice(0, 60)}</span>
-              </div>
-            ))}
-          </div>
-        )}
+              )}
+            </span>
+          </button>
 
-        {/* Input row */}
-        <div className="px-3 pb-2">
-          <div className="rounded-lg border border-[#3c3c3c] bg-[#252526] focus-within:border-[#007acc] transition-colors">
-            <textarea
-              ref={inputRef}
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Plan, @ for context, / for commands"
-              rows={1}
-              disabled={wsState !== 'connected'}
-              className="w-full resize-none bg-transparent px-3 pt-2.5 pb-1 text-[13px] text-white/90 placeholder:text-white/20 focus:outline-none disabled:opacity-30"
-              style={{ maxHeight: '100px', minHeight: '32px' }}
-              onInput={(e) => {
-                const t = e.target as HTMLTextAreaElement;
-                t.style.height = '32px';
-                t.style.height = Math.min(t.scrollHeight, 100) + 'px';
-              }}
-            />
-
-            {/* Bottom toolbar */}
-            <div className="flex items-center justify-between px-2 pb-1.5">
-              <div className="flex items-center gap-1">
-                {/* Mode selector */}
-                <div className="flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-white/5 cursor-pointer transition-colors">
-                  <div className="flex items-center gap-0.5">
-                    <span className="text-[11px] text-white/30">&#8734;</span>
-                    <span className="text-[11px] text-white/50 font-medium">Agent</span>
-                    <ChevronDown className="h-2.5 w-2.5 text-white/25" />
-                  </div>
-                </div>
-                <div className="w-px h-3 bg-white/10 mx-0.5" />
-                {/* Connection status dot */}
-                <div className="flex items-center gap-1 px-1.5 py-0.5">
-                  <div className={`h-1.5 w-1.5 rounded-full ${
-                    wsState === 'connected' ? 'bg-green-400' :
-                    wsState === 'connecting' ? 'bg-amber-400 animate-pulse' :
-                    'bg-red-400'
-                  }`} />
-                  <span className="text-[11px] text-white/30">
-                    {wsState === 'connected' ? 'Live' : wsState === 'connecting' ? '...' : 'Off'}
+          {filesOpen && messages.length > 0 && (
+            <div className="px-3 py-1.5 max-h-[100px] overflow-y-auto border-b border-[#333]">
+              {messages.slice(-10).map((m) => (
+                <div key={m.id} className="flex items-center gap-2 py-[2px] text-[11px]">
+                  <span className={`shrink-0 w-[38px] ${
+                    m.role === 'user' ? 'text-[#569cd6]/50' : m.role === 'assistant' ? 'text-[#dcdcaa]/50' : 'text-red-400/40'
+                  }`}>
+                    {m.role === 'user' ? 'You' : m.role === 'assistant' ? 'Agent' : 'Sys'}
                   </span>
+                  <span className="text-white/20 truncate">{m.content.slice(0, 80)}</span>
                 </div>
+              ))}
+            </div>
+          )}
+
+          {/* Text input */}
+          <textarea
+            ref={inputRef}
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Plan, @ for context, / for commands"
+            rows={1}
+            disabled={wsState !== 'connected'}
+            className="w-full resize-none bg-transparent px-3 pt-2.5 pb-1.5 text-[13px] text-white/90 placeholder:text-white/20 focus:outline-none disabled:opacity-30"
+            style={{ maxHeight: '120px', minHeight: '36px' }}
+            onInput={(e) => {
+              const t = e.target as HTMLTextAreaElement;
+              t.style.height = '36px';
+              t.style.height = Math.min(t.scrollHeight, 120) + 'px';
+            }}
+          />
+
+          {/* Bottom toolbar — matches Cursor exactly */}
+          <div className="flex items-center justify-between px-2 pb-2 pt-0.5">
+            {/* Left: Agent selector + Model */}
+            <div className="flex items-center gap-0.5">
+              {/* Agent selector */}
+              <div className="flex items-center gap-1 px-2 py-1 rounded-md hover:bg-white/[0.04] cursor-pointer transition-colors group">
+                <span className="text-[12px] text-white/30 group-hover:text-white/50">&#8734;</span>
+                <span className="text-[12px] text-white/50 group-hover:text-white/70 font-medium">
+                  {agentName || 'Agent'}
+                </span>
+                <ChevronDown className="h-3 w-3 text-white/20 group-hover:text-white/40" />
               </div>
 
-              <div className="flex items-center gap-0.5">
-                {isStreaming ? (
-                  <button
-                    onClick={handleStop}
-                    className="p-1.5 rounded-md hover:bg-red-500/10 transition-colors"
-                    title="Stop"
-                  >
-                    <Square className="h-3.5 w-3.5 text-red-400/70" />
-                  </button>
-                ) : (
-                  <>
-                    <button className="p-1.5 rounded-md hover:bg-white/5 transition-colors" title="Attach">
-                      <Paperclip className="h-3.5 w-3.5 text-white/25 hover:text-white/50" />
-                    </button>
-                    <button className="p-1.5 rounded-md hover:bg-white/5 transition-colors" title="Image">
-                      <ImageIcon className="h-3.5 w-3.5 text-white/25 hover:text-white/50" />
-                    </button>
-                    <button className="p-1.5 rounded-md hover:bg-white/5 transition-colors" title="Voice">
-                      <Mic className="h-3.5 w-3.5 text-white/25 hover:text-white/50" />
-                    </button>
-                    {input.trim() && (
-                      <button
-                        onClick={handleSend}
-                        disabled={wsState !== 'connected'}
-                        className="ml-1 p-1.5 rounded-md bg-[#007acc] hover:bg-[#1a8ad4] transition-colors disabled:opacity-30"
-                        title="Send"
-                      >
-                        <Send className="h-3.5 w-3.5 text-white" />
-                      </button>
-                    )}
-                  </>
-                )}
+              {/* Model selector */}
+              <div className="flex items-center gap-1 px-2 py-1 rounded-md hover:bg-white/[0.04] cursor-pointer transition-colors group">
+                <span className="text-[12px] text-white/40 group-hover:text-white/60">
+                  {modelName || 'Auto'}
+                </span>
+                <ChevronDown className="h-3 w-3 text-white/20 group-hover:text-white/40" />
               </div>
+            </div>
+
+            {/* Right: Action icons */}
+            <div className="flex items-center gap-0.5">
+              {/* Refresh / sync */}
+              <button
+                onClick={handleRefresh}
+                disabled={refreshing || wsState !== 'connected'}
+                className="p-1.5 rounded-md hover:bg-white/[0.06] transition-colors disabled:opacity-20"
+                title="Refresh"
+              >
+                <RefreshCw className={`h-[14px] w-[14px] text-white/30 ${refreshing ? 'animate-spin' : ''}`} />
+              </button>
+
+              {/* Image */}
+              <button className="p-1.5 rounded-md hover:bg-white/[0.06] transition-colors" title="Attach image">
+                <ImageIcon className="h-[14px] w-[14px] text-white/30" />
+              </button>
+
+              {/* Voice */}
+              <button className="p-1.5 rounded-md hover:bg-white/[0.06] transition-colors" title="Voice input">
+                <Mic className="h-[14px] w-[14px] text-white/30" />
+              </button>
+
+              {/* Send / Stop */}
+              {(isStreaming || activeRunId) ? (
+                <button
+                  onClick={handleStop}
+                  className="ml-1 h-7 w-7 rounded-full bg-white/10 hover:bg-white/15 flex items-center justify-center transition-all"
+                  title="Stop"
+                >
+                  <Square className="h-3 w-3 text-white/70 fill-white/70" />
+                </button>
+              ) : (
+                <button
+                  onClick={handleSend}
+                  disabled={!input.trim() || wsState !== 'connected'}
+                  className={`ml-1 h-7 w-7 rounded-full flex items-center justify-center transition-all ${
+                    input.trim()
+                      ? 'bg-white/90 hover:bg-white text-[#1e1e1e]'
+                      : 'bg-white/10 text-white/30 cursor-default'
+                  } disabled:opacity-20`}
+                  title="Send"
+                >
+                  <Send className="h-3 w-3" />
+                </button>
+              )}
             </div>
           </div>
         </div>
