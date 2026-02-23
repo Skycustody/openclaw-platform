@@ -15,6 +15,9 @@ const PLANS: Array<{
   name: string;
   price: number;
   tokens: string;
+  ram: string;
+  cpus: string;
+  storage: string;
   popular?: boolean;
   features: string[];
 }> = [
@@ -22,13 +25,18 @@ const PLANS: Array<{
     id: 'starter',
     name: 'Starter',
     price: 10,
-    tokens: '$3.18',
+    tokens: '$2',
+    ram: '2 GB',
+    cpus: '1 vCPU',
+    storage: '1 GB',
     features: [
-      'Personal AI agent',
-      '$3.18/mo AI budget',
-      '10 skills',
-      'Telegram only',
-      'Email support',
+      '$2/mo AI budget included',
+      '2 GB RAM dedicated server',
+      '1 vCPU · 1 GB storage',
+      '1 AI agent · 10 skills',
+      '3 scheduled tasks',
+      'Telegram channel',
+      'Smart AI routing',
     ],
   },
   {
@@ -36,26 +44,38 @@ const PLANS: Array<{
     name: 'Pro',
     price: 20,
     popular: true,
-    tokens: '$11.13',
+    tokens: '$7',
+    ram: '4 GB',
+    cpus: '2 vCPU',
+    storage: '5 GB',
     features: [
-      'Everything in Starter',
-      '$11.13/mo AI budget',
-      'All 53 skills',
+      '$7/mo AI budget included',
+      '4 GB RAM dedicated server',
+      '2 vCPU · 5 GB storage',
+      '2 AI agents · All 53 skills',
+      '20 scheduled tasks',
       'All messaging apps',
-      'Browser access',
-      'Priority support',
+      'Full browser access',
+      'Smart AI routing',
     ],
   },
   {
     id: 'business',
     name: 'Business',
     price: 50,
-    tokens: '$19.08',
+    tokens: '$12',
+    ram: '8 GB',
+    cpus: '4 vCPU',
+    storage: '20 GB',
     features: [
-      'Everything in Pro',
-      '$19.08/mo AI budget',
-      'Maximum agent power',
+      '$12/mo AI budget included',
+      '8 GB RAM dedicated server',
+      '4 vCPU · 20 GB storage',
+      '4 AI agents · All 53 skills',
       '100 scheduled tasks',
+      'All messaging apps',
+      'Full browser access',
+      'Smart AI routing',
       'Direct support line',
     ],
   },
@@ -179,8 +199,8 @@ function PricingContent() {
                 </span>
                 <span className="text-sm text-muted-foreground">/month</span>
               </p>
-              <p className="mt-1 text-[13px] text-muted-foreground">
-                {plan.tokens}/mo AI budget included
+              <p className="mt-2 text-[12px] text-muted-foreground">
+                {plan.ram} RAM · {plan.cpus} · {plan.storage} storage · {plan.tokens}/mo AI
               </p>
 
               <ul className="mt-6 flex-1 space-y-3">

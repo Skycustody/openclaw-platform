@@ -4,8 +4,10 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { flushSync } from 'react-dom';
 import {
   Send, Square, Loader2, Bot, User, AlertCircle, WifiOff, RefreshCw,
-  ChevronDown, ChevronRight, Image as ImageIcon, Mic,
+  ChevronDown, ChevronRight, Image as ImageIcon, Mic, MicOff, Upload,
+  Check, X,
 } from 'lucide-react';
+import api from '@/lib/api';
 
 interface Message {
   id: string;
@@ -13,7 +15,36 @@ interface Message {
   content: string;
   timestamp?: number;
   streaming?: boolean;
+  imageUrl?: string;
 }
+
+interface AgentInfo {
+  id: string;
+  name: string;
+  is_primary: boolean;
+  status: string;
+}
+
+interface ModelInfo {
+  id: string;
+  displayName: string;
+  costPer1MTokens: number;
+}
+
+const AVAILABLE_MODELS: ModelInfo[] = [
+  { id: 'auto', displayName: 'Auto (Smart Router)', costPer1MTokens: 0 },
+  { id: 'openai/gpt-4.1-nano', displayName: 'GPT-4.1 Nano', costPer1MTokens: 0.10 },
+  { id: 'openai/gpt-4o-mini', displayName: 'GPT-4o Mini', costPer1MTokens: 0.15 },
+  { id: 'google/gemini-2.5-flash', displayName: 'Gemini 2.5 Flash', costPer1MTokens: 0.30 },
+  { id: 'openai/gpt-4.1-mini', displayName: 'GPT-4.1 Mini', costPer1MTokens: 0.40 },
+  { id: 'deepseek/deepseek-r1', displayName: 'DeepSeek R1', costPer1MTokens: 0.70 },
+  { id: 'anthropic/claude-3.5-haiku', displayName: 'Claude 3.5 Haiku', costPer1MTokens: 1.00 },
+  { id: 'google/gemini-2.5-pro', displayName: 'Gemini 2.5 Pro', costPer1MTokens: 1.25 },
+  { id: 'openai/gpt-4.1', displayName: 'GPT-4.1', costPer1MTokens: 2.00 },
+  { id: 'openai/gpt-4o', displayName: 'GPT-4o', costPer1MTokens: 2.50 },
+  { id: 'anthropic/claude-sonnet-4', displayName: 'Claude Sonnet 4', costPer1MTokens: 3.00 },
+  { id: 'anthropic/claude-opus-4', displayName: 'Claude Opus 4', costPer1MTokens: 15.00 },
+];
 
 interface GatewayChatProps {
   gatewayUrl: string;
@@ -51,6 +82,16 @@ export default function GatewayChat({ gatewayUrl, token, agentName, modelName }:
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [filesOpen, setFilesOpen] = useState(false);
+  const [agents, setAgents] = useState<AgentInfo[]>([]);
+  const [selectedAgent, setSelectedAgent] = useState<string>(agentName || 'Agent');
+  const [selectedModel, setSelectedModel] = useState<string>('auto');
+  const [showAgentDropdown, setShowAgentDropdown] = useState(false);
+  const [showModelDropdown, setShowModelDropdown] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<string | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const agentDropdownRef = useRef<HTMLDivElement>(null);
+  const modelDropdownRef = useRef<HTMLDivElement>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -67,6 +108,106 @@ export default function GatewayChat({ gatewayUrl, token, agentName, modelName }:
       scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
     });
   }, []);
+
+  // Fetch agents list
+  useEffect(() => {
+    api.get<{ agents: AgentInfo[] }>('/agents')
+      .then(res => {
+        setAgents(res.agents || []);
+        if (!agentName && res.agents?.length > 0) {
+          const primary = res.agents.find(a => a.is_primary);
+          setSelectedAgent(primary?.name || res.agents[0].name);
+        }
+      })
+      .catch(() => {});
+  }, [agentName]);
+
+  // Close dropdowns on click outside
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (agentDropdownRef.current && !agentDropdownRef.current.contains(e.target as Node)) setShowAgentDropdown(false);
+      if (modelDropdownRef.current && !modelDropdownRef.current.contains(e.target as Node)) setShowModelDropdown(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const handleImageUpload = useCallback(() => {
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'image/*';
+    fileInput.onchange = async () => {
+      const file = fileInput.files?.[0];
+      if (!file) return;
+      setUploadStatus('Uploading...');
+      try {
+        const reader = new FileReader();
+        const content = await new Promise<string>((resolve, reject) => {
+          reader.onload = () => resolve((reader.result as string).split(',')[1] || '');
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+        await api.post('/files/upload', { filename: file.name, content });
+        setUploadStatus(`${file.name} uploaded`);
+        setInput(prev => prev + (prev ? '\n' : '') + `[Attached: ${file.name}]`);
+        setTimeout(() => setUploadStatus(null), 3000);
+      } catch (err: any) {
+        setUploadStatus(`Failed: ${err.message}`);
+        setTimeout(() => setUploadStatus(null), 4000);
+      }
+    };
+    fileInput.click();
+  }, []);
+
+  const handleVoice = useCallback(() => {
+    if (isRecording) {
+      mediaRecorderRef.current?.stop();
+      setIsRecording(false);
+      return;
+    }
+
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setUploadStatus('Speech recognition not supported in this browser');
+      setTimeout(() => setUploadStatus(null), 3000);
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+    setIsRecording(true);
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      setInput(prev => prev + (prev ? ' ' : '') + transcript);
+      setIsRecording(false);
+    };
+    recognition.onerror = () => setIsRecording(false);
+    recognition.onend = () => setIsRecording(false);
+    recognition.start();
+  }, [isRecording]);
+
+  const handleSelectAgent = useCallback((agent: AgentInfo) => {
+    setSelectedAgent(agent.name);
+    setShowAgentDropdown(false);
+  }, []);
+
+  const handleSelectModel = useCallback(async (model: ModelInfo) => {
+    setSelectedModel(model.id);
+    setShowModelDropdown(false);
+    if (model.id === 'auto') {
+      try { await api.put('/settings', { brain_mode: 'auto' }); } catch {}
+    } else {
+      try { await api.put('/settings', { brain_mode: 'manual', manual_model: model.id }); } catch {}
+    }
+  }, []);
+
+  const getModelLabel = () => {
+    if (selectedModel === 'auto') return modelName || 'Auto';
+    return AVAILABLE_MODELS.find(m => m.id === selectedModel)?.displayName || selectedModel;
+  };
 
   const sendReq = useCallback((method: string, params: any = {}): Promise<any> => {
     return new Promise((resolve, reject) => {
@@ -545,6 +686,15 @@ export default function GatewayChat({ gatewayUrl, token, agentName, modelName }:
         )}
       </div>
 
+      {/* Upload status toast */}
+      {uploadStatus && (
+        <div className={`mx-3 mb-1 px-3 py-1.5 rounded-lg text-[12px] ${
+          uploadStatus.startsWith('Failed') ? 'bg-red-500/10 text-red-400' : 'bg-green-500/10 text-green-400'
+        }`}>
+          {uploadStatus}
+        </div>
+      )}
+
       {/* Bottom input area — Cursor-style */}
       <div className="shrink-0 bg-[#1e1e1e]">
         <div className="mx-3 mb-3 rounded-xl border border-[#3c3c3c] bg-[#252526] focus-within:border-[#505050] transition-colors overflow-hidden">
@@ -600,51 +750,117 @@ export default function GatewayChat({ gatewayUrl, token, agentName, modelName }:
             }}
           />
 
-          {/* Bottom toolbar — matches Cursor exactly */}
+          {/* Bottom toolbar */}
           <div className="flex items-center justify-between px-2 pb-2 pt-0.5">
-            {/* Left: Agent selector + Model */}
+            {/* Left: Agent selector + Model selector */}
             <div className="flex items-center gap-0.5">
-              {/* Agent selector */}
-              <div className="flex items-center gap-1 px-2 py-1 rounded-md hover:bg-white/[0.04] cursor-pointer transition-colors group">
-                <span className="text-[12px] text-white/30 group-hover:text-white/50">&#8734;</span>
-                <span className="text-[12px] text-white/50 group-hover:text-white/70 font-medium">
-                  {agentName || 'Agent'}
-                </span>
-                <ChevronDown className="h-3 w-3 text-white/20 group-hover:text-white/40" />
+              {/* Agent selector with dropdown */}
+              <div ref={agentDropdownRef} className="relative">
+                <button
+                  onClick={() => { setShowAgentDropdown(!showAgentDropdown); setShowModelDropdown(false); }}
+                  className="flex items-center gap-1 px-2 py-1 rounded-md hover:bg-white/[0.04] transition-colors group"
+                >
+                  <span className="text-[12px] text-white/30 group-hover:text-white/50">&#8734;</span>
+                  <span className="text-[12px] text-white/50 group-hover:text-white/70 font-medium">{selectedAgent}</span>
+                  <ChevronDown className="h-3 w-3 text-white/20 group-hover:text-white/40" />
+                </button>
+
+                {showAgentDropdown && (
+                  <div className="absolute bottom-full left-0 mb-1 w-56 rounded-lg border border-[#3c3c3c] bg-[#2d2d2d] shadow-xl z-50 py-1 max-h-[200px] overflow-y-auto">
+                    {agents.length === 0 && (
+                      <div className="px-3 py-2 text-[12px] text-white/30">No agents found</div>
+                    )}
+                    {agents.map(agent => (
+                      <button
+                        key={agent.id}
+                        onClick={() => handleSelectAgent(agent)}
+                        className={`w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-white/[0.06] transition-colors ${
+                          selectedAgent === agent.name ? 'bg-white/[0.04]' : ''
+                        }`}
+                      >
+                        <div className={`h-1.5 w-1.5 rounded-full shrink-0 ${
+                          agent.status === 'active' || agent.status === 'online' ? 'bg-green-400' :
+                          agent.status === 'sleeping' ? 'bg-amber-400' : 'bg-white/20'
+                        }`} />
+                        <div className="min-w-0 flex-1">
+                          <span className="text-[12px] text-white/70 block truncate">{agent.name}</span>
+                          {agent.is_primary && <span className="text-[10px] text-white/25">Primary</span>}
+                        </div>
+                        {selectedAgent === agent.name && <Check className="h-3 w-3 text-white/40 shrink-0" />}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
-              {/* Model selector */}
-              <div className="flex items-center gap-1 px-2 py-1 rounded-md hover:bg-white/[0.04] cursor-pointer transition-colors group">
-                <span className="text-[12px] text-white/40 group-hover:text-white/60">
-                  {modelName || 'Auto'}
-                </span>
-                <ChevronDown className="h-3 w-3 text-white/20 group-hover:text-white/40" />
+              {/* Model selector with dropdown */}
+              <div ref={modelDropdownRef} className="relative">
+                <button
+                  onClick={() => { setShowModelDropdown(!showModelDropdown); setShowAgentDropdown(false); }}
+                  className="flex items-center gap-1 px-2 py-1 rounded-md hover:bg-white/[0.04] transition-colors group"
+                >
+                  <span className="text-[12px] text-white/40 group-hover:text-white/60">{getModelLabel()}</span>
+                  <ChevronDown className="h-3 w-3 text-white/20 group-hover:text-white/40" />
+                </button>
+
+                {showModelDropdown && (
+                  <div className="absolute bottom-full left-0 mb-1 w-64 rounded-lg border border-[#3c3c3c] bg-[#2d2d2d] shadow-xl z-50 py-1 max-h-[300px] overflow-y-auto">
+                    {AVAILABLE_MODELS.map(model => (
+                      <button
+                        key={model.id}
+                        onClick={() => handleSelectModel(model)}
+                        className={`w-full flex items-center justify-between px-3 py-1.5 text-left hover:bg-white/[0.06] transition-colors ${
+                          selectedModel === model.id ? 'bg-white/[0.04]' : ''
+                        }`}
+                      >
+                        <div className="min-w-0">
+                          <span className="text-[12px] text-white/70 block">{model.displayName}</span>
+                          {model.id !== 'auto' && (
+                            <span className="text-[10px] text-white/25">${model.costPer1MTokens}/1M tokens</span>
+                          )}
+                        </div>
+                        {selectedModel === model.id && <Check className="h-3 w-3 text-white/40 shrink-0" />}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
             {/* Right: Action icons */}
             <div className="flex items-center gap-0.5">
-              {/* Refresh / sync */}
               <button
                 onClick={handleRefresh}
                 disabled={refreshing || wsState !== 'connected'}
                 className="p-1.5 rounded-md hover:bg-white/[0.06] transition-colors disabled:opacity-20"
-                title="Refresh"
+                title="Sync messages"
               >
                 <RefreshCw className={`h-[14px] w-[14px] text-white/30 ${refreshing ? 'animate-spin' : ''}`} />
               </button>
 
-              {/* Image */}
-              <button className="p-1.5 rounded-md hover:bg-white/[0.06] transition-colors" title="Attach image">
+              <button
+                onClick={handleImageUpload}
+                disabled={wsState !== 'connected'}
+                className="p-1.5 rounded-md hover:bg-white/[0.06] transition-colors disabled:opacity-20"
+                title="Upload image"
+              >
                 <ImageIcon className="h-[14px] w-[14px] text-white/30" />
               </button>
 
-              {/* Voice */}
-              <button className="p-1.5 rounded-md hover:bg-white/[0.06] transition-colors" title="Voice input">
-                <Mic className="h-[14px] w-[14px] text-white/30" />
+              <button
+                onClick={handleVoice}
+                className={`p-1.5 rounded-md transition-colors ${
+                  isRecording ? 'bg-red-500/20 hover:bg-red-500/30' : 'hover:bg-white/[0.06]'
+                }`}
+                title={isRecording ? 'Stop recording' : 'Voice input'}
+              >
+                {isRecording
+                  ? <MicOff className="h-[14px] w-[14px] text-red-400" />
+                  : <Mic className="h-[14px] w-[14px] text-white/30" />
+                }
               </button>
 
-              {/* Send / Stop */}
+              {/* Send / Stop button */}
               {(isStreaming || activeRunId) ? (
                 <button
                   onClick={handleStop}

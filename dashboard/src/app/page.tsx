@@ -14,10 +14,14 @@ import {
   Coins,
   ArrowRight,
   Check,
-  RocketIcon,
-  PhoneCallIcon,
   Sparkles,
   Bot,
+  Cpu,
+  HardDrive,
+  Users,
+  Terminal,
+  Brain,
+  Layers,
 } from 'lucide-react';
 import { GlowingEffect } from '@/components/ui/glowing-effect';
 import dynamic from 'next/dynamic';
@@ -29,111 +33,123 @@ const DotScreenShader = dynamic(
 
 const features = [
   {
-    icon: Zap,
-    title: 'Ready in 60 Seconds',
-    desc: 'Sign up, pay, and your personal AI agent is live — no setup needed.',
+    icon: Brain,
+    title: 'Smart AI Routing',
+    desc: 'Picks the best AI model for each task automatically. Simple questions use cheap models, complex work uses powerful ones. You save money without thinking about it.',
+  },
+  {
+    icon: Globe,
+    title: 'Full Web Browser',
+    desc: 'Your agent browses the web, fills forms, applies to jobs, scrapes data, and researches topics — just like you would.',
   },
   {
     icon: MessageSquare,
     title: 'All Your Apps',
-    desc: 'Connect to Telegram, WhatsApp, Discord, Slack and more.',
+    desc: 'Connect Telegram, WhatsApp, Discord, and Slack. Your agent responds on any channel, 24/7.',
   },
   {
-    icon: Globe,
-    title: 'Browses the Web',
-    desc: 'Your agent searches, researches, checks prices, and extracts data.',
+    icon: Clock,
+    title: 'Scheduled Tasks',
+    desc: 'Daily briefings, price alerts, email summaries, social media posts — set it and forget it.',
+  },
+  {
+    icon: Users,
+    title: 'Multiple Agents',
+    desc: 'Create specialized agents — one for research, one for support, one for coding. They can talk to each other.',
   },
   {
     icon: Shield,
     title: 'Budget Protection',
-    desc: 'Smart budgets prevent surprise costs. You stay in control.',
+    desc: 'Set spending limits per day, week, or month. Smart routing keeps costs low. No surprise bills.',
   },
-  {
-    icon: Clock,
-    title: 'Works While You Sleep',
-    desc: 'Schedule daily briefings, email summaries, price alerts — automated.',
-  },
-  {
-    icon: Coins,
-    title: 'Saves You Money',
-    desc: 'Smart routing picks the cheapest AI model that can do the job.',
-  },
+];
+
+const howItWorks = [
+  { step: '1', title: 'Sign up & pay', desc: 'Pick a plan. Payment takes 30 seconds.' },
+  { step: '2', title: 'Agent goes live', desc: 'Your AI agent is provisioned on a dedicated server automatically.' },
+  { step: '3', title: 'Start chatting', desc: 'Talk in the dashboard, or connect your Telegram, Discord, or WhatsApp.' },
+  { step: '4', title: 'It works for you', desc: 'Research, browse the web, write code, manage files, run scheduled tasks.' },
 ];
 
 const plans = [
   {
     name: 'Starter',
     price: 10,
-    tokens: '$3.18',
+    tokens: '$2',
+    ram: '2 GB',
+    cpus: '1 vCPU',
+    storage: '1 GB',
     features: [
-      'Personal AI agent',
-      '$3.18/mo AI budget',
-      '10 skills',
-      'Telegram only',
+      '$2/mo AI budget included',
+      '2 GB RAM dedicated server',
+      '1 vCPU processing power',
+      '1 GB file storage',
+      '10 skills & tools',
+      '1 AI agent',
+      '3 scheduled tasks',
+      'Telegram channel',
+      'Smart AI routing',
       'Email support',
+    ],
+    excluded: [
+      'Browser access',
+      'All messaging apps',
     ],
   },
   {
     name: 'Pro',
     price: 20,
     popular: true,
-    tokens: '$11.13',
+    tokens: '$7',
+    ram: '4 GB',
+    cpus: '2 vCPU',
+    storage: '5 GB',
     features: [
-      'Everything in Starter',
-      '$11.13/mo AI budget',
-      'All 53 skills',
+      '$7/mo AI budget included',
+      '4 GB RAM dedicated server',
+      '2 vCPU processing power',
+      '5 GB file storage',
+      'All 53 skills & tools',
+      '2 AI agents',
+      '20 scheduled tasks',
       'All messaging apps',
-      'Browser access',
+      'Full browser access',
+      'Smart AI routing',
       'Priority support',
     ],
+    excluded: [],
   },
   {
     name: 'Business',
     price: 50,
-    tokens: '$19.08',
+    tokens: '$12',
+    ram: '8 GB',
+    cpus: '4 vCPU',
+    storage: '20 GB',
     features: [
-      'Everything in Pro',
-      '$19.08/mo AI budget',
-      'Maximum agent power',
+      '$12/mo AI budget included',
+      '8 GB RAM dedicated server',
+      '4 vCPU processing power',
+      '20 GB file storage',
+      'All 53 skills & tools',
+      '4 AI agents',
       '100 scheduled tasks',
+      'All messaging apps',
+      'Full browser access',
+      'Smart AI routing',
       'Direct support line',
     ],
+    excluded: [],
   },
 ];
 
 const logos = [
-  {
-    src: 'https://storage.efferd.com/logo/nvidia-wordmark.svg',
-    alt: 'Nvidia Logo',
-  },
-  {
-    src: 'https://storage.efferd.com/logo/supabase-wordmark.svg',
-    alt: 'Supabase Logo',
-  },
-  {
-    src: 'https://storage.efferd.com/logo/openai-wordmark.svg',
-    alt: 'OpenAI Logo',
-  },
-  {
-    src: 'https://storage.efferd.com/logo/turso-wordmark.svg',
-    alt: 'Turso Logo',
-  },
-  {
-    src: 'https://storage.efferd.com/logo/vercel-wordmark.svg',
-    alt: 'Vercel Logo',
-  },
-  {
-    src: 'https://storage.efferd.com/logo/github-wordmark.svg',
-    alt: 'GitHub Logo',
-  },
-  {
-    src: 'https://storage.efferd.com/logo/claude-wordmark.svg',
-    alt: 'Claude AI Logo',
-  },
-  {
-    src: 'https://storage.efferd.com/logo/clerk-wordmark.svg',
-    alt: 'Clerk Logo',
-  },
+  { src: 'https://storage.efferd.com/logo/openai-wordmark.svg', alt: 'OpenAI' },
+  { src: 'https://storage.efferd.com/logo/claude-wordmark.svg', alt: 'Claude AI' },
+  { src: 'https://storage.efferd.com/logo/github-wordmark.svg', alt: 'GitHub' },
+  { src: 'https://storage.efferd.com/logo/vercel-wordmark.svg', alt: 'Vercel' },
+  { src: 'https://storage.efferd.com/logo/supabase-wordmark.svg', alt: 'Supabase' },
+  { src: 'https://storage.efferd.com/logo/nvidia-wordmark.svg', alt: 'Nvidia' },
 ];
 
 export default function LandingPage() {
@@ -147,7 +163,9 @@ export default function LandingPage() {
         <main className="grow">
           <HeroSection />
           <LogosSection />
+          <WhatIsItSection />
           <FeaturesSection />
+          <HowItWorksSection />
           <PricingSection />
           <CTASection />
         </main>
@@ -161,45 +179,40 @@ function HeroSection() {
   return (
     <section className="relative mx-auto w-full max-w-5xl">
       <div className="relative flex flex-col items-center justify-center gap-5 px-4 pt-32 pb-30">
-        <a
+        <div
           className={cn(
-            'group mx-auto flex w-fit items-center gap-3 rounded-full border bg-card px-3 py-1 shadow',
+            'mx-auto flex w-fit items-center gap-2 rounded-full border bg-card px-3 py-1 shadow',
             'fade-in slide-in-from-bottom-10 animate-in fill-mode-backwards transition-all delay-500 duration-500 ease-out'
           )}
-          href="#features"
         >
-          <RocketIcon className="size-3 text-muted-foreground" />
-          <span className="text-xs">Open-source & self-hostable</span>
-          <span className="block h-5 border-l" />
-          <ArrowRight className="size-3 duration-150 ease-out group-hover:translate-x-1" />
-        </a>
+          <Bot className="size-3 text-muted-foreground" />
+          <span className="text-xs">Your own AI agent, hosted and ready</span>
+        </div>
 
         <h1
           className={cn(
             'fade-in slide-in-from-bottom-10 animate-in text-balance fill-mode-backwards text-center text-4xl font-bold tracking-tight delay-100 duration-500 ease-out md:text-5xl lg:text-6xl'
           )}
         >
-          Your Personal AI
+          An AI That Works
           <br />
-          <span className="text-muted-foreground">Ready in 60 Seconds</span>
+          <span className="text-muted-foreground">While You Don&apos;t</span>
         </h1>
 
-        <p className="fade-in slide-in-from-bottom-10 mx-auto max-w-md animate-in fill-mode-backwards text-center text-base tracking-wider text-foreground/70 delay-200 duration-500 ease-out sm:text-lg md:text-xl">
-          The most powerful open-source AI agent,
-          <br />
-          hosted for you. Zero setup.
+        <p className="fade-in slide-in-from-bottom-10 mx-auto max-w-lg animate-in fill-mode-backwards text-center text-base tracking-wider text-foreground/70 delay-200 duration-500 ease-out sm:text-lg">
+          Valnaa gives you a personal AI agent on a dedicated server. It browses the web, manages your apps,
+          runs scheduled tasks, and picks the smartest AI model for every job.
         </p>
 
         <div className="fade-in slide-in-from-bottom-10 flex animate-in flex-row flex-wrap items-center justify-center gap-3 fill-mode-backwards pt-2 delay-300 duration-500 ease-out">
           <Link href="#pricing">
             <Button className="rounded-full" size="lg" variant="secondary">
-              <PhoneCallIcon className="size-4" />
-              View Pricing
+              View Plans
             </Button>
           </Link>
           <Link href="/auth/signup">
             <Button className="rounded-full" size="lg">
-              Get Your AI Agent
+              Get Your Agent
               <ArrowRight className="size-4" />
             </Button>
           </Link>
@@ -213,8 +226,7 @@ function LogosSection() {
   return (
     <section className="relative space-y-4 border-t border-border pt-6 pb-10">
       <h2 className="text-center text-lg font-medium tracking-tight text-muted-foreground md:text-xl">
-        Powered by technology from{' '}
-        <span className="text-foreground">industry leaders</span>
+        Powered by <span className="text-foreground">leading AI models</span>
       </h2>
       <div className="relative z-10 mx-auto max-w-4xl">
         <LogoCloud logos={logos} />
@@ -223,22 +235,58 @@ function LogosSection() {
   );
 }
 
+function WhatIsItSection() {
+  return (
+    <section className="relative mx-auto max-w-5xl border-t border-border px-6 py-20">
+      <div className="mx-auto max-w-3xl">
+        <div className="grid grid-cols-1 gap-10 md:grid-cols-2 md:items-center">
+          <div>
+            <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
+              What is Valnaa?
+            </h2>
+            <p className="mt-4 text-base leading-relaxed text-muted-foreground">
+              Valnaa is a hosted AI agent platform. You get your own AI assistant running on a dedicated server
+              with its own memory, browser, file storage, and connections to your messaging apps.
+            </p>
+            <p className="mt-3 text-base leading-relaxed text-muted-foreground">
+              It&apos;s not a chatbot — it&apos;s an agent that takes action. It can browse websites, fill out forms,
+              write and run code, manage files, and execute tasks on a schedule.
+            </p>
+          </div>
+          <div className="space-y-4">
+            {[
+              { icon: Terminal, label: 'Dedicated server', desc: 'Your agent runs on its own container with guaranteed RAM and CPU' },
+              { icon: Layers, label: 'Persistent memory', desc: 'Remembers context across conversations and sessions' },
+              { icon: Cpu, label: '20+ AI models', desc: 'Claude, GPT-4o, Gemini, DeepSeek, Llama — auto-selected per task' },
+            ].map(item => (
+              <div key={item.label} className="flex items-start gap-3 rounded-xl border border-border bg-card p-4">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-secondary">
+                  <item.icon className="h-4 w-4 text-muted-foreground" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold">{item.label}</p>
+                  <p className="mt-0.5 text-sm text-muted-foreground">{item.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function FeaturesSection() {
   return (
-    <section
-      id="features"
-      className="relative mx-auto max-w-5xl border-t border-border px-6 py-24"
-    >
+    <section id="features" className="relative mx-auto max-w-5xl border-t border-border px-6 py-24">
       <div className="mx-auto max-w-2xl text-center">
         <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs text-muted-foreground">
           <Sparkles className="size-3" />
           Capabilities
         </div>
-        <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
-          Everything your agent can do
-        </h2>
+        <h2 className="text-3xl font-bold tracking-tight md:text-4xl">What your agent can do</h2>
         <p className="mt-3 text-base text-muted-foreground">
-          No coding. No technical knowledge needed.
+          No coding required. Everything works out of the box.
         </p>
       </div>
 
@@ -246,14 +294,7 @@ function FeaturesSection() {
         {features.map((f) => (
           <div key={f.title} className="min-h-[14rem] list-none">
             <div className="relative h-full rounded-[1.25rem] border-[0.75px] border-border p-2 md:rounded-[1.5rem] md:p-3">
-              <GlowingEffect
-                spread={40}
-                glow={true}
-                disabled={false}
-                proximity={64}
-                inactiveZone={0.01}
-                borderWidth={3}
-              />
+              <GlowingEffect spread={40} glow={true} disabled={false} proximity={64} inactiveZone={0.01} borderWidth={3} />
               <div className="relative flex h-full flex-col justify-between gap-6 overflow-hidden rounded-xl border-[0.75px] bg-background p-6 shadow-sm dark:shadow-[0px_0px_27px_0px_rgba(45,45,45,0.3)]">
                 <div className="relative flex flex-1 flex-col justify-between gap-3">
                   <div className="w-fit rounded-lg border-[0.75px] border-border bg-muted p-2">
@@ -277,37 +318,48 @@ function FeaturesSection() {
   );
 }
 
+function HowItWorksSection() {
+  return (
+    <section className="relative mx-auto max-w-5xl border-t border-border px-6 py-24">
+      <div className="mx-auto max-w-2xl text-center">
+        <h2 className="text-3xl font-bold tracking-tight md:text-4xl">How it works</h2>
+        <p className="mt-3 text-base text-muted-foreground">From sign-up to working agent in under 2 minutes.</p>
+      </div>
+
+      <div className="mt-16 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        {howItWorks.map((s) => (
+          <div key={s.step} className="relative flex flex-col items-start rounded-xl border border-border bg-card p-6">
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-foreground text-lg font-bold text-background">
+              {s.step}
+            </span>
+            <h3 className="mt-4 text-lg font-semibold">{s.title}</h3>
+            <p className="mt-2 text-sm text-muted-foreground">{s.desc}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function PricingSection() {
   return (
-    <section
-      id="pricing"
-      className="relative mx-auto max-w-5xl border-t border-border px-6 py-24"
-    >
+    <section id="pricing" className="relative mx-auto max-w-5xl border-t border-border px-6 py-24">
       <div className="mx-auto max-w-2xl text-center">
         <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs text-muted-foreground">
           <Coins className="size-3" />
           Pricing
         </div>
-        <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
-          Simple, transparent pricing
-        </h2>
+        <h2 className="text-3xl font-bold tracking-tight md:text-4xl">Simple pricing. Real servers.</h2>
         <p className="mt-3 text-base text-muted-foreground">
-          Start with what you need. Upgrade anytime. Cancel anytime.
+          Every plan includes a dedicated server, AI budget, and smart routing. Upgrade or cancel anytime.
         </p>
       </div>
 
       <div className="mt-16 grid grid-cols-1 gap-5 sm:grid-cols-3">
         {plans.map((plan) => (
-          <div key={plan.name} className="min-h-[20rem]">
+          <div key={plan.name} className="min-h-[24rem]">
             <div className="relative h-full rounded-[1.25rem] border-[0.75px] border-border p-2 md:rounded-[1.5rem] md:p-3">
-              <GlowingEffect
-                spread={40}
-                glow={true}
-                disabled={false}
-                proximity={64}
-                inactiveZone={0.01}
-                borderWidth={3}
-              />
+              <GlowingEffect spread={40} glow={true} disabled={false} proximity={64} inactiveZone={0.01} borderWidth={3} />
               <div
                 className={cn(
                   'relative flex h-full flex-col rounded-xl border-[0.75px] p-7 bg-background',
@@ -323,33 +375,33 @@ function PricingSection() {
                 )}
                 <h3 className="text-lg font-semibold">{plan.name}</h3>
                 <p className="mt-3">
-                  <span className="text-4xl font-bold tracking-tight">
-                    ${plan.price}
-                  </span>
+                  <span className="text-4xl font-bold tracking-tight">${plan.price}</span>
                   <span className="text-sm text-muted-foreground">/month</span>
                 </p>
-                <p className="mt-1 text-[13px] text-muted-foreground">
-                  {plan.tokens}/mo AI budget included
-                </p>
-                <ul className="mt-6 flex-1 space-y-3">
+                <div className="mt-2 flex items-center gap-3 text-[13px] text-muted-foreground">
+                  <span className="flex items-center gap-1"><HardDrive className="h-3 w-3" /> {plan.ram} RAM</span>
+                  <span className="flex items-center gap-1"><Cpu className="h-3 w-3" /> {plan.cpus}</span>
+                  <span className="flex items-center gap-1"><Coins className="h-3 w-3" /> {plan.tokens}</span>
+                </div>
+
+                <ul className="mt-6 flex-1 space-y-2.5">
                   {plan.features.map((f) => (
-                    <li
-                      key={f}
-                      className="flex items-start gap-2.5 text-sm text-foreground/70"
-                    >
+                    <li key={f} className="flex items-start gap-2.5 text-sm text-foreground/70">
                       <Check className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                       <span>{f}</span>
                     </li>
                   ))}
+                  {plan.excluded.map((f) => (
+                    <li key={f} className="flex items-start gap-2.5 text-sm text-foreground/30 line-through">
+                      <span className="mt-0.5 h-4 w-4 shrink-0 text-center text-muted-foreground/30">—</span>
+                      <span>{f}</span>
+                    </li>
+                  ))}
                 </ul>
+
                 <Link href="/auth/signup" className="mt-8">
-                  <Button
-                    variant={plan.popular ? 'default' : 'outline'}
-                    className="w-full"
-                    size="lg"
-                  >
-                    Get Started
-                    <ArrowRight className="h-4 w-4" />
+                  <Button variant={plan.popular ? 'default' : 'outline'} className="w-full" size="lg">
+                    Get Started <ArrowRight className="h-4 w-4" />
                   </Button>
                 </Link>
               </div>
@@ -357,6 +409,10 @@ function PricingSection() {
           </div>
         ))}
       </div>
+
+      <p className="mt-8 text-center text-sm text-muted-foreground">
+        Need more AI budget? Add credits anytime from the dashboard, or bring your own OpenRouter API key for unlimited usage.
+      </p>
     </section>
   );
 }
@@ -365,34 +421,20 @@ function CTASection() {
   return (
     <section id="about" className="mx-auto max-w-3xl px-6 py-24">
       <div className="relative rounded-[1.25rem] border-[0.75px] border-border p-2 md:rounded-[1.5rem] md:p-3">
-        <GlowingEffect
-          spread={40}
-          glow={true}
-          disabled={false}
-          proximity={64}
-          inactiveZone={0.01}
-          borderWidth={3}
-        />
+        <GlowingEffect spread={40} glow={true} disabled={false} proximity={64} inactiveZone={0.01} borderWidth={3} />
         <div className="relative overflow-hidden rounded-xl border-[0.75px] border-border bg-card p-12 text-center">
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(250,250,250,0.04),transparent_70%)]"
-          />
+          <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(250,250,250,0.04),transparent_70%)]" />
           <div className="relative">
             <div className="mx-auto mb-6 flex h-12 w-12 items-center justify-center rounded-xl bg-secondary">
               <Bot className="h-6 w-6" />
             </div>
-            <h2 className="text-2xl font-bold tracking-tight md:text-3xl">
-              Ready to meet your AI agent?
-            </h2>
+            <h2 className="text-2xl font-bold tracking-tight md:text-3xl">Ready to get your AI agent?</h2>
             <p className="mt-3 text-base text-muted-foreground">
-              From payment to working agent in under 60 seconds. Open-source and
-              self-hostable.
+              From payment to working agent in under 2 minutes. No setup, no coding, no hassle.
             </p>
             <Link href="/auth/signup">
               <Button size="lg" className="mt-8 rounded-full">
-                Get Started Now
-                <ArrowRight className="h-4 w-4" />
+                Get Started Now <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
           </div>
@@ -408,29 +450,12 @@ function Footer() {
       <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-4 px-6 py-8 sm:flex-row">
         <div className="flex items-center gap-2">
           <Zap className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm text-muted-foreground">
-            Valnaa — Powered by open-source AI
-          </span>
+          <span className="text-sm text-muted-foreground">Valnaa — Your AI, your server, your rules</span>
         </div>
         <div className="flex items-center gap-6">
-          <a
-            href="#features"
-            className="text-sm text-muted-foreground transition-colors hover:text-foreground"
-          >
-            Features
-          </a>
-          <a
-            href="#pricing"
-            className="text-sm text-muted-foreground transition-colors hover:text-foreground"
-          >
-            Pricing
-          </a>
-          <Link
-            href="/auth/login"
-            className="text-sm text-muted-foreground transition-colors hover:text-foreground"
-          >
-            Sign In
-          </Link>
+          <a href="#features" className="text-sm text-muted-foreground transition-colors hover:text-foreground">Features</a>
+          <a href="#pricing" className="text-sm text-muted-foreground transition-colors hover:text-foreground">Pricing</a>
+          <Link href="/auth/login" className="text-sm text-muted-foreground transition-colors hover:text-foreground">Sign In</Link>
         </div>
       </div>
     </footer>

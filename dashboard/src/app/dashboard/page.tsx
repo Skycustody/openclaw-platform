@@ -9,7 +9,7 @@ import { useStore } from '@/lib/store';
 import GatewayChat from '@/components/dashboard/GatewayChat';
 import {
   Bot, Sparkles, Loader2, Cpu, Zap,
-  AlertTriangle, ExternalLink, RefreshCw, Paperclip,
+  AlertTriangle, RefreshCw,
 } from 'lucide-react';
 
 type AgentDisplayStatus = 'active' | 'online' | 'sleeping' | 'paused' | 'provisioning' | 'cancelled' | 'offline' | 'grace_period';
@@ -343,26 +343,6 @@ export default function DashboardHome() {
         </div>
 
         <div className="flex items-center gap-2">
-          {phase === 'ready' && (
-            <>
-              <button onClick={handleFileUpload} disabled={uploadingFile}
-                className="flex items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-1.5 hover:border-white/15 hover:bg-white/[0.04] transition-all disabled:opacity-40"
-                title="Upload file to agent workspace">
-                {uploadingFile
-                  ? <Loader2 className="h-3.5 w-3.5 text-white/30 animate-spin" />
-                  : <Paperclip className="h-3.5 w-3.5 text-white/30" />}
-                <span className="text-[11px] text-white/40">Attach</span>
-              </button>
-              {agentUrl && (
-                <button onClick={() => window.open(agentUrl, '_blank')}
-                  className="flex items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-1.5 hover:border-white/15 hover:bg-white/[0.04] transition-all"
-                  title="Open full gateway UI">
-                  <ExternalLink className="h-3.5 w-3.5 text-white/30" />
-                </button>
-              )}
-            </>
-          )}
-
           <button onClick={() => window.location.href = '/dashboard/router'}
             className="flex items-center gap-2 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-1.5 hover:border-white/15 hover:bg-white/[0.04] transition-all"
             title="Change model settings">
@@ -383,14 +363,6 @@ export default function DashboardHome() {
           </button>
         </div>
       </div>
-
-      {uploadMsg && (
-        <div className={`mb-2 px-4 py-2 rounded-lg text-[13px] shrink-0 animate-fade-up ${
-          uploadMsg.includes('failed') ? 'border border-red-500/20 bg-red-500/5 text-red-400' : 'border border-green-500/20 bg-green-500/5 text-green-400'
-        }`}>
-          {uploadMsg}
-        </div>
-      )}
 
       {/* Main content */}
       <div className="flex-1 rounded-xl border border-white/[0.06] bg-white/[0.01] overflow-hidden relative">
