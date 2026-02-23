@@ -10,18 +10,8 @@ import {
   Loader2, Power, PowerOff, AlertTriangle, RefreshCw,
   Terminal, Image, Users, Clock, Key, ChevronDown, ChevronUp,
   MessageSquare, Music, Home, Shield, Zap, Camera, Mail,
-  Download, Store, Check,
+  Download, Package, Check,
 } from 'lucide-react';
-
-interface StoreSkill {
-  id: string;
-  owner: string;
-  name: string;
-  description: string;
-  category: string;
-  emoji: string;
-  repoPath: string;
-}
 
 /* ── Tool metadata (built-in OpenClaw tools) ── */
 const TOOL_META: Record<string, { label: string; desc: string; icon: typeof Globe; cat: string }> = {
@@ -124,6 +114,15 @@ interface SkillsData {
   notProvisioned?: boolean;
 }
 
+interface PlatformSkill {
+  id: string;
+  label: string;
+  description: string;
+  category: string;
+  repoPath: string;
+  emoji?: string;
+}
+
 export default function SkillsPage() {
   const [data, setData] = useState<SkillsData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -131,10 +130,9 @@ export default function SkillsPage() {
   const [error, setError] = useState<string | null>(null);
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set(CATEGORY_ORDER.slice(0, 6)));
   const [apiKeyInputs, setApiKeyInputs] = useState<Record<string, string>>({});
-  const [tab, setTab] = useState<'tools' | 'skills' | 'store'>('tools');
-  const [storeSkills, setStoreSkills] = useState<StoreSkill[]>([]);
-  const [storeLoading, setStoreLoading] = useState(false);
-  const [installingId, setInstallingId] = useState<string | null>(null);
+  const [tab, setTab] = useState<'tools' | 'skills' | 'marketplace'>('tools');
+  const [marketplaceSkills, setMarketplaceSkills] = useState<PlatformSkill[]>([]);
+  const [installingSkill, setInstallingSkill] = useState<string | null>(null);
 
   const fetchSkills = useCallback(async () => {
     try {
@@ -150,32 +148,28 @@ export default function SkillsPage() {
 
   useEffect(() => { fetchSkills(); }, [fetchSkills]);
 
-  const fetchStore = useCallback(async () => {
-    setStoreLoading(true);
+  const fetchMarketplace = useCallback(async () => {
     try {
-      const res = await api.get<{ skills: StoreSkill[] }>('/skills/store');
-      setStoreSkills(res.skills || []);
+      const res = await api.get<{ skills: PlatformSkill[] }>('/skills/marketplace');
+      setMarketplaceSkills(res.skills || []);
     } catch {
-      setStoreSkills([]);
-    } finally {
-      setStoreLoading(false);
+      setMarketplaceSkills([]);
     }
   }, []);
 
   useEffect(() => {
-    if (tab === 'store') fetchStore();
-  }, [tab, fetchStore]);
+    if (tab === 'marketplace' && marketplaceSkills.length === 0) fetchMarketplace();
+  }, [tab, marketplaceSkills.length, fetchMarketplace]);
 
   const installSkill = async (skillId: string) => {
-    setInstallingId(skillId);
+    setInstallingSkill(skillId);
     try {
       await api.post('/skills/install', { skillId });
       await fetchSkills();
-      await fetchStore();
     } catch (err: any) {
-      setError(err.message || 'Install failed');
+      setError(err.message || 'Failed to install skill');
     } finally {
-      setInstallingId(null);
+      setInstallingSkill(null);
     }
   };
 
@@ -235,12 +229,6 @@ export default function SkillsPage() {
 
   const enabledSet = new Set(data?.enabled || []);
   const skillsConfig = data?.skillsConfig || {};
-  const installedSkillNames = new Set([
-    ...(data?.skills || []).map((s: any) => (typeof s === 'string' ? s : s?.name || s?.id || '').toLowerCase()),
-    ...Object.keys(skillsConfig).map(k => k.toLowerCase()),
-  ].filter(Boolean));
-  const isStoreSkillInstalled = (skill: StoreSkill) =>
-    installedSkillNames.has(skill.id.toLowerCase()) || installedSkillNames.has(skill.name.toLowerCase());
 
   const allTools = loading
     ? Object.keys(TOOL_META)
@@ -288,7 +276,7 @@ export default function SkillsPage() {
       )}
 
       {/* Tab switcher */}
-      <div className="flex gap-2 flex-wrap">
+      <div className="flex gap-2">
         <button
           onClick={() => setTab('tools')}
           className={`px-4 py-2 rounded-lg text-[14px] font-medium transition-all ${
@@ -306,13 +294,13 @@ export default function SkillsPage() {
           Bundled Skills ({Object.keys(BUNDLED_SKILLS).length})
         </button>
         <button
-          onClick={() => setTab('store')}
+          onClick={() => setTab('marketplace')}
           className={`px-4 py-2 rounded-lg text-[14px] font-medium transition-all ${
-            tab === 'store' ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/60'
+            tab === 'marketplace' ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/60'
           }`}
         >
-          <Store className="h-3.5 w-3.5 inline mr-1.5" />
-          Skill Store ({storeSkills.length || '…'})
+          <Package className="h-3.5 w-3.5 inline mr-1" />
+          Skill Marketplace ({marketplaceSkills.length || '…'})
         </button>
       </div>
 
@@ -471,39 +459,34 @@ export default function SkillsPage() {
         </div>
       )}
 
-      {/* Skill Store tab */}
-      {tab === 'store' && (
+      {/* Skill Marketplace tab */}
+      {tab === 'marketplace' && (
         <div className="space-y-6">
-          <p className="text-[14px] text-white/50">
-            Browse and install community skills from the OpenClaw registry. Install with one click — no ClawHub rate limits.
-          </p>
-          {storeLoading ? (
-            <div className="flex justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-white/40" />
-            </div>
-          ) : storeSkills.length === 0 ? (
-            <div className="text-center py-12 text-white/40">
-              <Store className="h-12 w-12 mx-auto mb-3 opacity-50" />
-              <p>No skills in store. Check back later.</p>
+          <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
+            <p className="text-[13px] text-white/50">
+              Install community skills from the OpenClaw registry. Each skill is fetched from GitHub and added to your agent.
+            </p>
+          </div>
+          {data?.notProvisioned ? (
+            <div className="text-center py-8 text-white/40 text-[14px]">
+              Open your agent first to install skills.
             </div>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {storeSkills.map((skill) => {
-                const installed = isStoreSkillInstalled(skill);
-                const isInstalling = installingId === skill.id;
+              {marketplaceSkills.map(skill => {
+                const isInstalled = !!skillsConfig[skill.id]?.enabled;
+                const isInstalling = installingSkill === skill.id;
                 return (
-                  <Card key={skill.id} className={installed ? 'ring-1 ring-emerald-500/10' : ''}>
+                  <Card key={skill.id} className={isInstalled ? 'ring-1 ring-emerald-500/10' : ''}>
                     <div className="flex items-start gap-3 mb-2">
-                      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-lg ${installed ? 'bg-emerald-500/10' : 'bg-white/5'}`}>
-                        {skill.emoji}
+                      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-lg ${isInstalled ? 'bg-emerald-500/10' : 'bg-white/5'}`}>
+                        {skill.emoji || '📦'}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className={`text-[14px] font-semibold ${installed ? 'text-white' : 'text-white/70'}`}>
-                            {skill.name}
-                          </h3>
-                          {installed ? (
-                            <Badge variant="green" dot><Check className="h-3 w-3" /> Installed</Badge>
+                          <h3 className="text-[14px] font-semibold text-white">{skill.label}</h3>
+                          {isInstalled ? (
+                            <Badge variant="green"><Check className="h-3 w-3" /> Installed</Badge>
                           ) : (
                             <Badge variant="default">{skill.category}</Badge>
                           )}
@@ -512,13 +495,13 @@ export default function SkillsPage() {
                     </div>
                     <p className="text-[12px] text-white/40 leading-relaxed mb-3">{skill.description}</p>
                     <Button
-                      variant={installed ? 'glass' : 'primary'}
+                      variant={isInstalled ? 'glass' : 'primary'}
                       size="sm"
                       loading={isInstalling}
-                      disabled={installed}
-                      onClick={() => !installed && installSkill(skill.id)}
+                      onClick={() => !isInstalled && installSkill(skill.id)}
+                      disabled={isInstalled}
                     >
-                      {installed ? (
+                      {isInstalled ? (
                         <><Check className="h-3.5 w-3.5" /> Installed</>
                       ) : (
                         <><Download className="h-3.5 w-3.5" /> Install</>

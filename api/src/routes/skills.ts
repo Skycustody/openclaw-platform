@@ -25,70 +25,68 @@ import {
   restartContainer,
 } from '../services/containerConfig';
 import { sshExec } from '../services/ssh';
-import { SKILL_STORE, SKILL_STORE_BY_ID } from '../data/skillStore';
+import { PLATFORM_SKILLS, SKILLS_REPO_URL } from '../data/platformSkills';
 
 const router = Router();
+const INSTANCE_DIR = '/opt/openclaw/instances';
 router.use(authenticate);
-router.use(requireActiveSubscription);
 
-function isValidName(name: string): boolean {
-  return !!name && !/^(__proto__|constructor|prototype)$/.test(name) && /^[a-zA-Z0-9_\-.:]+$/.test(name);
-}
+// GET /skills/marketplace — list of installable platform skills (no container needed)
+router.get('/marketplace', (req: AuthRequest, res: Response) => {
+  res.json({ skills: PLATFORM_SKILLS });
+});
 
-// GET /skills/store — curated skill catalog for download/install
-router.get('/store', async (_req: AuthRequest, res: Response, next: NextFunction) => {
+// POST /skills/install — install a platform skill into user's container
+router.post('/install', requireActiveSubscription, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    res.json({ skills: SKILL_STORE });
+    const { skillId } = req.body;
+    if (!skillId || typeof skillId !== 'string') {
+      return res.status(400).json({ error: 'skillId required' });
+    }
+    const skill = PLATFORM_SKILLS.find(s => s.id === skillId);
+    if (!skill) {
+      return res.status(400).json({ error: 'Unknown skill' });
+    }
+    if (!isValidName(skill.id)) {
+      return res.status(400).json({ error: 'Invalid skill name' });
+    }
+
+    const { serverIp, containerName } = await getUserContainer(req.userId!);
+    const userId = req.userId!;
+    const skillsDir = `${INSTANCE_DIR}/${userId}/skills`;
+    const tmpDir = `/tmp/openclaw-skill-${userId}-${Date.now()}`;
+
+    // Clone repo, copy skill, cleanup
+    const repoPath = skill.repoPath;
+    const cmd = [
+      `mkdir -p ${skillsDir}`,
+      `git clone --depth 1 ${SKILLS_REPO_URL} ${tmpDir}`,
+      `cp -r ${tmpDir}/skills/${repoPath} ${skillsDir}/${skill.id}`,
+      `rm -rf ${tmpDir}`,
+    ].join(' && ');
+
+    await sshExec(serverIp, cmd);
+
+    // Enable in openclaw.json
+    const config = await readContainerConfig(serverIp, userId);
+    if (!config.skills) config.skills = {};
+    if (!config.skills.entries) config.skills.entries = {};
+    config.skills.entries[skill.id] = { enabled: true };
+    await writeContainerConfig(serverIp, userId, config);
+
+    const ready = await restartContainer(serverIp, containerName);
+
+    res.json({ ok: true, skill: skill.id, restarted: ready });
   } catch (err) {
     next(err);
   }
 });
 
-// POST /skills/install — install a skill from GitHub into user's container
-router.post('/install', async (req: AuthRequest, res: Response, next: NextFunction) => {
-  try {
-    const { skillId } = req.body as { skillId?: string };
-    if (!skillId || typeof skillId !== 'string') {
-      return res.status(400).json({ error: 'skillId required' });
-    }
-    const skill = SKILL_STORE_BY_ID[skillId];
-    if (!skill) {
-      return res.status(404).json({ error: `Skill "${skillId}" not found in store` });
-    }
+router.use(requireActiveSubscription);
 
-    const { serverIp, containerName } = await getUserContainer(req.userId!);
-    const userId = req.userId!;
-    const instanceDir = `/opt/openclaw/instances/${userId}`;
-    const skillsDir = `${instanceDir}/skills`;
-    const tmpId = `oc-skills-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const tmpDir = `/tmp/${tmpId}`;
-
-    // Clone repo, copy skill, cleanup. Uses repoPath which we control (no user input).
-    const cmd = [
-      `mkdir -p "${skillsDir}"`,
-      `git clone --depth 1 https://github.com/openclaw/skills.git "${tmpDir}" 2>/dev/null || true`,
-      `cp -r "${tmpDir}/skills/${skill.repoPath}" "${skillsDir}/${skill.name}" 2>/dev/null || true`,
-      `rm -rf "${tmpDir}"`,
-    ].join(' && ');
-
-    await sshExec(serverIp, cmd);
-
-    // Verify it was copied
-    const check = await sshExec(serverIp, `test -d "${skillsDir}/${skill.name}" && echo ok || echo missing`);
-    if (!check.stdout.trim().includes('ok')) {
-      return res.status(500).json({ error: 'Install failed — skill directory not found after copy' });
-    }
-
-    await restartContainer(serverIp, containerName);
-
-    res.json({ ok: true, skill: skill.name, installed: true });
-  } catch (err: any) {
-    if (err.statusCode === 409) {
-      return res.status(409).json({ error: 'Agent not provisioned yet' });
-    }
-    next(err);
-  }
-});
+function isValidName(name: string): boolean {
+  return !!name && !/^(__proto__|constructor|prototype)$/.test(name) && /^[a-zA-Z0-9_\-.:]+$/.test(name);
+}
 
 // GET /skills — returns both tools config AND bundled skills config
 router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
