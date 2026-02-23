@@ -76,10 +76,15 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
       (sum, [plan, count]) => sum + count * (PLAN_LIMITS[plan as keyof typeof PLAN_LIMITS]?.priceEurCents || 0), 0
     );
 
-    // Server costs
+    // Server costs (with VAT — Hetzner charges 21% VAT for EU)
     const serverCount = parseInt(servers?.total || '0');
-    const serverCostPerMonth = parseInt(process.env.SERVER_COST_EUR_CENTS || '1999');
-    const monthlyServerCosts = serverCount * serverCostPerMonth;
+    const serverCostNetPerMonth = parseInt(process.env.SERVER_COST_EUR_CENTS || '1999');
+    const vatRate = parseFloat(process.env.SERVER_VAT_RATE || '0.21');
+    const serverCostVatPerMonth = Math.round(serverCostNetPerMonth * vatRate);
+    const serverCostGrossPerMonth = serverCostNetPerMonth + serverCostVatPerMonth;
+    const monthlyServerCostsNet = serverCount * serverCostNetPerMonth;
+    const monthlyServerCostsVat = serverCount * serverCostVatPerMonth;
+    const monthlyServerCosts = serverCount * serverCostGrossPerMonth;
 
     // OpenRouter credit costs (estimated from per-plan budget allocations)
     const monthlyNexosCosts = Object.entries(planCounts).reduce(
@@ -95,8 +100,15 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
       currency: 'EUR',
       monthlySubscriptionRevenue,
       monthlyServerCosts,
+      monthlyServerCostsNet,
+      monthlyServerCostsVat,
+      serverCostNetPerMonth,
+      serverCostVatPerMonth,
+      serverCostGrossPerMonth,
+      vatRate,
       monthlyNexosCosts,
       monthlyCreditCosts: monthlyNexosCosts,
+      totalCosts,
       monthlyProfit,
       profitMarginPercent,
       profitMarginTarget: Math.round(PROFIT_MARGIN_TARGET * 100),
@@ -109,9 +121,11 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
           const serverCost = count * (limits?.serverCostShareEurCents || 0);
           return [plan, {
             count,
+            priceEurCents: limits?.priceEurCents || 0,
             revenueEurCents: revenue,
             nexosCostEurCents: nexosCost,
             serverCostEurCents: serverCost,
+            totalCostEurCents: nexosCost + serverCost,
             profitEurCents: revenue - nexosCost - serverCost,
             marginPercent: revenue > 0 ? Math.round(((revenue - nexosCost - serverCost) / revenue) * 100) : 0,
           }];
@@ -188,7 +202,17 @@ router.get('/revenue', async (_req: AuthRequest, res: Response, next: NextFuncti
       totalServerCostEurCents += serverCost;
     }
 
-    const totalProfitEurCents = totalRevenueEurCents - totalNexosCostEurCents - totalServerCostEurCents;
+    // Server costs with VAT
+    const serverCount2 = await db.getOne<any>(`SELECT COUNT(*) as total FROM servers WHERE status = 'active'`);
+    const sCount = parseInt(serverCount2?.total || '0');
+    const sNetPerMonth = parseInt(process.env.SERVER_COST_EUR_CENTS || '1999');
+    const sVatRate = parseFloat(process.env.SERVER_VAT_RATE || '0.21');
+    const sVatPerMonth = Math.round(sNetPerMonth * sVatRate);
+    const sGrossPerMonth = sNetPerMonth + sVatPerMonth;
+    const totalServerCostGross = sCount * sGrossPerMonth;
+    const totalServerCostVat = sCount * sVatPerMonth;
+
+    const totalProfitEurCents = totalRevenueEurCents - totalNexosCostEurCents - totalServerCostGross;
     const profitMarginPercent = totalRevenueEurCents > 0
       ? Math.round((totalProfitEurCents / totalRevenueEurCents) * 100) : 0;
 
@@ -196,7 +220,13 @@ router.get('/revenue', async (_req: AuthRequest, res: Response, next: NextFuncti
       currency: 'EUR',
       totalRevenueEurCents,
       totalNexosCostEurCents,
-      totalServerCostEurCents,
+      totalServerCostEurCents: totalServerCostGross,
+      totalServerCostNet: sCount * sNetPerMonth,
+      totalServerCostVat,
+      serverCount: sCount,
+      serverCostNetPerMonth: sNetPerMonth,
+      serverCostGrossPerMonth: sGrossPerMonth,
+      vatRate: sVatRate,
       totalProfitEurCents,
       profitMarginPercent,
       profitMarginTarget: Math.round(PROFIT_MARGIN_TARGET * 100),
@@ -341,6 +371,29 @@ router.get('/servers', async (_req: AuthRequest, res: Response, next: NextFuncti
   try {
     const servers = await getServerLoad();
     res.json({ servers });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete('/servers/:serverId', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { serverId } = req.params;
+    const server = await db.getOne<any>('SELECT * FROM servers WHERE id = $1', [serverId]);
+    if (!server) return res.status(404).json({ error: 'Server not found' });
+
+    const userCount = await db.getOne<any>(
+      `SELECT COUNT(*) as count FROM users WHERE server_id = $1 AND status NOT IN ('cancelled')`,
+      [serverId]
+    );
+    if (parseInt(userCount?.count || '0') > 0) {
+      return res.status(400).json({
+        error: `Cannot remove server with ${userCount.count} active users. Migrate them first.`,
+      });
+    }
+
+    await db.query(`UPDATE servers SET status = 'offline' WHERE id = $1`, [serverId]);
+    res.json({ ok: true, message: `Server ${server.hostname || server.ip} marked as offline` });
   } catch (err) {
     next(err);
   }
