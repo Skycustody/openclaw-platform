@@ -454,7 +454,21 @@ export async function getWhatsAppQr(userId: string): Promise<{
     return { status: 'waiting', message: 'Generating QR code...' };
   }
 
-  // Check for WhatsApp-specific fatal errors and CLI errors.
+  // Check for QR first — if found, return it even if logs contain unrelated errors
+  // (e.g. "failed to persist plugin" / "Unrecognized key: enabled" is non-fatal)
+  const qrText = extractQrFromLogs(combined);
+  if (qrText) {
+    console.log(`[whatsapp] QR found for user ${userId}`);
+    return { status: 'qr', qrText };
+  }
+
+  // Only then check for WhatsApp-specific fatal errors. Exclude non-fatal OpenClaw
+  // persist errors ("failed to persist", "Unrecognized key: enabled").
+  const lowerCombined = combined.toLowerCase();
+  if (lowerCombined.includes('failed to persist plugin') || lowerCombined.includes('unrecognized key')) {
+    return { status: 'waiting', message: 'Waiting for QR code from WhatsApp...' };
+  }
+
   const whatsappErrorPatterns = [
     'Connection Closed',
     'QR refs attempts ended',
@@ -464,14 +478,9 @@ export async function getWhatsAppQr(userId: string): Promise<{
     'ECONNREFUSED',
     'Unknown channel',
     'channel not found',
-    'Invalid config',
-    'Error:',
-    'ENOENT',
     'command not found',
     'is not a function',
-    'SyntaxError',
   ];
-  const lowerCombined = combined.toLowerCase();
   const hasWhatsAppError = whatsappErrorPatterns.some(p => lowerCombined.includes(p.toLowerCase()));
   if (hasWhatsAppError) {
     const errorLines = combined.split('\n')
@@ -482,13 +491,6 @@ export async function getWhatsAppQr(userId: string): Promise<{
     return { status: 'error', message: msg };
   }
 
-  const qrText = extractQrFromLogs(combined);
-  if (qrText) {
-    console.log(`[whatsapp] QR found for user ${userId}`);
-    return { status: 'qr', qrText };
-  }
-
-  // Log when we have output but no QR (helps debug format changes)
   if (combined.trim().length > 50) {
     console.warn(`[whatsapp] Log output present but no QR extracted for user ${userId} (${combined.trim().length} chars)`);
   }
