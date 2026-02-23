@@ -193,22 +193,27 @@ export default function GatewayChat({ gatewayUrl, token, agentName, modelName }:
   }, [isRecording]);
 
   const handleSelectAgent = useCallback((agent: AgentInfo) => {
+    // Save current agent's model before switching
+    setAgentModels(prev => ({ ...prev, [selectedAgent]: selectedModel }));
     setSelectedAgent(agent.name);
+    // Restore the new agent's model (or default to auto)
+    setSelectedModel(prev => agentModels[agent.name] || 'auto');
     setShowAgentDropdown(false);
-  }, []);
+  }, [selectedAgent, selectedModel, agentModels]);
 
   const handleSelectModel = useCallback(async (model: ModelInfo) => {
     setSelectedModel(model.id);
+    setAgentModels(prev => ({ ...prev, [selectedAgent]: model.id }));
     setShowModelDropdown(false);
     if (model.id === 'auto') {
       try { await api.put('/settings', { brain_mode: 'auto' }); } catch {}
     } else {
       try { await api.put('/settings', { brain_mode: 'manual', manual_model: model.id }); } catch {}
     }
-  }, []);
+  }, [selectedAgent]);
 
   const getModelLabel = () => {
-    if (selectedModel === 'auto') return modelName || 'Auto';
+    if (selectedModel === 'auto') return 'Auto';
     return AVAILABLE_MODELS.find(m => m.id === selectedModel)?.displayName || selectedModel;
   };
 
@@ -700,7 +705,7 @@ export default function GatewayChat({ gatewayUrl, token, agentName, modelName }:
 
       {/* Bottom input area — Cursor-style */}
       <div className="shrink-0 bg-[#1e1e1e]">
-        <div className="mx-3 mb-3 rounded-xl border border-[#3c3c3c] bg-[#252526] focus-within:border-[#505050] transition-colors overflow-hidden">
+        <div className="mx-3 mb-3 rounded-xl border border-[#3c3c3c] bg-[#252526] focus-within:border-[#505050] transition-colors">
           {/* Collapsible context header */}
           <button
             onClick={() => setFilesOpen(!filesOpen)}
@@ -769,7 +774,7 @@ export default function GatewayChat({ gatewayUrl, token, agentName, modelName }:
                 </button>
 
                 {showAgentDropdown && (
-                  <div className="absolute bottom-full left-0 mb-1 w-60 rounded-lg border border-[#3c3c3c] bg-[#252526] shadow-2xl z-50 overflow-hidden">
+                  <div className="absolute bottom-[calc(100%+4px)] left-0 w-60 rounded-lg border border-[#3c3c3c] bg-[#252526] shadow-2xl overflow-hidden" style={{ zIndex: 9999 }}>
                     {/* Search */}
                     <div className="px-3 py-2 border-b border-[#333]">
                       <input
@@ -824,7 +829,7 @@ export default function GatewayChat({ gatewayUrl, token, agentName, modelName }:
                 </button>
 
                 {showModelDropdown && (
-                  <div className="absolute bottom-full left-0 mb-1 w-64 rounded-lg border border-[#3c3c3c] bg-[#252526] shadow-2xl z-50 overflow-hidden">
+                  <div className="absolute bottom-[calc(100%+4px)] left-0 w-64 rounded-lg border border-[#3c3c3c] bg-[#252526] shadow-2xl overflow-hidden" style={{ zIndex: 9999 }}>
                     {/* Search */}
                     <div className="px-3 py-2 border-b border-[#333]">
                       <input

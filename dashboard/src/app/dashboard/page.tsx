@@ -365,7 +365,7 @@ export default function DashboardHome() {
       </div>
 
       {/* Main content */}
-      <div className="flex-1 rounded-xl border border-white/[0.06] bg-white/[0.01] overflow-hidden relative">
+      <div className="flex-1 rounded-xl border border-white/[0.06] bg-white/[0.01] relative">
         {(phase === 'loading' || phase === 'starting' || phase === 'provisioning' || phase === 'polling') && (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-center z-10">
             <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/[0.04] mb-5">
