@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { flushSync } from 'react-dom';
 import {
-  Send, Square, Loader2, Bot, User, AlertCircle, WifiOff, Wifi,
+  Send, Square, Loader2, Bot, User, AlertCircle, WifiOff, Wifi, RefreshCw,
 } from 'lucide-react';
 
 interface Message {
@@ -45,6 +46,7 @@ export default function GatewayChat({ gatewayUrl, token }: GatewayChatProps) {
   const [wsState, setWsState] = useState<WsState>('connecting');
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -359,11 +361,11 @@ export default function GatewayChat({ gatewayUrl, token }: GatewayChatProps) {
         newEntries.push({ id: entry.id || `h_${newEntries.length}`, role, content, timestamp: entry.ts || entry.timestamp });
       }
       if (newEntries.length > snapshotLen) {
-        setMessages(newEntries);
-        setTimeout(scrollToBottom, 50);
+        flushSync(() => setMessages(newEntries));
         lastHistoryLen.current = newEntries.length;
         setActiveRunId(null);
         streamBufferRef.current = '';
+        requestAnimationFrame(() => scrollToBottom());
         return true;
       }
       return false;
@@ -421,6 +423,16 @@ export default function GatewayChat({ gatewayUrl, token }: GatewayChatProps) {
       }]);
     }
   }, [input, activeRunId, sendReq, scrollToBottom, pollForReply]);
+
+  const handleRefresh = useCallback(async () => {
+    if (refreshing || wsState !== 'connected') return;
+    setRefreshing(true);
+    try {
+      await loadHistory();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [loadHistory, refreshing, wsState]);
 
   const handleStop = useCallback(async () => {
     if (pollTimer.current) { clearInterval(pollTimer.current); pollTimer.current = null; }
@@ -556,7 +568,7 @@ export default function GatewayChat({ gatewayUrl, token }: GatewayChatProps) {
         </div>
 
         <div className="flex items-center justify-between mt-2 px-1">
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2">
             <div className={`h-1.5 w-1.5 rounded-full ${
               wsState === 'connected' ? 'bg-green-400' :
               wsState === 'connecting' ? 'bg-amber-400 animate-pulse' :
@@ -565,6 +577,16 @@ export default function GatewayChat({ gatewayUrl, token }: GatewayChatProps) {
             <span className="text-[10px] text-white/20">
               {wsState === 'connected' ? 'Connected' : wsState === 'connecting' ? 'Connecting' : 'Disconnected'}
             </span>
+            {wsState === 'connected' && (
+              <button
+                onClick={handleRefresh}
+                disabled={refreshing}
+                className="p-1 rounded hover:bg-white/10 transition-colors"
+                title="Refresh messages"
+              >
+                <RefreshCw className={`h-3 w-3 text-white/40 ${refreshing ? 'animate-spin' : ''}`} />
+              </button>
+            )}
           </div>
           <span className="text-[10px] text-white/15">Shift+Enter for new line</span>
         </div>
