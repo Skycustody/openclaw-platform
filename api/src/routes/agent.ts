@@ -147,27 +147,24 @@ router.get('/status', async (req: AuthRequest, res: Response, next: NextFunction
 
     const status = await getContainerStatus(req.userId!);
 
-    // Quick stats — use multiple sources so numbers aren't zero
-    const [convResult, routingResult, activityResult, cronResult, skillsResult] = await Promise.all([
+    // Quick stats from multiple tables
+    const [convResult, activityMsgResult, routingResult, skillsCountResult] = await Promise.all([
       db.getOne<{ count: string }>(
         `SELECT COUNT(*) as count FROM conversations
          WHERE user_id = $1 AND created_at > CURRENT_DATE`,
         [req.userId]
       ),
-      db.getOne<{ count: string; models: string }>(
-        `SELECT COUNT(*) as count,
-                COALESCE(string_agg(DISTINCT model_selected, ','), '') as models
-         FROM routing_decisions
-         WHERE user_id = $1 AND created_at > CURRENT_DATE`,
-        [req.userId]
-      ),
       db.getOne<{ count: string }>(
         `SELECT COUNT(*) as count FROM activity_log
-         WHERE user_id = $1 AND created_at > CURRENT_DATE`,
+         WHERE user_id = $1 AND type = 'message' AND created_at > CURRENT_DATE`,
         [req.userId]
       ),
-      db.getOne<{ count: string }>(
-        `SELECT COUNT(*) as count FROM cron_jobs WHERE user_id = $1 AND enabled = true`,
+      db.getOne<{ count: string; spend: string }>(
+        `SELECT COUNT(*) as count,
+                COALESCE(SUM(tokens_saved), 0) as spend
+         FROM routing_decisions
+         WHERE user_id = $1 AND created_at > CURRENT_DATE
+           AND message_preview != '[mode switch]'`,
         [req.userId]
       ),
       (async () => {
@@ -175,20 +172,24 @@ router.get('/status', async (req: AuthRequest, res: Response, next: NextFunction
           const { getUserContainer, readContainerConfig } = await import('../services/containerConfig');
           const { serverIp } = await getUserContainer(req.userId!);
           const config = await readContainerConfig(serverIp, req.userId!);
-          const entries = config?.skills?.entries || {};
-          return Object.values(entries).filter((e: any) => e?.enabled !== false).length;
-        } catch { return 0; }
+          const skillEntries = config?.skills?.entries || {};
+          const toolEntries = config?.tools || {};
+          const skillCount = Object.values(skillEntries)
+            .filter((e: any) => e && (e === true || e.enabled !== false)).length;
+          const toolCount = Object.values(toolEntries)
+            .filter((e: any) => e && (e === true || e.enabled !== false)).length;
+          return skillCount + toolCount;
+        } catch { return -1; }
       })(),
     ]);
 
     const convCount = parseInt(convResult?.count || '0');
-    const routingCount = parseInt(routingResult?.count || '0');
-    const activityCount = parseInt(activityResult?.count || '0');
-    const messagesToday = Math.max(convCount, routingCount, activityCount);
+    const activityMsgCount = parseInt(activityMsgResult?.count || '0');
+    const messagesToday = Math.max(convCount, activityMsgCount);
 
-    const skillCount = typeof skillsResult === 'number' ? skillsResult : 0;
-    const cronCount = parseInt(cronResult?.count || '0');
-    const activeSkills = Math.max(skillCount, cronCount);
+    const aiRequests = parseInt(routingResult?.count || '0');
+
+    const containerSkills = typeof skillsCountResult === 'number' ? skillsCountResult : -1;
 
     res.json({
       userId: user.id,
@@ -202,8 +203,8 @@ router.get('/status', async (req: AuthRequest, res: Response, next: NextFunction
       isAdmin: user.is_admin || false,
       stats: {
         messagesToday,
-        tokensToday: routingCount,
-        activeSkills,
+        aiRequestsToday: aiRequests,
+        activeSkills: containerSkills >= 0 ? containerSkills : 0,
       },
     });
   } catch (err) {

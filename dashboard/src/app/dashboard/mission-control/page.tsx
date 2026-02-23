@@ -25,7 +25,7 @@ interface ApiStatus {
   plan: string;
   lastActive: string;
   createdAt: string;
-  stats: { messagesToday: number; tokensToday: number; activeSkills: number };
+  stats: { messagesToday: number; tokensToday?: number; aiRequestsToday?: number; activeSkills: number };
 }
 
 interface ActivityEntry {
@@ -302,9 +302,9 @@ export default function MissionControlPage() {
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-500/10">
               <Zap className="h-4 w-4 text-purple-400" />
             </div>
-            <span className="text-[12px] text-white/30">AI Requests</span>
+            <span className="text-[12px] text-white/30">AI Calls</span>
           </div>
-          <p className="text-[24px] font-bold text-white tabular-nums">{stats.tokensToday}</p>
+          <p className="text-[24px] font-bold text-white tabular-nums">{stats.aiRequestsToday ?? stats.tokensToday ?? 0}</p>
           <p className="text-[11px] text-white/20 mt-0.5">today</p>
         </Card>
         <button className="text-left w-full" onClick={() => window.location.href = '/dashboard/tokens'}>
