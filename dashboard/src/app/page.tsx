@@ -374,12 +374,6 @@ function PricingSection() {
                       <span>{f}</span>
                     </li>
                   ))}
-                  {plan.excluded.map((f) => (
-                    <li key={f} className="flex items-start gap-2.5 text-sm text-foreground/30 line-through">
-                      <span className="mt-0.5 h-4 w-4 shrink-0 text-center text-muted-foreground/30">—</span>
-                      <span>{f}</span>
-                    </li>
-                  ))}
                 </ul>
 
                 <Link href="/auth/signup" className="mt-8">
