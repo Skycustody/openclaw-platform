@@ -152,13 +152,12 @@ router.post('/v1/chat/completions', async (req: Request, res: Response) => {
     const lastMessage = extractLastUserMessage(body.messages);
     const hasImage = hasImageContent(body.messages);
     const hasToolHistory = hasToolCallsInHistory(body.messages);
-    const requestHasTools = Array.isArray(body.tools) && body.tools.length > 0;
     const ctx = extractConversationContext(body.messages);
 
     const aiPick = await pickModelWithAI(
       lastMessage,
       hasImage,
-      hasToolHistory || requestHasTools,
+      hasToolHistory,
       ctx,
     );
 

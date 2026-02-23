@@ -244,7 +244,7 @@ export async function pickModelWithAI(
   const toolCalls = ctx?.toolCallCount ?? 0;
 
   const msgKey = userMessage.slice(0, 200);
-  const cacheKey = `aiRoute3:${Buffer.from(msgKey).toString('base64')}:${hasImage}:${hasToolHistory}:${depth}:${toolCalls}`;
+  const cacheKey = `aiRoute4:${Buffer.from(msgKey).toString('base64')}:${hasImage}:${hasToolHistory}:${depth}:${toolCalls}`;
 
   try {
     const cached = await redis.get(cacheKey);
