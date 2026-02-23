@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { flushSync } from 'react-dom';
 import {
-  Send, Square, Loader2, Bot, User, AlertCircle, WifiOff, Wifi, RefreshCw,
+  Send, Square, Loader2, Bot, User, AlertCircle, WifiOff, RefreshCw,
+  ChevronDown, ChevronRight, Paperclip, Image as ImageIcon, Mic,
 } from 'lucide-react';
 
 interface Message {
@@ -47,6 +48,7 @@ export default function GatewayChat({ gatewayUrl, token }: GatewayChatProps) {
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [filesOpen, setFilesOpen] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -457,10 +459,10 @@ export default function GatewayChat({ gatewayUrl, token }: GatewayChatProps) {
   const isStreaming = messages.some(m => m.streaming);
 
   return (
-    <div className="flex flex-col h-full bg-[#0a0a0a]">
+    <div className="flex flex-col h-full bg-[#1e1e1e]">
       {/* Connection status bar */}
       {wsState !== 'connected' && (
-        <div className={`flex items-center gap-2 px-4 py-2 text-[12px] shrink-0 ${
+        <div className={`flex items-center gap-2 px-4 py-1.5 text-[12px] shrink-0 ${
           wsState === 'connecting' ? 'bg-amber-500/10 text-amber-400' :
           wsState === 'error' ? 'bg-red-500/10 text-red-400' :
           'bg-white/5 text-white/40'
@@ -476,124 +478,184 @@ export default function GatewayChat({ gatewayUrl, token }: GatewayChatProps) {
       )}
 
       {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-1">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-5 space-y-4">
         {messages.length === 0 && wsState === 'connected' && (
-          <div className="flex flex-col items-center justify-center h-full text-center opacity-40">
-            <Bot className="h-10 w-10 text-white/20 mb-3" />
-            <p className="text-[14px] text-white/30">Send a message to start chatting</p>
+          <div className="flex flex-col items-center justify-center h-full text-center">
+            <Bot className="h-8 w-8 text-white/15 mb-3" />
+            <p className="text-[13px] text-white/25">Send a message to start chatting</p>
           </div>
         )}
 
         {messages.map((msg) => (
-          <div key={msg.id} className={`flex gap-3 py-3 ${msg.role === 'user' ? 'justify-end' : ''}`}>
+          <div key={msg.id} className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : ''}`}>
             {msg.role !== 'user' && (
-              <div className="shrink-0 mt-0.5">
+              <div className="shrink-0 mt-1">
                 {msg.role === 'assistant' ? (
-                  <div className="h-7 w-7 rounded-lg bg-white/[0.06] flex items-center justify-center">
-                    <Bot className="h-3.5 w-3.5 text-white/40" />
+                  <div className="h-6 w-6 rounded-md bg-white/[0.06] flex items-center justify-center">
+                    <Bot className="h-3.5 w-3.5 text-white/30" />
                   </div>
                 ) : (
-                  <div className="h-7 w-7 rounded-lg bg-red-500/10 flex items-center justify-center">
-                    <AlertCircle className="h-3.5 w-3.5 text-red-400/60" />
+                  <div className="h-6 w-6 rounded-md bg-red-500/10 flex items-center justify-center">
+                    <AlertCircle className="h-3.5 w-3.5 text-red-400/50" />
                   </div>
                 )}
               </div>
             )}
 
-            <div className={`max-w-[80%] ${
+            <div className={`max-w-[85%] ${
               msg.role === 'user'
-                ? 'bg-white/[0.08] rounded-2xl rounded-br-md px-4 py-2.5'
+                ? 'bg-[#2d2d2d] rounded-xl rounded-br-sm px-3.5 py-2'
                 : msg.role === 'system'
-                  ? 'bg-red-500/5 border border-red-500/10 rounded-xl px-4 py-2.5'
+                  ? 'bg-red-500/5 border border-red-500/10 rounded-lg px-3.5 py-2'
                   : 'flex-1 min-w-0'
             }`}>
-              <p className={`text-[14px] leading-relaxed whitespace-pre-wrap break-words ${
-                msg.role === 'user' ? 'text-white/90'
-                : msg.role === 'system' ? 'text-red-400/80 text-[13px]'
-                : 'text-white/80'
+              <p className={`text-[13px] leading-[1.6] whitespace-pre-wrap break-words ${
+                msg.role === 'user' ? 'text-white/85'
+                : msg.role === 'system' ? 'text-red-400/70 text-[12px]'
+                : 'text-[#cccccc]'
               }`}>
                 {msg.content}
                 {msg.streaming && (
-                  <span className="inline-block w-1.5 h-4 bg-white/40 ml-0.5 animate-pulse rounded-sm" />
+                  <span className="inline-block w-[3px] h-[14px] bg-white/50 ml-0.5 animate-pulse rounded-[1px]" />
                 )}
               </p>
             </div>
 
             {msg.role === 'user' && (
-              <div className="shrink-0 mt-0.5">
-                <div className="h-7 w-7 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                  <User className="h-3.5 w-3.5 text-blue-400/60" />
+              <div className="shrink-0 mt-1">
+                <div className="h-6 w-6 rounded-md bg-[#264f78]/40 flex items-center justify-center">
+                  <User className="h-3.5 w-3.5 text-[#569cd6]/70" />
                 </div>
               </div>
             )}
           </div>
         ))}
+
+        {activeRunId && !messages.some(m => m.streaming) && (
+          <div className="flex gap-3">
+            <div className="h-6 w-6 rounded-md bg-white/[0.06] flex items-center justify-center">
+              <Loader2 className="h-3.5 w-3.5 text-white/30 animate-spin" />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[12px] text-white/30">Agent is thinking...</span>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Input */}
-      <div className="shrink-0 border-t border-white/[0.06] px-4 py-3">
-        <div className="flex items-end gap-2">
-          <div className="flex-1 relative">
+      {/* Bottom input area — Cursor-style */}
+      <div className="shrink-0 border-t border-[#333] bg-[#1e1e1e]">
+        {/* Collapsible files / context section */}
+        <button
+          onClick={() => setFilesOpen(!filesOpen)}
+          className="w-full flex items-center gap-1.5 px-4 py-1.5 text-[11px] text-white/30 hover:text-white/50 transition-colors"
+        >
+          {filesOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+          <span>{messages.length} Messages</span>
+          {wsState === 'connected' && (
+            <button
+              onClick={(e) => { e.stopPropagation(); handleRefresh(); }}
+              disabled={refreshing}
+              className="ml-auto px-2 py-0.5 rounded text-[10px] text-white/30 hover:text-white/60 hover:bg-white/5 transition-colors"
+            >
+              {refreshing ? <RefreshCw className="h-3 w-3 animate-spin inline" /> : 'Refresh'}
+            </button>
+          )}
+        </button>
+
+        {filesOpen && messages.length > 0 && (
+          <div className="px-4 pb-2 max-h-[120px] overflow-y-auto">
+            {messages.slice(-8).map((m) => (
+              <div key={m.id} className="flex items-center gap-2 py-0.5 text-[11px] text-white/25">
+                <span className={m.role === 'user' ? 'text-[#569cd6]/60' : m.role === 'assistant' ? 'text-white/40' : 'text-red-400/40'}>
+                  {m.role === 'user' ? 'You' : m.role === 'assistant' ? 'Agent' : 'System'}
+                </span>
+                <span className="text-white/15 truncate">{m.content.slice(0, 60)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Input row */}
+        <div className="px-3 pb-2">
+          <div className="rounded-lg border border-[#3c3c3c] bg-[#252526] focus-within:border-[#007acc] transition-colors">
             <textarea
               ref={inputRef}
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Message your agent..."
+              placeholder="Plan, @ for context, / for commands"
               rows={1}
               disabled={wsState !== 'connected'}
-              className="w-full resize-none rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-[14px] text-white/90 placeholder:text-white/20 focus:outline-none focus:border-white/20 focus:bg-white/[0.04] transition-all disabled:opacity-40"
-              style={{ maxHeight: '120px', minHeight: '44px' }}
+              className="w-full resize-none bg-transparent px-3 pt-2.5 pb-1 text-[13px] text-white/90 placeholder:text-white/20 focus:outline-none disabled:opacity-30"
+              style={{ maxHeight: '100px', minHeight: '32px' }}
               onInput={(e) => {
                 const t = e.target as HTMLTextAreaElement;
-                t.style.height = '44px';
-                t.style.height = Math.min(t.scrollHeight, 120) + 'px';
+                t.style.height = '32px';
+                t.style.height = Math.min(t.scrollHeight, 100) + 'px';
               }}
             />
-          </div>
 
-          {isStreaming ? (
-            <button
-              onClick={handleStop}
-              className="shrink-0 h-11 w-11 rounded-xl bg-red-500/20 hover:bg-red-500/30 flex items-center justify-center transition-all"
-              title="Stop"
-            >
-              <Square className="h-4 w-4 text-red-400" />
-            </button>
-          ) : (
-            <button
-              onClick={handleSend}
-              disabled={!input.trim() || wsState !== 'connected'}
-              className="shrink-0 h-11 w-11 rounded-xl bg-white/[0.08] hover:bg-white/[0.12] flex items-center justify-center transition-all disabled:opacity-30 disabled:hover:bg-white/[0.08]"
-              title="Send"
-            >
-              <Send className="h-4 w-4 text-white/60" />
-            </button>
-          )}
-        </div>
+            {/* Bottom toolbar */}
+            <div className="flex items-center justify-between px-2 pb-1.5">
+              <div className="flex items-center gap-1">
+                {/* Mode selector */}
+                <div className="flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-white/5 cursor-pointer transition-colors">
+                  <div className="flex items-center gap-0.5">
+                    <span className="text-[11px] text-white/30">&#8734;</span>
+                    <span className="text-[11px] text-white/50 font-medium">Agent</span>
+                    <ChevronDown className="h-2.5 w-2.5 text-white/25" />
+                  </div>
+                </div>
+                <div className="w-px h-3 bg-white/10 mx-0.5" />
+                {/* Connection status dot */}
+                <div className="flex items-center gap-1 px-1.5 py-0.5">
+                  <div className={`h-1.5 w-1.5 rounded-full ${
+                    wsState === 'connected' ? 'bg-green-400' :
+                    wsState === 'connecting' ? 'bg-amber-400 animate-pulse' :
+                    'bg-red-400'
+                  }`} />
+                  <span className="text-[11px] text-white/30">
+                    {wsState === 'connected' ? 'Live' : wsState === 'connecting' ? '...' : 'Off'}
+                  </span>
+                </div>
+              </div>
 
-        <div className="flex items-center justify-between mt-2 px-1">
-          <div className="flex items-center gap-2">
-            <div className={`h-1.5 w-1.5 rounded-full ${
-              wsState === 'connected' ? 'bg-green-400' :
-              wsState === 'connecting' ? 'bg-amber-400 animate-pulse' :
-              'bg-red-400'
-            }`} />
-            <span className="text-[10px] text-white/20">
-              {wsState === 'connected' ? 'Connected' : wsState === 'connecting' ? 'Connecting' : 'Disconnected'}
-            </span>
-            {wsState === 'connected' && (
-              <button
-                onClick={handleRefresh}
-                disabled={refreshing}
-                className="p-1 rounded hover:bg-white/10 transition-colors"
-                title="Refresh messages"
-              >
-                <RefreshCw className={`h-3 w-3 text-white/40 ${refreshing ? 'animate-spin' : ''}`} />
-              </button>
-            )}
+              <div className="flex items-center gap-0.5">
+                {isStreaming ? (
+                  <button
+                    onClick={handleStop}
+                    className="p-1.5 rounded-md hover:bg-red-500/10 transition-colors"
+                    title="Stop"
+                  >
+                    <Square className="h-3.5 w-3.5 text-red-400/70" />
+                  </button>
+                ) : (
+                  <>
+                    <button className="p-1.5 rounded-md hover:bg-white/5 transition-colors" title="Attach">
+                      <Paperclip className="h-3.5 w-3.5 text-white/25 hover:text-white/50" />
+                    </button>
+                    <button className="p-1.5 rounded-md hover:bg-white/5 transition-colors" title="Image">
+                      <ImageIcon className="h-3.5 w-3.5 text-white/25 hover:text-white/50" />
+                    </button>
+                    <button className="p-1.5 rounded-md hover:bg-white/5 transition-colors" title="Voice">
+                      <Mic className="h-3.5 w-3.5 text-white/25 hover:text-white/50" />
+                    </button>
+                    {input.trim() && (
+                      <button
+                        onClick={handleSend}
+                        disabled={wsState !== 'connected'}
+                        className="ml-1 p-1.5 rounded-md bg-[#007acc] hover:bg-[#1a8ad4] transition-colors disabled:opacity-30"
+                        title="Send"
+                      >
+                        <Send className="h-3.5 w-3.5 text-white" />
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
           </div>
-          <span className="text-[10px] text-white/15">Shift+Enter for new line</span>
         </div>
       </div>
     </div>
