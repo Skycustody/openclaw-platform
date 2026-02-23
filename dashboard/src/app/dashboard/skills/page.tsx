@@ -462,10 +462,17 @@ export default function SkillsPage() {
       {/* Skill Marketplace tab */}
       {tab === 'marketplace' && (
         <div className="space-y-6">
-          <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
+          <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4 space-y-3">
             <p className="text-[13px] text-white/50">
               Install community skills from the OpenClaw registry. Each skill is fetched from GitHub and added to your agent.
             </p>
+            <div className="flex gap-2 items-start rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2">
+              <Shield className="h-4 w-4 shrink-0 text-amber-400/80 mt-0.5" />
+              <div className="text-[12px] text-amber-200/80">
+                <strong>Safety notice:</strong> Community skills are not audited by us. Some may use external APIs, access credentials, or run code. Review skills on{' '}
+                <a href="https://clawhub.com" target="_blank" rel="noopener noreferrer" className="underline hover:text-amber-100">ClawHub</a> for VirusTotal reports before installing.
+              </div>
+            </div>
           </div>
           {data?.notProvisioned ? (
             <div className="text-center py-8 text-white/40 text-[14px]">
