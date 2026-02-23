@@ -639,7 +639,7 @@ export default function GatewayChat({ gatewayUrl, token, agentName, modelName }:
   const isStreaming = messages.some(m => m.streaming);
 
   return (
-    <div className="flex flex-col h-full w-full min-w-0 bg-[#1e1e1e]">
+    <div className="flex flex-col h-full w-full overflow-hidden bg-[#1e1e1e]">
       {/* Connection status bar */}
       {wsState !== 'connected' && (
         <div className={`flex items-center gap-2 px-4 py-1.5 text-[12px] shrink-0 ${
@@ -658,7 +658,7 @@ export default function GatewayChat({ gatewayUrl, token, agentName, modelName }:
       )}
 
       {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-5 space-y-4 min-w-0">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-5 space-y-4">
         {messages.length === 0 && wsState === 'connected' && (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <Bot className="h-8 w-8 text-white/15 mb-3" />
