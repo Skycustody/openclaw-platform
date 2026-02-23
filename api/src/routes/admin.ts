@@ -78,7 +78,7 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
 
     // Server costs (with VAT — Hetzner charges 21% VAT for EU)
     const serverCount = parseInt(servers?.total || '0');
-    const serverCostNetPerMonth = parseInt(process.env.SERVER_COST_EUR_CENTS || '1999');
+    const serverCostNetPerMonth = parseInt(process.env.SERVER_COST_EUR_CENTS || '3999');
     const vatRate = parseFloat(process.env.SERVER_VAT_RATE || '0.21');
     const serverCostVatPerMonth = Math.round(serverCostNetPerMonth * vatRate);
     const serverCostGrossPerMonth = serverCostNetPerMonth + serverCostVatPerMonth;
@@ -205,7 +205,7 @@ router.get('/revenue', async (_req: AuthRequest, res: Response, next: NextFuncti
     // Server costs with VAT
     const serverCount2 = await db.getOne<any>(`SELECT COUNT(*) as total FROM servers WHERE status = 'active'`);
     const sCount = parseInt(serverCount2?.total || '0');
-    const sNetPerMonth = parseInt(process.env.SERVER_COST_EUR_CENTS || '1999');
+    const sNetPerMonth = parseInt(process.env.SERVER_COST_EUR_CENTS || '3999');
     const sVatRate = parseFloat(process.env.SERVER_VAT_RATE || '0.21');
     const sVatPerMonth = Math.round(sNetPerMonth * sVatRate);
     const sGrossPerMonth = sNetPerMonth + sVatPerMonth;
