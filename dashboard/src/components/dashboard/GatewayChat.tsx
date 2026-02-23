@@ -25,6 +25,20 @@ function nextId() {
   return `r_${++reqCounter}_${Date.now()}`;
 }
 
+function extractContent(entry: Record<string, unknown>): string {
+  if (typeof entry.content === 'string') return entry.content;
+  if (typeof entry.text === 'string') return entry.text;
+  const parts = entry.parts as Array<{ text?: string; content?: string }> | undefined;
+  if (Array.isArray(parts)) {
+    return parts.map((p) => p?.text ?? p?.content ?? '').filter(Boolean).join('\n');
+  }
+  const contentArr = entry.content as Array<{ text?: string }> | undefined;
+  if (Array.isArray(contentArr)) {
+    return contentArr.map((c) => c?.text ?? '').filter(Boolean).join('\n');
+  }
+  return '';
+}
+
 export default function GatewayChat({ gatewayUrl, token }: GatewayChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -76,12 +90,11 @@ export default function GatewayChat({ gatewayUrl, token }: GatewayChatProps) {
     try {
       const res = await sendReq('chat.history', { sessionKey: 'main', limit: 50 });
       const entries: Message[] = [];
-      const items = res?.messages || res?.entries || res || [];
+      const items = res?.messages || res?.entries || res?.data?.messages || (Array.isArray(res) ? res : []);
       if (Array.isArray(items)) {
         for (const entry of items) {
           const role = entry.role === 'user' ? 'user' : entry.role === 'assistant' ? 'assistant' : 'system';
-          const content = typeof entry.content === 'string' ? entry.content
-            : typeof entry.text === 'string' ? entry.text : '';
+          const content = extractContent(entry as Record<string, unknown>);
           if (!content) continue;
           entries.push({
             id: entry.id || `h_${entries.length}`,
@@ -333,29 +346,30 @@ export default function GatewayChat({ gatewayUrl, token }: GatewayChatProps) {
   }, [connect]);
 
   // Poll chat.history and surface any new assistant messages not yet in state
-  const pollForReply = useCallback(async (snapshotLen: number) => {
+  const pollForReply = useCallback(async (snapshotLen: number): Promise<boolean> => {
     try {
       const res = await sendReq('chat.history', { sessionKey: 'main', limit: 50 });
-      const items = res?.messages || res?.entries || res || [];
-      if (!Array.isArray(items)) return;
+      const items = res?.messages || res?.entries || res?.data?.messages || (Array.isArray(res) ? res : []);
+      if (!Array.isArray(items)) return false;
       const newEntries: Message[] = [];
       for (const entry of items) {
         const role: Message['role'] = entry.role === 'user' ? 'user' : entry.role === 'assistant' ? 'assistant' : 'system';
-        const content = typeof entry.content === 'string' ? entry.content
-          : typeof entry.text === 'string' ? entry.text : '';
+        const content = extractContent(entry as Record<string, unknown>);
         if (!content) continue;
         newEntries.push({ id: entry.id || `h_${newEntries.length}`, role, content, timestamp: entry.ts || entry.timestamp });
       }
       if (newEntries.length > snapshotLen) {
-        // New messages arrived — show the full updated history
         setMessages(newEntries);
         setTimeout(scrollToBottom, 50);
         lastHistoryLen.current = newEntries.length;
         setActiveRunId(null);
         streamBufferRef.current = '';
-        if (pollTimer.current) { clearInterval(pollTimer.current); pollTimer.current = null; }
+        return true;
       }
-    } catch { /* ignore */ }
+      return false;
+    } catch {
+      return false;
+    }
   }, [sendReq, scrollToBottom]);
 
   const handleSend = useCallback(async () => {
@@ -384,18 +398,21 @@ export default function GatewayChat({ gatewayUrl, token }: GatewayChatProps) {
       });
       if (res?.runId) setActiveRunId(res.runId);
 
-      // Start polling for reply every 3 s (in case gateway doesn't push a stream event we handle)
+      // Poll for reply: immediate, then 1s, 2s, then every 2s (gateway may not push events to our WS)
       if (pollTimer.current) clearInterval(pollTimer.current);
-      let attempts = 0;
-      pollTimer.current = setInterval(async () => {
-        attempts++;
-        await pollForReply(snapshotLen);
-        if (attempts >= 20) { // max 60 s
-          clearInterval(pollTimer.current!);
-          pollTimer.current = null;
-          setActiveRunId(null);
-        }
-      }, 3000);
+      pollForReply(snapshotLen);
+      const delays = [1000, 2000, 2000, 2000, 2000, 3000, 3000, 3000, 3000, 3000];
+      let idx = 0;
+      const scheduleNext = () => {
+        if (idx >= delays.length) return;
+        const delay = delays[idx++];
+        pollTimer.current = setTimeout(async () => {
+          const updated = await pollForReply(snapshotLen);
+          if (!updated) scheduleNext();
+          else pollTimer.current = null;
+        }, delay);
+      };
+      scheduleNext();
     } catch (err: any) {
       setMessages(prev => [...prev, {
         id: `err_${Date.now()}`,
