@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, Activity, Smartphone, Puzzle, Brain, Clock,
-  Globe, Coins, Cpu, User, Shield, MessageSquare, FileText,
+  Globe, Coins, Cpu, User, MessageSquare, FileText,
   CreditCard, Store, LogOut, ChevronLeft, Zap, HelpCircle,
 } from 'lucide-react';
 import { useStore } from '@/lib/store';
@@ -89,20 +89,6 @@ export function Sidebar() {
       </nav>
 
       <div className="border-t border-white/[0.06] p-2 space-y-0.5">
-        {user?.isAdmin && (
-          <Link
-            href="/dashboard/admin"
-            className={cn(
-              'flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition-colors',
-              pathname === '/dashboard/admin'
-                ? 'bg-red-500/10 text-red-400'
-                : 'text-red-400/40 hover:text-red-400/70 hover:bg-red-400/5'
-            )}
-          >
-            <Shield className="h-[18px] w-[18px] shrink-0" />
-            {sidebarOpen && <span>Admin</span>}
-          </Link>
-        )}
         <Link
           href="/help"
           className="flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] text-white/30 hover:text-white/60 hover:bg-white/[0.04] transition-colors"
