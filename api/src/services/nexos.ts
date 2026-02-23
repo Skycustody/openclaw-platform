@@ -73,14 +73,26 @@ export const PURCHASE_SPLIT = { openrouter: 0.06, platform: 0.50, userCredit: 0.
  * Retail = wholesale × RETAIL_MARKUP.
  */
 export const OPENROUTER_MODEL_COSTS: Record<string, { inputPer1M: number; outputPer1M: number }> = {
-  'google/gemini-2.0-flash-001':      { inputPer1M: 0.10,  outputPer1M: 0.40  },
-  'openai/gpt-4o-mini':               { inputPer1M: 0.15,  outputPer1M: 0.60  },
-  'openai/gpt-4.1-mini':              { inputPer1M: 0.40,  outputPer1M: 1.60  },
-  'anthropic/claude-3.5-haiku':       { inputPer1M: 0.80,  outputPer1M: 4.00  },
-  'openai/gpt-4o':                    { inputPer1M: 2.50,  outputPer1M: 10.00 },
-  'openai/gpt-4.1':                   { inputPer1M: 2.00,  outputPer1M: 8.00  },
-  'anthropic/claude-sonnet-4': { inputPer1M: 3.00,  outputPer1M: 15.00 },
-  'openai/o3-mini':                   { inputPer1M: 1.10,  outputPer1M: 4.40  },
+  'google/gemini-2.0-flash-001':          { inputPer1M: 0.10,  outputPer1M: 0.40  },
+  'openai/gpt-4o-mini':                   { inputPer1M: 0.15,  outputPer1M: 0.60  },
+  'openai/gpt-4.1-nano':                  { inputPer1M: 0.10,  outputPer1M: 0.40  },
+  'openai/gpt-4.1-mini':                  { inputPer1M: 0.40,  outputPer1M: 1.60  },
+  'qwen/qwen-2.5-coder-32b-instruct':    { inputPer1M: 0.06,  outputPer1M: 0.16  },
+  'meta-llama/llama-4-scout':             { inputPer1M: 0.08,  outputPer1M: 0.30  },
+  'meta-llama/llama-4-maverick':          { inputPer1M: 0.15,  outputPer1M: 0.60  },
+  'deepseek/deepseek-chat-v3-0324':       { inputPer1M: 0.19,  outputPer1M: 0.87  },
+  'google/gemini-2.5-flash':              { inputPer1M: 0.30,  outputPer1M: 2.50  },
+  'x-ai/grok-3-mini-beta':               { inputPer1M: 0.30,  outputPer1M: 0.50  },
+  'deepseek/deepseek-r1':                 { inputPer1M: 0.70,  outputPer1M: 2.50  },
+  'anthropic/claude-3.5-haiku':           { inputPer1M: 1.00,  outputPer1M: 5.00  },
+  'openai/o3-mini':                       { inputPer1M: 1.10,  outputPer1M: 4.40  },
+  'google/gemini-2.5-pro':                { inputPer1M: 1.25,  outputPer1M: 10.00 },
+  'openai/gpt-4.1':                       { inputPer1M: 2.00,  outputPer1M: 8.00  },
+  'openai/gpt-4o':                        { inputPer1M: 2.50,  outputPer1M: 10.00 },
+  'anthropic/claude-sonnet-4':            { inputPer1M: 3.00,  outputPer1M: 15.00 },
+  'x-ai/grok-3-beta':                     { inputPer1M: 3.00,  outputPer1M: 15.00 },
+  'mistralai/mistral-large-2':            { inputPer1M: 3.00,  outputPer1M: 9.00  },
+  'anthropic/claude-opus-4':              { inputPer1M: 15.00, outputPer1M: 75.00 },
 };
 
 /**

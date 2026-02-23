@@ -15,7 +15,7 @@ const routerClient = new OpenAI({
 });
 
 const ROUTER_MODELS = [
-  'google/gemini-2.0-flash-001',
+  'google/gemini-2.5-flash',
   'openai/gpt-4o-mini',
 ];
 
@@ -27,13 +27,34 @@ const FINAL_FALLBACK_MODEL = 'anthropic/claude-sonnet-4';
  * Retail price = costPer1MTokens × RETAIL_MARKUP (1.5×) for 50% margin.
  */
 export const MODEL_MAP: Record<string, ModelCapability> = {
-  // ── Ultra cheap (< $0.50/1M) ──
+  // ── Ultra cheap (< $0.20/1M) ──
+  'qwen/qwen-2.5-coder-32b-instruct': {
+    name: 'qwen/qwen-2.5-coder-32b-instruct',
+    displayName: 'Qwen 2.5 Coder',
+    internet: false, vision: false, deepAnalysis: false,
+    costPer1MTokens: OPENROUTER_MODEL_COSTS['qwen/qwen-2.5-coder-32b-instruct']?.inputPer1M ?? 0.06,
+    maxContext: 32768, speed: 'very_fast',
+  },
+  'meta-llama/llama-4-scout': {
+    name: 'meta-llama/llama-4-scout',
+    displayName: 'Llama 4 Scout',
+    internet: false, vision: true, deepAnalysis: false,
+    costPer1MTokens: OPENROUTER_MODEL_COSTS['meta-llama/llama-4-scout']?.inputPer1M ?? 0.08,
+    maxContext: 1048576, speed: 'fast',
+  },
   'google/gemini-2.0-flash-001': {
     name: 'google/gemini-2.0-flash-001',
     displayName: 'Gemini 2.0 Flash',
     internet: false, vision: true, deepAnalysis: false,
     costPer1MTokens: OPENROUTER_MODEL_COSTS['google/gemini-2.0-flash-001']?.inputPer1M ?? 0.10,
-    maxContext: 1000000, speed: 'very_fast',
+    maxContext: 1048576, speed: 'very_fast',
+  },
+  'openai/gpt-4.1-nano': {
+    name: 'openai/gpt-4.1-nano',
+    displayName: 'GPT-4.1 Nano',
+    internet: false, vision: true, deepAnalysis: false,
+    costPer1MTokens: OPENROUTER_MODEL_COSTS['openai/gpt-4.1-nano']?.inputPer1M ?? 0.10,
+    maxContext: 1048576, speed: 'very_fast',
   },
   'openai/gpt-4o-mini': {
     name: 'openai/gpt-4o-mini',
@@ -42,63 +63,28 @@ export const MODEL_MAP: Record<string, ModelCapability> = {
     costPer1MTokens: OPENROUTER_MODEL_COSTS['openai/gpt-4o-mini']?.inputPer1M ?? 0.15,
     maxContext: 128000, speed: 'very_fast',
   },
-  'openai/gpt-4.1-nano': {
-    name: 'openai/gpt-4.1-nano',
-    displayName: 'GPT-4.1 Nano',
-    internet: false, vision: true, deepAnalysis: false,
-    costPer1MTokens: OPENROUTER_MODEL_COSTS['openai/gpt-4.1-nano']?.inputPer1M ?? 0.10,
-    maxContext: 1000000, speed: 'very_fast',
-  },
-  'openai/gpt-4.1-mini': {
-    name: 'openai/gpt-4.1-mini',
-    displayName: 'GPT-4.1 Mini',
-    internet: false, vision: true, deepAnalysis: false,
-    costPer1MTokens: OPENROUTER_MODEL_COSTS['openai/gpt-4.1-mini']?.inputPer1M ?? 0.40,
-    maxContext: 1000000, speed: 'very_fast',
-  },
-  'qwen/qwen-2.5-coder-32b-instruct': {
-    name: 'qwen/qwen-2.5-coder-32b-instruct',
-    displayName: 'Qwen 2.5 Coder',
-    internet: false, vision: false, deepAnalysis: false,
-    costPer1MTokens: 0,
-    maxContext: 32768, speed: 'very_fast',
+  'meta-llama/llama-4-maverick': {
+    name: 'meta-llama/llama-4-maverick',
+    displayName: 'Llama 4 Maverick',
+    internet: false, vision: true, deepAnalysis: true,
+    costPer1MTokens: OPENROUTER_MODEL_COSTS['meta-llama/llama-4-maverick']?.inputPer1M ?? 0.15,
+    maxContext: 1048576, speed: 'fast',
   },
 
-  // ── Mid-range ($0.50 – $2.00/1M) ──
-  'anthropic/claude-3.5-haiku': {
-    name: 'anthropic/claude-3.5-haiku',
-    displayName: 'Claude 3.5 Haiku',
-    internet: false, vision: true, deepAnalysis: false,
-    costPer1MTokens: OPENROUTER_MODEL_COSTS['anthropic/claude-3.5-haiku']?.inputPer1M ?? 0.80,
-    maxContext: 200000, speed: 'very_fast',
+  // ── Cheap ($0.20 – $0.50/1M) ──
+  'deepseek/deepseek-chat-v3-0324': {
+    name: 'deepseek/deepseek-chat-v3-0324',
+    displayName: 'DeepSeek V3',
+    internet: false, vision: false, deepAnalysis: true,
+    costPer1MTokens: OPENROUTER_MODEL_COSTS['deepseek/deepseek-chat-v3-0324']?.inputPer1M ?? 0.19,
+    maxContext: 163840, speed: 'fast',
   },
   'google/gemini-2.5-flash': {
     name: 'google/gemini-2.5-flash',
     displayName: 'Gemini 2.5 Flash',
     internet: false, vision: true, deepAnalysis: true,
-    costPer1MTokens: OPENROUTER_MODEL_COSTS['google/gemini-2.5-flash']?.inputPer1M ?? 0.15,
-    maxContext: 1000000, speed: 'very_fast',
-  },
-  'deepseek/deepseek-chat-v3-0324': {
-    name: 'deepseek/deepseek-chat-v3-0324',
-    displayName: 'DeepSeek V3',
-    internet: false, vision: false, deepAnalysis: true,
-    costPer1MTokens: OPENROUTER_MODEL_COSTS['deepseek/deepseek-chat-v3-0324']?.inputPer1M ?? 0.50,
-    maxContext: 128000, speed: 'fast',
-  },
-  'deepseek/deepseek-r1': {
-    name: 'deepseek/deepseek-r1',
-    displayName: 'DeepSeek R1',
-    internet: false, vision: false, deepAnalysis: true,
-    costPer1MTokens: OPENROUTER_MODEL_COSTS['deepseek/deepseek-r1']?.inputPer1M ?? 0.55,
-    maxContext: 128000, speed: 'fast',
-  },
-  'openai/o3-mini': {
-    name: 'openai/o3-mini',
-    displayName: 'o3-mini',
-    internet: false, vision: false, deepAnalysis: true,
-    costPer1MTokens: OPENROUTER_MODEL_COSTS['openai/o3-mini']?.inputPer1M ?? 1.10,
-    maxContext: 200000, speed: 'fast',
+    costPer1MTokens: OPENROUTER_MODEL_COSTS['google/gemini-2.5-flash']?.inputPer1M ?? 0.30,
+    maxContext: 1048576, speed: 'very_fast',
   },
   'x-ai/grok-3-mini-beta': {
     name: 'x-ai/grok-3-mini-beta',
@@ -107,8 +93,52 @@ export const MODEL_MAP: Record<string, ModelCapability> = {
     costPer1MTokens: OPENROUTER_MODEL_COSTS['x-ai/grok-3-mini-beta']?.inputPer1M ?? 0.30,
     maxContext: 131072, speed: 'fast',
   },
+  'openai/gpt-4.1-mini': {
+    name: 'openai/gpt-4.1-mini',
+    displayName: 'GPT-4.1 Mini',
+    internet: false, vision: true, deepAnalysis: false,
+    costPer1MTokens: OPENROUTER_MODEL_COSTS['openai/gpt-4.1-mini']?.inputPer1M ?? 0.40,
+    maxContext: 1048576, speed: 'very_fast',
+  },
+
+  // ── Mid-range ($0.50 – $2.00/1M) ──
+  'deepseek/deepseek-r1': {
+    name: 'deepseek/deepseek-r1',
+    displayName: 'DeepSeek R1',
+    internet: false, vision: false, deepAnalysis: true,
+    costPer1MTokens: OPENROUTER_MODEL_COSTS['deepseek/deepseek-r1']?.inputPer1M ?? 0.70,
+    maxContext: 64000, speed: 'fast',
+  },
+  'anthropic/claude-3.5-haiku': {
+    name: 'anthropic/claude-3.5-haiku',
+    displayName: 'Claude 3.5 Haiku',
+    internet: false, vision: true, deepAnalysis: false,
+    costPer1MTokens: OPENROUTER_MODEL_COSTS['anthropic/claude-3.5-haiku']?.inputPer1M ?? 1.00,
+    maxContext: 200000, speed: 'very_fast',
+  },
+  'openai/o3-mini': {
+    name: 'openai/o3-mini',
+    displayName: 'o3-mini',
+    internet: false, vision: false, deepAnalysis: true,
+    costPer1MTokens: OPENROUTER_MODEL_COSTS['openai/o3-mini']?.inputPer1M ?? 1.10,
+    maxContext: 200000, speed: 'fast',
+  },
+  'google/gemini-2.5-pro': {
+    name: 'google/gemini-2.5-pro',
+    displayName: 'Gemini 2.5 Pro',
+    internet: false, vision: true, deepAnalysis: true,
+    costPer1MTokens: OPENROUTER_MODEL_COSTS['google/gemini-2.5-pro']?.inputPer1M ?? 1.25,
+    maxContext: 1048576, speed: 'fast',
+  },
 
   // ── Premium ($2.00+/1M) ──
+  'openai/gpt-4.1': {
+    name: 'openai/gpt-4.1',
+    displayName: 'GPT-4.1',
+    internet: false, vision: true, deepAnalysis: true,
+    costPer1MTokens: OPENROUTER_MODEL_COSTS['openai/gpt-4.1']?.inputPer1M ?? 2.00,
+    maxContext: 1048576, speed: 'fast',
+  },
   'openai/gpt-4o': {
     name: 'openai/gpt-4o',
     displayName: 'GPT-4o',
@@ -116,33 +146,12 @@ export const MODEL_MAP: Record<string, ModelCapability> = {
     costPer1MTokens: OPENROUTER_MODEL_COSTS['openai/gpt-4o']?.inputPer1M ?? 2.50,
     maxContext: 128000, speed: 'fast',
   },
-  'openai/gpt-4.1': {
-    name: 'openai/gpt-4.1',
-    displayName: 'GPT-4.1',
-    internet: false, vision: true, deepAnalysis: true,
-    costPer1MTokens: OPENROUTER_MODEL_COSTS['openai/gpt-4.1']?.inputPer1M ?? 2.00,
-    maxContext: 1000000, speed: 'fast',
-  },
   'anthropic/claude-sonnet-4': {
     name: 'anthropic/claude-sonnet-4',
     displayName: 'Claude Sonnet 4',
     internet: true, vision: true, deepAnalysis: true,
     costPer1MTokens: OPENROUTER_MODEL_COSTS['anthropic/claude-sonnet-4']?.inputPer1M ?? 3.00,
     maxContext: 200000, speed: 'fast',
-  },
-  'anthropic/claude-opus-4': {
-    name: 'anthropic/claude-opus-4',
-    displayName: 'Claude Opus 4',
-    internet: true, vision: true, deepAnalysis: true,
-    costPer1MTokens: OPENROUTER_MODEL_COSTS['anthropic/claude-opus-4']?.inputPer1M ?? 15.00,
-    maxContext: 200000, speed: 'slower',
-  },
-  'google/gemini-2.5-pro': {
-    name: 'google/gemini-2.5-pro',
-    displayName: 'Gemini 2.5 Pro',
-    internet: false, vision: true, deepAnalysis: true,
-    costPer1MTokens: OPENROUTER_MODEL_COSTS['google/gemini-2.5-pro']?.inputPer1M ?? 1.25,
-    maxContext: 1000000, speed: 'fast',
   },
   'x-ai/grok-3-beta': {
     name: 'x-ai/grok-3-beta',
@@ -155,22 +164,15 @@ export const MODEL_MAP: Record<string, ModelCapability> = {
     name: 'mistralai/mistral-large-2',
     displayName: 'Mistral Large 2',
     internet: false, vision: true, deepAnalysis: true,
-    costPer1MTokens: OPENROUTER_MODEL_COSTS['mistralai/mistral-large-2']?.inputPer1M ?? 2.00,
+    costPer1MTokens: OPENROUTER_MODEL_COSTS['mistralai/mistral-large-2']?.inputPer1M ?? 3.00,
     maxContext: 128000, speed: 'fast',
   },
-  'meta-llama/llama-4-maverick': {
-    name: 'meta-llama/llama-4-maverick',
-    displayName: 'Llama 4 Maverick',
-    internet: false, vision: true, deepAnalysis: true,
-    costPer1MTokens: OPENROUTER_MODEL_COSTS['meta-llama/llama-4-maverick']?.inputPer1M ?? 0.50,
-    maxContext: 1000000, speed: 'fast',
-  },
-  'meta-llama/llama-4-scout': {
-    name: 'meta-llama/llama-4-scout',
-    displayName: 'Llama 4 Scout',
-    internet: false, vision: true, deepAnalysis: false,
-    costPer1MTokens: OPENROUTER_MODEL_COSTS['meta-llama/llama-4-scout']?.inputPer1M ?? 0.15,
-    maxContext: 10000000, speed: 'fast',
+  'anthropic/claude-opus-4': {
+    name: 'anthropic/claude-opus-4',
+    displayName: 'Claude Opus 4',
+    internet: true, vision: true, deepAnalysis: true,
+    costPer1MTokens: OPENROUTER_MODEL_COSTS['anthropic/claude-opus-4']?.inputPer1M ?? 15.00,
+    maxContext: 200000, speed: 'slower',
   },
 };
 
@@ -200,27 +202,33 @@ AVAILABLE MODELS (sorted cheapest first):
 ${MODEL_CATALOG}
 
 ROUTING RULES (follow strictly):
-1. Simple greetings, thanks, basic Q&A, translations, short factual answers → google/gemini-2.0-flash-001 ($0.10)
+1. Simple greetings, thanks, basic Q&A, translations, short factual answers → openai/gpt-4.1-nano ($0.10) or meta-llama/llama-4-scout ($0.08)
 2. Browser automation, fill forms, visit websites, apply to jobs, sign up, login, click buttons, scrape pages, download files, any web interaction → anthropic/claude-sonnet-4 ($3.00) — ONLY model reliable at multi-step tool orchestration
 3. Coding, debugging, code review, build apps, fix bugs, write scripts → anthropic/claude-sonnet-4 ($3.00)
-4. Math, logic, proofs, complex reasoning, puzzles → openai/o3-mini ($1.10) or deepseek/deepseek-r1 ($0.55)
-5. Research, summarize, analyze documents, compare options → deepseek/deepseek-chat-v3-0324 ($0.50) or google/gemini-2.5-flash ($0.15)
-6. Creative writing, stories, essays → openai/gpt-4o ($2.50)
-7. Image/vision analysis → openai/gpt-4o ($2.50) or google/gemini-2.5-pro ($1.25)
-8. Very large documents (>50K tokens) → openai/gpt-4.1 ($2.00) or google/gemini-2.5-pro ($1.25)
-9. General medium-complexity tasks → google/gemini-2.5-flash ($0.15) or openai/gpt-4o-mini ($0.15)
+4. Math, logic, proofs, complex reasoning, puzzles → deepseek/deepseek-r1 ($0.70) or openai/o3-mini ($1.10)
+5. Research, summarize, analyze documents, compare options → deepseek/deepseek-chat-v3-0324 ($0.19) or google/gemini-2.5-flash ($0.30)
+6. Creative writing, stories, essays → openai/gpt-4o ($2.50) or meta-llama/llama-4-maverick ($0.15)
+7. Image/vision analysis → google/gemini-2.5-flash ($0.30) or google/gemini-2.5-pro ($1.25)
+8. Very large documents (>50K tokens) → google/gemini-2.5-pro ($1.25) or openai/gpt-4.1 ($2.00)
+9. General medium-complexity tasks → google/gemini-2.5-flash ($0.30) or openai/gpt-4o-mini ($0.15)
 10. If conversation has active tool calls (agent is mid-task) → KEEP using anthropic/claude-sonnet-4, never downgrade mid-task
 11. Shell commands, install software, system administration → anthropic/claude-sonnet-4 ($3.00)
 12. Send messages, schedule tasks, manage files → anthropic/claude-sonnet-4 ($3.00)
-13. Only use claude-opus-4 ($15.00) for extremely complex multi-hour analysis tasks — almost never
+13. Only use anthropic/claude-opus-4 ($15.00) for extremely complex multi-hour analysis tasks — almost never
 
-When in doubt between two models, pick the cheaper one.
+IMPORTANT: You must return EXACTLY one of the model IDs listed above. Do not invent model IDs or add suffixes.
 
-Return JSON: {"model":"<full_model_id>","reason":"<why in max 10 words>"}`;
+Return JSON: {"model":"<exact_model_id_from_list>","reason":"<why in max 10 words>"}`;
+
+export interface RouterContext {
+  messageCount: number;
+  toolCallCount: number;
+  lastAssistantSnippet?: string;
+}
 
 /**
  * AI-powered model router with cascading fallback:
- *   1. Gemini Flash ($0.10/1M) — primary router, cheapest
+ *   1. Gemini 2.5 Flash ($0.30/1M) — primary router, fast + smart
  *   2. GPT-4o-mini ($0.15/1M) — backup if Gemini fails
  *   3. Claude Sonnet 4 direct — if both routers fail, safe default
  *
@@ -230,9 +238,13 @@ export async function pickModelWithAI(
   userMessage: string,
   hasImage: boolean,
   hasToolHistory: boolean,
+  ctx?: RouterContext,
 ): Promise<{ model: string; reason: string; routerUsed: string }> {
+  const depth = ctx?.messageCount ?? 0;
+  const toolCalls = ctx?.toolCallCount ?? 0;
+
   const msgKey = userMessage.slice(0, 200);
-  const cacheKey = `aiRoute2:${Buffer.from(msgKey).toString('base64')}:${hasImage}:${hasToolHistory}`;
+  const cacheKey = `aiRoute3:${Buffer.from(msgKey).toString('base64')}:${hasImage}:${hasToolHistory}:${depth}:${toolCalls}`;
 
   try {
     const cached = await redis.get(cacheKey);
@@ -242,8 +254,13 @@ export async function pickModelWithAI(
   const contextLines: string[] = [];
   if (hasImage) contextLines.push('Image attached: yes');
   if (hasToolHistory) contextLines.push('Conversation has active tool calls: yes (agent is mid-task, keep strong model)');
+  if (depth > 0) contextLines.push(`Conversation depth: ${depth} messages`);
+  if (toolCalls > 0) contextLines.push(`Tool calls so far: ${toolCalls} (complex multi-step task in progress)`);
+  if (ctx?.lastAssistantSnippet) contextLines.push(`Last assistant action: "${ctx.lastAssistantSnippet}"`);
   contextLines.push(`User message: "${userMessage.slice(0, 600)}"`);
   const userContent = contextLines.join('\n');
+
+  const cacheTTL = (hasToolHistory || toolCalls > 0) ? 120 : 600;
 
   for (const routerModel of ROUTER_MODELS) {
     try {
@@ -265,8 +282,8 @@ export async function pickModelWithAI(
       if (!parsed) continue;
 
       const result = { ...parsed, routerUsed: routerModel };
-      await redis.set(cacheKey, JSON.stringify(result), 'EX', 600).catch(() => {});
-      console.log(`[router] ${routerModel} picked ${result.model} — ${result.reason}`);
+      await redis.set(cacheKey, JSON.stringify(result), 'EX', cacheTTL).catch(() => {});
+      console.log(`[router] ${routerModel} picked ${result.model} — ${result.reason} (depth=${depth}, tools=${toolCalls})`);
       return result;
     } catch (err) {
       console.warn(`[router] ${routerModel} failed:`, (err as Error).message);
@@ -287,14 +304,15 @@ function parseRouterResponse(content: string): { model: string; reason: string }
     const parsed = JSON.parse(content);
     if (parsed.model && typeof parsed.model === 'string') {
       const model = parsed.model.trim();
-      if (VALID_MODEL_IDS.has(model) || model.includes('/')) {
+      if (VALID_MODEL_IDS.has(model)) {
         return { model, reason: parsed.reason || 'AI router selection' };
       }
+      console.warn(`[router] AI returned unknown model "${model}", rejecting`);
     }
   } catch { /* not valid JSON */ }
 
   const match = content.match(/([a-z][a-z0-9-]*\/[a-z0-9._-]+)/i);
-  if (match && (VALID_MODEL_IDS.has(match[1]) || match[1].includes('/'))) {
+  if (match && VALID_MODEL_IDS.has(match[1])) {
     return { model: match[1], reason: 'AI router selection' };
   }
 
@@ -364,15 +382,15 @@ export function selectModel(
     }
   } else if (needsVision) {
     if (complexity === 'simple') {
-      model = 'google/gemini-2.0-flash-001';
-      reason = 'Simple vision task - cheapest model with vision';
+      model = 'google/gemini-2.5-flash';
+      reason = 'Simple vision task - cheapest capable vision model';
     } else {
       model = 'openai/gpt-4o';
       reason = 'Complex vision task';
     }
   } else if (complexity === 'simple') {
-    model = 'google/gemini-2.0-flash-001';
-    reason = 'Simple text task - cheapest model (Gemini Flash)';
+    model = 'openai/gpt-4.1-nano';
+    reason = 'Simple text task - cheapest model';
   } else if (needsCode) {
     model = 'anthropic/claude-sonnet-4';
     reason = 'Code task - best code generation model';

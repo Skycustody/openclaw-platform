@@ -131,6 +131,11 @@ router.put('/brain', async (req: AuthRequest, res: Response, next: NextFunction)
   try {
     const { brainMode, manualModel } = req.body;
 
+    const prev = await db.getOne<{ brain_mode: string }>(
+      'SELECT brain_mode FROM user_settings WHERE user_id = $1',
+      [req.userId]
+    ).catch(() => null);
+
     await db.query(
       `UPDATE user_settings
        SET brain_mode = COALESCE($1, brain_mode),
@@ -138,6 +143,14 @@ router.put('/brain', async (req: AuthRequest, res: Response, next: NextFunction)
        WHERE user_id = $3`,
       [brainMode, manualModel || null, req.userId]
     );
+
+    if (prev?.brain_mode === 'auto' && brainMode === 'manual') {
+      db.query(
+        `INSERT INTO routing_decisions (user_id, message_preview, classification, model_selected, reason, tokens_saved)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [req.userId, '[mode switch]', JSON.stringify({ method: 'quality_signal', from: 'auto', to: 'manual' }), manualModel || 'unknown', 'User switched from auto to manual — possible routing dissatisfaction', 0]
+      ).catch(() => {});
+    }
 
     syncSettingsToContainer(req.userId!).catch(() => {});
     res.json({ ok: true });

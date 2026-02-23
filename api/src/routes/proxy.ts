@@ -5,10 +5,10 @@
  * Flow:
  *   Container → POST /proxy/v1/chat/completions → AI router picks model → OpenRouter → stream back
  *
- * Routing chain (cascading, no keyword heuristic):
+ * Routing chain (cascading):
  *   1. Direct model selection (user chose a specific model via /model command)
  *   2. Manual override (user settings brain_mode=manual)
- *   3. AI router (Gemini Flash) reads message + model catalog → picks best model
+ *   3. AI router (Gemini 2.5 Flash) reads message + conversation context + model catalog → picks best model
  *   4. AI router fallback (GPT-4o-mini) — if Gemini is down
  *   5. Safe default (Claude Sonnet 4) — if both routers fail
  *
@@ -20,7 +20,7 @@ import https from 'https';
 import { URL } from 'url';
 import db from '../lib/db';
 import { Plan } from '../types';
-import { pickModelWithAI } from '../services/smartRouter';
+import { pickModelWithAI, RouterContext } from '../services/smartRouter';
 
 const router = Router();
 
@@ -98,6 +98,28 @@ function hasToolCallsInHistory(messages: any[]): boolean {
   );
 }
 
+function extractConversationContext(messages: any[]): RouterContext {
+  if (!Array.isArray(messages)) return { messageCount: 0, toolCallCount: 0 };
+
+  let toolCallCount = 0;
+  let lastAssistantSnippet: string | undefined;
+
+  for (const m of messages) {
+    if (m.role === 'assistant' && Array.isArray(m.tool_calls)) {
+      toolCallCount += m.tool_calls.length;
+    }
+    if (m.role === 'assistant' && typeof m.content === 'string' && m.content.trim()) {
+      lastAssistantSnippet = m.content.trim().slice(0, 150);
+    }
+  }
+
+  return {
+    messageCount: messages.length,
+    toolCallCount,
+    lastAssistantSnippet,
+  };
+}
+
 router.post('/v1/chat/completions', async (req: Request, res: Response) => {
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith('Bearer ')) {
@@ -131,11 +153,13 @@ router.post('/v1/chat/completions', async (req: Request, res: Response) => {
     const hasImage = hasImageContent(body.messages);
     const hasToolHistory = hasToolCallsInHistory(body.messages);
     const requestHasTools = Array.isArray(body.tools) && body.tools.length > 0;
+    const ctx = extractConversationContext(body.messages);
 
     const aiPick = await pickModelWithAI(
       lastMessage,
       hasImage,
       hasToolHistory || requestHasTools,
+      ctx,
     );
 
     selectedModel = aiPick.model;
@@ -146,7 +170,7 @@ router.post('/v1/chat/completions', async (req: Request, res: Response) => {
       db.query(
         `INSERT INTO routing_decisions (user_id, message_preview, classification, model_selected, reason, tokens_saved)
          VALUES ($1, $2, $3, $4, $5, $6)`,
-        [user.id, lastMessage.slice(0, 200), JSON.stringify({ method: 'ai', routerUsed }), selectedModel, routingReason, 0]
+        [user.id, lastMessage.slice(0, 200), JSON.stringify({ method: 'ai', routerUsed, depth: ctx.messageCount, toolCalls: ctx.toolCallCount }), selectedModel, routingReason, 0]
       ).catch(() => {});
     }
   }
