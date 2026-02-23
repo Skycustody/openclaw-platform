@@ -80,21 +80,12 @@ const plans = [
     cpus: '1 vCPU',
     storage: '1 GB',
     features: [
-      '$2/mo AI budget included',
-      '2 GB RAM dedicated server',
-      '1 vCPU processing power',
-      '1 GB file storage',
-      '10 skills & tools',
+      '$2 of AI credits every month',
+      '2 GB RAM',
+      '1 vCPU · 1 GB storage',
       '1 AI agent',
-      '3 scheduled tasks',
-      'Telegram channel',
-      'Smart AI routing',
-      'Email support',
     ],
-    excluded: [
-      'Browser access',
-      'All messaging apps',
-    ],
+    excluded: [],
   },
   {
     name: 'Pro',
@@ -105,17 +96,10 @@ const plans = [
     cpus: '2 vCPU',
     storage: '5 GB',
     features: [
-      '$7/mo AI budget included',
-      '4 GB RAM dedicated server',
-      '2 vCPU processing power',
-      '5 GB file storage',
-      'All 53 skills & tools',
+      '$7 of AI credits every month',
+      '4 GB RAM',
+      '2 vCPU · 5 GB storage',
       '2 AI agents',
-      '20 scheduled tasks',
-      'All messaging apps',
-      'Full browser access',
-      'Smart AI routing',
-      'Priority support',
     ],
     excluded: [],
   },
@@ -127,17 +111,10 @@ const plans = [
     cpus: '4 vCPU',
     storage: '20 GB',
     features: [
-      '$12/mo AI budget included',
-      '8 GB RAM dedicated server',
-      '4 vCPU processing power',
-      '20 GB file storage',
-      'All 53 skills & tools',
+      '$12 of AI credits every month',
+      '8 GB RAM',
+      '4 vCPU · 20 GB storage',
       '4 AI agents',
-      '100 scheduled tasks',
-      'All messaging apps',
-      'Full browser access',
-      'Smart AI routing',
-      'Direct support line',
     ],
     excluded: [],
   },
@@ -410,9 +387,16 @@ function PricingSection() {
         ))}
       </div>
 
-      <p className="mt-8 text-center text-sm text-muted-foreground">
-        Need more AI budget? Add credits anytime from the dashboard, or bring your own OpenRouter API key for unlimited usage.
-      </p>
+      <div className="mx-auto mt-10 max-w-xl rounded-xl border border-border bg-card p-6 text-center">
+        <p className="text-sm font-medium text-foreground">All plans include</p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          All messaging apps (Telegram, Discord, Slack, WhatsApp) · Web browser · Smart AI routing ·
+          All skills & tools · Scheduled tasks · Persistent memory · File storage
+        </p>
+        <p className="mt-3 text-xs text-muted-foreground">
+          Need more AI credits? Add credits anytime, or bring your own OpenRouter API key for unlimited usage.
+        </p>
+      </div>
     </section>
   );
 }
