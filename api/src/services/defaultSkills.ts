@@ -1,39 +1,35 @@
 /**
  * Install default platform skills into a new user's container at provisioning time.
- * Uses the same skills as the Skill Marketplace — fetched from GitHub.
+ * Copies from the control plane's verified skills dir (no GitHub clone).
+ * Run scripts/install-skills-from-github.sh on the control plane to populate that dir.
  */
-import { sshExec } from './ssh';
+import fs from 'fs';
+import { sshUploadDir } from './ssh';
 import { readContainerConfig, writeContainerConfig, restartContainer } from './containerConfig';
-import { PLATFORM_SKILLS, SKILLS_REPO_URL } from '../data/platformSkills';
+import { PLATFORM_SKILLS } from '../data/platformSkills';
 
 const INSTANCE_DIR = '/opt/openclaw/instances';
 
+/** Path on the control plane where verified skills live (populated by install-skills-from-github.sh). */
+export const PLATFORM_SKILLS_DIR = process.env.PLATFORM_SKILLS_DIR || '/opt/openclaw-platform/skills';
+
 /**
  * Install all default platform skills into a user's instance.
- * Called during provisioning so new users get browser-use, job-auto-apply, etc. by default.
+ * Copies from control plane PLATFORM_SKILLS_DIR to the worker — no clone, uses pre-verified skills.
  */
 export async function installDefaultSkills(
   serverIp: string,
   userId: string,
   containerName: string
 ): Promise<void> {
-  const skillsDir = `${INSTANCE_DIR}/${userId}/skills`;
-  const tmpDir = `/tmp/openclaw-default-skills-${userId}-${Date.now()}`;
+  if (!fs.existsSync(PLATFORM_SKILLS_DIR)) {
+    console.warn(`[provision] PLATFORM_SKILLS_DIR missing (${PLATFORM_SKILLS_DIR}), skipping default skills. Run install-skills-from-github.sh on the control plane.`);
+    return;
+  }
 
   try {
-    // Clone once, copy all skills, cleanup
-    const copyCmds = PLATFORM_SKILLS.map(
-      s => `cp -r ${tmpDir}/skills/${s.repoPath} ${skillsDir}/${s.id}`
-    ).join(' && ');
-
-    const cmd = [
-      `mkdir -p ${skillsDir}`,
-      `git clone --depth 1 ${SKILLS_REPO_URL} ${tmpDir}`,
-      copyCmds,
-      `rm -rf ${tmpDir}`,
-    ].join(' && ');
-
-    await sshExec(serverIp, cmd);
+    const remoteSkillsDir = `${INSTANCE_DIR}/${userId}/skills`;
+    await sshUploadDir(serverIp, PLATFORM_SKILLS_DIR, remoteSkillsDir);
 
     // Enable all in openclaw.json
     const config = await readContainerConfig(serverIp, userId);
@@ -45,7 +41,7 @@ export async function installDefaultSkills(
     await writeContainerConfig(serverIp, userId, config);
 
     await restartContainer(serverIp, containerName);
-    console.log(`[provision] Installed ${PLATFORM_SKILLS.length} default skills for ${userId}`);
+    console.log(`[provision] Installed default skills from control plane for ${userId}`);
   } catch (err) {
     console.warn(`[provision] Failed to install default skills (non-fatal):`, err);
     // Don't fail provisioning — user can install from marketplace later

@@ -1,6 +1,7 @@
 import { Client } from 'ssh2';
 import { EventEmitter } from 'events';
 import fs from 'fs';
+import path from 'path';
 
 const SSH_TIMEOUT = 30000;
 
@@ -200,6 +201,134 @@ export function sshExecStream(ip: string, command: string, stdinData?: string): 
   emitter.kill = () => { conn.end(); };
 
   return emitter;
+}
+
+const SFTP_TIMEOUT = 120_000;
+
+/**
+ * Upload a local directory to the remote host over SFTP.
+ * Used to copy verified skills from the control plane to a worker.
+ */
+export async function sshUploadDir(
+  ip: string,
+  localDir: string,
+  remoteDir: string
+): Promise<void> {
+  if (!fs.existsSync(localDir) || !fs.statSync(localDir).isDirectory()) {
+    throw new Error(`Local path is not a directory: ${localDir}`);
+  }
+
+  const controlPlaneIp = process.env.CONTROL_PLANE_IP?.trim();
+  const host = controlPlaneIp && ip === controlPlaneIp ? '127.0.0.1' : ip;
+
+  return new Promise((resolve, reject) => {
+    const conn = new Client();
+    const timeout = setTimeout(() => {
+      conn.end();
+      reject(new Error(`SFTP timeout for ${ip}`));
+    }, SFTP_TIMEOUT);
+
+    conn
+      .on('ready', () => {
+        conn.sftp((err, sftp) => {
+          if (err) {
+            clearTimeout(timeout);
+            conn.end();
+            reject(err);
+            return;
+          }
+
+          function ensureRemoteDir(remotePath: string): Promise<void> {
+            const parts = remotePath.split('/').filter(Boolean);
+            let p = '';
+            const chain: Promise<void>[] = [];
+            for (const part of parts) {
+              p += '/' + part;
+              chain.push(
+                new Promise((res, rej) => {
+                  sftp.mkdir(p, { mode: 0o755 }, (e) => {
+                    if (e && e.code !== 4) res(undefined); // 4 = already exists
+                    else if (e) rej(e);
+                    else res(undefined);
+                  });
+                })
+              );
+            }
+            return Promise.all(chain).then(() => undefined);
+          }
+
+          function uploadFile(localPath: string, remotePath: string): Promise<void> {
+            return new Promise((res, rej) => {
+              const remoteDirPath = path.dirname(remotePath);
+              ensureRemoteDir(remoteDirPath)
+                .then(() => {
+                  const readStream = fs.createReadStream(localPath);
+                  const writeStream = sftp.createWriteStream(remotePath, { mode: 0o644 });
+                  readStream.pipe(writeStream);
+                  writeStream.on('close', () => res(undefined));
+                  writeStream.on('error', rej);
+                  readStream.on('error', rej);
+                })
+                .catch(rej);
+            });
+          }
+
+          function walk(dir: string, base = ''): string[] {
+            const entries = fs.readdirSync(dir, { withFileTypes: true });
+            const files: string[] = [];
+            for (const e of entries) {
+              const rel = path.join(base, e.name);
+              const full = path.join(dir, e.name);
+              if (e.isDirectory()) {
+                files.push(...walk(full, rel));
+              } else {
+                files.push(rel);
+              }
+            }
+            return files;
+          }
+
+          const relFiles = walk(localDir);
+          let done = 0;
+          const total = relFiles.length;
+          if (total === 0) {
+            clearTimeout(timeout);
+            conn.end();
+            resolve();
+            return;
+          }
+
+          Promise.all(
+            relFiles.map((rel) => {
+              const localPath = path.join(localDir, rel);
+              const remotePath = path.join(remoteDir, rel).replace(/\\/g, '/');
+              return uploadFile(localPath, remotePath);
+            })
+          )
+            .then(() => {
+              clearTimeout(timeout);
+              conn.end();
+              resolve();
+            })
+            .catch((e) => {
+              clearTimeout(timeout);
+              conn.end();
+              reject(e);
+            });
+        });
+      })
+      .on('error', (err) => {
+        clearTimeout(timeout);
+        reject(err);
+      })
+      .connect({
+        host,
+        port: 22,
+        username: 'root',
+        privateKey: getPrivateKey(),
+        readyTimeout: SSH_TIMEOUT,
+      });
+  });
 }
 
 export async function waitForReady(ip: string, containerName: string, timeoutMs = 60000): Promise<void> {

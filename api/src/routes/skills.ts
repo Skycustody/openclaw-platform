@@ -24,8 +24,10 @@ import {
   writeContainerConfig,
   restartContainer,
 } from '../services/containerConfig';
-import { sshExec } from '../services/ssh';
+import fs from 'fs';
+import { sshExec, sshUploadDir } from '../services/ssh';
 import { PLATFORM_SKILLS, SKILLS_REPO_URL } from '../data/platformSkills';
+import { PLATFORM_SKILLS_DIR } from '../services/defaultSkills';
 
 const router = Router();
 const INSTANCE_DIR = '/opt/openclaw/instances';
