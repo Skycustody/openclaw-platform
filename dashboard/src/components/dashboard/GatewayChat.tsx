@@ -87,6 +87,8 @@ export default function GatewayChat({ gatewayUrl, token, agentName, modelName }:
   const [selectedModel, setSelectedModel] = useState<string>('auto');
   const [showAgentDropdown, setShowAgentDropdown] = useState(false);
   const [showModelDropdown, setShowModelDropdown] = useState(false);
+  const [modelSearch, setModelSearch] = useState('');
+  const [agentSearch, setAgentSearch] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -757,7 +759,7 @@ export default function GatewayChat({ gatewayUrl, token, agentName, modelName }:
               {/* Agent selector with dropdown */}
               <div ref={agentDropdownRef} className="relative">
                 <button
-                  onClick={() => { setShowAgentDropdown(!showAgentDropdown); setShowModelDropdown(false); }}
+                  onClick={() => { setShowAgentDropdown(!showAgentDropdown); setShowModelDropdown(false); setAgentSearch(''); }}
                   className="flex items-center gap-1 px-2 py-1 rounded-md hover:bg-white/[0.04] transition-colors group"
                 >
                   <span className="text-[12px] text-white/30 group-hover:text-white/50">&#8734;</span>
@@ -766,29 +768,46 @@ export default function GatewayChat({ gatewayUrl, token, agentName, modelName }:
                 </button>
 
                 {showAgentDropdown && (
-                  <div className="absolute bottom-full left-0 mb-1 w-56 rounded-lg border border-[#3c3c3c] bg-[#2d2d2d] shadow-xl z-50 py-1 max-h-[200px] overflow-y-auto">
-                    {agents.length === 0 && (
-                      <div className="px-3 py-2 text-[12px] text-white/30">No agents found</div>
-                    )}
-                    {agents.map(agent => (
-                      <button
-                        key={agent.id}
-                        onClick={() => handleSelectAgent(agent)}
-                        className={`w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-white/[0.06] transition-colors ${
-                          selectedAgent === agent.name ? 'bg-white/[0.04]' : ''
-                        }`}
-                      >
-                        <div className={`h-1.5 w-1.5 rounded-full shrink-0 ${
-                          agent.status === 'active' || agent.status === 'online' ? 'bg-green-400' :
-                          agent.status === 'sleeping' ? 'bg-amber-400' : 'bg-white/20'
-                        }`} />
-                        <div className="min-w-0 flex-1">
-                          <span className="text-[12px] text-white/70 block truncate">{agent.name}</span>
-                          {agent.is_primary && <span className="text-[10px] text-white/25">Primary</span>}
-                        </div>
-                        {selectedAgent === agent.name && <Check className="h-3 w-3 text-white/40 shrink-0" />}
-                      </button>
-                    ))}
+                  <div className="absolute bottom-full left-0 mb-1 w-60 rounded-lg border border-[#3c3c3c] bg-[#252526] shadow-2xl z-50 overflow-hidden">
+                    {/* Search */}
+                    <div className="px-3 py-2 border-b border-[#333]">
+                      <input
+                        type="text"
+                        value={agentSearch}
+                        onChange={e => setAgentSearch(e.target.value)}
+                        placeholder="Search agents"
+                        autoFocus
+                        className="w-full bg-transparent text-[13px] text-white/60 placeholder:text-white/20 focus:outline-none"
+                      />
+                    </div>
+
+                    {/* Agent list */}
+                    <div className="max-h-[240px] overflow-y-auto py-1">
+                      {agents.length === 0 && (
+                        <div className="px-3 py-3 text-[12px] text-white/25 text-center">No agents found</div>
+                      )}
+                      {agents
+                        .filter(a => !agentSearch || a.name.toLowerCase().includes(agentSearch.toLowerCase()))
+                        .map(agent => (
+                        <button
+                          key={agent.id}
+                          onClick={() => handleSelectAgent(agent)}
+                          className="w-full flex items-center gap-2.5 px-3 py-[7px] text-left hover:bg-white/[0.05] transition-colors"
+                        >
+                          <span className="text-[13px] text-white/70 flex-1 truncate">{agent.name}</span>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {agent.is_primary && (
+                              <span className="text-[10px] text-white/20 bg-white/[0.04] px-1.5 py-0.5 rounded">primary</span>
+                            )}
+                            <div className={`h-2 w-2 rounded-full ${
+                              agent.status === 'active' || agent.status === 'online' ? 'bg-green-400' :
+                              agent.status === 'sleeping' ? 'bg-amber-400' : 'bg-white/15'
+                            }`} />
+                            {selectedAgent === agent.name && <Check className="h-3.5 w-3.5 text-white/50" />}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -796,7 +815,7 @@ export default function GatewayChat({ gatewayUrl, token, agentName, modelName }:
               {/* Model selector with dropdown */}
               <div ref={modelDropdownRef} className="relative">
                 <button
-                  onClick={() => { setShowModelDropdown(!showModelDropdown); setShowAgentDropdown(false); }}
+                  onClick={() => { setShowModelDropdown(!showModelDropdown); setShowAgentDropdown(false); setModelSearch(''); }}
                   className="flex items-center gap-1 px-2 py-1 rounded-md hover:bg-white/[0.04] transition-colors group"
                 >
                   <span className="text-[12px] text-white/40 group-hover:text-white/60">{getModelLabel()}</span>
@@ -804,24 +823,52 @@ export default function GatewayChat({ gatewayUrl, token, agentName, modelName }:
                 </button>
 
                 {showModelDropdown && (
-                  <div className="absolute bottom-full left-0 mb-1 w-64 rounded-lg border border-[#3c3c3c] bg-[#2d2d2d] shadow-xl z-50 py-1 max-h-[300px] overflow-y-auto">
-                    {AVAILABLE_MODELS.map(model => (
+                  <div className="absolute bottom-full left-0 mb-1 w-64 rounded-lg border border-[#3c3c3c] bg-[#252526] shadow-2xl z-50 overflow-hidden">
+                    {/* Search */}
+                    <div className="px-3 py-2 border-b border-[#333]">
+                      <input
+                        type="text"
+                        value={modelSearch}
+                        onChange={e => setModelSearch(e.target.value)}
+                        placeholder="Search models"
+                        autoFocus
+                        className="w-full bg-transparent text-[13px] text-white/60 placeholder:text-white/20 focus:outline-none"
+                      />
+                    </div>
+
+                    {/* Auto toggle */}
+                    <div className="border-b border-[#333]">
                       <button
-                        key={model.id}
-                        onClick={() => handleSelectModel(model)}
-                        className={`w-full flex items-center justify-between px-3 py-1.5 text-left hover:bg-white/[0.06] transition-colors ${
-                          selectedModel === model.id ? 'bg-white/[0.04]' : ''
-                        }`}
+                        onClick={() => handleSelectModel(AVAILABLE_MODELS[0])}
+                        className="w-full flex items-center justify-between px-3 py-[7px] hover:bg-white/[0.05] transition-colors"
                       >
-                        <div className="min-w-0">
-                          <span className="text-[12px] text-white/70 block">{model.displayName}</span>
-                          {model.id !== 'auto' && (
-                            <span className="text-[10px] text-white/25">${model.costPer1MTokens}/1M tokens</span>
-                          )}
+                        <span className="text-[13px] text-white/70">Auto</span>
+                        <div className={`w-7 h-4 rounded-full relative transition-colors ${
+                          selectedModel === 'auto' ? 'bg-[#007acc]' : 'bg-white/10'
+                        }`}>
+                          <div className={`absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-transform ${
+                            selectedModel === 'auto' ? 'translate-x-3.5' : 'translate-x-0.5'
+                          }`} />
                         </div>
-                        {selectedModel === model.id && <Check className="h-3 w-3 text-white/40 shrink-0" />}
                       </button>
-                    ))}
+                    </div>
+
+                    {/* Model list */}
+                    <div className="max-h-[260px] overflow-y-auto py-1">
+                      {AVAILABLE_MODELS
+                        .filter(m => m.id !== 'auto')
+                        .filter(m => !modelSearch || m.displayName.toLowerCase().includes(modelSearch.toLowerCase()))
+                        .map(model => (
+                        <button
+                          key={model.id}
+                          onClick={() => handleSelectModel(model)}
+                          className="w-full flex items-center justify-between px-3 py-[7px] text-left hover:bg-white/[0.05] transition-colors"
+                        >
+                          <span className="text-[13px] text-white/70">{model.displayName}</span>
+                          {selectedModel === model.id && <Check className="h-3.5 w-3.5 text-white/50 shrink-0" />}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
