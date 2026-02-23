@@ -146,8 +146,8 @@ export async function ensureNexosKey(userId: string): Promise<string> {
   if (!key) {
     if (!OPENROUTER_FALLBACK_KEY) {
       throw new Error(
-        'OPENROUTER_API_KEY or OPENROUTER_MGMT_KEY env var is required. ' +
-        'Get an API key from https://openrouter.ai/keys'
+        'OPENROUTER_MGMT_KEY env var is required for per-user API key creation. ' +
+        'Get a Management API key from https://openrouter.ai/settings/management-keys'
       );
     }
     key = OPENROUTER_FALLBACK_KEY;
