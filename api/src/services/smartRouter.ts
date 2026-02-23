@@ -7,14 +7,19 @@ import { OPENROUTER_MODEL_COSTS, RETAIL_MARKUP } from './nexos';
 const routerClient = new OpenAI({
   apiKey: process.env.OPENROUTER_API_KEY,
   baseURL: 'https://openrouter.ai/api/v1',
-  timeout: 4000,
+  timeout: 3500,
   defaultHeaders: {
     'HTTP-Referer': 'https://valnaa.com',
     'X-Title': 'OpenClaw Router',
   },
 });
 
-const ROUTER_MODEL_ID = 'google/gemini-2.0-flash-001';
+const ROUTER_MODELS = [
+  'google/gemini-2.0-flash-001',
+  'openai/gpt-4o-mini',
+];
+
+const FINAL_FALLBACK_MODEL = 'anthropic/claude-sonnet-4-20250514';
 
 /**
  * Model capabilities + OpenRouter wholesale costs (no markup on provider pricing).
@@ -214,55 +219,67 @@ When in doubt between two models, pick the cheaper one.
 Return JSON: {"model":"<full_model_id>","reason":"<why in max 10 words>"}`;
 
 /**
- * AI-powered model router — uses a cheap model (Gemini Flash, ~$0.00002/call)
- * to intelligently pick the best model for each task. Falls back to null
- * if the call fails, so the caller can use the heuristic fallback.
+ * AI-powered model router with cascading fallback:
+ *   1. Gemini Flash ($0.10/1M) — primary router, cheapest
+ *   2. GPT-4o-mini ($0.15/1M) — backup if Gemini fails
+ *   3. Claude Sonnet 4 direct — if both routers fail, safe default
+ *
+ * Always returns a result — never returns null.
  */
 export async function pickModelWithAI(
   userMessage: string,
   hasImage: boolean,
   hasToolHistory: boolean,
-): Promise<{ model: string; reason: string } | null> {
+): Promise<{ model: string; reason: string; routerUsed: string }> {
   const msgKey = userMessage.slice(0, 200);
-  const cacheKey = `aiRoute:${Buffer.from(msgKey).toString('base64')}:${hasImage}:${hasToolHistory}`;
+  const cacheKey = `aiRoute2:${Buffer.from(msgKey).toString('base64')}:${hasImage}:${hasToolHistory}`;
 
   try {
     const cached = await redis.get(cacheKey);
-    if (cached) {
-      return JSON.parse(cached);
-    }
-  } catch { /* cache miss, proceed */ }
+    if (cached) return JSON.parse(cached);
+  } catch { /* cache miss */ }
 
   const contextLines: string[] = [];
   if (hasImage) contextLines.push('Image attached: yes');
   if (hasToolHistory) contextLines.push('Conversation has active tool calls: yes (agent is mid-task, keep strong model)');
   contextLines.push(`User message: "${userMessage.slice(0, 600)}"`);
+  const userContent = contextLines.join('\n');
 
-  try {
-    const res = await routerClient.chat.completions.create({
-      model: ROUTER_MODEL_ID,
-      messages: [
-        { role: 'system', content: ROUTER_SYSTEM_PROMPT },
-        { role: 'user', content: contextLines.join('\n') },
-      ],
-      max_tokens: 80,
-      temperature: 0,
-      response_format: { type: 'json_object' },
-    });
+  for (const routerModel of ROUTER_MODELS) {
+    try {
+      const res = await routerClient.chat.completions.create({
+        model: routerModel,
+        messages: [
+          { role: 'system', content: ROUTER_SYSTEM_PROMPT },
+          { role: 'user', content: userContent },
+        ],
+        max_tokens: 80,
+        temperature: 0,
+        response_format: { type: 'json_object' },
+      });
 
-    const content = res.choices[0]?.message?.content?.trim();
-    if (!content) return null;
+      const content = res.choices[0]?.message?.content?.trim();
+      if (!content) continue;
 
-    const result = parseRouterResponse(content);
-    if (!result) return null;
+      const parsed = parseRouterResponse(content);
+      if (!parsed) continue;
 
-    await redis.set(cacheKey, JSON.stringify(result), 'EX', 600).catch(() => {});
-    console.log(`[router] AI picked ${result.model} — ${result.reason}`);
-    return result;
-  } catch (err) {
-    console.warn('[router] AI model picker failed, will use heuristic fallback:', (err as Error).message);
-    return null;
+      const result = { ...parsed, routerUsed: routerModel };
+      await redis.set(cacheKey, JSON.stringify(result), 'EX', 600).catch(() => {});
+      console.log(`[router] ${routerModel} picked ${result.model} — ${result.reason}`);
+      return result;
+    } catch (err) {
+      console.warn(`[router] ${routerModel} failed:`, (err as Error).message);
+    }
   }
+
+  const fallback = {
+    model: FINAL_FALLBACK_MODEL,
+    reason: 'All routers failed — using safe default (Claude Sonnet)',
+    routerUsed: 'fallback',
+  };
+  console.warn(`[router] All AI routers failed, falling back to ${FINAL_FALLBACK_MODEL}`);
+  return fallback;
 }
 
 function parseRouterResponse(content: string): { model: string; reason: string } | null {
@@ -380,16 +397,13 @@ export async function routeAndLog(
   userId: string,
   message: string,
   hasImage: boolean,
-  userPlan: Plan,
+  _userPlan: Plan,
   brainMode: string,
   manualModel?: string | null
 ): Promise<RoutingDecision> {
   if (brainMode === 'manual' && manualModel) {
-    const decision = selectModel(
-      { needsInternet: false, needsVision: hasImage, needsDeepAnalysis: false, needsCode: false, complexity: 'medium', estimatedTokens: 2000 },
-      userPlan,
-      manualModel,
-    );
+    const cost = MODEL_MAP[manualModel]?.costPer1MTokens ?? DEFAULT_COST_PER_1M;
+    const decision: RoutingDecision = { model: manualModel, reason: 'Manual override', estimatedCost: cost, tokensSaved: 0 };
     await db.query(
       `INSERT INTO routing_decisions (user_id, message_preview, classification, model_selected, reason, tokens_saved)
        VALUES ($1, $2, $3, $4, $5, $6)`,
@@ -399,24 +413,12 @@ export async function routeAndLog(
   }
 
   const aiPick = await pickModelWithAI(message, hasImage, false);
-  if (aiPick) {
-    const cost = MODEL_MAP[aiPick.model]?.costPer1MTokens ?? DEFAULT_COST_PER_1M;
-    const decision: RoutingDecision = { model: aiPick.model, reason: `AI router: ${aiPick.reason}`, estimatedCost: cost, tokensSaved: 0 };
-    await db.query(
-      `INSERT INTO routing_decisions (user_id, message_preview, classification, model_selected, reason, tokens_saved)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [userId, message.slice(0, 200), '{"method":"ai"}', decision.model, decision.reason, 0]
-    );
-    return decision;
-  }
-
-  const { classifyTaskHeuristic } = await import('./heuristicClassifier');
-  const classification = classifyTaskHeuristic(message, hasImage);
-  const decision = selectModel(classification, userPlan);
+  const cost = MODEL_MAP[aiPick.model]?.costPer1MTokens ?? DEFAULT_COST_PER_1M;
+  const decision: RoutingDecision = { model: aiPick.model, reason: aiPick.reason, estimatedCost: cost, tokensSaved: 0 };
   await db.query(
     `INSERT INTO routing_decisions (user_id, message_preview, classification, model_selected, reason, tokens_saved)
      VALUES ($1, $2, $3, $4, $5, $6)`,
-    [userId, message.slice(0, 200), JSON.stringify({ method: 'heuristic', ...classification }), decision.model, `Heuristic fallback: ${decision.reason}`, decision.tokensSaved]
+    [userId, message.slice(0, 200), JSON.stringify({ method: 'ai', routerUsed: aiPick.routerUsed }), decision.model, decision.reason, 0]
   );
   return decision;
 }

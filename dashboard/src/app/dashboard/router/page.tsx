@@ -35,6 +35,7 @@ interface RoutingEntry {
   model_selected: string;
   reason: string;
   tokens_saved: number;
+  classification: string;
   created_at: string;
 }
 
@@ -154,7 +155,7 @@ export default function RouterPage() {
                   {settings.brain_mode === 'auto' && <Badge variant="green">Active</Badge>}
                 </div>
                 <CardDescription className="mt-1">
-                  Smart routing picks the cheapest capable model per message. &quot;Hello&quot; uses Gemini Flash, &quot;build me an app&quot; uses Claude Sonnet.
+                  An AI reads each message and picks the best model. Simple chats use cheap models, complex tasks use powerful ones.
                 </CardDescription>
               </div>
             </div>
@@ -251,28 +252,49 @@ export default function RouterPage() {
                 <Zap className="h-4 w-4 text-amber-400" />
                 <CardTitle>Recent Routing Decisions</CardTitle>
               </div>
-              <div className="space-y-1">
+              <div className="space-y-1.5">
                 {routingHistory.map((entry) => {
                   const modelShort = entry.model_selected.split('/').pop() || entry.model_selected;
                   const timeAgo = formatTimeAgo(entry.created_at);
+                  let routerLabel = '';
+                  try {
+                    const cls = JSON.parse(entry.classification || '{}');
+                    if (cls.routerUsed === 'google/gemini-2.0-flash-001') routerLabel = 'Gemini Router';
+                    else if (cls.routerUsed === 'openai/gpt-4o-mini') routerLabel = 'GPT-4o-mini Router';
+                    else if (cls.routerUsed === 'fallback') routerLabel = 'Safe Fallback';
+                    else if (cls.method === 'ai') routerLabel = 'AI Router';
+                    else if (cls.method === 'manual') routerLabel = 'Manual';
+                  } catch {}
+                  const modelBadgeVariant = modelShort.includes('flash') || modelShort.includes('mini') || modelShort.includes('nano')
+                    ? 'green' as const
+                    : modelShort.includes('sonnet') || modelShort.includes('opus') || modelShort.includes('o3')
+                    ? 'amber' as const
+                    : 'default' as const;
                   return (
-                    <div key={entry.id} className="flex items-center gap-3 rounded-lg border border-white/[0.04] bg-white/[0.01] px-3 py-2">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[12px] text-white/60 truncate">{entry.message_preview || '...'}</p>
+                    <div key={entry.id} className="rounded-lg border border-white/[0.04] bg-white/[0.01] px-3 py-2.5">
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[12px] text-white/60 truncate">{entry.message_preview || '...'}</p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Badge variant={modelBadgeVariant}>
+                            {modelShort}
+                          </Badge>
+                          <span className="text-[10px] text-white/25 w-12 text-right">{timeAgo}</span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <Badge variant={modelShort.includes('flash') || modelShort.includes('mini') ? 'green' : modelShort.includes('sonnet') || modelShort.includes('o3') ? 'amber' : 'default'}>
-                          {modelShort}
-                        </Badge>
-                        <span className="text-[10px] text-white/25 w-12 text-right">{timeAgo}</span>
+                      <div className="flex items-center gap-2 mt-1.5">
+                        {routerLabel && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/[0.04] text-white/30 border border-white/[0.06]">
+                            {routerLabel}
+                          </span>
+                        )}
+                        <span className="text-[10px] text-white/20 truncate">{entry.reason}</span>
                       </div>
                     </div>
                   );
                 })}
               </div>
-              <p className="mt-2 text-[11px] text-white/25">
-                {routingHistory[0]?.reason}
-              </p>
             </Card>
           )}
         </div>
@@ -358,13 +380,12 @@ export default function RouterPage() {
             <Info className="h-4.5 w-4.5 text-blue-400/60" />
           </div>
           <div>
-            <p className="text-[13px] text-white/50 font-medium">How smart routing works</p>
+            <p className="text-[13px] text-white/50 font-medium">How AI routing works</p>
             <p className="text-[12px] text-white/30 mt-1 leading-relaxed">
-              In Auto mode, every message is classified instantly and routed to the best model.
-              Simple messages (&quot;hello&quot;) go to fast, cheap models like Gemini Flash ($0.10/1M tokens).
-              Complex tasks (&quot;build me an app&quot;) go to powerful models like Claude Sonnet ($3.00/1M tokens).
-              This typically saves 60-80% on API costs compared to always using one model.
-              In Fixed mode, all messages use your selected model.
+              In Auto mode, a cheap AI (Gemini Flash, costs ~$0.00002 per decision) reads your message and picks the best model from 21 options.
+              &quot;Hello&quot; → Gemini Flash ($0.10/1M). &quot;Apply to jobs on LinkedIn&quot; → Claude Sonnet ($3.00/1M).
+              If the router AI is down, a backup router (GPT-4o-mini) takes over. If both fail, Claude Sonnet handles it as a safe default.
+              This saves 60-80% vs always using one expensive model. In Fixed mode, all messages use your selected model.
             </p>
           </div>
         </div>
