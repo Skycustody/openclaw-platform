@@ -12,19 +12,48 @@ REPO_URL="https://github.com/openclaw/skills.git"
 TMP_DIR="/tmp/openclaw-skills-clone-$$"
 
 # Skills to install: "owner/skill-name" (path in repo: skills/owner/skill-name/)
+# Keep in sync with api/src/data/platformSkills.ts
 SKILLS=(
+  # Browser & Automation
   "shawnpana/browser-use"
-  "veeky-kumar/job-auto-apply"
-  "leohan123123/autofillin"
-  "matagul/desktop-control"
-  "opsun/deep-scraper"
-  "leonardogrig/firecrawl-skills"
-  "zizi-cat/chirp"
-  "red777777/inkedin-automation-that-really-works"
-  "cluka-399/clawflows"
   "pkiv/browse"
   "murphykobe/agent-browser-2"
+  "leohan123123/autofillin"
+  "veeky-kumar/job-auto-apply"
+  "opsun/deep-scraper"
+  "matagul/desktop-control"
+  "leonardogrig/firecrawl-skills"
+
+  # YouTube & Video
+  "therohitdas/youtube-full"
+  "abe238/youtube-summarizer"
+  "michaelgathara/youtube-watcher"
+  "apollo1234/yt-dlp-downloader-skill"
+  "dillera/tube-summary"
+  "therohitdas/transcript"
+
+  # Communication
+  "zizi-cat/chirp"
+  "red777777/inkedin-automation-that-really-works"
+  "xiwan/smtp-send"
+  "steipete/slack"
+  "jordanprater/multiposting"
+
+  # Productivity
+  "cluka-399/clawflows"
   "jk-0001/automation-workflows"
+  "promadgenius/ez-cronjob"
+  "jamesalmeida/grab"
+
+  # Memory & Self-Improvement
+  "icemilo414/cognitive-memory"
+  "badaramoni/agentmemory"
+  "bowen31337/create-agent-skills"
+  "hsssgdtc/ralph-evolver"
+
+  # Search & Research
+  "arun-8687/deepwiki"
+  "am-will/read-github"
 )
 
 echo "=== Installing OpenClaw skills from GitHub ==="
