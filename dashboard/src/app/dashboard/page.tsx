@@ -9,7 +9,7 @@ import { useStore } from '@/lib/store';
 import GatewayChat from '@/components/dashboard/GatewayChat';
 import {
   Bot, Sparkles, Loader2, Cpu, Zap,
-  AlertTriangle, RefreshCw,
+  AlertTriangle, RefreshCw, ExternalLink,
 } from 'lucide-react';
 
 type AgentDisplayStatus = 'active' | 'online' | 'sleeping' | 'paused' | 'provisioning' | 'cancelled' | 'offline' | 'grace_period';
