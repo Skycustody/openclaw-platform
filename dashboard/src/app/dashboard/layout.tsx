@@ -66,11 +66,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <Sidebar />
       <main
         className={cn(
-          'min-h-screen transition-all duration-300 p-5 pt-6',
-          sidebarOpen ? 'ml-[220px]' : 'ml-[68px]'
+          'min-h-screen transition-all duration-300 pt-6 pb-5',
+          sidebarOpen ? 'ml-[220px]' : 'ml-[68px]',
+          isHome ? 'px-0' : 'px-5'
         )}
       >
-        <div className={cn(isHome ? 'w-full' : 'mx-auto max-w-6xl')}>{children}</div>
+        <div className={cn(isHome ? 'w-full max-w-none' : 'mx-auto max-w-6xl')}>{children}</div>
       </main>
     </div>
   );
