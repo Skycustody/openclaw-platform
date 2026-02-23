@@ -244,7 +244,9 @@ function extractQrFromLogs(raw: string): string | null {
   const cleaned = raw.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '');
   const lines = cleaned.split('\n');
 
-  // 1. Raw Baileys pairing string — search newest → oldest
+  // 1. Raw Baileys pairing string (2@...) — search whole content then newest line
+  const globalBaileys = cleaned.match(/(2@[A-Za-z0-9+/=,._-]{20,})/);
+  if (globalBaileys) return globalBaileys[1];
   for (let i = lines.length - 1; i >= 0; i--) {
     const m = lines[i].match(/(2@[A-Za-z0-9+/=,._-]{20,})/);
     if (m) return m[1];
@@ -359,17 +361,23 @@ export async function initiateWhatsAppPairing(userId: string): Promise<{
     throw new Error('Agent failed to restart. Please try again in a moment.');
   }
 
-  // Give the gateway a moment to finish its own startup
-  await new Promise(r => setTimeout(r, 3000));
+  // Give the gateway time to finish startup so "channels login" can run
+  await new Promise(r => setTimeout(r, 8000));
 
+  console.log(`[whatsapp] Starting channels login for user ${userId}`);
   // Run `openclaw channels login --channel whatsapp` in background inside the container.
   // Output is written to the host-mounted volume so we can read it via SSH cat.
-  await sshExec(
+  const execResult = await sshExec(
     serverIp,
     `docker exec -d ${containerName} sh -c 'openclaw channels login --channel whatsapp > /root/.openclaw/whatsapp-qr.log 2>&1'`
   ).catch((err) => {
     console.warn(`[whatsapp] channels login exec failed:`, err.message);
+    return { code: 1, stderr: err.message, stdout: '' };
   });
+
+  if (execResult?.code !== 0) {
+    console.warn(`[whatsapp] exec returned code ${execResult?.code} for user ${userId}`);
+  }
 
   return { agentUrl, dashboardUrl, alreadyLinked: false };
 }
@@ -446,8 +454,7 @@ export async function getWhatsAppQr(userId: string): Promise<{
     return { status: 'waiting', message: 'Generating QR code...' };
   }
 
-  // Check for WhatsApp-specific fatal errors only.
-  // Ignore unrelated errors like missing API keys, lane task errors, etc.
+  // Check for WhatsApp-specific fatal errors and CLI errors.
   const whatsappErrorPatterns = [
     'Connection Closed',
     'QR refs attempts ended',
@@ -455,22 +462,35 @@ export async function getWhatsAppQr(userId: string): Promise<{
     'DisconnectReason',
     'connection refused',
     'ECONNREFUSED',
+    'Unknown channel',
+    'channel not found',
+    'Invalid config',
+    'Error:',
+    'ENOENT',
+    'command not found',
+    'is not a function',
+    'SyntaxError',
   ];
   const lowerCombined = combined.toLowerCase();
   const hasWhatsAppError = whatsappErrorPatterns.some(p => lowerCombined.includes(p.toLowerCase()));
   if (hasWhatsAppError) {
     const errorLines = combined.split('\n')
       .filter(l => whatsappErrorPatterns.some(p => l.toLowerCase().includes(p.toLowerCase())))
-      .slice(-2);
-    return {
-      status: 'error',
-      message: errorLines.join(' ').slice(0, 200) || 'WhatsApp connection failed. Click Retry to try again.',
-    };
+      .slice(-3);
+    const msg = errorLines.join(' ').trim().slice(0, 220) || 'WhatsApp connection failed. Click Retry to try again.';
+    console.warn(`[whatsapp] Error for user ${userId}:`, msg);
+    return { status: 'error', message: msg };
   }
 
   const qrText = extractQrFromLogs(combined);
   if (qrText) {
+    console.log(`[whatsapp] QR found for user ${userId}`);
     return { status: 'qr', qrText };
+  }
+
+  // Log when we have output but no QR (helps debug format changes)
+  if (combined.trim().length > 50) {
+    console.warn(`[whatsapp] Log output present but no QR extracted for user ${userId} (${combined.trim().length} chars)`);
   }
 
   return { status: 'waiting', message: 'Waiting for QR code from WhatsApp...' };
