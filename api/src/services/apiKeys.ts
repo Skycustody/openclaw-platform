@@ -154,12 +154,11 @@ export async function injectApiKeys(
   }
 
   // ── Tools configuration ──
-  // Only set keys that OpenClaw's config schema recognizes.
-  // Invalid keys cause the container to crash-loop.
-  // Valid tool keys under `tools`: web (with search/fetch sub-keys).
-  // All other tools (exec, read, write, memory, sessions, cron, image)
-  // are enabled by default in OpenClaw — no config needed.
+  // OpenClaw tools schema supports: profile, allow, deny, byProvider, web, exec, loopDetection.
+  // profile: "full" = all tools available (browser, exec, read, write, web_search, web_fetch, etc.)
+  // See https://docs.openclaw.ai/tools for the full reference.
   if (!config.tools) config.tools = {};
+  config.tools.profile = 'full';
   if (!config.tools.web) config.tools.web = {};
   config.tools.web.search = {
     enabled: true,
@@ -172,18 +171,16 @@ export async function injectApiKeys(
   };
   config.tools.web.fetch = { enabled: true };
 
-  // Remove any invalid tool keys that may exist from previous versions
-  const validToolKeys = ['web'];
+  // Only remove keys that are truly invalid in the tools schema.
+  // Valid: profile, allow, deny, byProvider, web, exec, loopDetection, sessions
+  const validToolKeys = ['profile', 'allow', 'deny', 'byProvider', 'web', 'exec', 'loopDetection', 'sessions'];
   for (const key of Object.keys(config.tools)) {
     if (!validToolKeys.includes(key)) delete config.tools[key];
   }
 
-  // Remove any stale invalid top-level keys from previous versions.
-  // OpenClaw has a strict config schema — unknown keys crash the container.
+  // Remove stale invalid top-level keys from previous versions.
+  // Note: `browser` and `bindings` are valid and re-set below — only delete truly invalid ones.
   delete config.personality;
-  delete config.bindings;
-  delete config.browser;
-  delete config.memory;
 
   // ── Per-agent channel bindings ──
   // Merge channel connections from agent_channels table into config
@@ -304,8 +301,19 @@ export async function injectApiKeys(
     };
   }
 
-  // Use embedded browser: headless Chromium, no sandbox (Docker requires it)
-  config.browser = { defaultProfile: 'openclaw', headless: true, noSandbox: true };
+  // ── Browser: headless Chromium, no sandbox (Docker requires it) ──
+  config.browser = {
+    enabled: true,
+    defaultProfile: 'openclaw',
+    headless: true,
+    noSandbox: true,
+  };
+
+  // ── Skills: enable useful bundled skills by default ──
+  if (!config.skills) config.skills = {};
+  if (!config.skills.entries) config.skills.entries = {};
+  if (!config.skills.load) config.skills.load = {};
+  config.skills.load.watch = true;
 
   const configB64 = Buffer.from(JSON.stringify(config, null, 2)).toString('base64');
   await sshExec(
