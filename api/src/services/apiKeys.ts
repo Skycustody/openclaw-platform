@@ -97,6 +97,8 @@ export async function injectApiKeys(
   }
 
   // ── Smart model routing via platform proxy ──
+  // model id "auto" triggers smart routing (heuristic picks best model per task).
+  // Any other id is passed through to OpenRouter directly.
   config.models = {
     providers: {
       platform: {
@@ -104,7 +106,34 @@ export async function injectApiKeys(
         apiKey: apiKey,
         api: 'openai-completions',
         models: [
-          { id: 'auto', name: 'Smart Auto (picks best model per task)', contextWindow: 128000, maxTokens: 4096 },
+          { id: 'auto', name: '⚡ Smart Auto (picks best model per task)', contextWindow: 128000, maxTokens: 4096 },
+
+          { id: 'anthropic/claude-sonnet-4-20250514', name: 'Claude Sonnet 4 (best for agents & tool use)', contextWindow: 200000, maxTokens: 8192 },
+          { id: 'anthropic/claude-3.5-haiku', name: 'Claude 3.5 Haiku (fast & cheap)', contextWindow: 200000, maxTokens: 8192 },
+          { id: 'anthropic/claude-opus-4-20250514', name: 'Claude Opus 4 (most powerful)', contextWindow: 200000, maxTokens: 8192 },
+
+          { id: 'openai/gpt-4o', name: 'GPT-4o (smart & balanced)', contextWindow: 128000, maxTokens: 4096 },
+          { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini (fast & cheap)', contextWindow: 128000, maxTokens: 4096 },
+          { id: 'openai/gpt-4.1', name: 'GPT-4.1 (latest, 1M context)', contextWindow: 1000000, maxTokens: 32768 },
+          { id: 'openai/gpt-4.1-mini', name: 'GPT-4.1 Mini (latest mini, 1M context)', contextWindow: 1000000, maxTokens: 32768 },
+          { id: 'openai/gpt-4.1-nano', name: 'GPT-4.1 Nano (ultra cheap)', contextWindow: 1000000, maxTokens: 32768 },
+          { id: 'openai/o3-mini', name: 'o3-mini (reasoning)', contextWindow: 200000, maxTokens: 65536 },
+
+          { id: 'google/gemini-2.5-pro-preview', name: 'Gemini 2.5 Pro (strong, 1M context)', contextWindow: 1000000, maxTokens: 65536 },
+          { id: 'google/gemini-2.5-flash-preview', name: 'Gemini 2.5 Flash (fast & smart)', contextWindow: 1000000, maxTokens: 65536 },
+          { id: 'google/gemini-2.0-flash-001', name: 'Gemini 2.0 Flash (cheapest)', contextWindow: 1000000, maxTokens: 8192 },
+
+          { id: 'deepseek/deepseek-chat-v3-0324', name: 'DeepSeek V3 (strong & very cheap)', contextWindow: 128000, maxTokens: 8192 },
+          { id: 'deepseek/deepseek-r1', name: 'DeepSeek R1 (reasoning, cheap)', contextWindow: 128000, maxTokens: 8192 },
+
+          { id: 'meta-llama/llama-4-maverick', name: 'Llama 4 Maverick (open source, strong)', contextWindow: 1000000, maxTokens: 32768 },
+          { id: 'meta-llama/llama-4-scout', name: 'Llama 4 Scout (open source, 10M context)', contextWindow: 10000000, maxTokens: 32768 },
+
+          { id: 'mistralai/mistral-large-2', name: 'Mistral Large 2 (strong European model)', contextWindow: 128000, maxTokens: 4096 },
+          { id: 'qwen/qwen-2.5-coder-32b-instruct', name: 'Qwen 2.5 Coder 32B (great for coding, free)', contextWindow: 32768, maxTokens: 4096 },
+
+          { id: 'x-ai/grok-3-mini-beta', name: 'Grok 3 Mini (fast reasoning)', contextWindow: 131072, maxTokens: 8192 },
+          { id: 'x-ai/grok-3-beta', name: 'Grok 3 (powerful)', contextWindow: 131072, maxTokens: 8192 },
         ],
       },
     },
@@ -114,7 +143,7 @@ export async function injectApiKeys(
   if (!config.agents.defaults) config.agents.defaults = {};
   config.agents.defaults.model = {
     primary: 'platform/auto',
-    fallbacks: ['openrouter/openai/gpt-4o-mini'],
+    fallbacks: ['openrouter/anthropic/claude-sonnet-4-20250514', 'openrouter/openai/gpt-4o'],
   };
 
   // Ensure the main agent always exists in agents.list — the OpenClaw gateway

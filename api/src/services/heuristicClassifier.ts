@@ -22,6 +22,8 @@ const INTERNET_KEYWORDS = /\b(latest|current|today|recent|news|weather|stock pri
 
 const BUILD_KEYWORDS = /\b(build|create|make|develop|implement|code|write|generate|scaffold|setup|set up|deploy|configure|install|refactor|debug|fix the|fix this|fix my|solve this|program|application|app|website|api|server|database|frontend|backend|fullstack|full-stack|component|module|library|framework|script|bot|cli|tool|service|microservice)\b/i;
 
+const AGENTIC_KEYWORDS = /\b(go to|open|navigate|click|fill|fill in|fill out|submit|sign in|sign up|log in|login|register|apply|download|upload|send|message|post|reply|scrape|automate|schedule|book|order|buy|purchase|subscribe|unsubscribe|cancel|delete my|remove my|update my|change my|edit my|find me|get me|show me|do this|do that|do it|for me|on my behalf|overnight|run this|execute|browse to|visit|form|checkout|payment|cv|resume|job|jobs|application|applications|linkedin|twitter|facebook|instagram|whatsapp|telegram|discord|email|gmail)\b/i;
+
 export function classifyTaskHeuristic(
   message: string,
   hasImage = false
@@ -35,6 +37,7 @@ export function classifyTaskHeuristic(
   const hasReasoning = REASONING_KEYWORDS.test(msg);
   const hasInternet = INTERNET_KEYWORDS.test(msg);
   const hasBuild = BUILD_KEYWORDS.test(msg);
+  const hasAgentic = AGENTIC_KEYWORDS.test(msg);
   const hasCodeBlock = msg.includes('```');
   const lineCount = msg.split('\n').length;
 
@@ -43,9 +46,13 @@ export function classifyTaskHeuristic(
   let needsDeepAnalysis = false;
   let needsInternet = hasInternet;
   let needsVision = hasImage;
+  let needsAgentic = hasAgentic;
 
-  if (isGreeting || (len < 40 && !hasCode && !hasAnalysis && !hasBuild)) {
+  if (isGreeting || (len < 40 && !hasCode && !hasAnalysis && !hasBuild && !hasAgentic)) {
     complexity = 'simple';
+  } else if (hasAgentic) {
+    complexity = 'complex';
+    needsInternet = true;
   } else if (hasCode || hasCodeBlock || hasBuild) {
     needsCode = true;
     complexity = (len > 500 || lineCount > 10 || hasCodeBlock) ? 'complex' : 'medium';
@@ -67,6 +74,7 @@ export function classifyTaskHeuristic(
     needsVision,
     needsDeepAnalysis,
     needsCode,
+    needsAgentic,
     complexity,
     estimatedTokens,
   };

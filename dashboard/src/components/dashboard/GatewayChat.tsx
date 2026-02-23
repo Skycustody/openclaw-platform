@@ -38,6 +38,8 @@ export default function GatewayChat({ gatewayUrl, token }: GatewayChatProps) {
   const pendingCallbacks = useRef<Map<string, (res: any) => void>>(new Map());
   const streamBufferRef = useRef<string>('');
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastHistoryLen = useRef<number>(0);
   const isUnmounted = useRef(false);
 
   const scrollToBottom = useCallback(() => {
@@ -89,6 +91,7 @@ export default function GatewayChat({ gatewayUrl, token }: GatewayChatProps) {
           });
         }
       }
+      lastHistoryLen.current = entries.length;
       setMessages(entries);
       setTimeout(scrollToBottom, 100);
     } catch {
@@ -174,6 +177,41 @@ export default function GatewayChat({ gatewayUrl, token }: GatewayChatProps) {
         return;
       }
 
+      // Old (non-v3) protocol: gateway sends { type:'response', payload:{ text:'...' } }
+      if (msg.type === 'response') {
+        const text = msg.payload?.text ?? msg.payload?.content ?? msg.text ?? msg.content ?? '';
+        if (typeof text === 'string' && text.length > 0) {
+          streamBufferRef.current = '';
+          setActiveRunId(null);
+          if (pollTimer.current) { clearInterval(pollTimer.current); pollTimer.current = null; }
+          setMessages(prev => {
+            const cleaned = prev.map(m => m.streaming ? { ...m, streaming: false } : m);
+            const last = cleaned[cleaned.length - 1];
+            if (last?.role === 'assistant' && last.content === text) return cleaned;
+            return [...cleaned, { id: `a_${Date.now()}`, role: 'assistant' as const, content: text }];
+          });
+          scrollToBottom();
+        }
+        return;
+      }
+
+      // tool_call / tool_result (old protocol top-level types)
+      if (msg.type === 'tool_call') {
+        const toolName = msg.payload?.tool ?? msg.payload?.name ?? 'tool';
+        setMessages(prev => [...prev, {
+          id: `tool_${Date.now()}`,
+          role: 'assistant' as const,
+          content: `*Using ${String(toolName)}...*`,
+          streaming: true,
+        }]);
+        scrollToBottom();
+        return;
+      }
+      if (msg.type === 'tool_result') {
+        setMessages(prev => prev.map(m => m.streaming ? { ...m, streaming: false } : m));
+        return;
+      }
+
       // Chat stream events: accept 'chat' and 'chat.*' and any event with chat-like payload
       const isChatEvent = msg.type === 'event' && (
         msg.event === 'chat' ||
@@ -221,6 +259,7 @@ export default function GatewayChat({ gatewayUrl, token }: GatewayChatProps) {
         if (isDone) {
           streamBufferRef.current = '';
           setActiveRunId(null);
+          if (pollTimer.current) { clearInterval(pollTimer.current); pollTimer.current = null; }
           setMessages(prev => prev.map(m => m.streaming ? { ...m, streaming: false } : m));
         }
 
@@ -288,9 +327,36 @@ export default function GatewayChat({ gatewayUrl, token }: GatewayChatProps) {
     return () => {
       isUnmounted.current = true;
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+      if (pollTimer.current) clearInterval(pollTimer.current);
       if (wsRef.current) wsRef.current.close(1000);
     };
   }, [connect]);
+
+  // Poll chat.history and surface any new assistant messages not yet in state
+  const pollForReply = useCallback(async (snapshotLen: number) => {
+    try {
+      const res = await sendReq('chat.history', { sessionKey: 'main', limit: 50 });
+      const items = res?.messages || res?.entries || res || [];
+      if (!Array.isArray(items)) return;
+      const newEntries: Message[] = [];
+      for (const entry of items) {
+        const role: Message['role'] = entry.role === 'user' ? 'user' : entry.role === 'assistant' ? 'assistant' : 'system';
+        const content = typeof entry.content === 'string' ? entry.content
+          : typeof entry.text === 'string' ? entry.text : '';
+        if (!content) continue;
+        newEntries.push({ id: entry.id || `h_${newEntries.length}`, role, content, timestamp: entry.ts || entry.timestamp });
+      }
+      if (newEntries.length > snapshotLen) {
+        // New messages arrived — show the full updated history
+        setMessages(newEntries);
+        setTimeout(scrollToBottom, 50);
+        lastHistoryLen.current = newEntries.length;
+        setActiveRunId(null);
+        streamBufferRef.current = '';
+        if (pollTimer.current) { clearInterval(pollTimer.current); pollTimer.current = null; }
+      }
+    } catch { /* ignore */ }
+  }, [sendReq, scrollToBottom]);
 
   const handleSend = useCallback(async () => {
     const text = input.trim();
@@ -305,8 +371,10 @@ export default function GatewayChat({ gatewayUrl, token }: GatewayChatProps) {
     setMessages(prev => [...prev, userMsg]);
     setInput('');
     scrollToBottom();
-
     streamBufferRef.current = '';
+
+    // Snapshot of current message count before sending
+    const snapshotLen = lastHistoryLen.current;
 
     try {
       const res = await sendReq('chat.send', {
@@ -315,6 +383,19 @@ export default function GatewayChat({ gatewayUrl, token }: GatewayChatProps) {
         idempotencyKey: userMsg.id,
       });
       if (res?.runId) setActiveRunId(res.runId);
+
+      // Start polling for reply every 3 s (in case gateway doesn't push a stream event we handle)
+      if (pollTimer.current) clearInterval(pollTimer.current);
+      let attempts = 0;
+      pollTimer.current = setInterval(async () => {
+        attempts++;
+        await pollForReply(snapshotLen);
+        if (attempts >= 20) { // max 60 s
+          clearInterval(pollTimer.current!);
+          pollTimer.current = null;
+          setActiveRunId(null);
+        }
+      }, 3000);
     } catch (err: any) {
       setMessages(prev => [...prev, {
         id: `err_${Date.now()}`,
@@ -322,12 +403,11 @@ export default function GatewayChat({ gatewayUrl, token }: GatewayChatProps) {
         content: `Failed to send: ${err.message}`,
       }]);
     }
-  }, [input, activeRunId, sendReq, scrollToBottom]);
+  }, [input, activeRunId, sendReq, scrollToBottom, pollForReply]);
 
   const handleStop = useCallback(async () => {
-    try {
-      await sendReq('chat.abort', {});
-    } catch {}
+    if (pollTimer.current) { clearInterval(pollTimer.current); pollTimer.current = null; }
+    try { await sendReq('chat.abort', {}); } catch {}
     streamBufferRef.current = '';
     setActiveRunId(null);
     setMessages(prev => prev.map(m => m.streaming ? { ...m, streaming: false } : m));

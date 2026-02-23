@@ -3,16 +3,14 @@
  * OpenClaw containers and OpenRouter.
  *
  * Flow:
- *   Container → POST /proxy/v1/chat/completions → classify task → pick model → OpenRouter → stream back
+ *   Container → POST /proxy/v1/chat/completions → classify or passthrough → OpenRouter → stream back
+ *
+ * Two modes:
+ *   1. model = "auto" (default) → heuristic classification → pick best model per task
+ *   2. model = "openai/gpt-4o" etc. → passthrough directly to OpenRouter (user chose a specific model)
  *
  * Auth: Bearer token = the user's OpenRouter API key (sk-or-v1-xxx).
  * We look up the user by their nexos_api_key to determine their plan tier.
- *
- * The proxy rewrites the `model` field based on task complexity:
- *   simple  → gemini-flash ($0.10/1M)
- *   medium  → gpt-4o-mini  ($0.15/1M)
- *   code    → claude-sonnet ($3.00/1M)
- *   complex → o3-mini       ($1.10/1M)
  */
 import { Router, Request, Response } from 'express';
 import https from 'https';
@@ -91,6 +89,13 @@ function hasImageContent(messages: any[]): boolean {
   return false;
 }
 
+function hasToolCallsInHistory(messages: any[]): boolean {
+  if (!Array.isArray(messages)) return false;
+  return messages.some(
+    (m: any) => m.role === 'tool' || (m.role === 'assistant' && Array.isArray(m.tool_calls) && m.tool_calls.length > 0)
+  );
+}
+
 router.post('/v1/chat/completions', async (req: Request, res: Response) => {
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith('Bearer ')) {
@@ -105,19 +110,34 @@ router.post('/v1/chat/completions', async (req: Request, res: Response) => {
     return res.status(400).json({ error: { message: 'messages field is required', type: 'invalid_request' } });
   }
 
-  const lastMessage = extractLastUserMessage(body.messages);
-  const hasImage = hasImageContent(body.messages);
-
-  const classification = classifyTaskHeuristic(lastMessage, hasImage);
+  const incomingModel = (body.model || '').toString().trim();
+  const isAutoRouting = !incomingModel || incomingModel === 'auto' || incomingModel === 'platform/auto';
 
   let selectedModel: string;
   let routingReason: string;
   let tokensSaved = 0;
 
-  if (user && user.brain_mode === 'manual' && user.manual_model) {
+  if (!isAutoRouting) {
+    selectedModel = incomingModel;
+    routingReason = `Direct model selection: ${incomingModel}`;
+  } else if (user && user.brain_mode === 'manual' && user.manual_model) {
     selectedModel = user.manual_model;
-    routingReason = 'Manual model override';
+    routingReason = 'Manual model override (user settings)';
   } else {
+    const lastMessage = extractLastUserMessage(body.messages);
+    const hasImage = hasImageContent(body.messages);
+    const hasTools = hasToolCallsInHistory(body.messages);
+
+    const classification = classifyTaskHeuristic(lastMessage, hasImage);
+
+    const requestHasTools = Array.isArray(body.tools) && body.tools.length > 0;
+
+    if ((hasTools || requestHasTools) && !classification.needsAgentic) {
+      classification.needsAgentic = true;
+      classification.complexity = 'complex';
+      classification.needsInternet = true;
+    }
+
     const plan = user?.plan || 'starter';
     const decision = selectModel(classification, plan);
     selectedModel = decision.model;

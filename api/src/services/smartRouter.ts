@@ -12,87 +12,154 @@ const openai = new OpenAI({ apiKey: process.env.OPENROUTER_API_KEY || process.en
  * Retail price = costPer1MTokens × RETAIL_MARKUP (1.5×) for 50% margin.
  */
 export const MODEL_MAP: Record<string, ModelCapability> = {
-  'openai/gpt-4o-mini': {
-    name: 'openai/gpt-4o-mini',
-    displayName: 'Fast & Cheap',
-    internet: false,
-    vision: true,
-    deepAnalysis: false,
-    costPer1MTokens: OPENROUTER_MODEL_COSTS['openai/gpt-4o-mini']?.inputPer1M ?? 0.15,
-    maxContext: 128000,
-    speed: 'very_fast',
-  },
+  // ── Ultra cheap (< $0.50/1M) ──
   'google/gemini-2.0-flash-001': {
     name: 'google/gemini-2.0-flash-001',
-    displayName: 'Fastest & Cheapest',
-    internet: false,
-    vision: true,
-    deepAnalysis: false,
+    displayName: 'Gemini 2.0 Flash',
+    internet: false, vision: true, deepAnalysis: false,
     costPer1MTokens: OPENROUTER_MODEL_COSTS['google/gemini-2.0-flash-001']?.inputPer1M ?? 0.10,
-    maxContext: 1000000,
-    speed: 'very_fast',
+    maxContext: 1000000, speed: 'very_fast',
+  },
+  'openai/gpt-4o-mini': {
+    name: 'openai/gpt-4o-mini',
+    displayName: 'GPT-4o Mini',
+    internet: false, vision: true, deepAnalysis: false,
+    costPer1MTokens: OPENROUTER_MODEL_COSTS['openai/gpt-4o-mini']?.inputPer1M ?? 0.15,
+    maxContext: 128000, speed: 'very_fast',
+  },
+  'openai/gpt-4.1-nano': {
+    name: 'openai/gpt-4.1-nano',
+    displayName: 'GPT-4.1 Nano',
+    internet: false, vision: true, deepAnalysis: false,
+    costPer1MTokens: OPENROUTER_MODEL_COSTS['openai/gpt-4.1-nano']?.inputPer1M ?? 0.10,
+    maxContext: 1000000, speed: 'very_fast',
   },
   'openai/gpt-4.1-mini': {
     name: 'openai/gpt-4.1-mini',
-    displayName: 'Fast & Affordable',
-    internet: false,
-    vision: true,
-    deepAnalysis: false,
+    displayName: 'GPT-4.1 Mini',
+    internet: false, vision: true, deepAnalysis: false,
     costPer1MTokens: OPENROUTER_MODEL_COSTS['openai/gpt-4.1-mini']?.inputPer1M ?? 0.40,
-    maxContext: 1000000,
-    speed: 'very_fast',
+    maxContext: 1000000, speed: 'very_fast',
   },
+  'qwen/qwen-2.5-coder-32b-instruct': {
+    name: 'qwen/qwen-2.5-coder-32b-instruct',
+    displayName: 'Qwen 2.5 Coder',
+    internet: false, vision: false, deepAnalysis: false,
+    costPer1MTokens: 0,
+    maxContext: 32768, speed: 'very_fast',
+  },
+
+  // ── Mid-range ($0.50 – $2.00/1M) ──
   'anthropic/claude-3.5-haiku': {
     name: 'anthropic/claude-3.5-haiku',
-    displayName: 'Fast & Cheap',
-    internet: false,
-    vision: true,
-    deepAnalysis: false,
+    displayName: 'Claude 3.5 Haiku',
+    internet: false, vision: true, deepAnalysis: false,
     costPer1MTokens: OPENROUTER_MODEL_COSTS['anthropic/claude-3.5-haiku']?.inputPer1M ?? 0.80,
-    maxContext: 200000,
-    speed: 'very_fast',
+    maxContext: 200000, speed: 'very_fast',
   },
-  'openai/gpt-4o': {
-    name: 'openai/gpt-4o',
-    displayName: 'Smart & Balanced',
-    internet: false,
-    vision: true,
-    deepAnalysis: true,
-    costPer1MTokens: OPENROUTER_MODEL_COSTS['openai/gpt-4o']?.inputPer1M ?? 2.50,
-    maxContext: 128000,
-    speed: 'fast',
+  'google/gemini-2.5-flash-preview': {
+    name: 'google/gemini-2.5-flash-preview',
+    displayName: 'Gemini 2.5 Flash',
+    internet: false, vision: true, deepAnalysis: true,
+    costPer1MTokens: OPENROUTER_MODEL_COSTS['google/gemini-2.5-flash-preview']?.inputPer1M ?? 0.15,
+    maxContext: 1000000, speed: 'very_fast',
   },
-  'openai/gpt-4.1': {
-    name: 'openai/gpt-4.1',
-    displayName: 'Smart & Balanced',
-    internet: false,
-    vision: true,
-    deepAnalysis: true,
-    costPer1MTokens: OPENROUTER_MODEL_COSTS['openai/gpt-4.1']?.inputPer1M ?? 2.00,
-    maxContext: 1000000,
-    speed: 'fast',
+  'deepseek/deepseek-chat-v3-0324': {
+    name: 'deepseek/deepseek-chat-v3-0324',
+    displayName: 'DeepSeek V3',
+    internet: false, vision: false, deepAnalysis: true,
+    costPer1MTokens: OPENROUTER_MODEL_COSTS['deepseek/deepseek-chat-v3-0324']?.inputPer1M ?? 0.50,
+    maxContext: 128000, speed: 'fast',
   },
-  'anthropic/claude-sonnet-4-20250514': {
-    name: 'anthropic/claude-sonnet-4-20250514',
-    displayName: 'Powerful',
-    internet: true,
-    vision: true,
-    deepAnalysis: true,
-    costPer1MTokens: OPENROUTER_MODEL_COSTS['anthropic/claude-sonnet-4-20250514']?.inputPer1M ?? 3.00,
-    maxContext: 200000,
-    speed: 'fast',
+  'deepseek/deepseek-r1': {
+    name: 'deepseek/deepseek-r1',
+    displayName: 'DeepSeek R1',
+    internet: false, vision: false, deepAnalysis: true,
+    costPer1MTokens: OPENROUTER_MODEL_COSTS['deepseek/deepseek-r1']?.inputPer1M ?? 0.55,
+    maxContext: 128000, speed: 'fast',
   },
   'openai/o3-mini': {
     name: 'openai/o3-mini',
-    displayName: 'Reasoning',
-    internet: false,
-    vision: false,
-    deepAnalysis: true,
+    displayName: 'o3-mini',
+    internet: false, vision: false, deepAnalysis: true,
     costPer1MTokens: OPENROUTER_MODEL_COSTS['openai/o3-mini']?.inputPer1M ?? 1.10,
-    maxContext: 200000,
-    speed: 'fast',
+    maxContext: 200000, speed: 'fast',
+  },
+  'x-ai/grok-3-mini-beta': {
+    name: 'x-ai/grok-3-mini-beta',
+    displayName: 'Grok 3 Mini',
+    internet: false, vision: false, deepAnalysis: true,
+    costPer1MTokens: OPENROUTER_MODEL_COSTS['x-ai/grok-3-mini-beta']?.inputPer1M ?? 0.30,
+    maxContext: 131072, speed: 'fast',
+  },
+
+  // ── Premium ($2.00+/1M) ──
+  'openai/gpt-4o': {
+    name: 'openai/gpt-4o',
+    displayName: 'GPT-4o',
+    internet: false, vision: true, deepAnalysis: true,
+    costPer1MTokens: OPENROUTER_MODEL_COSTS['openai/gpt-4o']?.inputPer1M ?? 2.50,
+    maxContext: 128000, speed: 'fast',
+  },
+  'openai/gpt-4.1': {
+    name: 'openai/gpt-4.1',
+    displayName: 'GPT-4.1',
+    internet: false, vision: true, deepAnalysis: true,
+    costPer1MTokens: OPENROUTER_MODEL_COSTS['openai/gpt-4.1']?.inputPer1M ?? 2.00,
+    maxContext: 1000000, speed: 'fast',
+  },
+  'anthropic/claude-sonnet-4-20250514': {
+    name: 'anthropic/claude-sonnet-4-20250514',
+    displayName: 'Claude Sonnet 4',
+    internet: true, vision: true, deepAnalysis: true,
+    costPer1MTokens: OPENROUTER_MODEL_COSTS['anthropic/claude-sonnet-4-20250514']?.inputPer1M ?? 3.00,
+    maxContext: 200000, speed: 'fast',
+  },
+  'anthropic/claude-opus-4-20250514': {
+    name: 'anthropic/claude-opus-4-20250514',
+    displayName: 'Claude Opus 4',
+    internet: true, vision: true, deepAnalysis: true,
+    costPer1MTokens: OPENROUTER_MODEL_COSTS['anthropic/claude-opus-4-20250514']?.inputPer1M ?? 15.00,
+    maxContext: 200000, speed: 'slower',
+  },
+  'google/gemini-2.5-pro-preview': {
+    name: 'google/gemini-2.5-pro-preview',
+    displayName: 'Gemini 2.5 Pro',
+    internet: false, vision: true, deepAnalysis: true,
+    costPer1MTokens: OPENROUTER_MODEL_COSTS['google/gemini-2.5-pro-preview']?.inputPer1M ?? 1.25,
+    maxContext: 1000000, speed: 'fast',
+  },
+  'x-ai/grok-3-beta': {
+    name: 'x-ai/grok-3-beta',
+    displayName: 'Grok 3',
+    internet: false, vision: false, deepAnalysis: true,
+    costPer1MTokens: OPENROUTER_MODEL_COSTS['x-ai/grok-3-beta']?.inputPer1M ?? 3.00,
+    maxContext: 131072, speed: 'fast',
+  },
+  'mistralai/mistral-large-2': {
+    name: 'mistralai/mistral-large-2',
+    displayName: 'Mistral Large 2',
+    internet: false, vision: true, deepAnalysis: true,
+    costPer1MTokens: OPENROUTER_MODEL_COSTS['mistralai/mistral-large-2']?.inputPer1M ?? 2.00,
+    maxContext: 128000, speed: 'fast',
+  },
+  'meta-llama/llama-4-maverick': {
+    name: 'meta-llama/llama-4-maverick',
+    displayName: 'Llama 4 Maverick',
+    internet: false, vision: true, deepAnalysis: true,
+    costPer1MTokens: OPENROUTER_MODEL_COSTS['meta-llama/llama-4-maverick']?.inputPer1M ?? 0.50,
+    maxContext: 1000000, speed: 'fast',
+  },
+  'meta-llama/llama-4-scout': {
+    name: 'meta-llama/llama-4-scout',
+    displayName: 'Llama 4 Scout',
+    internet: false, vision: true, deepAnalysis: false,
+    costPer1MTokens: OPENROUTER_MODEL_COSTS['meta-llama/llama-4-scout']?.inputPer1M ?? 0.15,
+    maxContext: 10000000, speed: 'fast',
   },
 };
+
+const DEFAULT_COST_PER_1M = 1.00;
 
 /**
  * Retail price per 1M tokens (what we effectively charge users).
@@ -162,12 +229,12 @@ export function selectModel(
   userPlan: Plan,
   manualModel?: string | null
 ): RoutingDecision {
-  // Manual override
-  if (manualModel && MODEL_MAP[manualModel]) {
+  if (manualModel) {
+    const cost = MODEL_MAP[manualModel]?.costPer1MTokens ?? DEFAULT_COST_PER_1M;
     return {
       model: manualModel,
       reason: 'Manual model selection',
-      estimatedCost: MODEL_MAP[manualModel].costPer1MTokens,
+      estimatedCost: cost,
       tokensSaved: 0,
     };
   }
@@ -177,6 +244,7 @@ export function selectModel(
     needsVision,
     needsDeepAnalysis,
     needsCode,
+    needsAgentic,
     estimatedTokens,
     complexity,
   } = classification;
@@ -186,7 +254,13 @@ export function selectModel(
 
   // Cost-optimised routing: use the cheapest OpenRouter model that handles the task.
   // This maximises our profit margin (target ≥50%) on API costs.
-  if (needsInternet && needsVision) {
+  //
+  // Agentic tasks (browser, forms, automation, multi-step actions) need strong
+  // tool-calling models — cheap models fail at multi-step tool orchestration.
+  if (needsAgentic) {
+    model = 'anthropic/claude-sonnet-4-20250514';
+    reason = 'Agentic task (browser/automation/actions) - requires strong tool-calling model';
+  } else if (needsInternet && needsVision) {
     model = 'anthropic/claude-sonnet-4-20250514';
     reason = 'Requires both internet access and vision capability';
   } else if (estimatedTokens > 100000) {
@@ -225,9 +299,8 @@ export function selectModel(
     reason = 'Balanced fallback - cost-efficient for medium complexity';
   }
 
-  // Calculate savings vs always using the most expensive available model (Sonnet)
   const expensiveCost = MODEL_MAP['anthropic/claude-sonnet-4-20250514']?.costPer1MTokens ?? 3.0;
-  const selectedCost = MODEL_MAP[model]?.costPer1MTokens ?? expensiveCost;
+  const selectedCost = MODEL_MAP[model]?.costPer1MTokens ?? DEFAULT_COST_PER_1M;
   const tokensSaved = Math.round(
     ((expensiveCost - selectedCost) / expensiveCost) * estimatedTokens
   );

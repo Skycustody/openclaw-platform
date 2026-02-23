@@ -116,6 +116,7 @@ export interface TaskClassification {
   needsVision: boolean;
   needsDeepAnalysis: boolean;
   needsCode: boolean;
+  needsAgentic?: boolean;
   complexity: TaskComplexity;
   estimatedTokens: number;
 }
