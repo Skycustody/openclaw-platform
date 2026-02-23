@@ -405,7 +405,13 @@ export default function DashboardHome() {
         )}
 
         {phase === 'ready' && gatewayWsUrl && gatewayToken && (
-          <GatewayChat gatewayUrl={gatewayWsUrl} token={gatewayToken} />
+          <GatewayChat
+            gatewayUrl={gatewayWsUrl}
+            token={gatewayToken}
+            onModelChange={(brainMode, manualModel) => {
+              setSettings(prev => prev ? { ...prev, brain_mode: brainMode, manual_model: manualModel } : prev);
+            }}
+          />
         )}
 
         {phase === 'ready' && (!gatewayWsUrl || !gatewayToken) && (

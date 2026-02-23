@@ -52,6 +52,7 @@ interface GatewayChatProps {
   token: string;
   agentName?: string;
   modelName?: string;
+  onModelChange?: (brainMode: 'auto' | 'manual', manualModel: string | null) => void;
 }
 
 type WsState = 'connecting' | 'connected' | 'disconnected' | 'error';
@@ -75,7 +76,7 @@ function extractContent(entry: Record<string, unknown>): string {
   return '';
 }
 
-export default function GatewayChat({ gatewayUrl, token, agentName, modelName }: GatewayChatProps) {
+export default function GatewayChat({ gatewayUrl, token, agentName, modelName, onModelChange }: GatewayChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [wsState, setWsState] = useState<WsState>('connecting');
@@ -220,14 +221,16 @@ export default function GatewayChat({ gatewayUrl, token, agentName, modelName }:
     setSelectedModel(model.id);
     setAgentModels(prev => ({ ...prev, [selectedAgent]: model.id }));
     setShowModelDropdown(false);
+    const isAuto = model.id === 'auto';
+    onModelChange?.(isAuto ? 'auto' : 'manual', isAuto ? null : model.id);
     try {
-      if (model.id === 'auto') {
+      if (isAuto) {
         await api.put('/settings/brain', { brainMode: 'auto', manualModel: null });
       } else {
         await api.put('/settings/brain', { brainMode: 'manual', manualModel: model.id });
       }
     } catch {}
-  }, [selectedAgent]);
+  }, [selectedAgent, onModelChange]);
 
   const getModelLabel = () => {
     if (selectedModel === 'auto') return 'Auto';
