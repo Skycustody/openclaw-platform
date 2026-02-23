@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, Activity, Smartphone, Puzzle, Brain, Clock,
-  Globe, Coins, Cpu, User, MessageSquare, FileText,
+  Globe, Coins, Cpu, User, Shield, MessageSquare, FileText,
   CreditCard, Store, LogOut, ChevronLeft, Zap, HelpCircle,
 } from 'lucide-react';
 import { useStore } from '@/lib/store';
