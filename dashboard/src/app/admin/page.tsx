@@ -144,12 +144,23 @@ export default function AdminPanel() {
   }, []);
 
   useEffect(() => {
-    const saved = typeof window !== 'undefined' ? sessionStorage.getItem('_ap') : null;
-    if (saved) {
-      tryAuth(saved);
-    } else {
-      tryAuth('');
-    }
+    // Redirect non-admin users immediately — they must not see any admin UI
+    api.get<{ isAdmin?: boolean }>('/agent/status')
+      .then((data) => {
+        if (data.isAdmin !== true && typeof window !== 'undefined') {
+          window.location.href = '/dashboard';
+          return;
+        }
+        const saved = sessionStorage.getItem('_ap');
+        if (saved) {
+          tryAuth(saved);
+        } else {
+          tryAuth('');
+        }
+      })
+      .catch(() => {
+        if (typeof window !== 'undefined') window.location.href = '/dashboard';
+      });
   }, [tryAuth]);
 
   const handlePasswordSubmit = async (e: React.FormEvent) => {
