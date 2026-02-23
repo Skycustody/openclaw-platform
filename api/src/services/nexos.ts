@@ -79,7 +79,7 @@ export const OPENROUTER_MODEL_COSTS: Record<string, { inputPer1M: number; output
   'anthropic/claude-3.5-haiku':       { inputPer1M: 0.80,  outputPer1M: 4.00  },
   'openai/gpt-4o':                    { inputPer1M: 2.50,  outputPer1M: 10.00 },
   'openai/gpt-4.1':                   { inputPer1M: 2.00,  outputPer1M: 8.00  },
-  'anthropic/claude-sonnet-4-20250514': { inputPer1M: 3.00,  outputPer1M: 15.00 },
+  'anthropic/claude-sonnet-4': { inputPer1M: 3.00,  outputPer1M: 15.00 },
   'openai/o3-mini':                   { inputPer1M: 1.10,  outputPer1M: 4.40  },
 };
 

@@ -19,7 +19,7 @@ const ROUTER_MODELS = [
   'openai/gpt-4o-mini',
 ];
 
-const FINAL_FALLBACK_MODEL = 'anthropic/claude-sonnet-4-20250514';
+const FINAL_FALLBACK_MODEL = 'anthropic/claude-sonnet-4';
 
 /**
  * Model capabilities + OpenRouter wholesale costs (no markup on provider pricing).
@@ -72,11 +72,11 @@ export const MODEL_MAP: Record<string, ModelCapability> = {
     costPer1MTokens: OPENROUTER_MODEL_COSTS['anthropic/claude-3.5-haiku']?.inputPer1M ?? 0.80,
     maxContext: 200000, speed: 'very_fast',
   },
-  'google/gemini-2.5-flash-preview': {
-    name: 'google/gemini-2.5-flash-preview',
+  'google/gemini-2.5-flash': {
+    name: 'google/gemini-2.5-flash',
     displayName: 'Gemini 2.5 Flash',
     internet: false, vision: true, deepAnalysis: true,
-    costPer1MTokens: OPENROUTER_MODEL_COSTS['google/gemini-2.5-flash-preview']?.inputPer1M ?? 0.15,
+    costPer1MTokens: OPENROUTER_MODEL_COSTS['google/gemini-2.5-flash']?.inputPer1M ?? 0.15,
     maxContext: 1000000, speed: 'very_fast',
   },
   'deepseek/deepseek-chat-v3-0324': {
@@ -123,25 +123,25 @@ export const MODEL_MAP: Record<string, ModelCapability> = {
     costPer1MTokens: OPENROUTER_MODEL_COSTS['openai/gpt-4.1']?.inputPer1M ?? 2.00,
     maxContext: 1000000, speed: 'fast',
   },
-  'anthropic/claude-sonnet-4-20250514': {
-    name: 'anthropic/claude-sonnet-4-20250514',
+  'anthropic/claude-sonnet-4': {
+    name: 'anthropic/claude-sonnet-4',
     displayName: 'Claude Sonnet 4',
     internet: true, vision: true, deepAnalysis: true,
-    costPer1MTokens: OPENROUTER_MODEL_COSTS['anthropic/claude-sonnet-4-20250514']?.inputPer1M ?? 3.00,
+    costPer1MTokens: OPENROUTER_MODEL_COSTS['anthropic/claude-sonnet-4']?.inputPer1M ?? 3.00,
     maxContext: 200000, speed: 'fast',
   },
-  'anthropic/claude-opus-4-20250514': {
-    name: 'anthropic/claude-opus-4-20250514',
+  'anthropic/claude-opus-4': {
+    name: 'anthropic/claude-opus-4',
     displayName: 'Claude Opus 4',
     internet: true, vision: true, deepAnalysis: true,
-    costPer1MTokens: OPENROUTER_MODEL_COSTS['anthropic/claude-opus-4-20250514']?.inputPer1M ?? 15.00,
+    costPer1MTokens: OPENROUTER_MODEL_COSTS['anthropic/claude-opus-4']?.inputPer1M ?? 15.00,
     maxContext: 200000, speed: 'slower',
   },
-  'google/gemini-2.5-pro-preview': {
-    name: 'google/gemini-2.5-pro-preview',
+  'google/gemini-2.5-pro': {
+    name: 'google/gemini-2.5-pro',
     displayName: 'Gemini 2.5 Pro',
     internet: false, vision: true, deepAnalysis: true,
-    costPer1MTokens: OPENROUTER_MODEL_COSTS['google/gemini-2.5-pro-preview']?.inputPer1M ?? 1.25,
+    costPer1MTokens: OPENROUTER_MODEL_COSTS['google/gemini-2.5-pro']?.inputPer1M ?? 1.25,
     maxContext: 1000000, speed: 'fast',
   },
   'x-ai/grok-3-beta': {
@@ -201,17 +201,17 @@ ${MODEL_CATALOG}
 
 ROUTING RULES (follow strictly):
 1. Simple greetings, thanks, basic Q&A, translations, short factual answers → google/gemini-2.0-flash-001 ($0.10)
-2. Browser automation, fill forms, visit websites, apply to jobs, sign up, login, click buttons, scrape pages, download files, any web interaction → anthropic/claude-sonnet-4-20250514 ($3.00) — ONLY model reliable at multi-step tool orchestration
-3. Coding, debugging, code review, build apps, fix bugs, write scripts → anthropic/claude-sonnet-4-20250514 ($3.00)
+2. Browser automation, fill forms, visit websites, apply to jobs, sign up, login, click buttons, scrape pages, download files, any web interaction → anthropic/claude-sonnet-4 ($3.00) — ONLY model reliable at multi-step tool orchestration
+3. Coding, debugging, code review, build apps, fix bugs, write scripts → anthropic/claude-sonnet-4 ($3.00)
 4. Math, logic, proofs, complex reasoning, puzzles → openai/o3-mini ($1.10) or deepseek/deepseek-r1 ($0.55)
-5. Research, summarize, analyze documents, compare options → deepseek/deepseek-chat-v3-0324 ($0.50) or google/gemini-2.5-flash-preview ($0.15)
+5. Research, summarize, analyze documents, compare options → deepseek/deepseek-chat-v3-0324 ($0.50) or google/gemini-2.5-flash ($0.15)
 6. Creative writing, stories, essays → openai/gpt-4o ($2.50)
-7. Image/vision analysis → openai/gpt-4o ($2.50) or google/gemini-2.5-pro-preview ($1.25)
-8. Very large documents (>50K tokens) → openai/gpt-4.1 ($2.00) or google/gemini-2.5-pro-preview ($1.25)
-9. General medium-complexity tasks → google/gemini-2.5-flash-preview ($0.15) or openai/gpt-4o-mini ($0.15)
-10. If conversation has active tool calls (agent is mid-task) → KEEP using anthropic/claude-sonnet-4-20250514, never downgrade mid-task
-11. Shell commands, install software, system administration → anthropic/claude-sonnet-4-20250514 ($3.00)
-12. Send messages, schedule tasks, manage files → anthropic/claude-sonnet-4-20250514 ($3.00)
+7. Image/vision analysis → openai/gpt-4o ($2.50) or google/gemini-2.5-pro ($1.25)
+8. Very large documents (>50K tokens) → openai/gpt-4.1 ($2.00) or google/gemini-2.5-pro ($1.25)
+9. General medium-complexity tasks → google/gemini-2.5-flash ($0.15) or openai/gpt-4o-mini ($0.15)
+10. If conversation has active tool calls (agent is mid-task) → KEEP using anthropic/claude-sonnet-4, never downgrade mid-task
+11. Shell commands, install software, system administration → anthropic/claude-sonnet-4 ($3.00)
+12. Send messages, schedule tasks, manage files → anthropic/claude-sonnet-4 ($3.00)
 13. Only use claude-opus-4 ($15.00) for extremely complex multi-hour analysis tasks — almost never
 
 When in doubt between two models, pick the cheaper one.
@@ -343,10 +343,10 @@ export function selectModel(
   // Agentic tasks (browser, forms, automation, multi-step actions) need strong
   // tool-calling models — cheap models fail at multi-step tool orchestration.
   if (needsAgentic) {
-    model = 'anthropic/claude-sonnet-4-20250514';
+    model = 'anthropic/claude-sonnet-4';
     reason = 'Agentic task (browser/automation/actions) - requires strong tool-calling model';
   } else if (needsInternet && needsVision) {
-    model = 'anthropic/claude-sonnet-4-20250514';
+    model = 'anthropic/claude-sonnet-4';
     reason = 'Requires both internet access and vision capability';
   } else if (estimatedTokens > 100000) {
     model = 'openai/gpt-4.1';
@@ -356,7 +356,7 @@ export function selectModel(
       model = 'openai/gpt-4o-mini';
       reason = 'Simple internet task - cheapest capable model';
     } else if (needsDeepAnalysis) {
-      model = 'anthropic/claude-sonnet-4-20250514';
+      model = 'anthropic/claude-sonnet-4';
       reason = 'Complex internet research requiring deep analysis';
     } else {
       model = 'openai/gpt-4o';
@@ -374,7 +374,7 @@ export function selectModel(
     model = 'google/gemini-2.0-flash-001';
     reason = 'Simple text task - cheapest model (Gemini Flash)';
   } else if (needsCode) {
-    model = 'anthropic/claude-sonnet-4-20250514';
+    model = 'anthropic/claude-sonnet-4';
     reason = 'Code task - best code generation model';
   } else if (needsDeepAnalysis) {
     model = 'openai/o3-mini';
@@ -384,7 +384,7 @@ export function selectModel(
     reason = 'Balanced fallback - cost-efficient for medium complexity';
   }
 
-  const expensiveCost = MODEL_MAP['anthropic/claude-sonnet-4-20250514']?.costPer1MTokens ?? 3.0;
+  const expensiveCost = MODEL_MAP['anthropic/claude-sonnet-4']?.costPer1MTokens ?? 3.0;
   const selectedCost = MODEL_MAP[model]?.costPer1MTokens ?? DEFAULT_COST_PER_1M;
   const tokensSaved = Math.round(
     ((expensiveCost - selectedCost) / expensiveCost) * estimatedTokens

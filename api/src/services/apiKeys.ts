@@ -108,9 +108,9 @@ export async function injectApiKeys(
         models: [
           { id: 'auto', name: '⚡ Smart Auto (picks best model per task)', contextWindow: 128000, maxTokens: 4096 },
 
-          { id: 'anthropic/claude-sonnet-4-20250514', name: 'Claude Sonnet 4 (best for agents & tool use)', contextWindow: 200000, maxTokens: 8192 },
+          { id: 'anthropic/claude-sonnet-4', name: 'Claude Sonnet 4 (best for agents & tool use)', contextWindow: 200000, maxTokens: 8192 },
           { id: 'anthropic/claude-3.5-haiku', name: 'Claude 3.5 Haiku (fast & cheap)', contextWindow: 200000, maxTokens: 8192 },
-          { id: 'anthropic/claude-opus-4-20250514', name: 'Claude Opus 4 (most powerful)', contextWindow: 200000, maxTokens: 8192 },
+          { id: 'anthropic/claude-opus-4', name: 'Claude Opus 4 (most powerful)', contextWindow: 200000, maxTokens: 8192 },
 
           { id: 'openai/gpt-4o', name: 'GPT-4o (smart & balanced)', contextWindow: 128000, maxTokens: 4096 },
           { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini (fast & cheap)', contextWindow: 128000, maxTokens: 4096 },
@@ -119,8 +119,8 @@ export async function injectApiKeys(
           { id: 'openai/gpt-4.1-nano', name: 'GPT-4.1 Nano (ultra cheap)', contextWindow: 1000000, maxTokens: 32768 },
           { id: 'openai/o3-mini', name: 'o3-mini (reasoning)', contextWindow: 200000, maxTokens: 65536 },
 
-          { id: 'google/gemini-2.5-pro-preview', name: 'Gemini 2.5 Pro (strong, 1M context)', contextWindow: 1000000, maxTokens: 65536 },
-          { id: 'google/gemini-2.5-flash-preview', name: 'Gemini 2.5 Flash (fast & smart)', contextWindow: 1000000, maxTokens: 65536 },
+          { id: 'google/gemini-2.5-pro', name: 'Gemini 2.5 Pro (strong, 1M context)', contextWindow: 1000000, maxTokens: 65536 },
+          { id: 'google/gemini-2.5-flash', name: 'Gemini 2.5 Flash (fast & smart)', contextWindow: 1000000, maxTokens: 65536 },
           { id: 'google/gemini-2.0-flash-001', name: 'Gemini 2.0 Flash (cheapest)', contextWindow: 1000000, maxTokens: 8192 },
 
           { id: 'deepseek/deepseek-chat-v3-0324', name: 'DeepSeek V3 (strong & very cheap)', contextWindow: 128000, maxTokens: 8192 },
@@ -143,7 +143,7 @@ export async function injectApiKeys(
   if (!config.agents.defaults) config.agents.defaults = {};
   config.agents.defaults.model = {
     primary: 'platform/auto',
-    fallbacks: ['openrouter/anthropic/claude-sonnet-4-20250514', 'openrouter/openai/gpt-4o'],
+    fallbacks: ['openrouter/anthropic/claude-sonnet-4', 'openrouter/openai/gpt-4o'],
   };
 
   // Ensure the main agent always exists in agents.list — the OpenClaw gateway
