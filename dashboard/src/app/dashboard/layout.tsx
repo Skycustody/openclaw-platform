@@ -40,7 +40,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           isAdmin: data.isAdmin || false,
         });
         const allowed = ['active', 'sleeping', 'grace_period', 'provisioning'];
-        if (!allowed.includes(subStatus) && typeof window !== 'undefined') {
+        const isAdmin = data.isAdmin === true;
+        if (!isAdmin && !allowed.includes(subStatus) && typeof window !== 'undefined') {
           window.location.href = '/pricing';
           return;
         }

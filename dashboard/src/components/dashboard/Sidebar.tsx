@@ -91,10 +91,10 @@ export function Sidebar() {
       <div className="border-t border-white/[0.06] p-2 space-y-0.5">
         {user?.isAdmin && (
           <Link
-            href="/admin"
+            href="/dashboard/admin"
             className={cn(
               'flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition-colors',
-              pathname === '/admin'
+              pathname === '/dashboard/admin'
                 ? 'bg-red-500/10 text-red-400'
                 : 'text-red-400/40 hover:text-red-400/70 hover:bg-red-400/5'
             )}
