@@ -10,7 +10,18 @@ import {
   Loader2, Power, PowerOff, AlertTriangle, RefreshCw,
   Terminal, Image, Users, Clock, Key, ChevronDown, ChevronUp,
   MessageSquare, Music, Home, Shield, Zap, Camera, Mail,
+  Download, Store, Check,
 } from 'lucide-react';
+
+interface StoreSkill {
+  id: string;
+  owner: string;
+  name: string;
+  description: string;
+  category: string;
+  emoji: string;
+  repoPath: string;
+}
 
 /* ── Tool metadata (built-in OpenClaw tools) ── */
 const TOOL_META: Record<string, { label: string; desc: string; icon: typeof Globe; cat: string }> = {
@@ -120,7 +131,10 @@ export default function SkillsPage() {
   const [error, setError] = useState<string | null>(null);
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set(CATEGORY_ORDER.slice(0, 6)));
   const [apiKeyInputs, setApiKeyInputs] = useState<Record<string, string>>({});
-  const [tab, setTab] = useState<'tools' | 'skills'>('tools');
+  const [tab, setTab] = useState<'tools' | 'skills' | 'store'>('tools');
+  const [storeSkills, setStoreSkills] = useState<StoreSkill[]>([]);
+  const [storeLoading, setStoreLoading] = useState(false);
+  const [installingId, setInstallingId] = useState<string | null>(null);
 
   const fetchSkills = useCallback(async () => {
     try {
@@ -135,6 +149,35 @@ export default function SkillsPage() {
   }, []);
 
   useEffect(() => { fetchSkills(); }, [fetchSkills]);
+
+  const fetchStore = useCallback(async () => {
+    setStoreLoading(true);
+    try {
+      const res = await api.get<{ skills: StoreSkill[] }>('/skills/store');
+      setStoreSkills(res.skills || []);
+    } catch {
+      setStoreSkills([]);
+    } finally {
+      setStoreLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (tab === 'store') fetchStore();
+  }, [tab, fetchStore]);
+
+  const installSkill = async (skillId: string) => {
+    setInstallingId(skillId);
+    try {
+      await api.post('/skills/install', { skillId });
+      await fetchSkills();
+      await fetchStore();
+    } catch (err: any) {
+      setError(err.message || 'Install failed');
+    } finally {
+      setInstallingId(null);
+    }
+  };
 
   const toggleTool = async (name: string, enable: boolean) => {
     setToggling(name);
@@ -192,6 +235,12 @@ export default function SkillsPage() {
 
   const enabledSet = new Set(data?.enabled || []);
   const skillsConfig = data?.skillsConfig || {};
+  const installedSkillNames = new Set([
+    ...(data?.skills || []).map((s: any) => (typeof s === 'string' ? s : s?.name || s?.id || '').toLowerCase()),
+    ...Object.keys(skillsConfig).map(k => k.toLowerCase()),
+  ].filter(Boolean));
+  const isStoreSkillInstalled = (skill: StoreSkill) =>
+    installedSkillNames.has(skill.id.toLowerCase()) || installedSkillNames.has(skill.name.toLowerCase());
 
   const allTools = loading
     ? Object.keys(TOOL_META)
@@ -239,7 +288,7 @@ export default function SkillsPage() {
       )}
 
       {/* Tab switcher */}
-      <div className="flex gap-2">
+      <div className="flex gap-2 flex-wrap">
         <button
           onClick={() => setTab('tools')}
           className={`px-4 py-2 rounded-lg text-[14px] font-medium transition-all ${
@@ -248,14 +297,23 @@ export default function SkillsPage() {
         >
           Built-in Tools ({allTools.length})
         </button>
-            <button
+        <button
           onClick={() => setTab('skills')}
           className={`px-4 py-2 rounded-lg text-[14px] font-medium transition-all ${
             tab === 'skills' ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/60'
           }`}
         >
           Bundled Skills ({Object.keys(BUNDLED_SKILLS).length})
-            </button>
+        </button>
+        <button
+          onClick={() => setTab('store')}
+          className={`px-4 py-2 rounded-lg text-[14px] font-medium transition-all ${
+            tab === 'store' ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/60'
+          }`}
+        >
+          <Store className="h-3.5 w-3.5 inline mr-1.5" />
+          Skill Store ({storeSkills.length || '…'})
+        </button>
       </div>
 
       {/* Built-in tools tab */}
@@ -410,6 +468,67 @@ export default function SkillsPage() {
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Skill Store tab */}
+      {tab === 'store' && (
+        <div className="space-y-6">
+          <p className="text-[14px] text-white/50">
+            Browse and install community skills from the OpenClaw registry. Install with one click — no ClawHub rate limits.
+          </p>
+          {storeLoading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-white/40" />
+            </div>
+          ) : storeSkills.length === 0 ? (
+            <div className="text-center py-12 text-white/40">
+              <Store className="h-12 w-12 mx-auto mb-3 opacity-50" />
+              <p>No skills in store. Check back later.</p>
+            </div>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {storeSkills.map((skill) => {
+                const installed = isStoreSkillInstalled(skill);
+                const isInstalling = installingId === skill.id;
+                return (
+                  <Card key={skill.id} className={installed ? 'ring-1 ring-emerald-500/10' : ''}>
+                    <div className="flex items-start gap-3 mb-2">
+                      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-lg ${installed ? 'bg-emerald-500/10' : 'bg-white/5'}`}>
+                        {skill.emoji}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className={`text-[14px] font-semibold ${installed ? 'text-white' : 'text-white/70'}`}>
+                            {skill.name}
+                          </h3>
+                          {installed ? (
+                            <Badge variant="green" dot><Check className="h-3 w-3" /> Installed</Badge>
+                          ) : (
+                            <Badge variant="default">{skill.category}</Badge>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-[12px] text-white/40 leading-relaxed mb-3">{skill.description}</p>
+                    <Button
+                      variant={installed ? 'glass' : 'primary'}
+                      size="sm"
+                      loading={isInstalling}
+                      disabled={installed}
+                      onClick={() => !installed && installSkill(skill.id)}
+                    >
+                      {installed ? (
+                        <><Check className="h-3.5 w-3.5" /> Installed</>
+                      ) : (
+                        <><Download className="h-3.5 w-3.5" /> Install</>
+                      )}
+                    </Button>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
     </div>
