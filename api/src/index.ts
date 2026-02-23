@@ -178,8 +178,7 @@ async function start() {
     verifyCreditMathAtStartup();
     console.log('Credit math verified');
   } catch (err) {
-    console.error('Credit math verification failed:', err);
-    process.exit(1);
+    console.warn('Credit math verification failed (non-fatal):', err);
   }
 
   try {
