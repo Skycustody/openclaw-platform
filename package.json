@@ -8,6 +8,7 @@
     "build:api": "npm run build --workspace=api",
     "build:dashboard": "npm run build --workspace=dashboard",
     "migrate": "node migrations/run.js",
+    "set-admin": "npm run set-admin --workspace=api --",
     "lint": "npm run lint --workspaces"
   }
 }
