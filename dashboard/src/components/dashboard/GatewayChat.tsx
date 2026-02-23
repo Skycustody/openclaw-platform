@@ -147,69 +147,113 @@ export default function GatewayChat({ gatewayUrl, token }: GatewayChatProps) {
         }
 
         const cb = pendingCallbacks.current.get(msg.id);
-        if (cb) cb(msg);
-        return;
-      }
-
-      if (msg.type === 'event' && msg.event === 'chat') {
-        const p = msg.payload || {};
-
-        if (p.type === 'text' || p.type === 'chunk' || p.text || p.content) {
-          const chunk = p.text || p.content || p.chunk || '';
-          if (chunk) {
-            streamBufferRef.current += chunk;
-            const buffered = streamBufferRef.current;
-
+        if (cb) {
+          cb(msg);
+          // If this was chat.send response with inline reply (non-streaming), show it
+          const pl = msg.payload || {};
+          const replyText = pl.text ?? pl.content ?? pl.reply;
+          const isChatSendResponse = 'runId' in pl || (typeof replyText === 'string' && replyText.length > 0 && !Array.isArray(pl.messages));
+          if (isChatSendResponse && typeof replyText === 'string' && replyText.length > 0) {
+            streamBufferRef.current = '';
+            setActiveRunId(pl.runId ?? null);
             setMessages(prev => {
               const last = prev[prev.length - 1];
               if (last?.streaming) {
-                return [...prev.slice(0, -1), { ...last, content: buffered }];
+                return [...prev.slice(0, -1), { ...last, content: replyText, streaming: false }];
               }
               return [...prev, {
-                id: `stream_${Date.now()}`,
+                id: `a_${Date.now()}`,
                 role: 'assistant',
-                content: buffered,
-                streaming: true,
+                content: replyText,
+                streaming: false,
               }];
             });
             scrollToBottom();
           }
         }
+        return;
+      }
 
-        if (p.type === 'done' || p.type === 'end' || p.finished || p.done) {
+      // Chat stream events: accept 'chat' and 'chat.*' and any event with chat-like payload
+      const isChatEvent = msg.type === 'event' && (
+        msg.event === 'chat' ||
+        (typeof msg.event === 'string' && msg.event.startsWith('chat.')) ||
+        (typeof msg.event === 'string' && (msg.event === 'run.chunk' || msg.event === 'run.delta'))
+      );
+      const p = (msg.payload != null ? msg.payload : msg) as Record<string, unknown>;
+      const chunk = typeof p === 'string' ? p : (
+        (p.text as string) ??
+        (p.content as string) ??
+        (p.chunk as string) ??
+        (typeof p.delta === 'string' ? p.delta : (p.delta as Record<string, unknown>)?.content as string) ??
+        (msg as Record<string, unknown>).chunk as string ??
+        (msg as Record<string, unknown>).text as string ??
+        ''
+      );
+
+      if (isChatEvent && typeof chunk === 'string' && chunk.length > 0) {
+        streamBufferRef.current += chunk;
+        const buffered = streamBufferRef.current;
+        setMessages(prev => {
+          const last = prev[prev.length - 1];
+          if (last?.streaming) {
+            return [...prev.slice(0, -1), { ...last, content: buffered }];
+          }
+          return [...prev, {
+            id: `stream_${Date.now()}`,
+            role: 'assistant',
+            content: buffered,
+            streaming: true,
+          }];
+        });
+        scrollToBottom();
+      }
+
+      const isChatRelated = msg.type === 'event' && (
+        msg.event === 'chat' ||
+        (typeof msg.event === 'string' && (msg.event.startsWith('chat.') || msg.event.startsWith('run.')))
+      );
+      if (isChatRelated) {
+        const ev = msg.event;
+        const pay = (msg.payload || {}) as Record<string, unknown>;
+        const isDone = pay.type === 'done' || pay.type === 'end' || pay.finished === true || pay.done === true ||
+          ev === 'chat.done' || ev === 'run.done';
+        if (isDone) {
           streamBufferRef.current = '';
           setActiveRunId(null);
           setMessages(prev => prev.map(m => m.streaming ? { ...m, streaming: false } : m));
         }
 
-        if (p.type === 'error') {
+        const isError = pay.type === 'error' || ev === 'chat.error' || ev === 'run.error';
+        if (isError) {
           streamBufferRef.current = '';
           setActiveRunId(null);
+          const errMsg = pay.message ?? pay.error ?? 'Unknown error';
           setMessages(prev => {
             const cleaned = prev.map(m => m.streaming ? { ...m, streaming: false } : m);
             return [...cleaned, {
               id: `err_${Date.now()}`,
               role: 'system',
-              content: `Error: ${p.message || p.error || 'Unknown error'}`,
+              content: `Error: ${String(errMsg)}`,
             }];
           });
         }
 
-        if (p.type === 'tool_call' || p.type === 'tool') {
-          const toolName = p.tool || p.name || 'tool';
-          const toolStatus = p.status || 'running';
+        const isTool = pay.type === 'tool_call' || pay.type === 'tool' || ev === 'chat.tool';
+        if (isTool) {
+          const toolName = pay.tool ?? pay.name ?? 'tool';
           setMessages(prev => {
             const last = prev[prev.length - 1];
             if (last?.streaming) {
               return [...prev.slice(0, -1), {
                 ...last,
-                content: last.content + `\n\n*Using ${toolName}...*`,
+                content: last.content + `\n\n*Using ${String(toolName)}...*`,
               }];
             }
             return [...prev, {
               id: `tool_${Date.now()}`,
               role: 'assistant',
-              content: `*Using ${toolName} (${toolStatus})...*`,
+              content: `*Using ${String(toolName)}...*`,
               streaming: true,
             }];
           });

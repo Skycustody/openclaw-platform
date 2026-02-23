@@ -25,7 +25,7 @@ import {
   restartContainer,
 } from '../services/containerConfig';
 import fs from 'fs';
-import { sshUploadDir } from '../services/ssh';
+import { sshExec, sshUploadDir } from '../services/ssh';
 import { PLATFORM_SKILLS } from '../data/platformSkills';
 import { PLATFORM_SKILLS_DIR } from '../services/defaultSkills';
 
