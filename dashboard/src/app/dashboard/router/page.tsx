@@ -8,7 +8,8 @@ import api from '@/lib/api';
 import {
   Brain, Loader2,
   Key, Eye, EyeOff, Trash2, Lock, Sparkles, Info, X, ExternalLink,
-  Zap, TrendingDown,
+  Zap, TrendingDown, Settings2, RotateCcw, Check, Code, Globe, Calculator,
+  Search, Pen, ImageIcon, FileText, Terminal, MessageSquare, Cpu, Layers,
 } from 'lucide-react';
 
 interface Model {
@@ -22,11 +23,27 @@ interface Model {
   retailPrice: number;
 }
 
+interface TaskCategory {
+  key: string;
+  label: string;
+  description: string;
+  defaultModel: string;
+  ruleNumber: number;
+}
+
+interface CategoryModel {
+  id: string;
+  displayName: string;
+  costPer1MTokens: number;
+  retailPrice: number;
+}
+
 interface Settings {
   brain_mode: 'auto' | 'manual';
   manual_model: string | null;
   has_own_openrouter_key: boolean;
   own_openrouter_key_masked: string | null;
+  routing_preferences: Record<string, string>;
 }
 
 interface RoutingEntry {
@@ -38,6 +55,21 @@ interface RoutingEntry {
   classification: string;
   created_at: string;
 }
+
+const CATEGORY_ICONS: Record<string, React.ReactNode> = {
+  greeting:      <MessageSquare className="h-4 w-4" />,
+  browser:       <Globe className="h-4 w-4" />,
+  coding:        <Code className="h-4 w-4" />,
+  math:          <Calculator className="h-4 w-4" />,
+  research:      <Search className="h-4 w-4" />,
+  creative:      <Pen className="h-4 w-4" />,
+  vision:        <ImageIcon className="h-4 w-4" />,
+  large_context: <FileText className="h-4 w-4" />,
+  general:       <Layers className="h-4 w-4" />,
+  shell:         <Terminal className="h-4 w-4" />,
+  messaging:     <MessageSquare className="h-4 w-4" />,
+  complex:       <Cpu className="h-4 w-4" />,
+};
 
 function formatTimeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -51,9 +83,12 @@ function formatTimeAgo(dateStr: string): string {
 
 export default function RouterPage() {
   const [models, setModels] = useState<Model[]>([]);
+  const [categories, setCategories] = useState<TaskCategory[]>([]);
+  const [categoryModels, setCategoryModels] = useState<CategoryModel[]>([]);
   const [settings, setSettings] = useState<Settings>({
     brain_mode: 'auto', manual_model: null,
     has_own_openrouter_key: false, own_openrouter_key_masked: null,
+    routing_preferences: {},
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -65,25 +100,36 @@ export default function RouterPage() {
   const [routingHistory, setRoutingHistory] = useState<RoutingEntry[]>([]);
   const [tokensSaved, setTokensSaved] = useState(0);
 
+  const [prefsDraft, setPrefsDraft] = useState<Record<string, string>>({});
+  const [prefsSaving, setPrefsSaving] = useState(false);
+  const [prefsSaved, setPrefsSaved] = useState(false);
+  const [showPrefs, setShowPrefs] = useState(false);
+
   const fetchData = useCallback(async () => {
     try {
-      const [modelsRes, settingsRes, historyRes, savingsRes] = await Promise.all([
+      const [modelsRes, settingsRes, historyRes, savingsRes, catRes] = await Promise.all([
         api.get<{ models: Model[] }>('/router/models'),
         api.get<{ settings: any }>('/settings'),
         api.get<{ history: RoutingEntry[] }>('/router/history?limit=10').catch(() => ({ history: [] })),
         api.get<{ tokensSavedThisMonth: number }>('/router/savings').catch(() => ({ tokensSavedThisMonth: 0 })),
+        api.get<{ categories: TaskCategory[]; models: CategoryModel[] }>('/router/categories').catch(() => ({ categories: [], models: [] })),
       ]);
       setModels(modelsRes.models || []);
+      setCategories(catRes.categories || []);
+      setCategoryModels(catRes.models || []);
       setRoutingHistory(historyRes.history || []);
       setTokensSaved(savingsRes.tokensSavedThisMonth || 0);
       if (settingsRes.settings) {
         const s = settingsRes.settings;
+        const prefs = s.routing_preferences || {};
         setSettings({
           brain_mode: s.brain_mode || 'auto',
           manual_model: s.manual_model || null,
           has_own_openrouter_key: !!s.has_own_openrouter_key,
           own_openrouter_key_masked: s.own_openrouter_key_masked || null,
+          routing_preferences: prefs,
         });
+        setPrefsDraft(prefs);
       }
     } catch {}
     setLoading(false);
@@ -121,6 +167,25 @@ export default function RouterPage() {
       fetchData();
     } catch {}
   };
+
+  const savePrefs = async () => {
+    setPrefsSaving(true);
+    try {
+      await api.put('/settings/routing-preferences', { preferences: prefsDraft });
+      setSettings(prev => ({ ...prev, routing_preferences: { ...prefsDraft } }));
+      setPrefsSaved(true);
+      setTimeout(() => setPrefsSaved(false), 2000);
+    } catch (err: any) {
+      alert(err.message || 'Failed to save preferences');
+    }
+    setPrefsSaving(false);
+  };
+
+  const resetAllPrefs = () => {
+    setPrefsDraft({});
+  };
+
+  const prefsChanged = JSON.stringify(prefsDraft) !== JSON.stringify(settings.routing_preferences);
 
   if (loading) {
     return (
@@ -259,7 +324,7 @@ export default function RouterPage() {
                   let routerLabel = '';
                   try {
                     const cls = JSON.parse(entry.classification || '{}');
-                    if (cls.routerUsed === 'google/gemini-2.0-flash-001') routerLabel = 'Gemini Router';
+                    if (cls.routerUsed === 'google/gemini-2.5-flash' || cls.routerUsed === 'google/gemini-2.0-flash-001') routerLabel = 'Gemini Router';
                     else if (cls.routerUsed === 'openai/gpt-4o-mini') routerLabel = 'GPT-4o-mini Router';
                     else if (cls.routerUsed === 'fallback') routerLabel = 'Safe Fallback';
                     else if (cls.method === 'ai') routerLabel = 'AI Router';
@@ -298,6 +363,146 @@ export default function RouterPage() {
             </Card>
           )}
         </div>
+      )}
+
+      {/* Per-Task Routing Preferences */}
+      {settings.brain_mode === 'auto' && categories.length > 0 && (
+        <Card>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Settings2 className="h-4 w-4 text-indigo-400" />
+              <CardTitle>Customize Auto Routing</CardTitle>
+            </div>
+            <Button
+              variant="glass"
+              size="sm"
+              onClick={() => setShowPrefs(!showPrefs)}
+            >
+              {showPrefs ? 'Hide' : 'Customize'}
+            </Button>
+          </div>
+
+          {!showPrefs && (
+            <CardDescription>
+              Override which model the AI router picks for specific task types. For example, use Codex for coding or DeepSeek for research.
+              {Object.keys(settings.routing_preferences).length > 0 && (
+                <span className="ml-1 text-indigo-400">
+                  ({Object.keys(settings.routing_preferences).length} custom {Object.keys(settings.routing_preferences).length === 1 ? 'override' : 'overrides'} active)
+                </span>
+              )}
+            </CardDescription>
+          )}
+
+          {showPrefs && (
+            <div className="space-y-2">
+              <p className="text-[12px] text-white/30 mb-3">
+                Set &quot;Default&quot; to let the AI router decide, or pick a specific model for each task type.
+              </p>
+              {categories.map((cat) => {
+                const override = prefsDraft[cat.key];
+                const defaultModelName = categoryModels.find(m => m.id === cat.defaultModel)?.displayName || cat.defaultModel.split('/').pop();
+                const isOverridden = !!override;
+
+                return (
+                  <div
+                    key={cat.key}
+                    className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors ${
+                      isOverridden
+                        ? 'border-indigo-500/20 bg-indigo-500/[0.03]'
+                        : 'border-white/[0.04] bg-white/[0.01]'
+                    }`}
+                  >
+                    <div className={`flex h-8 w-8 items-center justify-center rounded-lg shrink-0 ${
+                      isOverridden ? 'bg-indigo-500/15 text-indigo-400' : 'bg-white/[0.04] text-white/30'
+                    }`}>
+                      {CATEGORY_ICONS[cat.key] || <Layers className="h-4 w-4" />}
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-medium text-white/80">{cat.label}</p>
+                      <p className="text-[11px] text-white/30 truncate">{cat.description}</p>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      {!isOverridden && (
+                        <Badge variant="default">{defaultModelName}</Badge>
+                      )}
+                      <select
+                        value={override || ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setPrefsDraft(prev => {
+                            const next = { ...prev };
+                            if (val) {
+                              next[cat.key] = val;
+                            } else {
+                              delete next[cat.key];
+                            }
+                            return next;
+                          });
+                        }}
+                        className="rounded-md border border-white/[0.08] bg-white/[0.03] px-2 py-1.5 text-[12px] text-white/70 focus:border-indigo-500/40 focus:outline-none appearance-none cursor-pointer min-w-[160px]"
+                      >
+                        <option value="" className="bg-[#1a1a2e] text-white/70">
+                          Default ({defaultModelName})
+                        </option>
+                        {categoryModels.map((m) => (
+                          <option
+                            key={m.id}
+                            value={m.id}
+                            className="bg-[#1a1a2e] text-white/70"
+                          >
+                            {m.displayName} — ${m.retailPrice}/1M
+                          </option>
+                        ))}
+                      </select>
+
+                      {isOverridden && (
+                        <button
+                          onClick={() => setPrefsDraft(prev => {
+                            const next = { ...prev };
+                            delete next[cat.key];
+                            return next;
+                          })}
+                          className="p-1 rounded text-white/20 hover:text-white/50 transition-colors"
+                          title="Reset to default"
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+
+              <div className="flex items-center justify-between pt-2">
+                <button
+                  onClick={resetAllPrefs}
+                  className="text-[12px] text-white/30 hover:text-white/50 transition-colors"
+                  disabled={Object.keys(prefsDraft).length === 0}
+                >
+                  Reset all to defaults
+                </button>
+                <div className="flex items-center gap-2">
+                  {prefsSaved && (
+                    <span className="flex items-center gap-1 text-[12px] text-green-400">
+                      <Check className="h-3 w-3" /> Saved
+                    </span>
+                  )}
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={savePrefs}
+                    loading={prefsSaving}
+                    disabled={!prefsChanged}
+                  >
+                    Save Preferences
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+        </Card>
       )}
 
       {/* Own OpenRouter Key (BYOK) */}

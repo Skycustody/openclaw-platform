@@ -7,6 +7,7 @@ import fs from 'fs';
 import { sshUploadDir } from './ssh';
 import { readContainerConfig, writeContainerConfig, restartContainer } from './containerConfig';
 import { PLATFORM_SKILLS } from '../data/platformSkills';
+import { cacheUserSkills } from './smartRouter';
 
 const INSTANCE_DIR = '/opt/openclaw/instances';
 
@@ -39,6 +40,7 @@ export async function installDefaultSkills(
       config.skills.entries[skill.id] = { enabled: true };
     }
     await writeContainerConfig(serverIp, userId, config);
+    cacheUserSkills(userId, PLATFORM_SKILLS.map(s => s.id)).catch(() => {});
 
     await restartContainer(serverIp, containerName);
     console.log(`[provision] Installed default skills from control plane for ${userId}`);

@@ -5,6 +5,7 @@ import {
   getTokensSavedThisMonth,
   MODEL_MAP,
   RETAIL_PRICES,
+  TASK_CATEGORIES,
 } from '../services/smartRouter';
 
 const router = Router();
@@ -18,6 +19,21 @@ router.get('/models', async (_req: AuthRequest, res: Response, next: NextFunctio
       retailPrice: RETAIL_PRICES[m.name],
     }));
     res.json({ models });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Get task categories with default models (for preferences UI)
+router.get('/categories', async (_req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const models = Object.values(MODEL_MAP).map((m) => ({
+      id: m.name,
+      displayName: m.displayName,
+      costPer1MTokens: m.costPer1MTokens,
+      retailPrice: RETAIL_PRICES[m.name],
+    }));
+    res.json({ categories: TASK_CATEGORIES, models });
   } catch (err) {
     next(err);
   }

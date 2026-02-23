@@ -11,6 +11,8 @@ import db from '../lib/db';
 import { UserSettings } from '../types';
 import { getUserContainer, readContainerConfig, writeContainerConfig, restartContainer } from '../services/containerConfig';
 import { getNexosUsage } from '../services/nexos';
+import { VALID_CATEGORY_KEYS, MODEL_MAP } from '../services/smartRouter';
+import redis from '../lib/redis';
 
 async function syncSettingsToContainer(userId: string): Promise<void> {
   try {
@@ -70,6 +72,11 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
       ? settings.own_openrouter_key.slice(0, 8) + '...' + settings.own_openrouter_key.slice(-4)
       : null;
     delete safeSettings.own_openrouter_key;
+
+    if (typeof safeSettings.routing_preferences === 'string') {
+      try { safeSettings.routing_preferences = JSON.parse(safeSettings.routing_preferences); } catch { safeSettings.routing_preferences = {}; }
+    }
+    if (!safeSettings.routing_preferences) safeSettings.routing_preferences = {};
 
     res.json({ settings: safeSettings });
   } catch (err) {
@@ -270,6 +277,46 @@ router.post('/onboarding', async (req: AuthRequest, res: Response, next: NextFun
 
     syncSettingsToContainer(req.userId!).catch(() => {});
     res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Update per-task routing preferences
+router.put('/routing-preferences', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { preferences } = req.body;
+    if (!preferences || typeof preferences !== 'object' || Array.isArray(preferences)) {
+      return res.status(400).json({ error: 'preferences must be an object mapping category keys to model IDs' });
+    }
+
+    const validModelIds = new Set(Object.keys(MODEL_MAP));
+    const cleaned: Record<string, string> = {};
+
+    for (const [key, value] of Object.entries(preferences)) {
+      if (!VALID_CATEGORY_KEYS.has(key)) {
+        return res.status(400).json({ error: `Unknown task category: ${key}` });
+      }
+      if (typeof value !== 'string' || !value) continue;
+      if (!validModelIds.has(value)) {
+        return res.status(400).json({ error: `Invalid model ID for ${key}: ${value}` });
+      }
+      cleaned[key] = value;
+    }
+
+    await db.query(
+      'UPDATE user_settings SET routing_preferences = $1 WHERE user_id = $2',
+      [JSON.stringify(cleaned), req.userId]
+    );
+
+    // Invalidate cached routing decisions for this user
+    const pattern = `aiRoute6:*`;
+    try {
+      const keys = await redis.keys(pattern);
+      if (keys.length > 0) await redis.del(...keys);
+    } catch { /* non-critical */ }
+
+    res.json({ ok: true, preferences: cleaned });
   } catch (err) {
     next(err);
   }

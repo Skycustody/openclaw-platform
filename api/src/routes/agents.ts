@@ -145,7 +145,12 @@ The user cannot SSH into your container, so YOU are the only way to change your 
 → Read your \`~/.openclaw/SOUL.md\`, modify the personality section, write it back.
 
 **"Use GPT-4o for everything" / "Always use Claude" / "Switch to a cheaper model"**
-→ Read \`~/.openclaw/openclaw.json\`, find the \`models\` section, change \`agents.defaults.model.primary\` to the desired model ID (e.g., \`platform/openai/gpt-4o\`, \`platform/anthropic/claude-sonnet-4\`). Write back and run: \`openclaw restart\`
+→ To change for THIS session: use the session_status tool to set model to the desired ID (e.g., \`openai/gpt-4o\`, \`anthropic/claude-sonnet-4\`, or \`auto\` for smart routing).
+→ To change permanently: Read \`~/.openclaw/openclaw.json\`, find the \`models\` section, change \`agents.defaults.model.primary\` to the desired model ID. Write back and run: \`openclaw restart\`
+→ IMPORTANT: When you switch models via session_status, the change takes effect on the NEXT message, not your current response. Tell the user: "Done — the next message will use [model]."
+
+**"Use auto" / "Switch to auto" / "Let the system pick the model"**
+→ Use the session_status tool to set the model to \`auto\`. This enables smart auto-routing where a cheap AI picks the best model for each message. Simple messages use cheap models, complex tasks use powerful ones. The switch takes effect on the NEXT message.
 
 **"Remember that I prefer X" / "My name is Y" / "I work at Z"**
 → Add a \`## User Preferences\` section to your SOUL.md with the user's preferences. This persists across conversations.

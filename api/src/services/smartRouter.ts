@@ -186,7 +186,32 @@ function buildModelCatalog(): string {
 const MODEL_CATALOG = buildModelCatalog();
 const VALID_MODEL_IDS = new Set(Object.keys(MODEL_MAP));
 
-const ROUTER_SYSTEM_PROMPT = `You are a model router for an AI agent platform. The agent has these tools: browser (navigate pages, click, type, fill forms, take screenshots), exec (run shell commands, install software), web_search, web_fetch, file read/write, memory, cron jobs, messaging.
+export interface TaskCategory {
+  key: string;
+  label: string;
+  description: string;
+  defaultModel: string;
+  ruleNumber: number;
+}
+
+export const TASK_CATEGORIES: TaskCategory[] = [
+  { key: 'greeting',       label: 'Simple Q&A',            description: 'Greetings, thanks, basic questions, translations, short answers',                  defaultModel: 'openai/gpt-4.1-nano',              ruleNumber: 1 },
+  { key: 'browser',        label: 'Browser Automation',    description: 'Fill forms, visit websites, apply to jobs, sign up, scrape pages, web interaction', defaultModel: 'anthropic/claude-sonnet-4',         ruleNumber: 2 },
+  { key: 'coding',         label: 'Coding',                description: 'Coding, debugging, code review, build apps, fix bugs, write scripts',               defaultModel: 'anthropic/claude-sonnet-4',         ruleNumber: 3 },
+  { key: 'math',           label: 'Math & Reasoning',      description: 'Math, logic, proofs, complex reasoning, puzzles',                                  defaultModel: 'deepseek/deepseek-r1',              ruleNumber: 4 },
+  { key: 'research',       label: 'Research & Summarize',  description: 'Research, summarize, analyze documents, compare options',                           defaultModel: 'deepseek/deepseek-chat-v3-0324',   ruleNumber: 5 },
+  { key: 'creative',       label: 'Creative Writing',      description: 'Creative writing, stories, essays',                                                defaultModel: 'openai/gpt-4o',                     ruleNumber: 6 },
+  { key: 'vision',         label: 'Image & Vision',        description: 'Image/vision analysis',                                                            defaultModel: 'google/gemini-2.5-flash',           ruleNumber: 7 },
+  { key: 'large_context',  label: 'Large Documents',       description: 'Very large documents (>50K tokens)',                                               defaultModel: 'google/gemini-2.5-pro',             ruleNumber: 8 },
+  { key: 'general',        label: 'General Tasks',         description: 'General medium-complexity tasks',                                                  defaultModel: 'google/gemini-2.5-flash',           ruleNumber: 9 },
+  { key: 'shell',          label: 'Shell & Sysadmin',      description: 'Shell commands, install software, system administration',                           defaultModel: 'anthropic/claude-sonnet-4',         ruleNumber: 11 },
+  { key: 'messaging',      label: 'Messaging & Files',     description: 'Send messages, schedule tasks, manage files',                                      defaultModel: 'anthropic/claude-sonnet-4',         ruleNumber: 12 },
+  { key: 'complex',        label: 'Extremely Complex',     description: 'Extremely complex multi-hour analysis tasks',                                      defaultModel: 'anthropic/claude-opus-4',           ruleNumber: 13 },
+];
+
+const VALID_CATEGORY_KEYS = new Set(TASK_CATEGORIES.map(c => c.key));
+
+const BASE_ROUTER_SYSTEM_PROMPT = `You are a model router for an AI agent platform. The agent has these tools: browser (navigate pages, click, type, fill forms, take screenshots), exec (run shell commands, install software), web_search, web_fetch, file read/write, memory, cron jobs, messaging.
 
 Your job: pick the CHEAPEST model that will handle the user's task well. Cost matters — don't pick expensive models for simple tasks.
 
@@ -212,6 +237,42 @@ IMPORTANT: You must return EXACTLY one of the model IDs listed above. Do not inv
 
 Return JSON: {"model":"<exact_model_id_from_list>","reason":"<why in max 10 words>"}`;
 
+function buildRouterPrompt(
+  userPreferences?: Record<string, string>,
+  installedSkills?: string[],
+): string {
+  const parts = [BASE_ROUTER_SYSTEM_PROMPT];
+
+  if (userPreferences && Object.keys(userPreferences).length > 0) {
+    const overrideLines: string[] = [];
+    for (const cat of TASK_CATEGORIES) {
+      const override = userPreferences[cat.key];
+      if (override && VALID_MODEL_IDS.has(override)) {
+        overrideLines.push(`- ${cat.description} → ${override} (USER OVERRIDE — always use this model for this task type)`);
+      }
+    }
+    if (overrideLines.length > 0) {
+      parts.push(`\nUSER MODEL PREFERENCES (these override the defaults above):\n${overrideLines.join('\n')}`);
+    }
+  }
+
+  if (installedSkills && installedSkills.length > 0) {
+    const skillList = installedSkills.slice(0, 30).join(', ');
+    const browserSkills = installedSkills.filter(s =>
+      /browser|scraper?|firecrawl|autofillin|job-auto/i.test(s)
+    );
+    const hints: string[] = [`Agent has these skills installed: ${skillList}.`];
+    if (browserSkills.length > 0) {
+      hints.push(`Skills [${browserSkills.join(', ')}] require strong tool orchestration (prefer claude-sonnet-4 or equivalent).`);
+    }
+    parts.push(`\nINSTALLED SKILLS:\n${hints.join('\n')}`);
+  }
+
+  return parts.join('');
+}
+
+export { VALID_CATEGORY_KEYS };
+
 export interface RouterContext {
   messageCount: number;
   toolCallCount: number;
@@ -234,6 +295,8 @@ export async function pickModelWithAI(
   hasToolHistory: boolean,
   ctx?: RouterContext,
   apiKey?: string,
+  userPreferences?: Record<string, string>,
+  installedSkills?: string[],
 ): Promise<{ model: string; reason: string; routerUsed: string }> {
   const key = apiKey || process.env.OPENROUTER_API_KEY || process.env.OPENROUTER_MGMT_KEY || '';
   if (!key) {
@@ -243,13 +306,17 @@ export async function pickModelWithAI(
   const depth = ctx?.messageCount ?? 0;
   const toolCalls = ctx?.toolCallCount ?? 0;
 
+  const prefHash = userPreferences ? Buffer.from(JSON.stringify(userPreferences)).toString('base64').slice(0, 20) : '';
+  const skillHash = installedSkills?.length ? Buffer.from(installedSkills.sort().join(',')).toString('base64').slice(0, 20) : '';
   const msgKey = userMessage.slice(0, 200);
-  const cacheKey = `aiRoute5:${Buffer.from(msgKey).toString('base64')}:${hasImage}:${hasToolHistory}:${depth}:${toolCalls}`;
+  const cacheKey = `aiRoute6:${Buffer.from(msgKey).toString('base64')}:${hasImage}:${hasToolHistory}:${depth}:${toolCalls}:${prefHash}:${skillHash}`;
 
   try {
     const cached = await redis.get(cacheKey);
     if (cached) return JSON.parse(cached);
   } catch { /* cache miss */ }
+
+  const systemPrompt = buildRouterPrompt(userPreferences, installedSkills);
 
   const contextLines: string[] = [];
   if (hasImage) contextLines.push('Image attached: yes');
@@ -278,7 +345,7 @@ export async function pickModelWithAI(
         body: JSON.stringify({
           model: routerModel,
           messages: [
-            { role: 'system', content: ROUTER_SYSTEM_PROMPT },
+            { role: 'system', content: systemPrompt },
             { role: 'user', content: userContent },
           ],
           max_tokens: 80,
@@ -320,6 +387,25 @@ export async function pickModelWithAI(
   };
   console.warn(`[router] All AI routers failed, falling back to ${FINAL_FALLBACK_MODEL}`);
   return fallback;
+}
+
+// ── Skills cache (written by skills routes, read by proxy at routing time) ──
+
+const SKILLS_CACHE_TTL = 3600; // 1 hour
+
+export async function cacheUserSkills(userId: string, enabledSkillIds: string[]): Promise<void> {
+  const key = `userSkills:${userId}`;
+  try {
+    await redis.set(key, JSON.stringify(enabledSkillIds), 'EX', SKILLS_CACHE_TTL);
+  } catch { /* non-critical */ }
+}
+
+export async function getCachedUserSkills(userId: string): Promise<string[]> {
+  try {
+    const raw = await redis.get(`userSkills:${userId}`);
+    if (raw) return JSON.parse(raw);
+  } catch { /* cache miss */ }
+  return [];
 }
 
 function parseRouterResponse(content: string): { model: string; reason: string } | null {

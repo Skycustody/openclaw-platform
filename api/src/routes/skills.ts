@@ -28,10 +28,19 @@ import fs from 'fs';
 import { sshExec, sshUploadDir } from '../services/ssh';
 import { PLATFORM_SKILLS } from '../data/platformSkills';
 import { PLATFORM_SKILLS_DIR } from '../services/defaultSkills';
+import { cacheUserSkills } from '../services/smartRouter';
 
 const router = Router();
 const INSTANCE_DIR = '/opt/openclaw/instances';
 router.use(authenticate);
+
+async function refreshSkillsCache(userId: string, config: any): Promise<void> {
+  const entries = config?.skills?.entries || {};
+  const enabled = Object.entries(entries)
+    .filter(([, v]: [string, any]) => v && (v === true || v.enabled !== false))
+    .map(([k]) => k);
+  await cacheUserSkills(userId, enabled);
+}
 
 // GET /skills/marketplace — list of installable platform skills (no container needed)
 router.get('/marketplace', (req: AuthRequest, res: Response) => {
@@ -72,6 +81,7 @@ router.post('/install', requireActiveSubscription, async (req: AuthRequest, res:
     if (!config.skills.entries) config.skills.entries = {};
     config.skills.entries[skill.id] = { enabled: true };
     await writeContainerConfig(serverIp, userId, config);
+    refreshSkillsCache(userId, config).catch(() => {});
 
     const ready = await restartContainer(serverIp, containerName);
 
@@ -210,6 +220,7 @@ router.put('/bundled/:skillName', async (req: AuthRequest, res: Response, next: 
     config.skills.entries[skillName] = entry;
 
     await writeContainerConfig(serverIp, req.userId!, config);
+    refreshSkillsCache(req.userId!, config).catch(() => {});
     const ready = await restartContainer(serverIp, containerName);
 
     res.json({ ok: true, restarted: ready, skill: skillName, enabled: enabled !== false });
@@ -258,6 +269,7 @@ router.delete('/:toolName', async (req: AuthRequest, res: Response, next: NextFu
     if (config.skills?.entries) delete config.skills.entries[toolName];
 
     await writeContainerConfig(serverIp, req.userId!, config);
+    refreshSkillsCache(req.userId!, config).catch(() => {});
     await restartContainer(serverIp, containerName);
 
     res.json({ ok: true });

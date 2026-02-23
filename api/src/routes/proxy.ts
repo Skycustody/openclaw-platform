@@ -20,7 +20,7 @@ import https from 'https';
 import { URL } from 'url';
 import db from '../lib/db';
 import { Plan } from '../types';
-import { pickModelWithAI, RouterContext } from '../services/smartRouter';
+import { pickModelWithAI, RouterContext, getCachedUserSkills } from '../services/smartRouter';
 
 const router = Router();
 
@@ -31,6 +31,7 @@ interface ProxyUser {
   plan: Plan;
   brain_mode?: string;
   manual_model?: string | null;
+  routing_preferences?: Record<string, string>;
 }
 
 const userCache = new Map<string, { user: ProxyUser; expires: number }>();
@@ -48,16 +49,26 @@ async function lookupUser(apiKey: string): Promise<ProxyUser | null> {
   );
   if (!row) return null;
 
-  const settings = await db.getOne<{ brain_mode: string; manual_model: string | null }>(
-    'SELECT brain_mode, manual_model FROM user_settings WHERE user_id = $1',
+  const settings = await db.getOne<{ brain_mode: string; manual_model: string | null; routing_preferences: any }>(
+    'SELECT brain_mode, manual_model, routing_preferences FROM user_settings WHERE user_id = $1',
     [row.id]
   ).catch(() => null);
+
+  let prefs: Record<string, string> = {};
+  if (settings?.routing_preferences) {
+    try {
+      prefs = typeof settings.routing_preferences === 'string'
+        ? JSON.parse(settings.routing_preferences)
+        : settings.routing_preferences;
+    } catch { /* invalid JSON */ }
+  }
 
   const user: ProxyUser = {
     id: row.id,
     plan: row.plan as Plan,
     brain_mode: settings?.brain_mode || 'auto',
     manual_model: settings?.manual_model || null,
+    routing_preferences: prefs,
   };
 
   userCache.set(apiKey, { user, expires: Date.now() + CACHE_TTL_MS });
@@ -154,12 +165,19 @@ router.post('/v1/chat/completions', async (req: Request, res: Response) => {
     const hasToolHistory = hasToolCallsInHistory(body.messages);
     const ctx = extractConversationContext(body.messages);
 
+    const userPrefs = user?.routing_preferences && Object.keys(user.routing_preferences).length > 0
+      ? user.routing_preferences : undefined;
+    const skills = user ? await getCachedUserSkills(user.id) : [];
+    const installedSkills = skills.length > 0 ? skills : undefined;
+
     const aiPick = await pickModelWithAI(
       lastMessage,
       hasImage,
       hasToolHistory,
       ctx,
       apiKey,
+      userPrefs,
+      installedSkills,
     );
 
     selectedModel = aiPick.model;
