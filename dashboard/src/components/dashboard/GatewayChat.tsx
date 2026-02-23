@@ -72,7 +72,7 @@ export default function GatewayChat({ gatewayUrl, token }: GatewayChatProps) {
 
   const loadHistory = useCallback(async () => {
     try {
-      const res = await sendReq('chat.history', { limit: 50 });
+      const res = await sendReq('chat.history', { sessionKey: 'main', limit: 50 });
       const entries: Message[] = [];
       const items = res?.messages || res?.entries || res || [];
       if (Array.isArray(items)) {
@@ -266,6 +266,7 @@ export default function GatewayChat({ gatewayUrl, token }: GatewayChatProps) {
 
     try {
       const res = await sendReq('chat.send', {
+        sessionKey: 'main',
         message: text,
         idempotencyKey: userMsg.id,
       });

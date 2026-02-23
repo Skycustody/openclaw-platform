@@ -25,8 +25,8 @@ import {
   restartContainer,
 } from '../services/containerConfig';
 import fs from 'fs';
-import { sshExec, sshUploadDir } from '../services/ssh';
-import { PLATFORM_SKILLS, SKILLS_REPO_URL } from '../data/platformSkills';
+import { sshUploadDir } from '../services/ssh';
+import { PLATFORM_SKILLS } from '../data/platformSkills';
 import { PLATFORM_SKILLS_DIR } from '../services/defaultSkills';
 
 const router = Router();
@@ -55,19 +55,16 @@ router.post('/install', requireActiveSubscription, async (req: AuthRequest, res:
 
     const { serverIp, containerName } = await getUserContainer(req.userId!);
     const userId = req.userId!;
-    const skillsDir = `${INSTANCE_DIR}/${userId}/skills`;
-    const tmpDir = `/tmp/openclaw-skill-${userId}-${Date.now()}`;
+    const remoteSkillsDir = `${INSTANCE_DIR}/${userId}/skills`;
+    const localSkillPath = `${PLATFORM_SKILLS_DIR}/${skill.id}`;
 
-    // Clone repo, copy skill, cleanup
-    const repoPath = skill.repoPath;
-    const cmd = [
-      `mkdir -p ${skillsDir}`,
-      `git clone --depth 1 ${SKILLS_REPO_URL} ${tmpDir}`,
-      `cp -r ${tmpDir}/skills/${repoPath} ${skillsDir}/${skill.id}`,
-      `rm -rf ${tmpDir}`,
-    ].join(' && ');
+    if (!fs.existsSync(localSkillPath) || !fs.statSync(localSkillPath).isDirectory()) {
+      return res.status(400).json({
+        error: `Skill "${skill.id}" is not available. Add it to the control plane (${PLATFORM_SKILLS_DIR}) by running scripts/install-skills-from-github.sh, then try again.`,
+      });
+    }
 
-    await sshExec(serverIp, cmd);
+    await sshUploadDir(serverIp, localSkillPath, `${remoteSkillsDir}/${skill.id}`);
 
     // Enable in openclaw.json
     const config = await readContainerConfig(serverIp, userId);

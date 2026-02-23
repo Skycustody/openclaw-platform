@@ -289,9 +289,7 @@ export async function sshUploadDir(
           }
 
           const relFiles = walk(localDir);
-          let done = 0;
-          const total = relFiles.length;
-          if (total === 0) {
+          if (relFiles.length === 0) {
             clearTimeout(timeout);
             conn.end();
             resolve();
