@@ -66,12 +66,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <Sidebar />
       <main
         className={cn(
-          'h-screen overflow-hidden transition-all duration-300 flex flex-col',
+          'h-screen transition-all duration-300 flex flex-col',
           sidebarOpen ? 'ml-[220px]' : 'ml-[68px]',
-          isHome ? 'p-0' : 'p-5 pt-6'
+          isHome ? 'p-0 overflow-hidden' : 'p-5 pt-6 overflow-y-auto'
         )}
       >
-        <div className={cn('flex-1 flex flex-col min-h-0 overflow-hidden', isHome ? '' : 'mx-auto max-w-6xl w-full')}>{children}</div>
+        <div className={cn('flex-1 flex flex-col min-h-0', isHome ? 'overflow-hidden' : 'mx-auto max-w-6xl w-full')}>{children}</div>
       </main>
     </div>
   );
