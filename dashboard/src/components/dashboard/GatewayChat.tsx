@@ -125,7 +125,7 @@ export default function GatewayChat({ gatewayUrl, token }: GatewayChatProps) {
           params: {
             minProtocol: 3,
             maxProtocol: 3,
-            client: { id: 'cli', version: '1.0.0', platform: 'web', mode: 'operator' },
+            client: { id: 'openclaw-macos', version: '1.0.0', platform: 'web', mode: 'ui' },
             role: 'operator',
             scopes: ['operator.read', 'operator.write'],
             caps: [],
