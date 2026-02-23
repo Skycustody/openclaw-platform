@@ -67,6 +67,12 @@ openclaw-platform/
 └── .env.example            # Environment variables template
 ```
 
+## How to run
+
+**Full run instructions (dev, build, production, admin IPs):** see **[RUN.md](RUN.md)**.
+
+---
+
 ## Quick Start (Development)
 
 ### Prerequisites
@@ -80,8 +86,7 @@ openclaw-platform/
 ```bash
 git clone <repo> openclaw-platform
 cd openclaw-platform
-cp .env.example .env
-# Fill in your .env values
+# Create .env with required variables (see Environment Variables below)
 ```
 
 ### 2. Start infrastructure
@@ -156,7 +161,7 @@ When servers hit 85% RAM capacity, the system automatically provisions new Hosti
 
 ## Environment Variables
 
-See `.env.example` for the complete list. Key ones:
+Key variables:
 
 - `DATABASE_URL` — PostgreSQL connection string
 - `REDIS_URL` — Redis connection string
