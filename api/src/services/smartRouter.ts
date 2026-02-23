@@ -197,43 +197,54 @@ export interface TaskCategory {
 export const TASK_CATEGORIES: TaskCategory[] = [
   { key: 'greeting',       label: 'Simple Q&A',            description: 'Greetings, thanks, basic questions, translations, short answers',                  defaultModel: 'openai/gpt-4.1-nano',              ruleNumber: 1 },
   { key: 'browser',        label: 'Browser Automation',    description: 'Fill forms, visit websites, apply to jobs, sign up, scrape pages, web interaction', defaultModel: 'anthropic/claude-sonnet-4',         ruleNumber: 2 },
-  { key: 'coding',         label: 'Coding',                description: 'Coding, debugging, code review, build apps, fix bugs, write scripts',               defaultModel: 'anthropic/claude-sonnet-4',         ruleNumber: 3 },
+  { key: 'coding',         label: 'Coding',                description: 'Coding, debugging, code review, build apps, fix bugs, write scripts',               defaultModel: 'google/gemini-2.5-flash',           ruleNumber: 3 },
   { key: 'math',           label: 'Math & Reasoning',      description: 'Math, logic, proofs, complex reasoning, puzzles',                                  defaultModel: 'deepseek/deepseek-r1',              ruleNumber: 4 },
-  { key: 'research',       label: 'Research & Summarize',  description: 'Research, summarize, analyze documents, compare options',                           defaultModel: 'deepseek/deepseek-chat-v3-0324',   ruleNumber: 5 },
+  { key: 'research',       label: 'Research & Summarize',  description: 'Research, summarize, analyze documents, compare options',                           defaultModel: 'google/gemini-2.5-flash',           ruleNumber: 5 },
   { key: 'creative',       label: 'Creative Writing',      description: 'Creative writing, stories, essays',                                                defaultModel: 'openai/gpt-4o',                     ruleNumber: 6 },
   { key: 'vision',         label: 'Image & Vision',        description: 'Image/vision analysis',                                                            defaultModel: 'google/gemini-2.5-flash',           ruleNumber: 7 },
   { key: 'large_context',  label: 'Large Documents',       description: 'Very large documents (>50K tokens)',                                               defaultModel: 'google/gemini-2.5-pro',             ruleNumber: 8 },
   { key: 'general',        label: 'General Tasks',         description: 'General medium-complexity tasks',                                                  defaultModel: 'google/gemini-2.5-flash',           ruleNumber: 9 },
-  { key: 'shell',          label: 'Shell & Sysadmin',      description: 'Shell commands, install software, system administration',                           defaultModel: 'anthropic/claude-sonnet-4',         ruleNumber: 11 },
-  { key: 'messaging',      label: 'Messaging & Files',     description: 'Send messages, schedule tasks, manage files',                                      defaultModel: 'anthropic/claude-sonnet-4',         ruleNumber: 12 },
-  { key: 'complex',        label: 'Extremely Complex',     description: 'Extremely complex multi-hour analysis tasks',                                      defaultModel: 'anthropic/claude-opus-4',           ruleNumber: 13 },
+  { key: 'shell',          label: 'Shell & Sysadmin',      description: 'Shell commands, install software, system administration',                           defaultModel: 'google/gemini-2.5-flash',           ruleNumber: 10 },
+  { key: 'messaging',      label: 'Messaging & Files',     description: 'Send messages, schedule tasks, manage files',                                      defaultModel: 'openai/gpt-4o-mini',                ruleNumber: 11 },
+  { key: 'complex',        label: 'Extremely Complex',     description: 'Extremely complex multi-hour analysis tasks',                                      defaultModel: 'anthropic/claude-opus-4',           ruleNumber: 12 },
 ];
 
 const VALID_CATEGORY_KEYS = new Set(TASK_CATEGORIES.map(c => c.key));
 
-const BASE_ROUTER_SYSTEM_PROMPT = `You are a model router for an AI agent platform. The agent has these tools: browser (navigate pages, click, type, fill forms, take screenshots), exec (run shell commands, install software), web_search, web_fetch, file read/write, memory, cron jobs, messaging.
+const BASE_ROUTER_SYSTEM_PROMPT = `You are a cost-optimizing model router for an AI agent platform. The agent has tools: browser, exec, web_search, web_fetch, file read/write, memory, cron, messaging.
 
-Your job: pick the CHEAPEST model that will handle the user's task well. Cost matters — don't pick expensive models for simple tasks.
+Your job: pick the CHEAPEST model that can handle the user's CURRENT message well.
 
 AVAILABLE MODELS (sorted cheapest first):
 ${MODEL_CATALOG}
 
-ROUTING RULES (follow strictly):
-1. Simple greetings, thanks, basic Q&A, translations, short factual answers → openai/gpt-4.1-nano ($0.10) or meta-llama/llama-4-scout ($0.08)
-2. Browser automation, fill forms, visit websites, apply to jobs, sign up, login, click buttons, scrape pages, download files, any web interaction → anthropic/claude-sonnet-4 ($3.00) — ONLY model reliable at multi-step tool orchestration
-3. Coding, debugging, code review, build apps, fix bugs, write scripts → anthropic/claude-sonnet-4 ($3.00)
-4. Math, logic, proofs, complex reasoning, puzzles → deepseek/deepseek-r1 ($0.70) or openai/o3-mini ($1.10)
-5. Research, summarize, analyze documents, compare options → deepseek/deepseek-chat-v3-0324 ($0.19) or google/gemini-2.5-flash ($0.30)
-6. Creative writing, stories, essays → openai/gpt-4o ($2.50) or meta-llama/llama-4-maverick ($0.15)
-7. Image/vision analysis → google/gemini-2.5-flash ($0.30) or google/gemini-2.5-pro ($1.25)
-8. Very large documents (>50K tokens) → google/gemini-2.5-pro ($1.25) or openai/gpt-4.1 ($2.00)
-9. General medium-complexity tasks → google/gemini-2.5-flash ($0.30) or openai/gpt-4o-mini ($0.15)
-10. If conversation has active tool calls (agent is mid-task) → KEEP using anthropic/claude-sonnet-4, never downgrade mid-task
-11. Shell commands, install software, system administration → anthropic/claude-sonnet-4 ($3.00)
-12. Send messages, schedule tasks, manage files → anthropic/claude-sonnet-4 ($3.00)
-13. Only use anthropic/claude-opus-4 ($15.00) for extremely complex multi-hour analysis tasks — almost never
+ROUTING RULES:
+1. Simple greetings, thanks, "hi", "hello", "yes", "no", basic Q&A, short factual answers, status checks, confirmations → openai/gpt-4.1-nano ($0.10)
+2. Browser automation requiring multi-step tool orchestration (fill forms, apply to jobs, navigate complex workflows) → anthropic/claude-sonnet-4 ($3.00)
+3. Complex coding: build full apps, architect systems, debug complex issues → anthropic/claude-sonnet-4 ($3.00). Simple code questions, short scripts, config edits → google/gemini-2.5-flash ($0.30)
+4. Math, logic, proofs, complex reasoning → deepseek/deepseek-r1 ($0.70)
+5. Research, summarize, analyze documents → google/gemini-2.5-flash ($0.30)
+6. Creative writing → openai/gpt-4o ($2.50)
+7. Image/vision → google/gemini-2.5-flash ($0.30)
+8. Very large documents (>50K tokens) → google/gemini-2.5-pro ($1.25)
+9. General medium tasks, explanations, planning → google/gemini-2.5-flash ($0.30)
+10. Shell commands, install software, file operations → google/gemini-2.5-flash ($0.30)
+11. Send messages, manage files, schedule tasks → openai/gpt-4o-mini ($0.15)
+12. Only use anthropic/claude-opus-4 ($15.00) for extremely complex multi-hour tasks — almost never
 
-IMPORTANT: You must return EXACTLY one of the model IDs listed above. Do not invent model IDs or add suffixes.
+CONTINUATION MESSAGES:
+If the user's message is a short continuation like "continue", "do it", "go ahead", "next", "fix that", "try again", "apply to the next one" — look at what the agent was LAST DOING (provided in context) to decide the model:
+- If the agent was browsing/automating → anthropic/claude-sonnet-4
+- If the agent was coding something complex → anthropic/claude-sonnet-4
+- If the agent was doing research/summarizing → google/gemini-2.5-flash
+- If the agent was doing simple tasks → keep it cheap
+
+COST RULES:
+- Don't lock to an expensive model just because tools were used before. Route based on what the current message ACTUALLY NEEDS.
+- A user saying "thanks" or "ok cool" after a coding session gets gpt-4.1-nano — they're not asking for more code.
+- anthropic/claude-sonnet-4 is ONLY for tasks that genuinely need strong multi-step tool orchestration or complex code generation.
+- When in doubt between two models, pick the cheaper one.
+- You must return EXACTLY one of the model IDs listed above.
 
 Return JSON: {"model":"<exact_model_id_from_list>","reason":"<why in max 10 words>"}`;
 
@@ -277,6 +288,9 @@ export interface RouterContext {
   messageCount: number;
   toolCallCount: number;
   lastAssistantSnippet?: string;
+  recentToolNames?: string[];
+  previousUserMessage?: string;
+  taskSummary?: string;
 }
 
 /**
@@ -297,6 +311,7 @@ export async function pickModelWithAI(
   apiKey?: string,
   userPreferences?: Record<string, string>,
   installedSkills?: string[],
+  userId?: string,
 ): Promise<{ model: string; reason: string; routerUsed: string }> {
   const key = apiKey || process.env.OPENROUTER_API_KEY || process.env.OPENROUTER_MGMT_KEY || '';
   if (!key) {
@@ -308,8 +323,9 @@ export async function pickModelWithAI(
 
   const prefHash = userPreferences ? Buffer.from(JSON.stringify(userPreferences)).toString('base64').slice(0, 20) : '';
   const skillHash = installedSkills?.length ? Buffer.from(installedSkills.sort().join(',')).toString('base64').slice(0, 20) : '';
+  const userKey = userId ? userId.slice(0, 12) : 'anon';
   const msgKey = userMessage.slice(0, 200);
-  const cacheKey = `aiRoute6:${Buffer.from(msgKey).toString('base64')}:${hasImage}:${hasToolHistory}:${depth}:${toolCalls}:${prefHash}:${skillHash}`;
+  const cacheKey = `aiRoute7:${userKey}:${Buffer.from(msgKey).toString('base64')}:${hasImage}:${hasToolHistory}:${depth}:${toolCalls}:${prefHash}:${skillHash}`;
 
   try {
     const cached = await redis.get(cacheKey);
@@ -320,14 +336,15 @@ export async function pickModelWithAI(
 
   const contextLines: string[] = [];
   if (hasImage) contextLines.push('Image attached: yes');
-  if (hasToolHistory) contextLines.push('Conversation has active tool calls: yes (agent is mid-task, keep strong model)');
-  if (depth > 0) contextLines.push(`Conversation depth: ${depth} messages`);
-  if (toolCalls > 0) contextLines.push(`Tool calls so far: ${toolCalls} (complex multi-step task in progress)`);
-  if (ctx?.lastAssistantSnippet) contextLines.push(`Last assistant action: "${ctx.lastAssistantSnippet}"`);
   contextLines.push(`User message: "${userMessage.slice(0, 600)}"`);
+  if (ctx?.previousUserMessage) contextLines.push(`Previous user request: "${ctx.previousUserMessage}"`);
+  if (ctx?.lastAssistantSnippet) contextLines.push(`Agent's last response: "${ctx.lastAssistantSnippet}"`);
+  if (ctx?.recentToolNames && ctx.recentToolNames.length > 0) contextLines.push(`Tools agent recently used: ${ctx.recentToolNames.join(', ')}`);
+  if (ctx?.taskSummary) contextLines.push(`Recent task type: ${ctx.taskSummary}`);
+  if (depth > 0) contextLines.push(`Conversation depth: ${depth} messages`);
   const userContent = contextLines.join('\n');
 
-  const cacheTTL = (hasToolHistory || toolCalls > 0) ? 120 : 600;
+  const cacheTTL = 300;
 
   for (const routerModel of ROUTER_MODELS) {
     try {
@@ -469,9 +486,12 @@ export function selectModel(
   //
   // Agentic tasks (browser, forms, automation, multi-step actions) need strong
   // tool-calling models — cheap models fail at multi-step tool orchestration.
-  if (needsAgentic) {
+  if (needsAgentic && complexity !== 'simple') {
     model = 'anthropic/claude-sonnet-4';
-    reason = 'Agentic task (browser/automation/actions) - requires strong tool-calling model';
+    reason = 'Complex agentic task - requires strong tool-calling model';
+  } else if (needsAgentic) {
+    model = 'google/gemini-2.5-flash';
+    reason = 'Simple agentic task - fast and capable';
   } else if (needsInternet && needsVision) {
     model = 'anthropic/claude-sonnet-4';
     reason = 'Requires both internet access and vision capability';

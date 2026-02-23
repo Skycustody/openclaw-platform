@@ -437,7 +437,11 @@ router.get('/logs', requireActiveSubscription, async (req: AuthRequest, res: Res
       .replace(/GATEWAY_TOKEN=[^\s]+/g, 'GATEWAY_TOKEN=[REDACTED]')
       .replace(/OPENAI_API_KEY=[^\s]+/g, 'OPENAI_API_KEY=[REDACTED]')
       .replace(/ANTHROPIC_API_KEY=[^\s]+/g, 'ANTHROPIC_API_KEY=[REDACTED]')
-      .replace(/OPENROUTER_API_KEY=[^\s]+/g, 'OPENROUTER_API_KEY=[REDACTED]');
+      .replace(/OPENROUTER_API_KEY=[^\s]+/g, 'OPENROUTER_API_KEY=[REDACTED]')
+      .replace(/BROWSERLESS_TOKEN=[^\s]+/g, 'BROWSERLESS_TOKEN=[REDACTED]')
+      .replace(/BROWSERLESS_URL=[^\s]+/g, 'BROWSERLESS_URL=[REDACTED]')
+      .replace(/GEMINI_API_KEY=[^\s]+/g, 'GEMINI_API_KEY=[REDACTED]')
+      .replace(/[a-f0-9]{64}/gi, '[REDACTED-TOKEN]');
 
     res.json({ logs: result.stdout });
   } catch (err) {

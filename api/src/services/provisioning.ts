@@ -252,6 +252,10 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
     '--restart unless-stopped',
     '--no-healthcheck',
     '--network openclaw-net',
+    '--cap-drop ALL',
+    '--cap-add NET_BIND_SERVICE',
+    '--cap-add SYS_ADMIN',
+    '--no-new-privileges',
     '--pids-limit 256',
     `--memory ${limits.ramMb}m`,
     `--memory-swap ${limits.ramMb}m`,
@@ -291,6 +295,9 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
 
   // Also connect container to its own isolated network (prevents cross-container access)
   await sshExec(server.ip, `docker network connect ${containerName}-net ${containerName} 2>/dev/null || true`);
+
+  // Block container access to cloud metadata endpoint (prevents INTERNAL_SECRET leak via user-data)
+  await sshExec(server.ip, `iptables -C FORWARD -s $(docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ${containerName} 2>/dev/null) -d 169.254.169.254 -j DROP 2>/dev/null || iptables -I FORWARD -s $(docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ${containerName} 2>/dev/null) -d 169.254.169.254 -j DROP 2>/dev/null || true`);
 
   // Step 6: Quick alive check — give the container 5s to start, then verify
   await new Promise(r => setTimeout(r, 5000));

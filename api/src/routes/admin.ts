@@ -248,7 +248,10 @@ router.get('/users/:userId', async (req: AuthRequest, res: Response, next: NextF
     const { userId } = req.params;
     const [user, tokens, activity, transactions] = await Promise.all([
       db.getOne<any>(
-        `SELECT u.*, s.ip as server_ip, s.hostname as server_hostname
+        `SELECT u.id, u.email, u.display_name, u.plan, u.status, u.subdomain,
+                u.container_name, u.server_id, u.stripe_customer_id, u.referral_code,
+                u.is_admin, u.created_at, u.last_active,
+                s.ip as server_ip, s.hostname as server_hostname
          FROM users u
          LEFT JOIN servers s ON s.id = u.server_id
          WHERE u.id = $1`,
@@ -371,7 +374,7 @@ router.post('/reprovision', async (req: AuthRequest, res: Response, next: NextFu
         results.push({ userId: user.id, email: user.email, status: 'success', subdomain: result.subdomain });
       } catch (err: any) {
         console.error(`Re-provision failed for ${user.id}:`, err.message);
-        results.push({ userId: user.id, email: user.email, status: 'failed', error: err.message });
+        results.push({ userId: user.id, email: user.email, status: 'failed', error: 'Provisioning failed' });
       }
     }
 
@@ -415,10 +418,10 @@ router.post('/inject-keys', async (req: AuthRequest, res: Response, next: NextFu
         const nexosKey = await ensureNexosKey(user.id);
         await injectApiKeys(user.server_ip, user.id, cn, user.plan || 'starter');
         await sshExec(user.server_ip, `docker restart ${cn} 2>/dev/null || true`);
-        results.push({ userId: user.id, email: user.email, nexosKey: nexosKey.slice(0, 12) + '...', status: 'success' });
+        results.push({ userId: user.id, email: user.email, nexosKey: nexosKey.slice(0, 6) + '...', status: 'success' });
       } catch (err: any) {
         console.error(`[inject-keys] Failed for ${user.id}:`, err.message);
-        results.push({ userId: user.id, email: user.email, status: 'failed', error: err.message });
+        results.push({ userId: user.id, email: user.email, status: 'failed', error: 'Key injection failed' });
       }
     }
 

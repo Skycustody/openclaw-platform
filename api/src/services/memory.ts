@@ -49,8 +49,8 @@ class MemorySystem {
     if (memories.length) {
       const ids = memories.map((m) => m.id);
       await db.query(
-        `UPDATE memories SET accessed_at = NOW() WHERE id = ANY($1::uuid[])`,
-        [ids]
+        `UPDATE memories SET accessed_at = NOW() WHERE id = ANY($1::uuid[]) AND user_id = $2`,
+        [ids, userId]
       );
     }
 

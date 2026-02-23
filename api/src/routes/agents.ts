@@ -477,8 +477,8 @@ router.get('/:agentId', async (req: AuthRequest, res: Response, next: NextFuncti
     if (!agent) return res.status(404).json({ error: 'Agent not found' });
 
     const channels = await db.getMany<AgentChannel>(
-      `SELECT * FROM agent_channels WHERE agent_id = $1 ORDER BY created_at ASC`,
-      [agentId]
+      `SELECT * FROM agent_channels WHERE agent_id = $1 AND user_id = $2 ORDER BY created_at ASC`,
+      [agentId, req.userId]
     );
 
     // Get all agents for this user (for comm checkboxes)
@@ -489,14 +489,14 @@ router.get('/:agentId', async (req: AuthRequest, res: Response, next: NextFuncti
 
     // Get communication permissions FROM this agent
     const commsFrom = await db.getMany<AgentComm>(
-      `SELECT * FROM agent_communications WHERE source_agent_id = $1`,
-      [agentId]
+      `SELECT * FROM agent_communications WHERE source_agent_id = $1 AND user_id = $2`,
+      [agentId, req.userId]
     );
 
     // Get communication permissions TO this agent
     const commsTo = await db.getMany<AgentComm>(
-      `SELECT * FROM agent_communications WHERE target_agent_id = $1`,
-      [agentId]
+      `SELECT * FROM agent_communications WHERE target_agent_id = $1 AND user_id = $2`,
+      [agentId, req.userId]
     );
 
     res.json({
@@ -582,7 +582,7 @@ router.post('/', async (req: AuthRequest, res: Response, next: NextFunction) => 
     await restartContainerHelper(container.serverIp, container.containerName, 15000);
     await reapplyGatewayConfig(container.serverIp, req.userId!, container.containerName);
 
-    const agent = await db.getOne<Agent>('SELECT * FROM agents WHERE id = $1', [agentId]);
+    const agent = await db.getOne<Agent>('SELECT * FROM agents WHERE id = $1 AND user_id = $2', [agentId, req.userId]);
 
     res.json({
       agent: { ...agent, openclawAgentId: openclawId },
@@ -611,13 +611,13 @@ router.put('/:agentId', async (req: AuthRequest, res: Response, next: NextFuncti
         name = COALESCE($1, name),
         purpose = COALESCE($2, purpose),
         instructions = COALESCE($3, instructions)
-       WHERE id = $4`,
-      [name || null, purpose || null, instructions || null, agentId]
+       WHERE id = $4 AND user_id = $5`,
+      [name || null, purpose || null, instructions || null, agentId, req.userId]
     );
 
     try {
       const container = await getUserContainer(req.userId!);
-      const updatedAgent = await db.getOne<Agent>('SELECT * FROM agents WHERE id = $1', [agentId]);
+      const updatedAgent = await db.getOne<Agent>('SELECT * FROM agents WHERE id = $1 AND user_id = $2', [agentId, req.userId]);
 
       const agentName = updatedAgent?.name || agent.name;
       const agentPurpose = updatedAgent?.purpose || agent.purpose;
@@ -669,7 +669,7 @@ router.delete('/:agentId', async (req: AuthRequest, res: Response, next: NextFun
     }
 
     // Cascade deletes agent_channels and agent_communications via FK
-    await db.query('DELETE FROM agents WHERE id = $1', [agentId]);
+    await db.query('DELETE FROM agents WHERE id = $1 AND user_id = $2', [agentId, req.userId]);
 
     try {
       const container = await getUserContainer(req.userId!);
@@ -743,7 +743,8 @@ router.post('/:agentId/channels', async (req: AuthRequest, res: Response, next: 
     // Sync to container
     try {
       const container = await getUserContainer(req.userId!);
-      await injectApiKeys(container.serverIp, req.userId!, container.containerName, 'starter');
+      const chanUser = await db.getOne<User>('SELECT plan FROM users WHERE id = $1', [req.userId]);
+      await injectApiKeys(container.serverIp, req.userId!, container.containerName, (chanUser?.plan || 'starter') as any);
       await syncBindingsToContainer(container.serverIp, req.userId!);
       await restartContainerHelper(container.serverIp, container.containerName, 15000);
       await reapplyGatewayConfig(container.serverIp, req.userId!, container.containerName);
@@ -770,7 +771,7 @@ router.delete('/:agentId/channels/:channelId', async (req: AuthRequest, res: Res
     );
     if (!channel) return res.status(404).json({ error: 'Channel connection not found' });
 
-    await db.query('DELETE FROM agent_channels WHERE id = $1', [channelId]);
+    await db.query('DELETE FROM agent_channels WHERE id = $1 AND user_id = $2', [channelId, req.userId]);
 
     // Check if this was the last connection for this channel type
     const remaining = await db.getOne<{ count: string }>(
@@ -827,8 +828,8 @@ router.put('/:agentId/communications', async (req: AuthRequest, res: Response, n
 
     // Remove all existing outgoing permissions
     await db.query(
-      `DELETE FROM agent_communications WHERE source_agent_id = $1`,
-      [agentId]
+      `DELETE FROM agent_communications WHERE source_agent_id = $1 AND user_id = $2`,
+      [agentId, req.userId]
     );
 
     // Insert new permissions
@@ -873,8 +874,8 @@ router.post('/:agentId/start', async (req: AuthRequest, res: Response, next: Nex
     }
 
     await db.query(
-      `UPDATE agents SET status = 'active', last_active = NOW() WHERE id = $1`,
-      [agentId]
+      `UPDATE agents SET status = 'active', last_active = NOW() WHERE id = $1 AND user_id = $2`,
+      [agentId, req.userId]
     );
 
     res.json({ ok: true, status: 'active', message: 'Agent is running inside your OpenClaw container.' });
@@ -895,8 +896,8 @@ router.post('/:agentId/stop', async (req: AuthRequest, res: Response, next: Next
     if (!agent) return res.status(404).json({ error: 'Agent not found' });
 
     await db.query(
-      `UPDATE agents SET status = 'sleeping' WHERE id = $1`,
-      [agentId]
+      `UPDATE agents SET status = 'sleeping' WHERE id = $1 AND user_id = $2`,
+      [agentId, req.userId]
     );
 
     res.json({ ok: true, status: 'sleeping' });
@@ -907,7 +908,12 @@ router.post('/:agentId/stop', async (req: AuthRequest, res: Response, next: Next
 
 // ─── Helpers ───
 
+const VALID_LEGACY_CHANNEL_TYPES = ['telegram', 'discord', 'slack', 'whatsapp', 'signal'] as const;
+
 async function updateLegacyChannels(userId: string, channelType: string, connected: boolean): Promise<void> {
+  if (!(VALID_LEGACY_CHANNEL_TYPES as readonly string[]).includes(channelType)) {
+    throw new Error(`Invalid channel type: ${channelType}`);
+  }
   const col = `${channelType}_connected`;
   await db.query(
     `INSERT INTO user_channels (user_id, ${col}, updated_at) VALUES ($1, $2, NOW())

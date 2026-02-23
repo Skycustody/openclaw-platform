@@ -521,6 +521,16 @@ export default function RouterPage() {
           </a>
         </CardDescription>
 
+        {settings.has_own_openrouter_key && (
+          <div className="mb-4 rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-3">
+            <p className="text-[12px] text-amber-400/90 font-medium mb-1">Direct OpenRouter Mode</p>
+            <p className="text-[11px] text-amber-400/60">
+              Your agent connects directly to OpenRouter with your key. Smart routing, cost optimization, and token compression are disabled.
+              You choose the model, you pay OpenRouter directly. Remove your key to re-enable the platform&apos;s cost-saving features.
+            </p>
+          </div>
+        )}
+
         <div className="space-y-3">
           <div className="flex items-center justify-between rounded-lg border border-white/[0.06] bg-white/[0.02] px-4 py-3">
             <div className="flex items-center gap-3">
@@ -573,7 +583,7 @@ export default function RouterPage() {
         <div className="mt-3 flex items-start gap-2 rounded-lg bg-white/[0.02] p-2.5">
           <Lock className="h-3.5 w-3.5 text-white/20 shrink-0 mt-0.5" />
           <p className="text-[11px] text-white/30">
-            Your key is stored securely and never displayed in full. When using your own key, all AI costs are billed directly to your OpenRouter account with no limits from us.
+            Your key is stored securely and never displayed in full. With your own key: unlimited usage, direct OpenRouter billing, but no smart routing or cost optimization. Without your key: platform budget applies, but the AI router picks the best model per task and compresses tokens to save you money.
           </p>
         </div>
       </Card>

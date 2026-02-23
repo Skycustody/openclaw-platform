@@ -3,6 +3,16 @@ import { sshExec } from './ssh';
 import { User } from '../types';
 
 const INSTANCE_DIR = '/opt/openclaw/instances';
+const UUID_RE = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+const CONTAINER_NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9_.-]+$/;
+
+function validateUserId(userId: string): void {
+  if (!UUID_RE.test(userId)) throw new Error('Invalid user ID format');
+}
+
+function validateContainerName(name: string): void {
+  if (!CONTAINER_NAME_RE.test(name)) throw new Error('Invalid container name format');
+}
 
 export async function getUserContainer(userId: string): Promise<{
   serverIp: string;
@@ -50,6 +60,7 @@ export async function requireRunningContainer(userId: string): Promise<{
 }
 
 export async function readContainerConfig(serverIp: string, userId: string): Promise<Record<string, any>> {
+  validateUserId(userId);
   const result = await sshExec(
     serverIp,
     `cat ${INSTANCE_DIR}/${userId}/openclaw.json 2>/dev/null || echo '{}'`
@@ -62,6 +73,7 @@ export async function readContainerConfig(serverIp: string, userId: string): Pro
 }
 
 export async function writeContainerConfig(serverIp: string, userId: string, config: Record<string, any>): Promise<void> {
+  validateUserId(userId);
   const b64 = Buffer.from(JSON.stringify(config, null, 2)).toString('base64');
   const result = await sshExec(
     serverIp,
@@ -73,6 +85,7 @@ export async function writeContainerConfig(serverIp: string, userId: string, con
 }
 
 export async function restartContainer(serverIp: string, containerName: string, waitMs = 30000): Promise<boolean> {
+  validateContainerName(containerName);
   await sshExec(serverIp, `docker restart ${containerName}`);
   const start = Date.now();
   while (Date.now() - start < waitMs) {
@@ -131,8 +144,9 @@ export async function sendContainerMessage(
   containerName: string,
   message: string,
 ): Promise<string> {
+  validateContainerName(containerName);
   const msgB64 = Buffer.from(message).toString('base64');
-  const cmd = `echo '${msgB64}' | base64 -d | timeout 120 docker exec -i ${containerName} openclaw run --stdin 2>&1 || docker exec ${containerName} openclaw run "$(echo '${msgB64}' | base64 -d | head -c 500)" 2>&1`;
+  const cmd = `echo '${msgB64}' | base64 -d | timeout 120 docker exec -i ${containerName} openclaw run --stdin 2>&1`;
 
   const result = await sshExec(serverIp, cmd);
   return result.stdout || result.stderr || 'Task completed';

@@ -80,8 +80,8 @@ export default function ActivityFeed() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
-  const [isAgentActive, setIsAgentActive] = useState(true);
-  const [currentAction, setCurrentAction] = useState('Looking up restaurant reviews for your dinner tonight');
+  const [isAgentActive, setIsAgentActive] = useState(false);
+  const [currentAction, setCurrentAction] = useState<string | null>(null);
 
   const fetchEntries = useCallback(async (offset: number, reset: boolean) => {
     const setter = offset === 0 ? setLoading : setLoadingMore;
@@ -91,8 +91,22 @@ export default function ActivityFeed() {
         `/activity?filter=${filter}&limit=${LIMIT}&offset=${offset}`
       );
       const data = res.activities || [];
-      if (reset) setEntries(data);
-      else setEntries((prev) => [...prev, ...data]);
+      if (reset) {
+        setEntries(data);
+        if (data.length > 0) {
+          const latest = data[0];
+          const ageMs = Date.now() - new Date(latest.timestamp).getTime();
+          if (ageMs < 120_000 && latest.status !== 'completed' && latest.status !== 'failed') {
+            setIsAgentActive(true);
+            setCurrentAction(latest.summary);
+          } else {
+            setIsAgentActive(false);
+            setCurrentAction(null);
+          }
+        }
+      } else {
+        setEntries((prev) => [...prev, ...data]);
+      }
       setHasMore(data.length === LIMIT);
     } catch {
       if (reset) setEntries([]);

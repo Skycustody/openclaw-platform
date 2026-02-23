@@ -7,6 +7,11 @@ import { injectApiKeys } from './apiKeys';
 // ── Helpers ──
 
 const INSTANCE_DIR = '/opt/openclaw/instances';
+const UUID_RE = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+
+function validateUserId(userId: string): void {
+  if (!UUID_RE.test(userId)) throw new Error('Invalid user ID format');
+}
 
 async function getUserContainer(userId: string): Promise<{
   serverIp: string;
@@ -48,6 +53,7 @@ async function getUserContainer(userId: string): Promise<{
  * Avoids fragile `docker exec` + Node one-liners.
  */
 async function readContainerConfig(serverIp: string, userId: string): Promise<Record<string, any>> {
+  validateUserId(userId);
   const result = await sshExec(
     serverIp,
     `cat ${INSTANCE_DIR}/${userId}/openclaw.json 2>/dev/null || echo '{}'`
@@ -64,6 +70,7 @@ async function readContainerConfig(serverIp: string, userId: string): Promise<Re
  * Base64-encodes the entire JSON so no shell quoting issues can arise.
  */
 async function writeContainerConfig(serverIp: string, userId: string, config: Record<string, any>): Promise<void> {
+  validateUserId(userId);
   const b64 = Buffer.from(JSON.stringify(config, null, 2)).toString('base64');
   const result = await sshExec(
     serverIp,

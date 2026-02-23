@@ -310,10 +310,15 @@ router.put('/routing-preferences', async (req: AuthRequest, res: Response, next:
     );
 
     // Invalidate cached routing decisions for this user
-    const pattern = `aiRoute6:*`;
+    const userKey = req.userId!.slice(0, 12);
+    const pattern = `aiRoute7:${userKey}:*`;
     try {
-      const keys = await redis.keys(pattern);
-      if (keys.length > 0) await redis.del(...keys);
+      let cursor = '0';
+      do {
+        const [next, keys] = await redis.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
+        cursor = next;
+        if (keys.length > 0) await redis.del(...keys);
+      } while (cursor !== '0');
     } catch { /* non-critical */ }
 
     res.json({ ok: true, preferences: cleaned });

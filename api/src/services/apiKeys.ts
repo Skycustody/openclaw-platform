@@ -96,55 +96,102 @@ export async function injectApiKeys(
     config.env.BROWSERLESS_TOKEN = process.env.BROWSERLESS_TOKEN;
   }
 
-  // ── Smart model routing via platform proxy ──
-  // model id "auto" triggers smart routing (heuristic picks best model per task).
-  // Any other id is passed through to OpenRouter directly.
-  config.models = {
-    providers: {
-      platform: {
-        baseUrl: PROXY_BASE_URL,
-        apiKey: apiKey,
-        api: 'openai-completions',
-        models: [
-          { id: 'auto', name: '⚡ Smart Auto (picks best model per task)', contextWindow: 128000, maxTokens: 4096 },
+  // ── Model provider config ──
+  // BYOK users → direct to OpenRouter (no proxy, no router, no compression)
+  // Platform users → through the smart routing proxy
+  if (usingOwnKey) {
+    config.models = {
+      providers: {
+        openrouter: {
+          baseUrl: 'https://openrouter.ai/api/v1',
+          apiKey: apiKey,
+          api: 'openai-completions',
+          models: [
+            { id: 'anthropic/claude-sonnet-4', name: 'Claude Sonnet 4', contextWindow: 200000, maxTokens: 8192 },
+            { id: 'anthropic/claude-3.5-haiku', name: 'Claude 3.5 Haiku', contextWindow: 200000, maxTokens: 8192 },
+            { id: 'anthropic/claude-opus-4', name: 'Claude Opus 4', contextWindow: 200000, maxTokens: 8192 },
 
-          { id: 'anthropic/claude-sonnet-4', name: 'Claude Sonnet 4 (best for agents & tool use)', contextWindow: 200000, maxTokens: 8192 },
-          { id: 'anthropic/claude-3.5-haiku', name: 'Claude 3.5 Haiku (fast & cheap)', contextWindow: 200000, maxTokens: 8192 },
-          { id: 'anthropic/claude-opus-4', name: 'Claude Opus 4 (most powerful)', contextWindow: 200000, maxTokens: 8192 },
+            { id: 'openai/gpt-4o', name: 'GPT-4o', contextWindow: 128000, maxTokens: 4096 },
+            { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini', contextWindow: 128000, maxTokens: 4096 },
+            { id: 'openai/gpt-4.1', name: 'GPT-4.1', contextWindow: 1000000, maxTokens: 32768 },
+            { id: 'openai/gpt-4.1-mini', name: 'GPT-4.1 Mini', contextWindow: 1000000, maxTokens: 32768 },
+            { id: 'openai/gpt-4.1-nano', name: 'GPT-4.1 Nano', contextWindow: 1000000, maxTokens: 32768 },
+            { id: 'openai/o3-mini', name: 'o3-mini', contextWindow: 200000, maxTokens: 65536 },
 
-          { id: 'openai/gpt-4o', name: 'GPT-4o (smart & balanced)', contextWindow: 128000, maxTokens: 4096 },
-          { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini (fast & cheap)', contextWindow: 128000, maxTokens: 4096 },
-          { id: 'openai/gpt-4.1', name: 'GPT-4.1 (latest, 1M context)', contextWindow: 1000000, maxTokens: 32768 },
-          { id: 'openai/gpt-4.1-mini', name: 'GPT-4.1 Mini (latest mini, 1M context)', contextWindow: 1000000, maxTokens: 32768 },
-          { id: 'openai/gpt-4.1-nano', name: 'GPT-4.1 Nano (ultra cheap)', contextWindow: 1000000, maxTokens: 32768 },
-          { id: 'openai/o3-mini', name: 'o3-mini (reasoning)', contextWindow: 200000, maxTokens: 65536 },
+            { id: 'google/gemini-2.5-pro', name: 'Gemini 2.5 Pro', contextWindow: 1000000, maxTokens: 65536 },
+            { id: 'google/gemini-2.5-flash', name: 'Gemini 2.5 Flash', contextWindow: 1000000, maxTokens: 65536 },
+            { id: 'google/gemini-2.0-flash-001', name: 'Gemini 2.0 Flash', contextWindow: 1000000, maxTokens: 8192 },
 
-          { id: 'google/gemini-2.5-pro', name: 'Gemini 2.5 Pro (strong, 1M context)', contextWindow: 1000000, maxTokens: 65536 },
-          { id: 'google/gemini-2.5-flash', name: 'Gemini 2.5 Flash (fast & smart)', contextWindow: 1000000, maxTokens: 65536 },
-          { id: 'google/gemini-2.0-flash-001', name: 'Gemini 2.0 Flash (cheapest)', contextWindow: 1000000, maxTokens: 8192 },
+            { id: 'deepseek/deepseek-chat-v3-0324', name: 'DeepSeek V3', contextWindow: 128000, maxTokens: 8192 },
+            { id: 'deepseek/deepseek-r1', name: 'DeepSeek R1', contextWindow: 128000, maxTokens: 8192 },
 
-          { id: 'deepseek/deepseek-chat-v3-0324', name: 'DeepSeek V3 (strong & very cheap)', contextWindow: 128000, maxTokens: 8192 },
-          { id: 'deepseek/deepseek-r1', name: 'DeepSeek R1 (reasoning, cheap)', contextWindow: 128000, maxTokens: 8192 },
+            { id: 'meta-llama/llama-4-maverick', name: 'Llama 4 Maverick', contextWindow: 1000000, maxTokens: 32768 },
+            { id: 'meta-llama/llama-4-scout', name: 'Llama 4 Scout', contextWindow: 10000000, maxTokens: 32768 },
 
-          { id: 'meta-llama/llama-4-maverick', name: 'Llama 4 Maverick (open source, strong)', contextWindow: 1000000, maxTokens: 32768 },
-          { id: 'meta-llama/llama-4-scout', name: 'Llama 4 Scout (open source, 10M context)', contextWindow: 10000000, maxTokens: 32768 },
+            { id: 'mistralai/mistral-large-2', name: 'Mistral Large 2', contextWindow: 128000, maxTokens: 4096 },
+            { id: 'qwen/qwen-2.5-coder-32b-instruct', name: 'Qwen 2.5 Coder 32B', contextWindow: 32768, maxTokens: 4096 },
 
-          { id: 'mistralai/mistral-large-2', name: 'Mistral Large 2 (strong European model)', contextWindow: 128000, maxTokens: 4096 },
-          { id: 'qwen/qwen-2.5-coder-32b-instruct', name: 'Qwen 2.5 Coder 32B (great for coding, free)', contextWindow: 32768, maxTokens: 4096 },
-
-          { id: 'x-ai/grok-3-mini-beta', name: 'Grok 3 Mini (fast reasoning)', contextWindow: 131072, maxTokens: 8192 },
-          { id: 'x-ai/grok-3-beta', name: 'Grok 3 (powerful)', contextWindow: 131072, maxTokens: 8192 },
-        ],
+            { id: 'x-ai/grok-3-mini-beta', name: 'Grok 3 Mini', contextWindow: 131072, maxTokens: 8192 },
+            { id: 'x-ai/grok-3-beta', name: 'Grok 3', contextWindow: 131072, maxTokens: 8192 },
+          ],
+        },
       },
-    },
-  };
+    };
 
-  if (!config.agents) config.agents = {};
-  if (!config.agents.defaults) config.agents.defaults = {};
-  config.agents.defaults.model = {
-    primary: 'platform/auto',
-    fallbacks: ['openrouter/anthropic/claude-sonnet-4', 'openrouter/openai/gpt-4o'],
-  };
+    if (!config.agents) config.agents = {};
+    if (!config.agents.defaults) config.agents.defaults = {};
+    config.agents.defaults.model = {
+      primary: 'openrouter/anthropic/claude-sonnet-4',
+      fallbacks: ['openrouter/openai/gpt-4o', 'openrouter/google/gemini-2.5-flash'],
+    };
+  } else {
+    config.models = {
+      providers: {
+        platform: {
+          baseUrl: PROXY_BASE_URL,
+          apiKey: apiKey,
+          api: 'openai-completions',
+          models: [
+            { id: 'auto', name: '⚡ Smart Auto (picks best model per task)', contextWindow: 128000, maxTokens: 4096 },
+
+            { id: 'anthropic/claude-sonnet-4', name: 'Claude Sonnet 4 (best for agents & tool use)', contextWindow: 200000, maxTokens: 8192 },
+            { id: 'anthropic/claude-3.5-haiku', name: 'Claude 3.5 Haiku (fast & cheap)', contextWindow: 200000, maxTokens: 8192 },
+            { id: 'anthropic/claude-opus-4', name: 'Claude Opus 4 (most powerful)', contextWindow: 200000, maxTokens: 8192 },
+
+            { id: 'openai/gpt-4o', name: 'GPT-4o (smart & balanced)', contextWindow: 128000, maxTokens: 4096 },
+            { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini (fast & cheap)', contextWindow: 128000, maxTokens: 4096 },
+            { id: 'openai/gpt-4.1', name: 'GPT-4.1 (latest, 1M context)', contextWindow: 1000000, maxTokens: 32768 },
+            { id: 'openai/gpt-4.1-mini', name: 'GPT-4.1 Mini (latest mini, 1M context)', contextWindow: 1000000, maxTokens: 32768 },
+            { id: 'openai/gpt-4.1-nano', name: 'GPT-4.1 Nano (ultra cheap)', contextWindow: 1000000, maxTokens: 32768 },
+            { id: 'openai/o3-mini', name: 'o3-mini (reasoning)', contextWindow: 200000, maxTokens: 65536 },
+
+            { id: 'google/gemini-2.5-pro', name: 'Gemini 2.5 Pro (strong, 1M context)', contextWindow: 1000000, maxTokens: 65536 },
+            { id: 'google/gemini-2.5-flash', name: 'Gemini 2.5 Flash (fast & smart)', contextWindow: 1000000, maxTokens: 65536 },
+            { id: 'google/gemini-2.0-flash-001', name: 'Gemini 2.0 Flash (cheapest)', contextWindow: 1000000, maxTokens: 8192 },
+
+            { id: 'deepseek/deepseek-chat-v3-0324', name: 'DeepSeek V3 (strong & very cheap)', contextWindow: 128000, maxTokens: 8192 },
+            { id: 'deepseek/deepseek-r1', name: 'DeepSeek R1 (reasoning, cheap)', contextWindow: 128000, maxTokens: 8192 },
+
+            { id: 'meta-llama/llama-4-maverick', name: 'Llama 4 Maverick (open source, strong)', contextWindow: 1000000, maxTokens: 32768 },
+            { id: 'meta-llama/llama-4-scout', name: 'Llama 4 Scout (open source, 10M context)', contextWindow: 10000000, maxTokens: 32768 },
+
+            { id: 'mistralai/mistral-large-2', name: 'Mistral Large 2 (strong European model)', contextWindow: 128000, maxTokens: 4096 },
+            { id: 'qwen/qwen-2.5-coder-32b-instruct', name: 'Qwen 2.5 Coder 32B (great for coding, free)', contextWindow: 32768, maxTokens: 4096 },
+
+            { id: 'x-ai/grok-3-mini-beta', name: 'Grok 3 Mini (fast reasoning)', contextWindow: 131072, maxTokens: 8192 },
+            { id: 'x-ai/grok-3-beta', name: 'Grok 3 (powerful)', contextWindow: 131072, maxTokens: 8192 },
+          ],
+        },
+      },
+    };
+
+    if (!config.agents) config.agents = {};
+    if (!config.agents.defaults) config.agents.defaults = {};
+    config.agents.defaults.model = {
+      primary: 'platform/auto',
+      fallbacks: ['openrouter/anthropic/claude-sonnet-4', 'openrouter/openai/gpt-4o'],
+    };
+  }
 
   // Ensure the main agent always exists in agents.list — the OpenClaw gateway
   // dashboard needs this to show agents and enable the "Start Agent" button.
@@ -316,7 +363,7 @@ export async function injectApiKeys(
     config.gateway = {
       mode: 'local',
       bind: 'lan',
-      trustedProxies: ['0.0.0.0/0'],
+      trustedProxies: ['172.16.0.0/12', '10.0.0.0/8', '192.168.0.0/16'],
       controlUi: {
         enabled: true,
         allowInsecureAuth: true,
@@ -371,7 +418,7 @@ export function buildOpenclawConfig(gatewayToken: string): Record<string, any> {
     gateway: {
       mode: 'local',
       bind: 'lan',
-      trustedProxies: ['0.0.0.0/0'],
+      trustedProxies: ['172.16.0.0/12', '10.0.0.0/8', '192.168.0.0/16'],
       controlUi: {
         enabled: true,
         allowInsecureAuth: true,
