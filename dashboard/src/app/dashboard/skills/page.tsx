@@ -157,9 +157,7 @@ export default function SkillsPage() {
     }
   }, []);
 
-  useEffect(() => {
-    if (tab === 'marketplace' && marketplaceSkills.length === 0) fetchMarketplace();
-  }, [tab, marketplaceSkills.length, fetchMarketplace]);
+  useEffect(() => { fetchMarketplace(); }, [fetchMarketplace]);
 
   const installSkill = async (skillId: string) => {
     setInstallingSkill(skillId);
@@ -230,9 +228,8 @@ export default function SkillsPage() {
   const enabledSet = new Set(data?.enabled || []);
   const skillsConfig = data?.skillsConfig || {};
 
-  const allTools = loading
-    ? Object.keys(TOOL_META)
-    : [...new Set([...(data?.enabled || []), ...(data?.disabled || [])])];
+  const apiTools = [...new Set([...(data?.enabled || []), ...(data?.disabled || [])])];
+  const allTools = [...new Set([...Object.keys(TOOL_META), ...apiTools])];
 
   const toolsByCat: Record<string, string[]> = {};
   for (const name of allTools) {
@@ -378,7 +375,7 @@ export default function SkillsPage() {
                   {skillsByCat[cat].map(name => {
                     const meta = BUNDLED_SKILLS[name];
                     const Icon = meta.icon;
-                    const isEnabled = skillsConfig[name]?.enabled === true;
+                    const isEnabled = skillsConfig[name]?.enabled === true || enabledSet.has(name);
                     const isMacOnly = meta.requiresOs === 'darwin';
                     const needsBin = meta.requiresBin && meta.requiresBin.length > 0;
                     const needsKey = !!meta.envKey && !meta.canUseOpenRouter;
@@ -481,7 +478,7 @@ export default function SkillsPage() {
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {marketplaceSkills.map(skill => {
-                const isInstalled = !!skillsConfig[skill.id]?.enabled;
+                const isInstalled = skillsConfig[skill.id]?.enabled === true || enabledSet.has(skill.id);
                 const isInstalling = installingSkill === skill.id;
                 return (
                   <Card key={skill.id} className={isInstalled ? 'ring-1 ring-emerald-500/10' : ''}>
