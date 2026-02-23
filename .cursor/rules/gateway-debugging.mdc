@@ -29,8 +29,11 @@ OpenClaw has a strict config schema. Writing unrecognized keys causes the contai
 tools.exec.enabled, tools.browser, tools.read, tools.write, tools.edit,
 tools.memory_search, tools.memory_get, tools.sessions_spawn, tools.sessions_list,
 tools.sessions_send, tools.session_status, tools.cron, tools.image, personality,
-agents.defaults.subagents.allowAgents
+agents.defaults.subagents.allowAgents,
+channels.whatsapp.enabled
 ```
+
+Note: OpenClaw gateway may auto-add `channels.whatsapp.enabled` when persisting; if schema rejects it, that's an OpenClaw bug — update the image or check openclaw/openclaw issues.
 
 **Valid top-level keys** (confirmed working):
 ```json
