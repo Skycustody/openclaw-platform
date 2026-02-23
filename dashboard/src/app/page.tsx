@@ -334,7 +334,7 @@ function PricingSection() {
         </div>
         <h2 className="text-3xl font-bold tracking-tight md:text-4xl">Pick your plan</h2>
         <p className="mt-3 text-base text-muted-foreground">
-          Every plan is a real dedicated server with OpenClaw, AI credits, and smart routing included.
+          Every plan includes a dedicated server, smart routing, and AI credits starting at $2/mo.
         </p>
       </div>
 
