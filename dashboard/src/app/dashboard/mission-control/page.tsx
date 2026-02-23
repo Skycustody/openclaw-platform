@@ -302,9 +302,9 @@ export default function MissionControlPage() {
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-500/10">
               <Zap className="h-4 w-4 text-purple-400" />
             </div>
-            <span className="text-[12px] text-white/30">AI Spend</span>
+            <span className="text-[12px] text-white/30">AI Requests</span>
           </div>
-          <p className="text-[24px] font-bold text-white tabular-nums">{formatUsd(stats.tokensToday)}</p>
+          <p className="text-[24px] font-bold text-white tabular-nums">{stats.tokensToday}</p>
           <p className="text-[11px] text-white/20 mt-0.5">today</p>
         </Card>
         <button className="text-left w-full" onClick={() => window.location.href = '/dashboard/tokens'}>

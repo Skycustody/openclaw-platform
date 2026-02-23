@@ -147,23 +147,48 @@ router.get('/status', async (req: AuthRequest, res: Response, next: NextFunction
 
     const status = await getContainerStatus(req.userId!);
 
-    // Quick stats from Redis/DB
-    const [messagesResult, tokensResult, cronResult] = await Promise.all([
+    // Quick stats — use multiple sources so numbers aren't zero
+    const [convResult, routingResult, activityResult, cronResult, skillsResult] = await Promise.all([
       db.getOne<{ count: string }>(
         `SELECT COUNT(*) as count FROM conversations
          WHERE user_id = $1 AND created_at > CURRENT_DATE`,
         [req.userId]
       ),
-      db.getOne<{ total: string }>(
-        `SELECT COALESCE(SUM(ABS(amount)), 0) as total FROM token_transactions
-         WHERE user_id = $1 AND type = 'usage' AND created_at > CURRENT_DATE`,
+      db.getOne<{ count: string; models: string }>(
+        `SELECT COUNT(*) as count,
+                COALESCE(string_agg(DISTINCT model_selected, ','), '') as models
+         FROM routing_decisions
+         WHERE user_id = $1 AND created_at > CURRENT_DATE`,
+        [req.userId]
+      ),
+      db.getOne<{ count: string }>(
+        `SELECT COUNT(*) as count FROM activity_log
+         WHERE user_id = $1 AND created_at > CURRENT_DATE`,
         [req.userId]
       ),
       db.getOne<{ count: string }>(
         `SELECT COUNT(*) as count FROM cron_jobs WHERE user_id = $1 AND enabled = true`,
         [req.userId]
       ),
+      (async () => {
+        try {
+          const { getUserContainer, readContainerConfig } = await import('../services/containerConfig');
+          const { serverIp } = await getUserContainer(req.userId!);
+          const config = await readContainerConfig(serverIp, req.userId!);
+          const entries = config?.skills?.entries || {};
+          return Object.values(entries).filter((e: any) => e?.enabled !== false).length;
+        } catch { return 0; }
+      })(),
     ]);
+
+    const convCount = parseInt(convResult?.count || '0');
+    const routingCount = parseInt(routingResult?.count || '0');
+    const activityCount = parseInt(activityResult?.count || '0');
+    const messagesToday = Math.max(convCount, routingCount, activityCount);
+
+    const skillCount = typeof skillsResult === 'number' ? skillsResult : 0;
+    const cronCount = parseInt(cronResult?.count || '0');
+    const activeSkills = Math.max(skillCount, cronCount);
 
     res.json({
       userId: user.id,
@@ -176,9 +201,9 @@ router.get('/status', async (req: AuthRequest, res: Response, next: NextFunction
       createdAt: user.created_at,
       isAdmin: user.is_admin || false,
       stats: {
-        messagesToday: parseInt(messagesResult?.count || '0'),
-        tokensToday: parseInt(tokensResult?.total || '0'),
-        activeSkills: parseInt(cronResult?.count || '0'),
+        messagesToday,
+        tokensToday: routingCount,
+        activeSkills,
       },
     });
   } catch (err) {
