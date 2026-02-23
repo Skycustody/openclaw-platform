@@ -1,27 +1,10 @@
-import OpenAI from 'openai';
 import db from '../lib/db';
 import redis from '../lib/redis';
 import { TaskClassification, ModelCapability, RoutingDecision, Plan } from '../types';
 import { OPENROUTER_MODEL_COSTS, RETAIL_MARKUP } from './nexos';
 
-const ROUTER_API_KEY = process.env.OPENROUTER_API_KEY || process.env.OPENROUTER_MGMT_KEY || '';
-
-const routerClient = new OpenAI({
-  apiKey: ROUTER_API_KEY,
-  baseURL: 'https://openrouter.ai/api/v1',
-  timeout: 3500,
-  defaultHeaders: {
-    'HTTP-Referer': 'https://valnaa.com',
-    'X-Title': 'OpenClaw Router',
-  },
-});
-
-if (!ROUTER_API_KEY) {
-  console.error('[router] WARNING: No OPENROUTER_API_KEY or OPENROUTER_MGMT_KEY set — router will always fall back to default model');
-} else {
-  const source = process.env.OPENROUTER_API_KEY ? 'OPENROUTER_API_KEY' : 'OPENROUTER_MGMT_KEY';
-  console.log(`[router] Using ${source} for AI model routing (key: ${ROUTER_API_KEY.slice(0, 12)}...)`);
-}
+const OPENROUTER_CHAT_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const ROUTER_TIMEOUT_MS = 3500;
 
 const ROUTER_MODELS = [
   'google/gemini-2.5-flash',
@@ -236,7 +219,9 @@ export interface RouterContext {
 }
 
 /**
- * AI-powered model router with cascading fallback:
+ * AI-powered model router with cascading fallback.
+ * Uses the USER'S OWN API key so routing costs count against their budget.
+ *
  *   1. Gemini 2.5 Flash ($0.30/1M) — primary router, fast + smart
  *   2. GPT-4o-mini ($0.15/1M) — backup if Gemini fails
  *   3. Claude Sonnet 4 direct — if both routers fail, safe default
@@ -248,12 +233,18 @@ export async function pickModelWithAI(
   hasImage: boolean,
   hasToolHistory: boolean,
   ctx?: RouterContext,
+  apiKey?: string,
 ): Promise<{ model: string; reason: string; routerUsed: string }> {
+  const key = apiKey || process.env.OPENROUTER_API_KEY || process.env.OPENROUTER_MGMT_KEY || '';
+  if (!key) {
+    return { model: FINAL_FALLBACK_MODEL, reason: 'No API key available for router', routerUsed: 'fallback' };
+  }
+
   const depth = ctx?.messageCount ?? 0;
   const toolCalls = ctx?.toolCallCount ?? 0;
 
   const msgKey = userMessage.slice(0, 200);
-  const cacheKey = `aiRoute4:${Buffer.from(msgKey).toString('base64')}:${hasImage}:${hasToolHistory}:${depth}:${toolCalls}`;
+  const cacheKey = `aiRoute5:${Buffer.from(msgKey).toString('base64')}:${hasImage}:${hasToolHistory}:${depth}:${toolCalls}`;
 
   try {
     const cached = await redis.get(cacheKey);
@@ -273,18 +264,40 @@ export async function pickModelWithAI(
 
   for (const routerModel of ROUTER_MODELS) {
     try {
-      const res = await routerClient.chat.completions.create({
-        model: routerModel,
-        messages: [
-          { role: 'system', content: ROUTER_SYSTEM_PROMPT },
-          { role: 'user', content: userContent },
-        ],
-        max_tokens: 80,
-        temperature: 0,
-        response_format: { type: 'json_object' },
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), ROUTER_TIMEOUT_MS);
+
+      const res = await fetch(OPENROUTER_CHAT_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${key}`,
+          'HTTP-Referer': 'https://valnaa.com',
+          'X-Title': 'OpenClaw Router',
+        },
+        body: JSON.stringify({
+          model: routerModel,
+          messages: [
+            { role: 'system', content: ROUTER_SYSTEM_PROMPT },
+            { role: 'user', content: userContent },
+          ],
+          max_tokens: 80,
+          temperature: 0,
+          response_format: { type: 'json_object' },
+        }),
+        signal: controller.signal,
       });
 
-      const content = res.choices[0]?.message?.content?.trim();
+      clearTimeout(timeout);
+
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '');
+        console.warn(`[router] ${routerModel} failed: ${res.status} ${errText.slice(0, 100)}`);
+        continue;
+      }
+
+      const data = await res.json();
+      const content = data?.choices?.[0]?.message?.content?.trim();
       if (!content) continue;
 
       const parsed = parseRouterResponse(content);
@@ -294,8 +307,9 @@ export async function pickModelWithAI(
       await redis.set(cacheKey, JSON.stringify(result), 'EX', cacheTTL).catch(() => {});
       console.log(`[router] ${routerModel} picked ${result.model} — ${result.reason} (depth=${depth}, tools=${toolCalls})`);
       return result;
-    } catch (err) {
-      console.warn(`[router] ${routerModel} failed:`, (err as Error).message);
+    } catch (err: any) {
+      const msg = err?.name === 'AbortError' ? 'timeout' : (err?.message || 'unknown');
+      console.warn(`[router] ${routerModel} failed: ${msg}`);
     }
   }
 

@@ -159,6 +159,7 @@ router.post('/v1/chat/completions', async (req: Request, res: Response) => {
       hasImage,
       hasToolHistory,
       ctx,
+      apiKey,
     );
 
     selectedModel = aiPick.model;
