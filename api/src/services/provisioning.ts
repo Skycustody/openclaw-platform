@@ -42,6 +42,7 @@ import { v4 as uuid } from 'uuid';
 import { buildOpenclawConfig, injectApiKeys } from './apiKeys';
 import { reapplyGatewayConfig } from './containerConfig';
 import { ensureNexosKey } from './nexos';
+import { installDefaultSkills } from './defaultSkills';
 
 /** Generate a per-container secret bound to a specific userId. */
 export function generateContainerSecret(userId: string): string {
@@ -308,6 +309,9 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
 
   // Step 6b: Inject OpenRouter key + configure model router per plan tier
   await injectApiKeys(server.ip, userId, containerName, plan);
+
+  // Step 6b2: Install default skills (browser-use, job-auto-apply, etc.) so new users get them out of the box
+  await installDefaultSkills(server.ip, userId, containerName);
 
   // Step 6c: Re-apply gateway auth config (doctor --fix on existing images may strip it)
   await reapplyGatewayConfig(server.ip, userId, containerName);
