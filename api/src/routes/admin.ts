@@ -18,7 +18,7 @@ router.use(requireAdmin);
 // ── Platform Overview ──
 router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const [users, servers, recentSignups, plans] = await Promise.all([
+    const [users, servers, recentSignups, plans, creditsRow, revenueRow] = await Promise.all([
       db.getOne<any>(`
         SELECT
           COUNT(*) as total,
@@ -50,6 +50,19 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
           COUNT(*) FILTER (WHERE plan = 'business') as business
         FROM users WHERE status != 'cancelled'
       `),
+      db.getOne<any>(`
+        SELECT
+          COALESCE(SUM(total_used), 0)::text as total_used,
+          COALESCE(SUM(balance), 0)::text as total_balance,
+          COALESCE(SUM(total_purchased), 0)::text as total_purchased
+        FROM token_balances
+      `).catch(() => ({ total_used: '0', total_balance: '0', total_purchased: '0' })),
+      db.getOne<any>(`
+        SELECT
+          COALESCE(SUM(CASE WHEN created_at >= DATE_TRUNC('month', NOW()) THEN credits_usd ELSE 0 END), 0)::text as month_credit_purchases,
+          COALESCE(SUM(credits_usd), 0)::text as total_credit_purchases
+        FROM credit_purchases
+      `).catch(() => ({ month_credit_purchases: '0', total_credit_purchases: '0' })),
     ]);
 
     const starterCount = parseInt(plans?.starter || '0');
@@ -83,6 +96,7 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
       monthlySubscriptionRevenue,
       monthlyServerCosts,
       monthlyNexosCosts,
+      monthlyCreditCosts: monthlyNexosCosts,
       monthlyProfit,
       profitMarginPercent,
       profitMarginTarget: Math.round(PROFIT_MARGIN_TARGET * 100),
@@ -105,7 +119,16 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
       ),
     };
 
-    res.json({ users, servers, recentSignups, plans, financials });
+    const revenue = {
+      month_credit_purchases: revenueRow?.month_credit_purchases ?? '0',
+      total_credit_purchases: revenueRow?.total_credit_purchases ?? '0',
+    };
+    const credits = {
+      total_used: creditsRow?.total_used ?? '0',
+      total_balance: creditsRow?.total_balance ?? '0',
+      total_purchased: creditsRow?.total_purchased ?? '0',
+    };
+    res.json({ users, servers, recentSignups, plans, financials, revenue, credits });
   } catch (err) {
     next(err);
   }
@@ -220,7 +243,7 @@ router.get('/users', async (req: AuthRequest, res: Response, next: NextFunction)
       db.getMany<any>(
         `SELECT u.id, u.email, u.display_name, u.plan, u.status, u.subdomain,
                 u.created_at, u.last_active, u.is_admin,
-                tb.balance as token_balance, tb.total_used, tb.total_purchased,
+                tb.balance as credit_balance, tb.total_used, tb.total_purchased,
                 s.ip as server_ip, s.hostname as server_hostname
          FROM users u
          LEFT JOIN token_balances tb ON tb.user_id = u.id
