@@ -240,11 +240,12 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
     );
     if (settings?.agent_name || settings?.custom_instructions) {
       const parts: string[] = ['# User Profile'];
-      if (settings.agent_name) parts.push(`\nName: ${settings.agent_name}`);
+      if (settings.agent_name) parts.push(`\nThe user's name is: ${settings.agent_name}`);
       if (settings.language) parts.push(`Preferred language: ${settings.language}`);
       if (settings.agent_tone) parts.push(`Communication style: ${settings.agent_tone}`);
       if (settings.response_length) parts.push(`Response length: ${settings.response_length}`);
-      if (settings.custom_instructions) parts.push(`\n## About the User\n${settings.custom_instructions}`);
+      if (settings.custom_instructions) parts.push(`\n## Instructions\n${settings.custom_instructions}`);
+      parts.push(`\nIMPORTANT: You are the user's AI assistant. The user's name above is who you are talking to — it is NOT your name. If asked your name, say you are their AI assistant.`);
       const userMdB64 = Buffer.from(parts.join('\n')).toString('base64');
       await sshExec(server.ip, `echo '${userMdB64}' | base64 -d > /opt/openclaw/instances/${userId}/USER.md`);
     }

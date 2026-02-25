@@ -26,14 +26,16 @@ const UUID_RE = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/
 function buildUserMd(settings: UserSettings): string {
   const sections: string[] = ['# User Profile'];
 
-  if (settings.agent_name) sections.push(`\nName: ${settings.agent_name}`);
+  if (settings.agent_name) sections.push(`\nThe user's name is: ${settings.agent_name}`);
   if (settings.language) sections.push(`Preferred language: ${settings.language}`);
   if (settings.agent_tone) sections.push(`Communication style: ${settings.agent_tone}`);
   if (settings.response_length) sections.push(`Response length: ${settings.response_length}`);
 
   if (settings.custom_instructions) {
-    sections.push(`\n## About the User\n${settings.custom_instructions}`);
+    sections.push(`\n## Instructions\n${settings.custom_instructions}`);
   }
+
+  sections.push(`\nIMPORTANT: You are the user's AI assistant. The user's name above is who you are talking to — it is NOT your name. If asked your name, say you are their AI assistant.`);
 
   return sections.join('\n');
 }
