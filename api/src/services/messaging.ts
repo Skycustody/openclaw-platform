@@ -1,9 +1,9 @@
 import db from '../lib/db';
 import { encrypt } from '../lib/encryption';
 import { sshExec } from './ssh';
-import { User } from '../types';
+import { User, Server } from '../types';
 import { injectApiKeys } from './apiKeys';
-import { readContainerConfig, writeContainerConfig } from './containerConfig';
+import { readContainerConfig, writeContainerConfig, reapplyGatewayConfig } from './containerConfig';
 
 // ── Helpers ──
 
@@ -21,13 +21,15 @@ async function getUserContainer(userId: string): Promise<{
 }> {
   const user = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [userId]);
   if (!user?.server_id) {
+    console.warn(`[channels] getUserContainer: user ${userId} has no server_id (status=${user?.status})`);
     const err: any = new Error('Your agent is not provisioned yet. Open Agent first, then try again.');
     err.statusCode = 409;
     throw err;
   }
 
-  const server = await db.getOne<any>('SELECT ip FROM servers WHERE id = $1', [user.server_id]);
+  const server = await db.getOne<Server>('SELECT * FROM servers WHERE id = $1', [user.server_id]);
   if (!server) {
+    console.warn(`[channels] getUserContainer: server ${user.server_id} not found for user ${userId}`);
     const err: any = new Error('Worker server not found. Please open your agent again to re-provision.');
     err.statusCode = 409;
     throw err;
@@ -41,9 +43,58 @@ async function getUserContainer(userId: string): Promise<{
   ).catch(() => null);
 
   if (!running || !running.stdout.includes('true')) {
-    const err: any = new Error('Your agent is not running. Open Agent, wait until it is online, then retry.');
-    err.statusCode = 409;
-    throw err;
+    // Auto-wake: try to start the container instead of failing
+    console.log(`[channels] Container ${containerName} not running for user ${userId} (status=${user.status}) — auto-waking`);
+    const startResult = await sshExec(
+      server.ip,
+      `docker start ${containerName} 2>/dev/null`
+    ).catch((err) => {
+      console.error(`[channels] docker start failed for ${containerName}: ${err.message}`);
+      return null;
+    });
+
+    if (startResult && startResult.code === 0) {
+      // Wait for container to come up
+      const maxWait = 30000;
+      const start = Date.now();
+      let isRunning = false;
+      while (Date.now() - start < maxWait) {
+        const check = await sshExec(
+          server.ip,
+          `docker inspect ${containerName} --format='{{.State.Running}}' 2>/dev/null`
+        ).catch(() => null);
+        if (check?.stdout.includes('true')) {
+          isRunning = true;
+          break;
+        }
+        await new Promise(r => setTimeout(r, 2000));
+      }
+
+      if (isRunning) {
+        console.log(`[channels] Container ${containerName} auto-woke successfully`);
+        // Update status to active if it was sleeping
+        if (user.status === 'sleeping') {
+          await db.query(
+            `UPDATE users SET status = 'active', last_active = NOW() WHERE id = $1`,
+            [userId]
+          );
+        }
+        // Re-apply gateway config in background (doctor --fix strips auth keys on startup)
+        setTimeout(() => {
+          reapplyGatewayConfig(server.ip, userId, containerName).catch(() => {});
+        }, 10000);
+      } else {
+        console.error(`[channels] Container ${containerName} failed to start within ${maxWait}ms`);
+        const err: any = new Error('Your agent failed to start. Please open your Agent dashboard first, then retry.');
+        err.statusCode = 409;
+        throw err;
+      }
+    } else {
+      console.error(`[channels] Container ${containerName} does not exist or cannot start`);
+      const err: any = new Error('Your agent is not running. Open Agent, wait until it is online, then retry.');
+      err.statusCode = 409;
+      throw err;
+    }
   }
 
   return { serverIp: server.ip, containerName, user };
@@ -69,13 +120,17 @@ async function waitForContainer(serverIp: string, containerName: string, timeout
 // ── Telegram ──
 
 export async function connectTelegram(userId: string, botToken: string): Promise<void> {
+  console.log(`[telegram] Connecting for user ${userId}`);
   const res = await fetch(`https://api.telegram.org/bot${botToken}/getMe`);
-  if (!res.ok) throw new Error('Invalid Telegram bot token');
+  if (!res.ok) {
+    console.warn(`[telegram] Invalid bot token for user ${userId}: HTTP ${res.status}`);
+    throw new Error('Invalid Telegram bot token');
+  }
   const botInfo: any = await res.json();
+  console.log(`[telegram] Bot validated: @${botInfo.result?.username} for user ${userId}`);
 
   const { serverIp, containerName, user } = await getUserContainer(userId);
 
-  // Ensure API keys + model router are configured before starting the channel
   await injectApiKeys(serverIp, userId, containerName, user.plan as any);
 
   const config = await readContainerConfig(serverIp, userId);
@@ -88,11 +143,13 @@ export async function connectTelegram(userId: string, botToken: string): Promise
     groups: { '*': { requireMention: true } },
   };
   await writeContainerConfig(serverIp, userId, config);
+  console.log(`[telegram] Config written for user ${userId}`);
 
   await sshExec(serverIp, `docker restart ${containerName}`);
 
   const ready = await waitForContainer(serverIp, containerName);
   if (!ready) {
+    console.error(`[telegram] Container ${containerName} failed to restart for user ${userId}`);
     throw new Error('Agent failed to restart after configuring Telegram. Please try again.');
   }
 
@@ -102,6 +159,7 @@ export async function connectTelegram(userId: string, botToken: string): Promise
      WHERE user_id = $3`,
     [encrypt(botToken), botInfo.result?.username || '', userId]
   );
+  console.log(`[telegram] Connected for user ${userId} (@${botInfo.result?.username})`);
 }
 
 export async function disconnectTelegram(userId: string): Promise<void> {
@@ -128,12 +186,18 @@ export async function disconnectTelegram(userId: string): Promise<void> {
 // ── Discord ──
 
 export async function connectDiscord(userId: string, botToken: string, guildId?: string): Promise<void> {
+  console.log(`[discord] Connecting for user ${userId}`);
   const res = await fetch('https://discord.com/api/v10/users/@me', {
     headers: { Authorization: `Bot ${botToken}` },
   });
-  if (!res.ok) throw new Error('Invalid Discord bot token');
+  if (!res.ok) {
+    console.warn(`[discord] Invalid bot token for user ${userId}: HTTP ${res.status}`);
+    throw new Error('Invalid Discord bot token');
+  }
 
-  const { serverIp, containerName } = await getUserContainer(userId);
+  const { serverIp, containerName, user } = await getUserContainer(userId);
+
+  await injectApiKeys(serverIp, userId, containerName, user.plan as any);
 
   const config = await readContainerConfig(serverIp, userId);
   if (!config.channels) config.channels = {};
@@ -144,11 +208,13 @@ export async function connectDiscord(userId: string, botToken: string, guildId?:
     allowFrom: ['*'],
   };
   await writeContainerConfig(serverIp, userId, config);
+  console.log(`[discord] Config written for user ${userId}`);
 
   await sshExec(serverIp, `docker restart ${containerName}`);
 
   const ready = await waitForContainer(serverIp, containerName);
   if (!ready) {
+    console.error(`[discord] Container failed to restart for user ${userId}`);
     throw new Error('Agent failed to restart after configuring Discord. Please try again.');
   }
 
@@ -158,6 +224,7 @@ export async function connectDiscord(userId: string, botToken: string, guildId?:
      WHERE user_id = $3`,
     [encrypt(botToken), guildId || null, userId]
   );
+  console.log(`[discord] Connected for user ${userId}`);
 }
 
 export async function disconnectDiscord(userId: string): Promise<void> {
@@ -184,7 +251,10 @@ export async function disconnectDiscord(userId: string): Promise<void> {
 // ── Slack ──
 
 export async function connectSlack(userId: string, accessToken: string, teamId: string): Promise<void> {
-  const { serverIp, containerName } = await getUserContainer(userId);
+  console.log(`[slack] Connecting for user ${userId}, team=${teamId}`);
+  const { serverIp, containerName, user } = await getUserContainer(userId);
+
+  await injectApiKeys(serverIp, userId, containerName, user.plan as any);
 
   const config = await readContainerConfig(serverIp, userId);
   if (!config.channels) config.channels = {};
@@ -193,11 +263,13 @@ export async function connectSlack(userId: string, accessToken: string, teamId: 
     token: accessToken,
   };
   await writeContainerConfig(serverIp, userId, config);
+  console.log(`[slack] Config written for user ${userId}`);
 
   await sshExec(serverIp, `docker restart ${containerName}`);
 
   const ready = await waitForContainer(serverIp, containerName);
   if (!ready) {
+    console.error(`[slack] Container failed to restart for user ${userId}`);
     throw new Error('Agent failed to restart after configuring Slack. Please try again.');
   }
 
@@ -207,6 +279,7 @@ export async function connectSlack(userId: string, accessToken: string, teamId: 
      WHERE user_id = $3`,
     [encrypt(accessToken), teamId, userId]
   );
+  console.log(`[slack] Connected for user ${userId}`);
 }
 
 export async function disconnectSlack(userId: string): Promise<void> {

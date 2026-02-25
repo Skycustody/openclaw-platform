@@ -35,6 +35,8 @@ let provisionInProgress: Promise<Server> | null = null;
 export async function findBestServer(requiredRamMb = 2048): Promise<Server> {
   const cpIp = controlPlaneIp();
 
+  console.log(`[findBestServer] Looking for server with ${requiredRamMb}MB free RAM`);
+
   // Atomically reserve RAM on the best server to prevent double-booking
   let server = await db.getOne<Server>(
     `UPDATE servers SET ram_used = ram_used + $1
@@ -51,13 +53,20 @@ export async function findBestServer(requiredRamMb = 2048): Promise<Server> {
     [requiredRamMb, cpIp]
   );
 
-  if (server) return server;
+  if (server) {
+    console.log(`[findBestServer] Reserved ${requiredRamMb}MB on ${server.hostname || server.ip} (now ${server.ram_used}/${server.ram_total}MB)`);
+    return server;
+  }
 
   if (provisionInProgress) {
-    console.log('Another request is already provisioning a worker — waiting');
+    console.log('[findBestServer] Another request is already provisioning a worker — waiting');
     server = await provisionInProgress;
     const hasCapacity = server && (server.ram_total - server.ram_used) >= requiredRamMb;
-    if (hasCapacity) return server;
+    if (hasCapacity) {
+      console.log(`[findBestServer] Newly provisioned server ${server.hostname || server.ip} has capacity`);
+      return server;
+    }
+    console.warn(`[findBestServer] Newly provisioned server has no capacity (${server?.ram_used}/${server?.ram_total}MB) — will try again`);
     provisionInProgress = null;
   }
 
@@ -77,7 +86,10 @@ export async function findBestServer(requiredRamMb = 2048): Promise<Server> {
          RETURNING *`,
         [requiredRamMb, cpIp]
       );
-      if (server) return server;
+      if (server) {
+        console.log(`[findBestServer] Found capacity on retry: ${server.hostname || server.ip}`);
+        return server;
+      }
 
       if (!process.env.HETZNER_API_TOKEN) {
         throw new Error(
@@ -88,9 +100,10 @@ export async function findBestServer(requiredRamMb = 2048): Promise<Server> {
         );
       }
 
-      console.log('No worker servers available — provisioning new worker');
+      console.log('[findBestServer] No worker servers available — provisioning new Hetzner server');
       await cloudProvider.provisionNewServer();
       const newServer = await waitForNewServer();
+      console.log(`[findBestServer] New server registered: ${newServer.hostname || newServer.ip} (${newServer.ram_total}MB)`);
       return newServer;
     } finally {
       provisionInProgress = null;
@@ -123,6 +136,7 @@ async function waitForNewServer(timeoutMs = 600000): Promise<Server> {
 export async function registerServer(ip: string, ramTotal: number, hostname: string, hostingerId?: string): Promise<Server> {
   const existing = await db.getOne<Server>('SELECT * FROM servers WHERE ip = $1', [ip]);
   if (existing) {
+    console.log(`[registerServer] Re-activating existing server ${ip} (${hostname}), RAM=${ramTotal}MB`);
     await db.query(
       `UPDATE servers SET status = 'active', ram_total = $1 WHERE ip = $2`,
       [ramTotal, ip]
@@ -130,6 +144,7 @@ export async function registerServer(ip: string, ramTotal: number, hostname: str
     return { ...existing, status: 'active', ram_total: ramTotal };
   }
 
+  console.log(`[registerServer] New server registered: ${ip} (${hostname}), RAM=${ramTotal}MB`);
   const result = await db.query<Server>(
     `INSERT INTO servers (ip, hostname, hostinger_id, ram_total, status)
      VALUES ($1, $2, $3, $4, 'active')
@@ -185,13 +200,52 @@ export async function checkCapacity(): Promise<void> {
     [cpIp]
   );
 
+  if (servers.length === 0) {
+    console.log('[checkCapacity] No active worker servers');
+    return;
+  }
+
+  // First, recalculate RAM for all servers to fix any drift from phantom reservations
   for (const server of servers) {
-    const usedPercent = (server.ram_used / server.ram_total) * 100;
+    await updateServerRam(server.id);
+  }
+
+  // Re-read after recalculation
+  const refreshed = await db.getMany<Server>(
+    `SELECT * FROM servers
+     WHERE status = 'active'
+       AND ($1::text IS NULL OR ip != $1)`,
+    [cpIp]
+  );
+
+  let anyOverCapacity = false;
+  let hasSpareServer = false;
+
+  for (const server of refreshed) {
+    const usedPercent = server.ram_total > 0 ? (server.ram_used / server.ram_total) * 100 : 0;
+    const freeMb = server.ram_total - server.ram_used;
+    console.log(`[checkCapacity] ${server.hostname || server.ip}: ${server.ram_used}/${server.ram_total}MB (${usedPercent.toFixed(1)}%), free=${freeMb}MB`);
+
     if (usedPercent > 85) {
-      console.log(`Worker ${server.hostname} at ${usedPercent.toFixed(1)}% — ensuring extra capacity`);
-      await findBestServer(2048);
-      return;
+      anyOverCapacity = true;
     }
+    if (freeMb >= 2048) {
+      hasSpareServer = true;
+    }
+  }
+
+  if (anyOverCapacity && !hasSpareServer) {
+    console.log('[checkCapacity] All servers above 85% and no spare capacity — provisioning new worker');
+    try {
+      const server = await findBestServer(2048);
+      // Release the phantom reservation immediately — this was just a capacity check
+      await updateServerRam(server.id);
+      console.log(`[checkCapacity] Capacity ensured on ${server.hostname || server.ip}`);
+    } catch (err: any) {
+      console.error(`[checkCapacity] Failed to ensure capacity: ${err.message}`);
+    }
+  } else if (anyOverCapacity) {
+    console.log('[checkCapacity] Some servers above 85% but spare capacity exists — no action needed');
   }
 }
 

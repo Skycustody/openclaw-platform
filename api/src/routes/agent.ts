@@ -287,7 +287,9 @@ router.post('/open', authenticate, async (req: AuthRequest, res: Response, next:
         plan: user.plan,
         stripeCustomerId: user.stripe_customer_id || undefined,
       }).catch((err) => {
-        console.error(`[agent/open] Background provisioning failed for ${user.id}:`, err.message);
+        console.error(`[agent/open] Background provisioning failed for ${user.id}: ${err.message}`);
+        // Log the full error for debugging
+        if (err.stack) console.error(`[agent/open] Stack: ${err.stack}`);
         throw err;
       }).finally(() => {
         provisioningInFlight.delete(user.id);

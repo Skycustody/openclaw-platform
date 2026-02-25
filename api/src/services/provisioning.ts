@@ -82,19 +82,46 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
   const { userId, email, plan, stripeCustomerId } = params;
   validateUserId(userId);
   const limits = PLAN_LIMITS[plan];
+  const startTime = Date.now();
 
   const existing = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [userId]);
+
+  // Check retry count — don't infinite-loop server creation
+  const retryCount = (existing as any)?.provision_retries || 0;
+  if (retryCount >= 3) {
+    console.error(`[provision] User ${userId} has failed provisioning ${retryCount} times — halting. Manual intervention needed.`);
+    await db.query(
+      `UPDATE users SET status = 'paused' WHERE id = $1`,
+      [userId]
+    );
+    throw new Error(`Provisioning failed ${retryCount} times. Please contact support.`);
+  }
+
+  await db.query(
+    `UPDATE users SET provision_retries = COALESCE(provision_retries, 0) + 1 WHERE id = $1`,
+    [userId]
+  ).catch(() => {
+    // Column may not exist yet — non-fatal
+  });
+
   const subdomain = existing?.subdomain || (
     email.split('@')[0].replace(/[^a-z0-9]/gi, '').toLowerCase().slice(0, 20) + '-' + uuid().slice(0, 6)
   );
   const referralCode = existing?.referral_code || uuid().slice(0, 8).toUpperCase();
   const containerName = existing?.container_name || `openclaw-${userId.slice(0, 12)}`;
 
-  console.log(`[provision] Starting for ${email} (${userId}), plan=${plan}`);
+  console.log(`[provision] Starting for ${email} (${userId}), plan=${plan}, retry=${retryCount}`);
 
   // Step 1: Find best server
-  const server = await findBestServer(limits.ramMb);
-  console.log(`[provision] Using server ${server.ip} (${server.id})`);
+  let server;
+  try {
+    server = await findBestServer(limits.ramMb);
+  } catch (err: any) {
+    console.error(`[provision] findBestServer failed for ${userId}: ${err.message}`);
+    // Don't leave user stuck — they can retry later
+    throw err;
+  }
+  console.log(`[provision] Using server ${server.ip} (${server.hostname || server.id})`);
 
   // Step 2: Update user record (S3 removed — files live in container workspace)
   await db.query(
@@ -355,11 +382,14 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
     }
   })().catch(() => {});
 
-  // Step 8: Update status to active
+  // Step 8: Update status to active and reset retry count
   await db.query(
-    `UPDATE users SET status = 'active', last_active = NOW() WHERE id = $1`,
+    `UPDATE users SET status = 'active', last_active = NOW(), provision_retries = 0 WHERE id = $1`,
     [userId]
-  );
+  ).catch(() => {
+    // provision_retries column might not exist
+    db.query(`UPDATE users SET status = 'active', last_active = NOW() WHERE id = $1`, [userId]);
+  });
 
   await updateServerRam(server.id);
 
@@ -367,10 +397,11 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
   try {
     await sendWelcomeEmail(email, subdomain, domain);
   } catch (err) {
-    console.error('Welcome email failed:', err);
+    console.error('[provision] Welcome email failed:', err);
   }
 
-  console.log(`[provision] Complete for ${email}: https://${hostRule}`);
+  const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+  console.log(`[provision] Complete for ${email}: https://${hostRule} (took ${elapsed}s)`);
 
   const user = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [userId]);
   return user!;

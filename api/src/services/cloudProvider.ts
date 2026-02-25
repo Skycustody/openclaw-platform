@@ -121,6 +121,8 @@ class CloudProvider {
     const location = process.env.HETZNER_LOCATION || 'nbg1';
     const hostname = `openclaw-worker-${Date.now()}`;
 
+    console.log(`[hetzner] Provisioning new server: type=${serverType}, location=${location}, hostname=${hostname}`);
+
     const apiUrl = process.env.API_URL || 'https://api.yourdomain.com';
     const internalSecret = process.env.INTERNAL_SECRET;
     if (!internalSecret) throw new Error('INTERNAL_SECRET is required for worker provisioning');

@@ -21,6 +21,7 @@ export async function getUserContainer(userId: string): Promise<{
 }> {
   const user = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [userId]);
   if (!user?.server_id) {
+    console.warn(`[containerConfig] getUserContainer: user ${userId} has no server_id (status=${user?.status})`);
     const err: any = new Error('Your agent is not provisioned yet. Open Agent first, then try again.');
     err.statusCode = 409;
     throw err;
@@ -28,6 +29,7 @@ export async function getUserContainer(userId: string): Promise<{
 
   const server = await db.getOne<any>('SELECT ip FROM servers WHERE id = $1', [user.server_id]);
   if (!server) {
+    console.warn(`[containerConfig] getUserContainer: server ${user.server_id} not found for user ${userId}`);
     const err: any = new Error('Worker server not found. Please open your agent again to re-provision.');
     err.statusCode = 409;
     throw err;

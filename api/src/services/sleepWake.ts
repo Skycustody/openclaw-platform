@@ -33,19 +33,23 @@ export async function runSleepCycle(): Promise<{ slept: number }> {
      WHERE u.status = 'active'`
   );
 
+  if (users.length > 0) {
+    console.log(`[sleep] Checking ${users.length} active containers for idle timeout (>${SLEEP_AFTER_MINUTES}min)`);
+  }
+
   for (const user of users) {
     const idleMinutes = (Date.now() - new Date(user.last_active).getTime()) / 60000;
     const ageMinutes = (Date.now() - new Date(user.created_at).getTime()) / 60000;
 
-    // Don't sleep containers less than 60 minutes old (just provisioned)
     if (ageMinutes < 60) continue;
 
     if (idleMinutes >= SLEEP_AFTER_MINUTES) {
       try {
+        console.log(`[sleep] Sleeping ${user.container_name || user.id} (idle ${idleMinutes.toFixed(0)}min)`);
         await sleepContainer(user);
         slept++;
-      } catch (err) {
-        console.error(`Failed to sleep container for ${user.id}:`, err);
+      } catch (err: any) {
+        console.error(`[sleep] Failed to sleep container for ${user.id}: ${err.message}`);
       }
     }
   }
@@ -80,6 +84,9 @@ export async function sleepContainer(user: User & { server_ip?: string }): Promi
 }
 
 export async function wakeContainer(userId: string): Promise<void> {
+  const startTime = Date.now();
+  console.log(`[wake] Waking container for user ${userId}`);
+
   // Atomic status transition: only proceed if currently sleeping
   const user = await db.getOne<User>(
     `UPDATE users SET status = 'active' WHERE id = $1 AND status = 'sleeping' RETURNING *`,
@@ -88,30 +95,36 @@ export async function wakeContainer(userId: string): Promise<void> {
   if (!user) {
     const current = await db.getOne<User>('SELECT status FROM users WHERE id = $1', [userId]);
     if (!current) throw new Error(`User not found: ${userId}`);
-    if (current.status === 'active') return;
+    if (current.status === 'active') {
+      console.log(`[wake] User ${userId} already active`);
+      return;
+    }
     if (current.status === 'cancelled' || current.status === 'paused') {
+      console.warn(`[wake] Cannot wake ${current.status} container for ${userId}`);
       throw new Error(`Cannot wake ${current.status} container`);
     }
-    return; // Already being woken by another request
+    console.log(`[wake] User ${userId} status=${current.status}, already being woken`);
+    return;
   }
 
   const server = await db.getOne<Server>('SELECT * FROM servers WHERE id = $1', [user.server_id]);
-  if (!server) throw new Error(`Server not found for user ${userId}`);
+  if (!server) {
+    console.error(`[wake] Server ${user.server_id} not found for user ${userId}`);
+    throw new Error(`Server not found for user ${userId}`);
+  }
 
   const containerName = user.container_name || `openclaw-${userId}`;
+  console.log(`[wake] Starting container ${containerName} on ${server.ip}`);
 
-  // Data persists via host volume mount, just start the container
   await sshExec(server.ip, `docker start ${containerName}`);
 
   try {
     await waitForReady(server.ip, containerName, 30000);
+    console.log(`[wake] Container ${containerName} health check passed (${Date.now() - startTime}ms)`);
   } catch {
-    console.warn(`Container ${containerName} started but health check timed out`);
+    console.warn(`[wake] Container ${containerName} started but health check timed out (${Date.now() - startTime}ms)`);
   }
 
-  // Re-apply gateway auth config after wake. Existing containers run
-  // `openclaw doctor --fix` at startup which strips dangerouslyDisableDeviceAuth,
-  // causing "gateway closed (1008): pairing required" for tools like browser.
   await reapplyGatewayConfig(server.ip, userId, containerName);
 
   await db.query(
@@ -121,7 +134,7 @@ export async function wakeContainer(userId: string): Promise<void> {
 
   await updateServerRam(server.id);
   await redis.set(`container:status:${userId}`, 'active', 'EX', 300);
-  console.log(`Container woke: ${containerName}`);
+  console.log(`[wake] Container ${containerName} woke (${Date.now() - startTime}ms)`);
 }
 
 export async function touchActivity(userId: string): Promise<void> {
