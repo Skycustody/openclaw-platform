@@ -112,13 +112,12 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
 
   console.log(`[provision] Starting for ${email} (${userId}), plan=${plan}, retry=${retryCount}`);
 
-  // Step 1: Find best server
+  // Step 1: Find best server (allowNewServer=true because a real user is waiting)
   let server;
   try {
-    server = await findBestServer(limits.ramMb);
+    server = await findBestServer(limits.ramMb, true);
   } catch (err: any) {
     console.error(`[provision] findBestServer failed for ${userId}: ${err.message}`);
-    // Don't leave user stuck — they can retry later
     throw err;
   }
   console.log(`[provision] Using server ${server.ip} (${server.hostname || server.id})`);

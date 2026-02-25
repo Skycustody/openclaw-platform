@@ -32,14 +32,18 @@ const controlPlaneIp = (): string | null =>
 /** Single-flight: only one "provision new server" at a time to avoid duplicate VPS. */
 let provisionInProgress: Promise<Server> | null = null;
 
-/** Cooldown after Hetzner provisioning failure — don't keep hammering a limit every 10 min. */
-let lastProvisionFailure = 0;
-const PROVISION_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour
-
-export async function findBestServer(requiredRamMb = 2048): Promise<Server> {
+/**
+ * Find a server with enough RAM for a new container.
+ *
+ * @param requiredRamMb — RAM needed for the container
+ * @param allowNewServer — if true AND no existing server has capacity, create a
+ *   new Hetzner server. Set to false for background checks (checkCapacity) so
+ *   they NEVER spend money. Only set to true when a real user is waiting.
+ */
+export async function findBestServer(requiredRamMb = 2048, allowNewServer = false): Promise<Server> {
   const cpIp = controlPlaneIp();
 
-  console.log(`[findBestServer] Looking for server with ${requiredRamMb}MB free RAM`);
+  console.log(`[findBestServer] Looking for server with ${requiredRamMb}MB free RAM (allowNewServer=${allowNewServer})`);
 
   // Atomically reserve RAM on the best server to prevent double-booking
   let server = await db.getOne<Server>(
@@ -62,6 +66,23 @@ export async function findBestServer(requiredRamMb = 2048): Promise<Server> {
     return server;
   }
 
+  // No existing server has capacity
+  if (!allowNewServer) {
+    throw new Error('No worker server has enough free RAM and auto-provisioning is not allowed for this call');
+  }
+
+  // Double-check: are there actually users who need a server?
+  const waitingUsers = await db.getOne<{ count: string }>(
+    `SELECT COUNT(*) as count FROM users WHERE status = 'provisioning' AND server_id IS NULL`
+  );
+  const waitingCount = parseInt(waitingUsers?.count || '0');
+  if (waitingCount === 0) {
+    console.warn('[findBestServer] No users waiting for provisioning — skipping server creation');
+    throw new Error('No capacity available and no users need a server');
+  }
+
+  console.log(`[findBestServer] ${waitingCount} user(s) waiting — proceeding with new server creation`);
+
   if (provisionInProgress) {
     console.log('[findBestServer] Another request is already provisioning a worker — waiting');
     server = await provisionInProgress;
@@ -76,6 +97,7 @@ export async function findBestServer(requiredRamMb = 2048): Promise<Server> {
 
   provisionInProgress = (async () => {
     try {
+      // Re-check existing servers one more time
       server = await db.getOne<Server>(
         `UPDATE servers SET ram_used = ram_used + $1
          WHERE id = (
@@ -104,7 +126,7 @@ export async function findBestServer(requiredRamMb = 2048): Promise<Server> {
         );
       }
 
-      console.log('[findBestServer] No worker servers available — provisioning new Hetzner server');
+      console.log('[findBestServer] CREATING NEW HETZNER SERVER — a real user is waiting for provisioning');
       await cloudProvider.provisionNewServer();
       const newServer = await waitForNewServer();
       console.log(`[findBestServer] New server registered: ${newServer.hostname || newServer.ip} (${newServer.ram_total}MB)`);
@@ -195,6 +217,17 @@ export async function getServerLoad(): Promise<Array<Server & { user_count: numb
   );
 }
 
+/**
+ * Background capacity check — runs every 10 minutes.
+ *
+ * THIS FUNCTION MUST NEVER CREATE SERVERS. It only:
+ *  1. Recalculates real RAM usage (fixes drift)
+ *  2. Logs server status
+ *  3. Warns if capacity is low
+ *
+ * New Hetzner servers are ONLY created when a real user triggers
+ * provisionUser() → findBestServer(ram, allowNewServer=true).
+ */
 export async function checkCapacity(): Promise<void> {
   const cpIp = controlPlaneIp();
   const servers = await db.getMany<Server>(
@@ -205,11 +238,10 @@ export async function checkCapacity(): Promise<void> {
   );
 
   if (servers.length === 0) {
-    console.log('[checkCapacity] No active worker servers');
     return;
   }
 
-  // First, recalculate RAM for all servers to fix any drift from phantom reservations
+  // Recalculate RAM for all servers to fix any drift from phantom reservations
   for (const server of servers) {
     await updateServerRam(server.id);
   }
@@ -222,42 +254,13 @@ export async function checkCapacity(): Promise<void> {
     [cpIp]
   );
 
-  let anyOverCapacity = false;
-  let hasSpareServer = false;
-
   for (const server of refreshed) {
     const usedPercent = server.ram_total > 0 ? (server.ram_used / server.ram_total) * 100 : 0;
     const freeMb = server.ram_total - server.ram_used;
-    console.log(`[checkCapacity] ${server.hostname || server.ip}: ${server.ram_used}/${server.ram_total}MB (${usedPercent.toFixed(1)}%), free=${freeMb}MB`);
 
     if (usedPercent > 85) {
-      anyOverCapacity = true;
+      console.warn(`[checkCapacity] WARNING: ${server.hostname || server.ip} at ${usedPercent.toFixed(1)}% (${server.ram_used}/${server.ram_total}MB, free=${freeMb}MB) — new users may trigger auto-provisioning`);
     }
-    if (freeMb >= 2048) {
-      hasSpareServer = true;
-    }
-  }
-
-  if (anyOverCapacity && !hasSpareServer) {
-    // Don't keep hammering Hetzner if we recently hit a limit
-    const cooldownRemaining = PROVISION_COOLDOWN_MS - (Date.now() - lastProvisionFailure);
-    if (cooldownRemaining > 0) {
-      console.log(`[checkCapacity] All servers above 85% but Hetzner provision failed recently — cooling down (${Math.ceil(cooldownRemaining / 60000)}min left)`);
-      return;
-    }
-
-    console.log('[checkCapacity] All servers above 85% and no spare capacity — provisioning new worker');
-    try {
-      const server = await findBestServer(2048);
-      // Release the phantom reservation immediately — this was just a capacity check
-      await updateServerRam(server.id);
-      console.log(`[checkCapacity] Capacity ensured on ${server.hostname || server.ip}`);
-    } catch (err: any) {
-      lastProvisionFailure = Date.now();
-      console.error(`[checkCapacity] Failed to ensure capacity: ${err.message} — will retry in ${PROVISION_COOLDOWN_MS / 60000}min`);
-    }
-  } else if (anyOverCapacity) {
-    console.log('[checkCapacity] Some servers above 85% but spare capacity exists — no action needed');
   }
 }
 
