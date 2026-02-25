@@ -4,6 +4,7 @@ import fs from 'fs';
 import path from 'path';
 
 const SSH_TIMEOUT = 30000;
+const POOL_IDLE_MS = 60_000;
 
 /** Resolve private key: SSH_PRIVATE_KEY (base64) or SSH_PRIVATE_KEY_PATH (file path). */
 function getPrivateKey(): Buffer | string | undefined {
@@ -28,10 +29,108 @@ function getPrivateKey(): Buffer | string | undefined {
 }
 const MAX_RETRIES = 3;
 
-interface SSHExecResult {
+export interface SSHExecResult {
   stdout: string;
   stderr: string;
   code: number;
+}
+
+function resolveHost(ip: string): string {
+  const controlPlaneIp = process.env.CONTROL_PLANE_IP?.trim();
+  return controlPlaneIp && ip === controlPlaneIp ? '127.0.0.1' : ip;
+}
+
+// ── Connection pool: reuse SSH connections per host ──
+
+interface PoolEntry {
+  conn: Client;
+  ready: boolean;
+  idleTimer: ReturnType<typeof setTimeout> | null;
+}
+
+const pool = new Map<string, PoolEntry>();
+
+function getPooledConnection(ip: string): Promise<Client> {
+  const host = resolveHost(ip);
+  const existing = pool.get(host);
+  if (existing?.ready) {
+    if (existing.idleTimer) {
+      clearTimeout(existing.idleTimer);
+      existing.idleTimer = null;
+    }
+    return Promise.resolve(existing.conn);
+  }
+
+  return new Promise((resolve, reject) => {
+    const conn = new Client();
+    const timeout = setTimeout(() => {
+      conn.end();
+      pool.delete(host);
+      reject(new Error(`SSH timeout connecting to ${ip}`));
+    }, SSH_TIMEOUT);
+
+    conn
+      .on('ready', () => {
+        clearTimeout(timeout);
+        pool.set(host, { conn, ready: true, idleTimer: null });
+        resolve(conn);
+      })
+      .on('error', (err) => {
+        clearTimeout(timeout);
+        pool.delete(host);
+        reject(err);
+      })
+      .on('close', () => {
+        pool.delete(host);
+      })
+      .connect({
+        host,
+        port: 22,
+        username: 'root',
+        privateKey: getPrivateKey(),
+        readyTimeout: SSH_TIMEOUT,
+        keepaliveInterval: 15000,
+      });
+  });
+}
+
+function releaseConnection(ip: string): void {
+  const host = resolveHost(ip);
+  const entry = pool.get(host);
+  if (!entry) return;
+  if (entry.idleTimer) clearTimeout(entry.idleTimer);
+  entry.idleTimer = setTimeout(() => {
+    entry.conn.end();
+    pool.delete(host);
+  }, POOL_IDLE_MS);
+}
+
+function execOnPooled(conn: Client, command: string): Promise<SSHExecResult> {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error(`SSH command timeout`));
+    }, SSH_TIMEOUT);
+
+    conn.exec(command, (err, stream) => {
+      if (err) {
+        clearTimeout(timeout);
+        reject(err);
+        return;
+      }
+
+      let stdout = '';
+      let stderr = '';
+
+      stream
+        .on('data', (data: Buffer) => { stdout += data.toString(); })
+        .stderr.on('data', (data: Buffer) => { stderr += data.toString(); });
+
+      stream.on('close', (code: number) => {
+        clearTimeout(timeout);
+        resolve({ stdout: stdout.trim(), stderr: stderr.trim(), code });
+      });
+    });
+  });
 }
 
 export async function sshExec(
@@ -41,72 +140,24 @@ export async function sshExec(
 ): Promise<SSHExecResult> {
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
-      return await execOnce(ip, command);
+      const conn = await getPooledConnection(ip);
+      const result = await execOnPooled(conn, command);
+      releaseConnection(ip);
+      return result;
     } catch (err) {
+      // Connection might be stale — remove from pool and retry with fresh connection
+      const host = resolveHost(ip);
+      const entry = pool.get(host);
+      if (entry) {
+        entry.conn.end();
+        pool.delete(host);
+      }
       if (attempt === retries) throw err;
       console.warn(`SSH attempt ${attempt} failed for ${ip}, retrying...`);
       await sleep(1000 * attempt);
     }
   }
   throw new Error('SSH exec failed after retries');
-}
-
-function execOnce(ip: string, command: string): Promise<SSHExecResult> {
-  return new Promise((resolve, reject) => {
-    const conn = new Client();
-    const timeout = setTimeout(() => {
-      conn.end();
-      reject(new Error(`SSH timeout connecting to ${ip}`));
-    }, SSH_TIMEOUT);
-
-    // When the target is the control plane (this host), SSH to 127.0.0.1 so auth works
-    const controlPlaneIp = process.env.CONTROL_PLANE_IP?.trim();
-    const host = controlPlaneIp && ip === controlPlaneIp ? '127.0.0.1' : ip;
-    if (host !== ip) {
-      console.log(`[SSH] Target ${ip} is control plane, using 127.0.0.1`);
-    }
-
-    conn
-      .on('ready', () => {
-        conn.exec(command, (err, stream) => {
-          if (err) {
-            clearTimeout(timeout);
-            conn.end();
-            reject(err);
-            return;
-          }
-
-          let stdout = '';
-          let stderr = '';
-
-          stream
-            .on('data', (data: Buffer) => {
-              stdout += data.toString();
-            })
-            .stderr.on('data', (data: Buffer) => {
-              stderr += data.toString();
-            });
-
-          stream.on('close', (code: number) => {
-            clearTimeout(timeout);
-            conn.end();
-            resolve({ stdout: stdout.trim(), stderr: stderr.trim(), code });
-          });
-        });
-      })
-      .on('error', (err) => {
-        clearTimeout(timeout);
-        console.error(`[SSH] ${host} error:`, err.message);
-        reject(err);
-      })
-      .connect({
-        host,
-        port: 22,
-        username: 'root',
-        privateKey: getPrivateKey(),
-        readyTimeout: SSH_TIMEOUT,
-      });
-  });
 }
 
 function sleep(ms: number) {

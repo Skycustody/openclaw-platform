@@ -333,8 +333,29 @@ router.post('/open', authenticate, async (req: AuthRequest, res: Response, next:
       return respond(await agentUrlParts(user.subdomain!, user.id, server), 'active');
     }
 
-    // Case 3: still provisioning from a previous attempt — verify the container actually exists
-    if (user.status === 'provisioning') {
+    // Case 3a: provisioning completed but gateway wasn't reachable — re-check now
+    if (user.status === 'starting') {
+      if (server) {
+        const containerName = user.container_name || `openclaw-${user.id}`;
+        const check = await sshExec(server.ip, `docker inspect ${containerName} --format='{{.State.Running}}' 2>/dev/null`).catch(() => null);
+        if (check && check.stdout.includes('true')) {
+          let currentStatus = 'starting';
+          try {
+            const { waitForReady } = await import('../services/ssh');
+            await waitForReady(server.ip, containerName, 15000);
+            await db.query(`UPDATE users SET status = 'active', last_active = NOW() WHERE id = $1`, [user.id]);
+            currentStatus = 'active';
+          } catch {
+            reapplyGatewayConfig(server.ip, user.id, containerName).catch(() => {});
+          }
+          return respond(await agentUrlParts(user.subdomain!, user.id, server), currentStatus);
+        }
+      }
+      // Container not found — fall through to re-provision below
+    }
+
+    // Case 3b: still provisioning from a previous attempt — verify the container actually exists
+    if (user.status === 'provisioning' || (user.status === 'starting' && !server)) {
       if (server) {
         const containerName = user.container_name || `openclaw-${user.id}`;
         const check = await sshExec(server.ip, `docker inspect ${containerName} --format='{{.State.Running}}' 2>/dev/null`).catch(() => null);

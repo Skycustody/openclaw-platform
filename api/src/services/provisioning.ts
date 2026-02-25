@@ -87,6 +87,9 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
   const startTime = Date.now();
 
   const existing = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [userId]);
+  if (!existing) {
+    throw new Error(`User ${userId} not found — cannot provision a deleted user`);
+  }
 
   // Check retry count — don't infinite-loop server creation
   const retryCount = (existing as any)?.provision_retries || 0;
@@ -361,20 +364,28 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
   await reapplyGatewayConfig(server.ip, userId, containerName);
 
   // Step 8: Wait for gateway to actually be reachable — don't lie about status
+  let gatewayReady = false;
   try {
     await waitForReady(server.ip, containerName, 90000);
+    gatewayReady = true;
     console.log(`[provision] Gateway confirmed reachable for ${containerName}`);
-  } catch {
-    console.warn(`[provision] Gateway health check timed out for ${containerName} — setting active anyway`);
+  } catch (err) {
+    console.warn(`[provision] Gateway health check timed out for ${containerName}: ${(err as Error).message}`);
   }
 
-  // Step 9: NOW set status to active
-  await db.query(
-    `UPDATE users SET status = 'active', last_active = NOW(), provision_retries = 0 WHERE id = $1`,
-    [userId]
-  ).catch(() => {
-    db.query(`UPDATE users SET status = 'active', last_active = NOW() WHERE id = $1`, [userId]);
-  });
+  // Step 9: Set status based on actual gateway state
+  if (gatewayReady) {
+    await db.query(
+      `UPDATE users SET status = 'active', last_active = NOW(), provision_retries = 0 WHERE id = $1`,
+      [userId]
+    );
+  } else {
+    await db.query(
+      `UPDATE users SET status = 'starting', last_active = NOW() WHERE id = $1`,
+      [userId]
+    );
+    console.warn(`[provision] ${containerName} marked 'starting' — gateway not yet reachable`);
+  }
 
   await updateServerRam(server.id);
 

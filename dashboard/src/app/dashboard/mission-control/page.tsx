@@ -57,7 +57,7 @@ interface AgentInfo {
   purpose: string | null;
 }
 
-type AgentDisplayStatus = 'active' | 'online' | 'sleeping' | 'paused' | 'provisioning' | 'cancelled' | 'offline' | 'grace_period';
+type AgentDisplayStatus = 'active' | 'online' | 'sleeping' | 'paused' | 'provisioning' | 'starting' | 'cancelled' | 'offline' | 'grace_period';
 
 const STATUS_CONFIG: Record<string, { message: string; color: string; dot: string }> = {
   active:       { message: 'Running and ready',            color: 'text-green-400',  dot: 'bg-green-400' },
@@ -65,6 +65,7 @@ const STATUS_CONFIG: Record<string, { message: string; color: string; dot: strin
   sleeping:     { message: 'Sleeping — wakes on message',  color: 'text-blue-400',   dot: 'bg-blue-400' },
   paused:       { message: 'Paused — top up balance',      color: 'text-red-400',    dot: 'bg-red-400' },
   provisioning: { message: 'Setting up...',                color: 'text-amber-400',  dot: 'bg-amber-400' },
+  starting:     { message: 'Starting up — almost ready',   color: 'text-amber-400',  dot: 'bg-amber-400 animate-pulse' },
   cancelled:    { message: 'Subscription cancelled',       color: 'text-red-400',    dot: 'bg-red-400' },
   offline:      { message: 'Offline',                      color: 'text-white/30',   dot: 'bg-white/30' },
   grace_period: { message: 'Grace period',                 color: 'text-amber-400',  dot: 'bg-amber-400' },

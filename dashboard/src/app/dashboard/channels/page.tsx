@@ -291,7 +291,7 @@ export default function ConnectApps() {
         return;
       }
 
-      setWhatsAppStatus('Agent restarted. Generating QR code...');
+      setWhatsAppStatus('Generating QR code...');
 
       const pollQr = async () => {
         if (Date.now() - pairingStartRef.current > WHATSAPP_TIMEOUT_MS) {
@@ -350,9 +350,9 @@ export default function ConnectApps() {
         }
       };
 
-      // First poll after 6s, then every 4s until QR appears
-      setTimeout(pollQr, 6000);
-      pollRef.current = setInterval(pollQr, 4000);
+      // First poll after 2s, then every 3s until QR appears
+      setTimeout(pollQr, 2000);
+      pollRef.current = setInterval(pollQr, 3000);
 
     } catch (err: any) {
       setWhatsAppError(err?.message || 'Could not start WhatsApp pairing. Make sure your agent is running, then retry.');

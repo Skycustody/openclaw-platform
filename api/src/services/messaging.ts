@@ -398,17 +398,22 @@ export async function initiateWhatsAppPairing(userId: string): Promise<{
     ? `${agentUrl}/?token=${encodeURIComponent(user.gateway_token)}`
     : agentUrl;
 
-  // Ensure API keys + model router are configured before starting the channel
-  await injectApiKeys(serverIp, userId, containerName, user.plan as any);
-
   // Write WhatsApp config via host filesystem (no docker exec needed)
   const config = await readContainerConfig(serverIp, userId);
+  let configChanged = false;
   if (!config.channels) config.channels = {};
   if (!config.channels.whatsapp) {
     config.channels.whatsapp = { dmPolicy: 'open', allowFrom: ['*'] };
-    await writeContainerConfig(serverIp, userId, config);
-    console.log(`[whatsapp] Config written for user ${userId}`);
+    configChanged = true;
   }
+
+  // Only inject API keys if models section is missing (already set during provisioning)
+  if (!config.models?.providers || Object.keys(config.models.providers).length === 0) {
+    await injectApiKeys(serverIp, userId, containerName, user.plan as any);
+  } else if (configChanged) {
+    await writeContainerConfig(serverIp, userId, config);
+  }
+  if (configChanged) console.log(`[whatsapp] Config written for user ${userId}`);
 
   // Check credentials on host filesystem
   if (await hasWhatsAppCredentials(serverIp, userId)) {
@@ -425,21 +430,20 @@ export async function initiateWhatsAppPairing(userId: string): Promise<{
     `rm -f ${INSTANCE_DIR}/${userId}/whatsapp-qr.log`
   ).catch(() => {});
 
-  // Restart so the gateway picks up WhatsApp config
-  await sshExec(serverIp, `docker restart ${containerName}`);
-
-  // Wait for container to come back up before launching login
-  const ready = await waitForContainer(serverIp, containerName);
-  if (!ready) {
-    throw new Error('Agent failed to restart. Please try again in a moment.');
+  // Only restart if the config changed (new WhatsApp channel added).
+  // Otherwise the container already has the right config and we can
+  // jump straight to `channels login`.
+  if (configChanged) {
+    await sshExec(serverIp, `docker restart ${containerName}`);
+    const ready = await waitForContainer(serverIp, containerName);
+    if (!ready) {
+      throw new Error('Agent failed to restart. Please try again in a moment.');
+    }
+    // Brief pause for gateway to initialize after restart
+    await new Promise(r => setTimeout(r, 3000));
   }
 
-  // Give the gateway time to finish startup so "channels login" can run
-  await new Promise(r => setTimeout(r, 8000));
-
   console.log(`[whatsapp] Starting channels login for user ${userId}`);
-  // Run `openclaw channels login --channel whatsapp` in background inside the container.
-  // Output is written to the host-mounted volume so we can read it via SSH cat.
   const execResult = await sshExec(
     serverIp,
     `docker exec -d ${containerName} sh -c 'openclaw channels login --channel whatsapp > /root/.openclaw/whatsapp-qr.log 2>&1'`
@@ -510,19 +514,23 @@ export async function getWhatsAppQr(userId: string): Promise<{
     return { status: 'paired' };
   }
 
-  // Read QR output from the host-mounted volume (primary source)
+  // Read QR output from the host-mounted volume (primary & fast source)
   const qrFile = await sshExec(
     serverIp,
     `cat ${INSTANCE_DIR}/${userId}/whatsapp-qr.log 2>/dev/null`
   ).catch(() => null);
 
-  // Docker logs as fallback
-  const logs = await sshExec(
-    serverIp,
-    `docker logs --tail 300 ${containerName} 2>&1`
-  ).catch(() => null);
+  // Only fall back to docker logs (last 30 lines, not 300) if QR file is empty
+  let fallbackLogs = '';
+  if (!qrFile?.stdout?.trim()) {
+    const logs = await sshExec(
+      serverIp,
+      `docker logs --tail 30 ${containerName} 2>&1`
+    ).catch(() => null);
+    fallbackLogs = logs?.stdout || '';
+  }
 
-  const combined = [qrFile?.stdout, logs?.stdout].filter(Boolean).join('\n');
+  const combined = [qrFile?.stdout, fallbackLogs].filter(Boolean).join('\n');
   if (!combined || combined.trim().length === 0) {
     return { status: 'waiting', message: 'Generating QR code...' };
   }
