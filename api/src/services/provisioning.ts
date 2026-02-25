@@ -297,7 +297,7 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
     '--cap-drop ALL',
     '--cap-add NET_BIND_SERVICE',
     '--security-opt seccomp=unconfined',
-    '--no-new-privileges',
+    '--security-opt no-new-privileges',
     '--pids-limit 256',
     `--memory ${limits.ramMb}m`,
     `--memory-swap ${limits.ramMb}m`,
