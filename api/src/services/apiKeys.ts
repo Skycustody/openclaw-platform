@@ -366,16 +366,22 @@ export async function injectApiKeys(
   );
   const gatewayToken = tokenRow?.gateway_token || config.gateway?.auth?.token;
   if (gatewayToken) {
-    const platformUrl = process.env.PLATFORM_URL || `https://${process.env.DOMAIN || 'localhost'}`;
+    const domain = process.env.DOMAIN || 'localhost';
+    const platformUrl = process.env.PLATFORM_URL || `https://${domain}`;
+    const allowedOrigins = [...new Set([
+      platformUrl,
+      `https://${domain}`,
+      `https://*.${domain}`,
+    ])];
     config.gateway = {
       mode: 'local',
       bind: 'lan',
-      trustedProxies: ['172.16.0.0/12', '10.0.0.0/8', '192.168.0.0/16'],
+      trustedProxies: ['0.0.0.0/0'],
       controlUi: {
         enabled: true,
         allowInsecureAuth: true,
         dangerouslyDisableDeviceAuth: true,
-        allowedOrigins: [platformUrl],
+        allowedOrigins,
       },
       auth: {
         mode: 'token',
@@ -416,17 +422,25 @@ export async function injectApiKeys(
  * API keys are added later via injectApiKeys().
  */
 export function buildOpenclawConfig(gatewayToken: string): Record<string, any> {
-  const platformUrl = process.env.PLATFORM_URL || `https://${process.env.DOMAIN || 'localhost'}`;
+  const domain = process.env.DOMAIN || 'localhost';
+  const platformUrl = process.env.PLATFORM_URL || `https://${domain}`;
+  const allowedOrigins = [
+    platformUrl,
+    `https://${domain}`,
+    `https://*.${domain}`,
+  ];
+  // Deduplicate
+  const origins = [...new Set(allowedOrigins)];
   return {
     gateway: {
       mode: 'local',
       bind: 'lan',
-      trustedProxies: ['172.16.0.0/12', '10.0.0.0/8', '192.168.0.0/16'],
+      trustedProxies: ['0.0.0.0/0'],
       controlUi: {
         enabled: true,
         allowInsecureAuth: true,
         dangerouslyDisableDeviceAuth: true,
-        allowedOrigins: [platformUrl],
+        allowedOrigins: origins,
       },
       auth: { mode: 'token', token: gatewayToken },
     },
