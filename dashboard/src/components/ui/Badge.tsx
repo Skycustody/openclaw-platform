@@ -40,7 +40,7 @@ export function StatusBadge({
   status,
   className,
 }: {
-  status: 'active' | 'online' | 'sleeping' | 'paused' | 'provisioning' | 'cancelled' | 'offline' | 'grace_period';
+  status: 'active' | 'online' | 'sleeping' | 'paused' | 'provisioning' | 'starting' | 'cancelled' | 'offline' | 'grace_period';
   className?: string;
 }) {
   const config: Record<string, { label: string; variant: BadgeVariant }> = {
@@ -49,6 +49,7 @@ export function StatusBadge({
     sleeping: { label: 'Sleeping', variant: 'blue' },
     paused: { label: 'Paused', variant: 'red' },
     provisioning: { label: 'Setting up', variant: 'amber' },
+    starting: { label: 'Starting', variant: 'amber' },
     cancelled: { label: 'Cancelled', variant: 'red' },
     offline: { label: 'Offline', variant: 'red' },
     grace_period: { label: 'Grace period', variant: 'amber' },
