@@ -269,6 +269,7 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
   // This ensures dangerouslyDisableDeviceAuth survives gateway startup.
   const startScript = [
     `sh -c '`,
+    `rm -f /root/.openclaw/agents/*/sessions/*.lock 2>/dev/null;`,
     `openclaw gateway --port 18789 --bind lan --allow-unconfigured run &`,
     `GW_PID=$!;`,
     `sleep 10;`,
@@ -441,6 +442,13 @@ export async function restartContainer(userId: string): Promise<void> {
 
   const containerName = user.container_name || `openclaw-${userId}`;
   validateContainerName(containerName);
+
+  // Clear stale session locks before restart — a hung request leaves .lock files
+  // that block all subsequent messages with "session file locked (timeout)"
+  await sshExec(server.ip,
+    `rm -f /opt/openclaw/instances/${userId}/agents/*/sessions/*.lock 2>/dev/null`
+  ).catch(() => {});
+
   await sshExec(server.ip, `docker restart ${containerName}`);
 
   // Wait for the gateway process to finish its startup initialization

@@ -116,6 +116,12 @@ export async function wakeContainer(userId: string): Promise<void> {
   const containerName = user.container_name || `openclaw-${userId}`;
   console.log(`[wake] Starting container ${containerName} on ${server.ip}`);
 
+  // Clear stale session locks before starting — a previous session may have left
+  // .lock files that block all messages with "session file locked (timeout)"
+  await sshExec(server.ip,
+    `rm -f /opt/openclaw/instances/${userId}/agents/*/sessions/*.lock 2>/dev/null`
+  ).catch(() => {});
+
   await sshExec(server.ip, `docker start ${containerName}`);
 
   try {
