@@ -21,8 +21,19 @@ import { URL } from 'url';
 import db from '../lib/db';
 import { Plan } from '../types';
 import { pickModelWithAI, RouterContext, getCachedUserSkills, MODEL_MAP } from '../services/smartRouter';
+import { touchActivity } from '../services/sleepWake';
 
 const router = Router();
+
+// Debounce touchActivity per user — at most once per 60s to avoid DB spam
+const lastTouch = new Map<string, number>();
+function touchIfNeeded(userId: string): void {
+  const now = Date.now();
+  const last = lastTouch.get(userId) || 0;
+  if (now - last < 60_000) return;
+  lastTouch.set(userId, now);
+  touchActivity(userId).catch(() => {});
+}
 
 const OPENROUTER_COMPLETIONS = 'https://openrouter.ai/api/v1/chat/completions';
 
@@ -320,6 +331,8 @@ router.post('/v1/chat/completions', async (req: Request, res: Response) => {
 
     const apiKey = authHeader.slice(7);
     const user = await lookupUser(apiKey).catch(() => null);
+
+    if (user) touchIfNeeded(user.id);
 
     const body = req.body;
     if (!body?.messages) {
