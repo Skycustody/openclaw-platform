@@ -103,15 +103,17 @@ export default function MissionControlPage() {
   const [upcomingTasks, setUpcomingTasks] = useState<CronJob[]>([]);
   const [agents, setAgents] = useState<AgentInfo[]>([]);
   const [lastFetch, setLastFetch] = useState<Date>(new Date());
+  const [gatewayReady, setGatewayReady] = useState<boolean | null>(null);
 
   const fetchAll = useCallback(async () => {
     try {
-      const [statusRes, tokensRes, activityRes, cronRes, agentsRes] = await Promise.allSettled([
+      const [statusRes, tokensRes, activityRes, cronRes, agentsRes, readyRes] = await Promise.allSettled([
         api.get<any>('/agent/status'),
         api.get<any>('/settings/nexos-usage'),
         api.get<{ activities: ActivityEntry[] }>('/activity?limit=20&offset=0'),
         api.get<{ jobs: CronJob[] }>('/cron'),
         api.get<{ agents: AgentInfo[] }>('/agents'),
+        api.get<{ ready: boolean }>('/agent/ready'),
       ]);
       if (statusRes.status === 'fulfilled') setApiData(statusRes.value);
       if (tokensRes.status === 'fulfilled' && tokensRes.value.usage) setBalanceUsd(tokensRes.value.usage.remainingUsd ?? 0);
@@ -127,6 +129,9 @@ export default function MissionControlPage() {
       if (agentsRes.status === 'fulfilled') {
         setAgents((agentsRes.value.agents || agentsRes.value || []) as AgentInfo[]);
       }
+      if (readyRes.status === 'fulfilled') {
+        setGatewayReady(readyRes.value.ready);
+      }
       setLastFetch(new Date());
     } catch {} finally { setLoading(false); }
   }, []);
@@ -137,7 +142,10 @@ export default function MissionControlPage() {
     return () => clearInterval(interval);
   }, [fetchAll]);
 
-  const displayStatus = (apiData?.subscriptionStatus || apiData?.status || 'offline') as AgentDisplayStatus;
+  const dbStatus = (apiData?.subscriptionStatus || apiData?.status || 'offline') as AgentDisplayStatus;
+  // If DB says active but gateway isn't reachable, show 'starting' instead of lying
+  const displayStatus: AgentDisplayStatus = (dbStatus === 'active' || dbStatus === 'online') && gatewayReady === false
+    ? 'starting' : dbStatus;
   const sc = STATUS_CONFIG[displayStatus] || STATUS_CONFIG.offline;
   const stats = apiData?.stats || { messagesToday: 0, tokensToday: 0, activeSkills: 0 };
   const subdomain = apiData?.subdomain || user?.subdomain || 'your-agent';
