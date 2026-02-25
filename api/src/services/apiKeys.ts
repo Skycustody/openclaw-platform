@@ -374,6 +374,7 @@ export async function injectApiKeys(
         enabled: true,
         allowInsecureAuth: true,
         dangerouslyDisableDeviceAuth: true,
+        dangerouslyAllowHostHeaderOriginFallback: true,
       },
       auth: {
         mode: 'token',
@@ -423,6 +424,7 @@ export function buildOpenclawConfig(gatewayToken: string): Record<string, any> {
         enabled: true,
         allowInsecureAuth: true,
         dangerouslyDisableDeviceAuth: true,
+        dangerouslyAllowHostHeaderOriginFallback: true,
       },
       auth: { mode: 'token', token: gatewayToken },
     },
