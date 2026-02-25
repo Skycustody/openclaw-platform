@@ -43,6 +43,7 @@ import { buildOpenclawConfig, injectApiKeys } from './apiKeys';
 import { reapplyGatewayConfig, writeContainerConfig } from './containerConfig';
 import { ensureNexosKey } from './nexos';
 import { installDefaultSkills } from './defaultSkills';
+import { UserSettings } from '../types';
 
 const UUID_RE = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const CONTAINER_NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9_.-]+$/;
@@ -367,6 +368,27 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
 
   // Step 6c: Re-apply gateway auth config (doctor --fix on existing images may strip it)
   await reapplyGatewayConfig(server.ip, userId, containerName);
+
+  // Step 6d: Write USER.md if onboarding data exists (OpenClaw injects this into every prompt)
+  try {
+    const settings = await db.getOne<UserSettings>(
+      'SELECT * FROM user_settings WHERE user_id = $1',
+      [userId]
+    );
+    if (settings?.agent_name || settings?.custom_instructions) {
+      const parts: string[] = ['# User Profile'];
+      if (settings.agent_name) parts.push(`\nName: ${settings.agent_name}`);
+      if (settings.language) parts.push(`Preferred language: ${settings.language}`);
+      if (settings.agent_tone) parts.push(`Communication style: ${settings.agent_tone}`);
+      if (settings.response_length) parts.push(`Response length: ${settings.response_length}`);
+      if (settings.custom_instructions) parts.push(`\n## About the User\n${settings.custom_instructions}`);
+      const userMdB64 = Buffer.from(parts.join('\n')).toString('base64');
+      await sshExec(server.ip, `echo '${userMdB64}' | base64 -d > /opt/openclaw/instances/${userId}/USER.md`);
+      console.log(`[provision] USER.md written for ${userId}`);
+    }
+  } catch (err: any) {
+    console.warn(`[provision] USER.md write failed (non-fatal): ${err.message}`);
+  }
 
   // Step 7: Create DNS record pointing subdomain → worker IP
   await cloudflareDNS.upsertRecord(subdomain, server.ip);

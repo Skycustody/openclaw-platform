@@ -11,7 +11,8 @@ These are hard-won lessons. Each one was discovered by a production outage or se
 
 - `allowInsecureAuth: true` — REQUIRED. TLS terminates at Cloudflare/Traefik. The container sees plain WS. Without this, token auth is rejected.
 - `dangerouslyDisableDeviceAuth: true` — REQUIRED. OpenClaw device pairing requires browser crypto + operator approval. In a SaaS the gateway token IS the auth. Without this: "pairing required" error.
-- `trustedProxies: ["172.16.0.0/12", ...]` — REQUIRED. Without it the gateway rejects connections from Traefik's Docker IP.
+- `trustedProxies: ["0.0.0.0/0"]` — REQUIRED. Container is behind Traefik (not directly exposed), so trust all IPs. Without trustedProxies the gateway rejects connections from Traefik's Docker IP.
+- `dangerouslyAllowHostHeaderOriginFallback: true` — REQUIRED in controlUi. Without it AND without explicit allowedOrigins, gateway crash-loops with "non-loopback Control UI requires gateway.controlUi.allowedOrigins". Using Host header fallback is safe because Traefik/Cloudflare set the Host header.
 - `models` array entries must be objects `{ id: "gpt-4o", name: "GPT-4o" }`, never plain strings. Strings crash the gateway.
 - Use `baseUrl` (camelCase), never `baseURL`. Wrong casing silently fails.
 
@@ -24,7 +25,7 @@ These are hard-won lessons. Each one was discovered by a production outage or se
 
 ## Container Security
 
-- Containers use `--cap-drop ALL --security-opt seccomp=unconfined --no-new-privileges`.
+- Containers use `--cap-drop ALL --security-opt seccomp=unconfined --security-opt no-new-privileges`. Use `--security-opt no-new-privileges` (not standalone `--no-new-privileges`) for compatibility with older Docker versions.
 - Do NOT add `--cap-add SYS_ADMIN` — it enables container escape. Chrome uses `--no-sandbox` instead.
 - All userIds MUST be validated with UUID regex before use in shell commands or file paths.
 - Container names MUST be validated with `CONTAINER_NAME_RE` before use in `docker exec` or `docker restart`.

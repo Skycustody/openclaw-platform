@@ -85,10 +85,11 @@ export async function injectApiKeys(
     config = {};
   }
 
-  // Clean up any stale keys from previous config versions
+  // Clean up any stale/invalid keys from previous config versions
   if (config.agents?.defaults) {
     delete config.agents.defaults.fallbacks;
   }
+  delete config.personality; // invalid key — user context lives in USER.md
 
   // ── Environment variables ──
   // Inject the OpenRouter key under multiple names so skills that expect

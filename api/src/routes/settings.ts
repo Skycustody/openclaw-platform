@@ -10,41 +10,53 @@ import { AuthRequest, authenticate, requireActiveSubscription } from '../middlew
 import db from '../lib/db';
 import { UserSettings } from '../types';
 import { getUserContainer, readContainerConfig, writeContainerConfig, restartContainer } from '../services/containerConfig';
+import { sshExec } from '../services/ssh';
 import { getNexosUsage } from '../services/nexos';
 import { VALID_CATEGORY_KEYS, MODEL_MAP } from '../services/smartRouter';
 import redis from '../lib/redis';
 
+const INSTANCE_DIR = '/opt/openclaw/instances';
+const UUID_RE = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+
+/**
+ * Build USER.md content from user settings.
+ * OpenClaw injects USER.md into every system prompt automatically,
+ * so the agent sees this context on every message.
+ */
+function buildUserMd(settings: UserSettings): string {
+  const sections: string[] = ['# User Profile'];
+
+  if (settings.agent_name) sections.push(`\nName: ${settings.agent_name}`);
+  if (settings.language) sections.push(`Preferred language: ${settings.language}`);
+  if (settings.agent_tone) sections.push(`Communication style: ${settings.agent_tone}`);
+  if (settings.response_length) sections.push(`Response length: ${settings.response_length}`);
+
+  if (settings.custom_instructions) {
+    sections.push(`\n## About the User\n${settings.custom_instructions}`);
+  }
+
+  return sections.join('\n');
+}
+
 async function syncSettingsToContainer(userId: string): Promise<void> {
   try {
+    if (!UUID_RE.test(userId)) return;
+
     const settings = await db.getOne<UserSettings>(
       'SELECT * FROM user_settings WHERE user_id = $1',
       [userId]
     );
     if (!settings) return;
 
-    const { serverIp, containerName } = await getUserContainer(userId);
-    const config = await readContainerConfig(serverIp, userId);
+    const { serverIp } = await getUserContainer(userId);
 
-    if (!config.personality) config.personality = {};
-    if (settings.agent_name) config.personality.name = settings.agent_name;
-    if (settings.agent_tone) config.personality.tone = settings.agent_tone;
-    if (settings.response_length) config.personality.responseLength = settings.response_length;
-    if (settings.language) config.personality.language = settings.language;
-    if (settings.custom_instructions) config.personality.instructions = settings.custom_instructions;
-
-    if (settings.brain_mode || settings.manual_model) {
-      if (!config.models) config.models = {};
-      if (settings.brain_mode === 'manual' && settings.manual_model) {
-        config.models.defaultModel = settings.manual_model;
-        config.models.autoRoute = false;
-      } else {
-        config.models.autoRoute = true;
-        delete config.models.defaultModel;
-      }
-    }
-
-    await writeContainerConfig(serverIp, userId, config);
-    restartContainer(serverIp, containerName).catch(() => {});
+    // Write USER.md — OpenClaw auto-injects this into every system prompt
+    const userMd = buildUserMd(settings);
+    const userMdB64 = Buffer.from(userMd).toString('base64');
+    await sshExec(
+      serverIp,
+      `echo '${userMdB64}' | base64 -d > ${INSTANCE_DIR}/${userId}/USER.md`
+    );
   } catch {
     // Container not provisioned or not running — settings saved to DB only
   }
