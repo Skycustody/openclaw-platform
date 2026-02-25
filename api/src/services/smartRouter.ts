@@ -4,7 +4,7 @@ import { TaskClassification, ModelCapability, RoutingDecision, Plan } from '../t
 import { OPENROUTER_MODEL_COSTS, RETAIL_MARKUP } from './nexos';
 
 const OPENROUTER_CHAT_URL = 'https://openrouter.ai/api/v1/chat/completions';
-const ROUTER_TIMEOUT_MS = 3500;
+const ROUTER_TIMEOUT_MS = 2000;
 
 const ROUTER_MODELS = [
   'google/gemini-2.5-flash',
@@ -284,6 +284,50 @@ function buildRouterPrompt(
 
 export { VALID_CATEGORY_KEYS };
 
+const GREETING_RE = /^(hi|hey|hello|yo|sup|thanks|thank you|thx|ok|okay|cool|nice|great|got it|sure|yes|no|yep|nope|bye|goodbye|good morning|good evening|good night|gm|gn|how are you|what's up|whats up)[.!?\s]*$/i;
+const CONTINUATION_RE = /^(continue|go ahead|do it|next|go on|keep going|proceed|try again|retry|fix that|fix it|apply|yes do it|ok do it|start|run it|do that)[.!?\s]*$/i;
+
+/**
+ * Fast local classifier for obvious messages — returns a model instantly
+ * without calling the AI router. Returns null if the message is ambiguous
+ * and needs AI routing.
+ */
+function quickClassify(
+  message: string,
+  hasImage: boolean,
+  hasToolHistory: boolean,
+  ctx?: RouterContext,
+): { model: string; reason: string } | null {
+  const trimmed = message.trim();
+  const lower = trimmed.toLowerCase();
+
+  if (hasImage) {
+    return { model: 'google/gemini-2.5-flash', reason: 'Image attached — fast vision model' };
+  }
+
+  if (trimmed.length <= 30 && GREETING_RE.test(trimmed)) {
+    return { model: 'openai/gpt-4.1-nano', reason: 'Simple greeting/acknowledgment' };
+  }
+
+  if (trimmed.length <= 40 && CONTINUATION_RE.test(trimmed)) {
+    if (ctx?.taskSummary?.includes('browser')) {
+      return { model: 'anthropic/claude-sonnet-4', reason: 'Continue browser automation' };
+    }
+    if (ctx?.taskSummary?.includes('coding')) {
+      return { model: 'anthropic/claude-sonnet-4', reason: 'Continue coding task' };
+    }
+    return { model: 'google/gemini-2.5-flash', reason: 'Continue previous task' };
+  }
+
+  if (trimmed.length < 60 && !hasToolHistory) {
+    if (/^(what('?s| is) (the )?(time|date|weather)|translate |define |how do you say )/i.test(lower)) {
+      return { model: 'openai/gpt-4.1-nano', reason: 'Simple factual question' };
+    }
+  }
+
+  return null;
+}
+
 export interface RouterContext {
   messageCount: number;
   toolCallCount: number;
@@ -316,6 +360,23 @@ export async function pickModelWithAI(
   installedSkills?: string[],
   userId?: string,
 ): Promise<{ model: string; reason: string; routerUsed: string }> {
+  // Fast path: obvious messages handled locally without any AI call
+  const quick = quickClassify(userMessage, hasImage, hasToolHistory, ctx);
+  if (quick) {
+    // Respect user preference overrides for the category
+    if (userPreferences) {
+      const catKey = quick.model.includes('nano') ? 'greeting'
+        : quick.model.includes('sonnet') && quick.reason.includes('browser') ? 'browser'
+        : quick.model.includes('sonnet') ? 'coding'
+        : hasImage ? 'vision' : 'general';
+      const override = userPreferences[catKey];
+      if (override && VALID_MODEL_IDS.has(override)) {
+        return { model: override, reason: `${quick.reason} (user override)`, routerUsed: 'heuristic' };
+      }
+    }
+    return { ...quick, routerUsed: 'heuristic' };
+  }
+
   const key = apiKey || process.env.OPENROUTER_API_KEY || '';
   if (!key) {
     return { model: FINAL_FALLBACK_MODEL, reason: 'No API key available for router', routerUsed: 'fallback' };
@@ -347,7 +408,7 @@ export async function pickModelWithAI(
   if (depth > 0) contextLines.push(`Conversation depth: ${depth} messages`);
   const userContent = contextLines.join('\n');
 
-  const cacheTTL = 300;
+  const cacheTTL = 600;
 
   for (const routerModel of ROUTER_MODELS) {
     try {

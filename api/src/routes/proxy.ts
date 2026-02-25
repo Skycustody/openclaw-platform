@@ -397,6 +397,7 @@ router.post('/v1/chat/completions', async (req: Request, res: Response) => {
         port: 443,
         path: url.pathname,
         method: 'POST',
+        timeout: 120_000,
         headers: {
           'Content-Type': 'application/json',
           'Content-Length': Buffer.byteLength(payload),
@@ -414,18 +415,41 @@ router.post('/v1/chat/completions', async (req: Request, res: Response) => {
           'X-Model-Selected': selectedModel,
           'X-Routing-Reason': safeReason,
         });
+
+        proxyRes.on('error', (err) => {
+          console.error(`[proxy] Upstream response error mid-stream: ${err.message}`);
+          if (!res.writableEnded) {
+            if (isStream) {
+              res.write(`data: {"error":{"message":"Upstream connection lost","type":"proxy_error"}}\n\ndata: [DONE]\n\n`);
+            }
+            res.end();
+          }
+        });
+
         proxyRes.pipe(res);
       }
     );
+
+    proxyReq.on('timeout', () => {
+      console.error(`[proxy] OpenRouter request timed out after 120s for model ${selectedModel}`);
+      proxyReq.destroy(new Error('Request timeout'));
+    });
 
     proxyReq.on('error', (err) => {
       console.error('[proxy] OpenRouter request failed:', err.message);
       if (!res.headersSent) {
         res.status(502).json({ error: { message: 'Upstream error', type: 'proxy_error' } });
+      } else if (!res.writableEnded) {
+        if (isStream) {
+          res.write(`data: {"error":{"message":"Connection to AI provider failed","type":"proxy_error"}}\n\ndata: [DONE]\n\n`);
+        }
+        res.end();
       }
     });
 
-    req.on('close', () => proxyReq.destroy());
+    req.on('close', () => {
+      if (!proxyReq.destroyed) proxyReq.destroy();
+    });
     proxyReq.write(payload);
     proxyReq.end();
   } catch (err) {
