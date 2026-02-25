@@ -305,6 +305,11 @@ function quickClassify(
     return { model: 'google/gemini-2.5-flash', reason: 'Image attached — fast vision model' };
   }
 
+  // OpenClaw heartbeat check-ins — always cheapest model
+  if (/heartbeat|HEARTBEAT_OK|pending tasks|outstanding tasks|queued work|nothing needs attention|check.?in/i.test(lower)) {
+    return { model: 'openai/gpt-4.1-nano', reason: 'Heartbeat check-in — cheapest model' };
+  }
+
   if (trimmed.length <= 30 && GREETING_RE.test(trimmed)) {
     return { model: 'openai/gpt-4.1-nano', reason: 'Simple greeting/acknowledgment' };
   }
