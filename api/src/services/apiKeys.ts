@@ -152,6 +152,10 @@ export async function injectApiKeys(
       primary: 'openrouter/anthropic/claude-sonnet-4',
       fallbacks: ['openrouter/openai/gpt-4o', 'openrouter/google/gemini-2.5-flash'],
     };
+    config.agents.defaults.heartbeat = {
+      every: '30m',
+      model: 'openrouter/openai/gpt-4.1-nano',
+    };
   } else {
     config.models = {
       providers: {
@@ -198,6 +202,10 @@ export async function injectApiKeys(
     config.agents.defaults.model = {
       primary: 'platform/auto',
       fallbacks: ['openrouter/anthropic/claude-sonnet-4', 'openrouter/openai/gpt-4o'],
+    };
+    config.agents.defaults.heartbeat = {
+      every: '30m',
+      model: 'platform/auto',
     };
   }
 
