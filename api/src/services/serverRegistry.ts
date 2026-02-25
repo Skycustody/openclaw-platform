@@ -32,6 +32,10 @@ const controlPlaneIp = (): string | null =>
 /** Single-flight: only one "provision new server" at a time to avoid duplicate VPS. */
 let provisionInProgress: Promise<Server> | null = null;
 
+/** Cooldown after Hetzner provisioning failure — don't keep hammering a limit every 10 min. */
+let lastProvisionFailure = 0;
+const PROVISION_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour
+
 export async function findBestServer(requiredRamMb = 2048): Promise<Server> {
   const cpIp = controlPlaneIp();
 
@@ -235,6 +239,13 @@ export async function checkCapacity(): Promise<void> {
   }
 
   if (anyOverCapacity && !hasSpareServer) {
+    // Don't keep hammering Hetzner if we recently hit a limit
+    const cooldownRemaining = PROVISION_COOLDOWN_MS - (Date.now() - lastProvisionFailure);
+    if (cooldownRemaining > 0) {
+      console.log(`[checkCapacity] All servers above 85% but Hetzner provision failed recently — cooling down (${Math.ceil(cooldownRemaining / 60000)}min left)`);
+      return;
+    }
+
     console.log('[checkCapacity] All servers above 85% and no spare capacity — provisioning new worker');
     try {
       const server = await findBestServer(2048);
@@ -242,7 +253,8 @@ export async function checkCapacity(): Promise<void> {
       await updateServerRam(server.id);
       console.log(`[checkCapacity] Capacity ensured on ${server.hostname || server.ip}`);
     } catch (err: any) {
-      console.error(`[checkCapacity] Failed to ensure capacity: ${err.message}`);
+      lastProvisionFailure = Date.now();
+      console.error(`[checkCapacity] Failed to ensure capacity: ${err.message} — will retry in ${PROVISION_COOLDOWN_MS / 60000}min`);
     }
   } else if (anyOverCapacity) {
     console.log('[checkCapacity] Some servers above 85% but spare capacity exists — no action needed');
