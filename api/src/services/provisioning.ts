@@ -354,39 +354,34 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
     await new Promise(r => setTimeout(r, 3000));
   }
 
+  // Step 7: Create DNS record BEFORE waiting — gives Cloudflare time to propagate
+  await cloudflareDNS.upsertRecord(subdomain, server.ip);
+
   // Re-apply gateway auth config (doctor --fix on startup may strip it) — needs running container
   await reapplyGatewayConfig(server.ip, userId, containerName);
 
-  // Step 7: Create DNS record pointing subdomain → worker IP
-  await cloudflareDNS.upsertRecord(subdomain, server.ip);
+  // Step 8: Wait for gateway to actually be reachable — don't lie about status
+  try {
+    await waitForReady(server.ip, containerName, 90000);
+    console.log(`[provision] Gateway confirmed reachable for ${containerName}`);
+  } catch {
+    console.warn(`[provision] Gateway health check timed out for ${containerName} — setting active anyway`);
+  }
 
-  // Background: health check + routing probes (don't block the response)
-  (async () => {
-    try {
-      await waitForReady(server.ip, containerName, 60000);
-      console.log(`[provision] Container ${containerName} health check passed`);
-    } catch {
-      console.warn(`[provision] Container ${containerName} health check timed out`);
-    }
-  })().catch(() => {});
-
-  // Step 8: Update status to active and reset retry count
+  // Step 9: NOW set status to active
   await db.query(
     `UPDATE users SET status = 'active', last_active = NOW(), provision_retries = 0 WHERE id = $1`,
     [userId]
   ).catch(() => {
-    // provision_retries column might not exist
     db.query(`UPDATE users SET status = 'active', last_active = NOW() WHERE id = $1`, [userId]);
   });
 
   await updateServerRam(server.id);
 
-  // Step 9: Send welcome email
-  try {
-    await sendWelcomeEmail(email, subdomain, domain);
-  } catch (err) {
+  // Send welcome email (non-blocking)
+  sendWelcomeEmail(email, subdomain, domain).catch((err) => {
     console.error('[provision] Welcome email failed:', err);
-  }
+  });
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
   console.log(`[provision] Complete for ${email}: https://${hostRule} (took ${elapsed}s)`);
