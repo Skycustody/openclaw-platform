@@ -20,16 +20,15 @@ function validateUserId(userId: string): void {
 export const PLATFORM_SKILLS_DIR = process.env.PLATFORM_SKILLS_DIR || '/opt/openclaw-platform/skills';
 
 /**
- * Install all default platform skills into a user's instance.
- * Copies from control plane PLATFORM_SKILLS_DIR to the worker — no clone, uses pre-verified skills.
+ * Upload skill files + enable in config. No container restart.
+ * Use during provisioning BEFORE docker run — container starts with skills already in place.
  */
-export async function installDefaultSkills(
+export async function preInstallSkills(
   serverIp: string,
   userId: string,
-  containerName: string
 ): Promise<void> {
   if (!fs.existsSync(PLATFORM_SKILLS_DIR)) {
-    console.warn(`[provision] PLATFORM_SKILLS_DIR missing (${PLATFORM_SKILLS_DIR}), skipping default skills. Run install-skills-from-github.sh on the control plane.`);
+    console.warn(`[provision] PLATFORM_SKILLS_DIR missing (${PLATFORM_SKILLS_DIR}), skipping default skills.`);
     return;
   }
 
@@ -38,7 +37,39 @@ export async function installDefaultSkills(
     const remoteSkillsDir = `${INSTANCE_DIR}/${userId}/skills`;
     await sshUploadDir(serverIp, PLATFORM_SKILLS_DIR, remoteSkillsDir);
 
-    // Enable all in openclaw.json
+    const config = await readContainerConfig(serverIp, userId);
+    if (!config.skills) config.skills = {};
+    if (!config.skills.entries) config.skills.entries = {};
+    for (const skill of PLATFORM_SKILLS) {
+      config.skills.entries[skill.id] = { enabled: true };
+    }
+    await writeContainerConfig(serverIp, userId, config);
+    cacheUserSkills(userId, PLATFORM_SKILLS.map(s => s.id)).catch(() => {});
+    console.log(`[provision] Pre-installed default skills for ${userId}`);
+  } catch (err) {
+    console.warn(`[provision] Failed to pre-install default skills (non-fatal):`, err);
+  }
+}
+
+/**
+ * Install default skills into a running container (uploads + config + restart).
+ * Use when adding skills to an existing running container.
+ */
+export async function installDefaultSkills(
+  serverIp: string,
+  userId: string,
+  containerName: string
+): Promise<void> {
+  if (!fs.existsSync(PLATFORM_SKILLS_DIR)) {
+    console.warn(`[provision] PLATFORM_SKILLS_DIR missing (${PLATFORM_SKILLS_DIR}), skipping default skills.`);
+    return;
+  }
+
+  try {
+    validateUserId(userId);
+    const remoteSkillsDir = `${INSTANCE_DIR}/${userId}/skills`;
+    await sshUploadDir(serverIp, PLATFORM_SKILLS_DIR, remoteSkillsDir);
+
     const config = await readContainerConfig(serverIp, userId);
     if (!config.skills) config.skills = {};
     if (!config.skills.entries) config.skills.entries = {};
@@ -49,9 +80,8 @@ export async function installDefaultSkills(
     cacheUserSkills(userId, PLATFORM_SKILLS.map(s => s.id)).catch(() => {});
 
     await restartContainer(serverIp, containerName);
-    console.log(`[provision] Installed default skills from control plane for ${userId}`);
+    console.log(`[provision] Installed default skills for ${userId}`);
   } catch (err) {
     console.warn(`[provision] Failed to install default skills (non-fatal):`, err);
-    // Don't fail provisioning — user can install from marketplace later
   }
 }

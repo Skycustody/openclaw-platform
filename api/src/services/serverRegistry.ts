@@ -25,6 +25,7 @@ import db from '../lib/db';
 import { Server } from '../types';
 import { cloudProvider } from './cloudProvider';
 import { sshExec } from './ssh';
+import { ensureDockerImage } from './dockerImage';
 
 const controlPlaneIp = (): string | null =>
   process.env.CONTROL_PLANE_IP?.trim() || null;
@@ -177,6 +178,12 @@ export async function registerServer(ip: string, ramTotal: number, hostname: str
      RETURNING *`,
     [ip, hostname, hostingerId || null, ramTotal]
   );
+
+  // Pre-build Docker image in background so the first user doesn't wait
+  ensureDockerImage(ip).catch((err) => {
+    console.warn(`[registerServer] Background image pre-build failed for ${ip}: ${err.message}`);
+  });
+
   return result.rows[0];
 }
 

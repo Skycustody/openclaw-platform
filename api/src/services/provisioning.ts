@@ -42,7 +42,8 @@ import { v4 as uuid } from 'uuid';
 import { buildOpenclawConfig, injectApiKeys } from './apiKeys';
 import { reapplyGatewayConfig, writeContainerConfig } from './containerConfig';
 import { ensureNexosKey } from './nexos';
-import { installDefaultSkills } from './defaultSkills';
+import { preInstallSkills } from './defaultSkills';
+import { ensureDockerImage } from './dockerImage';
 import { UserSettings } from '../types';
 
 const UUID_RE = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
@@ -155,22 +156,28 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
   const image = `${process.env.DOCKER_REGISTRY || 'openclaw/openclaw'}:latest`;
   const hostRule = `${subdomain}.${domain}`;
 
-  // Remove any existing container with same name first
-  await sshExec(server.ip, `docker rm -f ${containerName} 2>/dev/null || true`);
-
-  // Ensure shared Traefik network exists with ICC disabled so containers cannot reach each other
-  await sshExec(server.ip, `docker network create --opt com.docker.network.bridge.enable_icc=false openclaw-net 2>/dev/null || true`);
-
-  // Per-user isolated network
   validateContainerName(containerName);
-  await sshExec(server.ip, `docker network create ${containerName}-net 2>/dev/null || true`);
-  // Always verify Traefik has DOCKER_API_VERSION set; recreate if missing
-  const traefikCheck = await sshExec(server.ip, `docker inspect traefik --format='{{.State.Running}}' 2>/dev/null`).catch(() => null);
-  const traefikEnvCheck = await sshExec(server.ip, `docker inspect traefik --format='{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null`).catch(() => null);
-  const hasApiVersion = traefikEnvCheck?.stdout?.includes('DOCKER_API_VERSION');
-  if (!traefikCheck || !traefikCheck.stdout.includes('true') || !hasApiVersion) {
+
+  // Batch: cleanup + networks + instance dir in a single SSH call
+  const setupResult = await sshExec(server.ip, [
+    `docker rm -f ${containerName} 2>/dev/null || true`,
+    `docker network create --opt com.docker.network.bridge.enable_icc=false openclaw-net 2>/dev/null || true`,
+    `docker network create ${containerName}-net 2>/dev/null || true`,
+    `mkdir -p /opt/openclaw/instances/${userId}`,
+  ].join(' && '));
+  if (setupResult.code !== 0) {
+    console.error(`[provision] setup failed:`, setupResult.stderr);
+    throw new Error(`Server setup failed: ${setupResult.stderr}`);
+  }
+
+  // Traefik check — single SSH call to inspect both state and env
+  const traefikInfo = await sshExec(server.ip,
+    `docker inspect traefik --format='RUNNING={{.State.Running}} ENV={{range .Config.Env}}{{.}},{{end}}' 2>/dev/null || echo 'MISSING'`
+  ).catch(() => ({ stdout: 'MISSING', stderr: '', code: 1 }));
+  const traefikRunning = traefikInfo.stdout.includes('RUNNING=true');
+  const hasApiVersion = traefikInfo.stdout.includes('DOCKER_API_VERSION');
+  if (!traefikRunning || !hasApiVersion) {
     console.log(`[provision] Starting Traefik on ${server.ip}`);
-    const adminEmail = process.env.EMAIL_FROM?.replace('noreply@', '') || 'admin@yourdomain.com';
     const traefikCfgB64 = Buffer.from([
       'api:',
       '  dashboard: false',
@@ -193,13 +200,6 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
     ].join(' && '));
   }
 
-  // Create data directory and initial config
-  const mkdirResult = await sshExec(server.ip, `mkdir -p /opt/openclaw/instances/${userId}`);
-  if (mkdirResult.code !== 0) {
-    console.error(`[provision] mkdir failed:`, mkdirResult.stderr);
-    throw new Error(`mkdir failed: ${mkdirResult.stderr}`);
-  }
-
   const internalSecret = process.env.INTERNAL_SECRET;
   if (!internalSecret) throw new Error('INTERNAL_SECRET env var is required');
 
@@ -213,9 +213,41 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
   });
 
   const openclawConfig = buildOpenclawConfig(gatewayToken);
-
   await writeContainerConfig(server.ip, userId, openclawConfig);
-  // Keep a backup copy so readContainerConfig can recover from corruption
+  console.log(`[provision] Base config written for ${userId}`);
+
+  // Ensure Docker image exists (pre-built at server registration, fallback build here)
+  // Run in parallel with API key creation — neither depends on the other
+  const [, nexosKey] = await Promise.all([
+    ensureDockerImage(server.ip),
+    ensureNexosKey(userId),
+  ]);
+
+  // Inject API keys + model config into openclaw.json BEFORE container starts
+  await injectApiKeys(server.ip, userId, containerName, plan);
+
+  // Upload skills + enable in config BEFORE container starts (no restart needed)
+  await preInstallSkills(server.ip, userId);
+
+  // Write USER.md BEFORE container starts
+  try {
+    const settings = await db.getOne<UserSettings>(
+      'SELECT * FROM user_settings WHERE user_id = $1',
+      [userId]
+    );
+    if (settings?.agent_name || settings?.custom_instructions) {
+      const parts: string[] = ['# User Profile'];
+      if (settings.agent_name) parts.push(`\nName: ${settings.agent_name}`);
+      if (settings.language) parts.push(`Preferred language: ${settings.language}`);
+      if (settings.agent_tone) parts.push(`Communication style: ${settings.agent_tone}`);
+      if (settings.response_length) parts.push(`Response length: ${settings.response_length}`);
+      if (settings.custom_instructions) parts.push(`\n## About the User\n${settings.custom_instructions}`);
+      const userMdB64 = Buffer.from(parts.join('\n')).toString('base64');
+      await sshExec(server.ip, `echo '${userMdB64}' | base64 -d > /opt/openclaw/instances/${userId}/USER.md`);
+    }
+  } catch { /* non-fatal */ }
+
+  // Keep a backup copy after full config is built
   await sshExec(
     server.ip,
     [
@@ -223,52 +255,9 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
       `cp /opt/openclaw/instances/${userId}/openclaw.json /opt/openclaw/instances/${userId}/config.json`,
     ].join(' && ')
   );
-  console.log(`[provision] Config written to /opt/openclaw/instances/${userId}/`);
-
-  // Pull image only if using a remote registry
-  if (process.env.DOCKER_REGISTRY) {
-    console.log(`[provision] Pulling image ${image}...`);
-    const pullResult = await sshExec(server.ip, `docker pull ${image}`);
-    if (pullResult.code !== 0) {
-      console.error(`[provision] docker pull failed:`, pullResult.stderr);
-      throw new Error(`docker pull failed: ${pullResult.stderr}`);
-    }
-  }
-
-  // Verify image exists — if missing, build it on the worker
-  const imageCheck = await sshExec(server.ip, `docker image inspect ${image} > /dev/null 2>&1 && echo OK || echo MISSING`);
-  if (imageCheck.stdout.includes('MISSING')) {
-    console.log(`[provision] Image ${image} not on ${server.ip} — building it now`);
-    const dockerfile = [
-      'FROM node:22-slim',
-      'RUN apt-get update && apt-get install -y curl git python3 make g++ chromium --no-install-recommends && rm -rf /var/lib/apt/lists/*',
-      'RUN npm install -g openclaw@latest',
-      'WORKDIR /data',
-      'EXPOSE 18789',
-      'CMD ["sh", "-c", "exec openclaw gateway --port 18789 --bind lan --allow-unconfigured run"]',
-    ].join('\n');
-    const dockerfileB64 = Buffer.from(dockerfile).toString('base64');
-    const defaultCfgB64 = Buffer.from(JSON.stringify(openclawConfig, null, 2)).toString('base64');
-    const buildCmd = [
-      `mkdir -p /tmp/oc-build`,
-      `echo '${dockerfileB64}' | base64 -d > /tmp/oc-build/Dockerfile`,
-      `echo '${defaultCfgB64}' | base64 -d > /tmp/oc-build/openclaw.default.json`,
-      `docker build -t ${image} /tmp/oc-build`,
-      `rm -rf /tmp/oc-build`,
-    ].join(' && ');
-    const buildResult = await sshExec(server.ip, buildCmd);
-    if (buildResult.code !== 0) {
-      console.error(`[provision] Image build failed:`, buildResult.stderr);
-      throw new Error(`Docker image build failed on ${server.ip}: ${buildResult.stderr}`);
-    }
-    console.log(`[provision] Image ${image} built successfully`);
-  }
 
   // Give Node.js ~75% of the container memory for its heap
   const heapMb = Math.floor(limits.ramMb * 0.75);
-
-  // Ensure user has an OpenRouter API key before container creation
-  const nexosKey = await ensureNexosKey(userId);
 
   // Mount the instance directory at /root/.openclaw so config + credentials persist.
   // The startup script launches the gateway in the background, waits for it to
@@ -336,59 +325,37 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
 
   console.log(`[provision] Container ${containerName} started: ${runResult.stdout.slice(0, 20)}`);
 
-  // Also connect container to its own isolated network (prevents cross-container access)
-  await sshExec(server.ip, `docker network connect ${containerName}-net ${containerName} 2>/dev/null || true`);
-
-  // Block ALL Docker containers from reaching cloud metadata endpoint (survives container restarts/IP changes)
+  // Batch: connect isolation network + metadata firewall in one SSH call
   await sshExec(server.ip, [
+    `docker network connect ${containerName}-net ${containerName} 2>/dev/null || true`,
     `iptables -C FORWARD -d 169.254.169.254 -j DROP 2>/dev/null || iptables -I FORWARD -d 169.254.169.254 -j DROP 2>/dev/null || true`,
     `iptables -C OUTPUT -d 169.254.169.254 -m owner ! --uid-owner 0 -j DROP 2>/dev/null || iptables -I OUTPUT -d 169.254.169.254 -m owner ! --uid-owner 0 -j DROP 2>/dev/null || true`,
   ].join(' && '));
 
-  // Step 6: Quick alive check — give the container 5s to start, then verify
-  await new Promise(r => setTimeout(r, 5000));
-  const aliveCheck = await sshExec(
-    server.ip,
-    `docker inspect ${containerName} --format='{{.State.Running}}' 2>/dev/null`
-  ).catch(() => null);
+  // Step 6: Fast alive check — poll every 1s instead of hard sleep
+  let containerAlive = false;
+  for (let i = 0; i < 10; i++) {
+    await new Promise(r => setTimeout(r, 1000));
+    const check = await sshExec(
+      server.ip,
+      `docker inspect ${containerName} --format='{{.State.Running}}' 2>/dev/null`
+    ).catch(() => null);
+    if (check?.stdout.includes('true')) {
+      containerAlive = true;
+      break;
+    }
+  }
 
-  if (!aliveCheck || !aliveCheck.stdout.includes('true')) {
+  if (!containerAlive) {
     const crashLogs = await sshExec(server.ip, `docker logs --tail 30 ${containerName} 2>&1`).catch(() => null);
-    console.error(`[provision] Container ${containerName} crashed! Logs:\n${crashLogs?.stdout || 'no logs'}`);
+    console.error(`[provision] Container ${containerName} not running after 10s! Logs:\n${crashLogs?.stdout || 'no logs'}`);
     console.log(`[provision] Attempting restart of ${containerName}`);
     await sshExec(server.ip, `docker start ${containerName} 2>/dev/null`).catch(() => null);
     await new Promise(r => setTimeout(r, 3000));
   }
 
-  // Step 6b: Inject OpenRouter key + configure model router per plan tier
-  await injectApiKeys(server.ip, userId, containerName, plan);
-
-  // Step 6b2: Install default skills (browser-use, job-auto-apply, etc.) so new users get them out of the box
-  await installDefaultSkills(server.ip, userId, containerName);
-
-  // Step 6c: Re-apply gateway auth config (doctor --fix on existing images may strip it)
+  // Re-apply gateway auth config (doctor --fix on startup may strip it) — needs running container
   await reapplyGatewayConfig(server.ip, userId, containerName);
-
-  // Step 6d: Write USER.md if onboarding data exists (OpenClaw injects this into every prompt)
-  try {
-    const settings = await db.getOne<UserSettings>(
-      'SELECT * FROM user_settings WHERE user_id = $1',
-      [userId]
-    );
-    if (settings?.agent_name || settings?.custom_instructions) {
-      const parts: string[] = ['# User Profile'];
-      if (settings.agent_name) parts.push(`\nName: ${settings.agent_name}`);
-      if (settings.language) parts.push(`Preferred language: ${settings.language}`);
-      if (settings.agent_tone) parts.push(`Communication style: ${settings.agent_tone}`);
-      if (settings.response_length) parts.push(`Response length: ${settings.response_length}`);
-      if (settings.custom_instructions) parts.push(`\n## About the User\n${settings.custom_instructions}`);
-      const userMdB64 = Buffer.from(parts.join('\n')).toString('base64');
-      await sshExec(server.ip, `echo '${userMdB64}' | base64 -d > /opt/openclaw/instances/${userId}/USER.md`);
-      console.log(`[provision] USER.md written for ${userId}`);
-    }
-  } catch (err: any) {
-    console.warn(`[provision] USER.md write failed (non-fatal): ${err.message}`);
-  }
 
   // Step 7: Create DNS record pointing subdomain → worker IP
   await cloudflareDNS.upsertRecord(subdomain, server.ip);
