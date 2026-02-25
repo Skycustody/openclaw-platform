@@ -389,7 +389,11 @@ export async function initiateWhatsAppPairing(userId: string): Promise<{
   dashboardUrl: string;
   alreadyLinked: boolean;
 }> {
+  const t0 = Date.now();
+  const lap = (label: string) => console.log(`[whatsapp:pair] ${label} +${Date.now() - t0}ms`);
+
   const { serverIp, containerName, user } = await getUserContainer(userId);
+  lap(`getUserContainer (server=${serverIp}, container=${containerName})`);
 
   const domain = process.env.DOMAIN || 'yourdomain.com';
   const subdomain = user.subdomain || '';
@@ -398,8 +402,9 @@ export async function initiateWhatsAppPairing(userId: string): Promise<{
     ? `${agentUrl}/?token=${encodeURIComponent(user.gateway_token)}`
     : agentUrl;
 
-  // Write WhatsApp config via host filesystem (no docker exec needed)
   const config = await readContainerConfig(serverIp, userId);
+  lap('readContainerConfig');
+
   let configChanged = false;
   if (!config.channels) config.channels = {};
   if (!config.channels.whatsapp) {
@@ -407,55 +412,57 @@ export async function initiateWhatsAppPairing(userId: string): Promise<{
     configChanged = true;
   }
 
-  // Only inject API keys if models section is missing (already set during provisioning)
   if (!config.models?.providers || Object.keys(config.models.providers).length === 0) {
     await injectApiKeys(serverIp, userId, containerName, user.plan as any);
+    lap('injectApiKeys (models missing, had to inject)');
   } else if (configChanged) {
     await writeContainerConfig(serverIp, userId, config);
+    lap('writeContainerConfig (whatsapp channel added)');
+  } else {
+    lap('config OK — no injectApiKeys, no write needed');
   }
-  if (configChanged) console.log(`[whatsapp] Config written for user ${userId}`);
 
-  // Check credentials on host filesystem
-  if (await hasWhatsAppCredentials(serverIp, userId)) {
+  const hasCreds = await hasWhatsAppCredentials(serverIp, userId);
+  lap(`hasWhatsAppCredentials → ${hasCreds}`);
+  if (hasCreds) {
     await db.query(
       `UPDATE user_channels SET whatsapp_connected = true, updated_at = NOW() WHERE user_id = $1`,
       [userId]
     );
+    lap('alreadyLinked — returning early');
     return { agentUrl, dashboardUrl, alreadyLinked: true };
   }
 
-  // Clear old QR output so stale data isn't returned
   await sshExec(
     serverIp,
     `rm -f ${INSTANCE_DIR}/${userId}/whatsapp-qr.log`
   ).catch(() => {});
+  lap('cleared old QR log');
 
-  // Only restart if the config changed (new WhatsApp channel added).
-  // Otherwise the container already has the right config and we can
-  // jump straight to `channels login`.
   if (configChanged) {
     await sshExec(serverIp, `docker restart ${containerName}`);
+    lap('docker restart issued');
     const ready = await waitForContainer(serverIp, containerName);
+    lap(`waitForContainer → ${ready}`);
     if (!ready) {
       throw new Error('Agent failed to restart. Please try again in a moment.');
     }
-    // Brief pause for gateway to initialize after restart
     await new Promise(r => setTimeout(r, 3000));
+    lap('post-restart 3s pause done');
+  } else {
+    lap('skipped restart (config unchanged)');
   }
 
-  console.log(`[whatsapp] Starting channels login for user ${userId}`);
   const execResult = await sshExec(
     serverIp,
     `docker exec -d ${containerName} sh -c 'openclaw channels login --channel whatsapp > /root/.openclaw/whatsapp-qr.log 2>&1'`
   ).catch((err) => {
-    console.warn(`[whatsapp] channels login exec failed:`, err.message);
+    console.warn(`[whatsapp:pair] channels login exec failed:`, err.message);
     return { code: 1, stderr: err.message, stdout: '' };
   });
+  lap(`channels login exec → code=${execResult?.code}`);
 
-  if (execResult?.code !== 0) {
-    console.warn(`[whatsapp] exec returned code ${execResult?.code} for user ${userId}`);
-  }
-
+  console.log(`[whatsapp:pair] TOTAL ${Date.now() - t0}ms for user ${userId}`);
   return { agentUrl, dashboardUrl, alreadyLinked: false };
 }
 
@@ -468,6 +475,7 @@ export async function getWhatsAppQr(userId: string): Promise<{
   qrText?: string;
   message?: string;
 }> {
+  const t0 = Date.now();
   let serverIp: string;
   let containerName: string;
 
@@ -476,30 +484,24 @@ export async function getWhatsAppQr(userId: string): Promise<{
     serverIp = result.serverIp;
     containerName = result.containerName;
   } catch {
+    console.log(`[whatsapp:qr] getUserContainer failed +${Date.now() - t0}ms — returning waiting`);
     return { status: 'waiting', message: 'Waiting for agent to start...' };
   }
+  console.log(`[whatsapp:qr] getUserContainer +${Date.now() - t0}ms`);
 
-  // Check credentials on host filesystem
-  if (await hasWhatsAppCredentials(serverIp, userId)) {
-    // Credentials exist. Restart container so the gateway fully initializes
-    // the WhatsApp connection (this completes the handshake on the phone side
-    // and stops the phone from showing "logging in" forever).
+  const hasCreds = await hasWhatsAppCredentials(serverIp, userId);
+  console.log(`[whatsapp:qr] hasWhatsAppCredentials → ${hasCreds} +${Date.now() - t0}ms`);
+
+  if (hasCreds) {
     const needsRestart = await sshExec(
       serverIp,
       `cat ${INSTANCE_DIR}/${userId}/whatsapp-qr.log 2>/dev/null`
     ).catch(() => null);
 
-    // If qr log still exists, this is the first time we're seeing paired status
-    // after a fresh scan — restart the container to finalize the connection.
     if (needsRestart?.stdout && needsRestart.stdout.trim().length > 0) {
-      console.log(`[whatsapp] Credentials found for ${userId}, restarting container to finalize connection`);
-
-      // Clear the QR log so we don't restart again on next poll
+      console.log(`[whatsapp:qr] Credentials found, restarting to finalize +${Date.now() - t0}ms`);
       await sshExec(serverIp, `rm -f ${INSTANCE_DIR}/${userId}/whatsapp-qr.log`).catch(() => {});
-
-      // Restart in background so this poll returns quickly
       void sshExec(serverIp, `docker restart ${containerName}`).catch(() => {});
-
       await db.query(
         `UPDATE user_channels SET whatsapp_connected = true, updated_at = NOW() WHERE user_id = $1`,
         [userId]
@@ -511,16 +513,17 @@ export async function getWhatsAppQr(userId: string): Promise<{
       `UPDATE user_channels SET whatsapp_connected = true, updated_at = NOW() WHERE user_id = $1`,
       [userId]
     );
+    console.log(`[whatsapp:qr] → paired +${Date.now() - t0}ms`);
     return { status: 'paired' };
   }
 
-  // Read QR output from the host-mounted volume (primary & fast source)
   const qrFile = await sshExec(
     serverIp,
     `cat ${INSTANCE_DIR}/${userId}/whatsapp-qr.log 2>/dev/null`
   ).catch(() => null);
+  const qrFileLen = qrFile?.stdout?.trim().length || 0;
+  console.log(`[whatsapp:qr] cat QR log → ${qrFileLen} chars +${Date.now() - t0}ms`);
 
-  // Only fall back to docker logs (last 30 lines, not 300) if QR file is empty
   let fallbackLogs = '';
   if (!qrFile?.stdout?.trim()) {
     const logs = await sshExec(
@@ -528,25 +531,24 @@ export async function getWhatsAppQr(userId: string): Promise<{
       `docker logs --tail 30 ${containerName} 2>&1`
     ).catch(() => null);
     fallbackLogs = logs?.stdout || '';
+    console.log(`[whatsapp:qr] docker logs fallback → ${fallbackLogs.length} chars +${Date.now() - t0}ms`);
   }
 
   const combined = [qrFile?.stdout, fallbackLogs].filter(Boolean).join('\n');
   if (!combined || combined.trim().length === 0) {
+    console.log(`[whatsapp:qr] → waiting (empty) +${Date.now() - t0}ms`);
     return { status: 'waiting', message: 'Generating QR code...' };
   }
 
-  // Check for QR first — if found, return it even if logs contain unrelated errors
-  // (e.g. "failed to persist plugin" / "Unrecognized key: enabled" is non-fatal)
   const qrText = extractQrFromLogs(combined);
   if (qrText) {
-    console.log(`[whatsapp] QR found for user ${userId}`);
+    console.log(`[whatsapp:qr] → QR found (${qrText.length} chars) +${Date.now() - t0}ms`);
     return { status: 'qr', qrText };
   }
 
-  // Only then check for WhatsApp-specific fatal errors. Exclude non-fatal OpenClaw
-  // persist errors ("failed to persist", "Unrecognized key: enabled").
   const lowerCombined = combined.toLowerCase();
   if (lowerCombined.includes('failed to persist plugin') || lowerCombined.includes('unrecognized key')) {
+    console.log(`[whatsapp:qr] → waiting (non-fatal persist error) +${Date.now() - t0}ms`);
     return { status: 'waiting', message: 'Waiting for QR code from WhatsApp...' };
   }
 
@@ -568,14 +570,11 @@ export async function getWhatsAppQr(userId: string): Promise<{
       .filter(l => whatsappErrorPatterns.some(p => l.toLowerCase().includes(p.toLowerCase())))
       .slice(-3);
     const msg = errorLines.join(' ').trim().slice(0, 220) || 'WhatsApp connection failed. Click Retry to try again.';
-    console.warn(`[whatsapp] Error for user ${userId}:`, msg);
+    console.warn(`[whatsapp:qr] → error: ${msg} +${Date.now() - t0}ms`);
     return { status: 'error', message: msg };
   }
 
-  if (combined.trim().length > 50) {
-    console.warn(`[whatsapp] Log output present but no QR extracted for user ${userId} (${combined.trim().length} chars)`);
-  }
-
+  console.log(`[whatsapp:qr] → waiting (no QR in ${combined.trim().length} chars of output) +${Date.now() - t0}ms`);
   return { status: 'waiting', message: 'Waiting for QR code from WhatsApp...' };
 }
 
