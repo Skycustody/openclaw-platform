@@ -158,6 +158,7 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
   const browserlessToken = process.env.BROWSERLESS_TOKEN || '';
   const image = `${process.env.DOCKER_REGISTRY || 'openclaw/openclaw'}:latest`;
   const hostRule = `${subdomain}.${domain}`;
+  const previewHost = `preview-${subdomain}.${domain}`;
 
   validateContainerName(containerName);
 
@@ -232,12 +233,18 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
   // Upload skills + enable in config BEFORE container starts (no restart needed)
   await preInstallSkills(server.ip, userId);
 
-  // Write USER.md BEFORE container starts
+  // Write USER.md + seed MEMORY.md BEFORE container starts
   try {
     const settings = await db.getOne<UserSettings>(
       'SELECT * FROM user_settings WHERE user_id = $1',
       [userId]
     );
+
+    // Ensure workspace + memory directories exist
+    await sshExec(server.ip,
+      `mkdir -p /opt/openclaw/instances/${userId}/workspace/memory /opt/openclaw/instances/${userId}/agents/main/agent`
+    );
+
     if (settings?.agent_name || settings?.custom_instructions) {
       const parts: string[] = ['# User Profile'];
       if (settings.agent_name) parts.push(`\nThe user's name is: ${settings.agent_name}`);
@@ -246,8 +253,22 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
       if (settings.response_length) parts.push(`Response length: ${settings.response_length}`);
       if (settings.custom_instructions) parts.push(`\n## Instructions\n${settings.custom_instructions}`);
       parts.push(`\nIMPORTANT: You are the user's AI assistant. The user's name above is who you are talking to — it is NOT your name. If asked your name, say you are their AI assistant.`);
+      parts.push(`\n## Memory\nYou have persistent memory. Always save important facts, user preferences, project details, and key decisions to MEMORY.md. For daily notes and conversation context, use memory/YYYY-MM-DD.md. When you're unsure about something the user mentioned before, search your memory first.`);
+      parts.push(`\n## Web Preview\nWhen you build websites or web apps, always start the dev server on port 8080 (use \`--port 8080\` or equivalent). The user can preview it live at the URL in the PREVIEW_URL environment variable. Tell the user this URL when you start a dev server.`);
+      parts.push(`\n## AI Models\nYou are running on a platform with multiple AI models. The user may ask you to "switch to sonnet", "use GPT-4o", etc. You have a skill called "switch-model" that can change which AI model processes your responses. Available models: Claude Sonnet 4 (sonnet), Claude Opus 4 (opus), GPT-4o (gpt4o/gpt-4o), GPT-4.1 (gpt4.1), GPT-4.1 Mini (gpt4.1-mini), GPT-4.1 Nano (gpt4.1-nano), Gemini 2.5 Pro (gemini-pro), Gemini 2.5 Flash (gemini-flash), DeepSeek V3 (deepseek), DeepSeek R1 (deepseek-r1), Grok 3 (grok), or "auto" for smart automatic routing. When the user asks to switch models, use the switch-model skill.`);
       const userMdB64 = Buffer.from(parts.join('\n')).toString('base64');
       await sshExec(server.ip, `echo '${userMdB64}' | base64 -d > /opt/openclaw/instances/${userId}/USER.md`);
+
+      // Seed MEMORY.md with user profile so it survives context compaction
+      const memParts: string[] = ['# User Profile (from onboarding)'];
+      if (settings.agent_name) memParts.push(`- Name: ${settings.agent_name}`);
+      if (settings.language) memParts.push(`- Preferred language: ${settings.language}`);
+      if (settings.agent_tone) memParts.push(`- Communication style: ${settings.agent_tone}`);
+      if (settings.response_length) memParts.push(`- Response length: ${settings.response_length}`);
+      if (settings.custom_instructions) memParts.push(`- Custom instructions: ${settings.custom_instructions}`);
+      memParts.push('');
+      const memB64 = Buffer.from(memParts.join('\n')).toString('base64');
+      await sshExec(server.ip, `echo '${memB64}' | base64 -d > /opt/openclaw/instances/${userId}/workspace/MEMORY.md`);
     }
   } catch { /* non-fatal */ }
 
@@ -304,18 +325,32 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
     `-e "BROWSERLESS_URL=wss://production-sfo.browserless.io?token=${browserlessToken}"`,
     `-e OPENCLAW_GATEWAY_TOKEN=${gatewayToken}`,
     `-e OPENROUTER_API_KEY=${nexosKey}`,
+    `-e PREVIEW_PORT=8080`,
+    `-e "PREVIEW_URL=https://${previewHost}"`,
     `-v /opt/openclaw/instances/${userId}:/root/.openclaw`,
     `--label traefik.enable=true`,
+    // Gateway routes (port 18789)
     `--label 'traefik.http.routers.${containerName}.rule=Host(\`${hostRule}\`)'`,
     `--label 'traefik.http.routers.${containerName}.entrypoints=web'`,
+    `--label 'traefik.http.routers.${containerName}.service=${containerName}'`,
     `--label 'traefik.http.routers.${containerName}-secure.rule=Host(\`${hostRule}\`)'`,
     `--label 'traefik.http.routers.${containerName}-secure.entrypoints=websecure'`,
     `--label 'traefik.http.routers.${containerName}-secure.tls=true'`,
+    `--label 'traefik.http.routers.${containerName}-secure.service=${containerName}'`,
     `--label traefik.http.services.${containerName}.loadbalancer.server.port=18789`,
     `--label 'traefik.http.middlewares.${containerName}-iframe.headers.customResponseHeaders.X-Frame-Options='`,
     `--label 'traefik.http.middlewares.${containerName}-iframe.headers.customResponseHeaders.Content-Security-Policy=frame-ancestors self https://${domain} https://*.${domain}'`,
     `--label 'traefik.http.routers.${containerName}.middlewares=${containerName}-iframe'`,
     `--label 'traefik.http.routers.${containerName}-secure.middlewares=${containerName}-iframe'`,
+    // Web preview routes (port 8080) — agent serves websites here
+    `--label 'traefik.http.routers.${containerName}-preview.rule=Host(\`${previewHost}\`)'`,
+    `--label 'traefik.http.routers.${containerName}-preview.entrypoints=web'`,
+    `--label 'traefik.http.routers.${containerName}-preview.service=${containerName}-preview'`,
+    `--label 'traefik.http.routers.${containerName}-preview-secure.rule=Host(\`${previewHost}\`)'`,
+    `--label 'traefik.http.routers.${containerName}-preview-secure.entrypoints=websecure'`,
+    `--label 'traefik.http.routers.${containerName}-preview-secure.tls=true'`,
+    `--label 'traefik.http.routers.${containerName}-preview-secure.service=${containerName}-preview'`,
+    `--label traefik.http.services.${containerName}-preview.loadbalancer.server.port=8080`,
     image,
     startScript,
   ].join(' ');

@@ -16,10 +16,11 @@ alwaysApply: true
 ## Container Details
 
 - Image: `openclaw/openclaw:latest` (Node 22 + `openclaw` CLI)
-- Internal port: `18789` (gateway)
+- Internal port: `18789` (gateway), `8080` (web preview)
 - Config: `/opt/openclaw/instances/{userId}/openclaw.json` on worker, mounted at `/root/.openclaw/` inside container
 - CMD: `openclaw doctor --fix; exec openclaw gateway --port 18789 --bind lan --allow-unconfigured run`
 - Container name pattern: `openclaw-{userId first 12 chars}`
+- Traefik routes: `{subdomain}.valnaa.com` → gateway:18789, `preview-{subdomain}.valnaa.com` → preview:8080
 
 ## openclaw.json — VALID Keys Only
 

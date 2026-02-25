@@ -2,8 +2,11 @@
  * Install default platform skills into a new user's container at provisioning time.
  * Copies from the control plane's verified skills dir (no GitHub clone).
  * Run scripts/install-skills-from-github.sh on the control plane to populate that dir.
+ *
+ * Platform-bundled skills (api/skills/) are always uploaded alongside GitHub-sourced ones.
  */
 import fs from 'fs';
+import path from 'path';
 import { sshUploadDir } from './ssh';
 import { readContainerConfig, writeContainerConfig, restartContainer } from './containerConfig';
 import { PLATFORM_SKILLS } from '../data/platformSkills';
@@ -19,6 +22,9 @@ function validateUserId(userId: string): void {
 /** Path on the control plane where verified skills live (populated by install-skills-from-github.sh). */
 export const PLATFORM_SKILLS_DIR = process.env.PLATFORM_SKILLS_DIR || '/opt/openclaw-platform/skills';
 
+/** Bundled skills shipped with the API (always available, no GitHub clone needed). */
+const BUNDLED_SKILLS_DIR = path.resolve(__dirname, '../../skills');
+
 /**
  * Upload skill files + enable in config. No container restart.
  * Use during provisioning BEFORE docker run — container starts with skills already in place.
@@ -27,15 +33,21 @@ export async function preInstallSkills(
   serverIp: string,
   userId: string,
 ): Promise<void> {
-  if (!fs.existsSync(PLATFORM_SKILLS_DIR)) {
-    console.warn(`[provision] PLATFORM_SKILLS_DIR missing (${PLATFORM_SKILLS_DIR}), skipping default skills.`);
-    return;
-  }
-
   try {
     validateUserId(userId);
     const remoteSkillsDir = `${INSTANCE_DIR}/${userId}/skills`;
-    await sshUploadDir(serverIp, PLATFORM_SKILLS_DIR, remoteSkillsDir);
+
+    // Upload GitHub-sourced skills (if available)
+    if (fs.existsSync(PLATFORM_SKILLS_DIR)) {
+      await sshUploadDir(serverIp, PLATFORM_SKILLS_DIR, remoteSkillsDir);
+    } else {
+      console.warn(`[provision] PLATFORM_SKILLS_DIR missing (${PLATFORM_SKILLS_DIR}), skipping GitHub skills.`);
+    }
+
+    // Always upload bundled platform skills (switch-model, etc.)
+    if (fs.existsSync(BUNDLED_SKILLS_DIR)) {
+      await sshUploadDir(serverIp, BUNDLED_SKILLS_DIR, remoteSkillsDir);
+    }
 
     const config = await readContainerConfig(serverIp, userId);
     if (!config.skills) config.skills = {};
@@ -60,15 +72,19 @@ export async function installDefaultSkills(
   userId: string,
   containerName: string
 ): Promise<void> {
-  if (!fs.existsSync(PLATFORM_SKILLS_DIR)) {
-    console.warn(`[provision] PLATFORM_SKILLS_DIR missing (${PLATFORM_SKILLS_DIR}), skipping default skills.`);
-    return;
-  }
-
   try {
     validateUserId(userId);
     const remoteSkillsDir = `${INSTANCE_DIR}/${userId}/skills`;
-    await sshUploadDir(serverIp, PLATFORM_SKILLS_DIR, remoteSkillsDir);
+
+    if (fs.existsSync(PLATFORM_SKILLS_DIR)) {
+      await sshUploadDir(serverIp, PLATFORM_SKILLS_DIR, remoteSkillsDir);
+    } else {
+      console.warn(`[provision] PLATFORM_SKILLS_DIR missing (${PLATFORM_SKILLS_DIR}), skipping GitHub skills.`);
+    }
+
+    if (fs.existsSync(BUNDLED_SKILLS_DIR)) {
+      await sshUploadDir(serverIp, BUNDLED_SKILLS_DIR, remoteSkillsDir);
+    }
 
     const config = await readContainerConfig(serverIp, userId);
     if (!config.skills) config.skills = {};

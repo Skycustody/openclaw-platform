@@ -181,6 +181,16 @@ interface ProxyUser {
 const userCache = new Map<string, { user: ProxyUser; expires: number }>();
 const CACHE_TTL_MS = 60_000;
 
+/** Evict cached proxy user so the next request reads fresh settings from DB. */
+export function invalidateProxyCache(userId: string): void {
+  for (const [key, entry] of userCache) {
+    if (entry.user.id === userId) {
+      userCache.delete(key);
+      break;
+    }
+  }
+}
+
 async function lookupUser(apiKey: string): Promise<ProxyUser | null> {
   const cached = userCache.get(apiKey);
   if (cached && cached.expires > Date.now()) return cached.user;

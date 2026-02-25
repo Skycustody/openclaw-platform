@@ -193,6 +193,9 @@ router.get('/status', async (req: AuthRequest, res: Response, next: NextFunction
 
     const containerSkills = typeof skillsCountResult === 'number' ? skillsCountResult : -1;
 
+    const domain = process.env.DOMAIN || 'yourdomain.com';
+    const previewUrl = user.subdomain ? `https://preview-${user.subdomain}.${domain}` : null;
+
     res.json({
       userId: user.id,
       email: user.email,
@@ -203,6 +206,7 @@ router.get('/status', async (req: AuthRequest, res: Response, next: NextFunction
       lastActive: user.last_active,
       createdAt: user.created_at,
       isAdmin: user.is_admin || false,
+      previewUrl,
       stats: {
         messagesToday,
         aiRequestsToday: aiRequests,

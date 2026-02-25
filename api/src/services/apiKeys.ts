@@ -104,6 +104,16 @@ export async function injectApiKeys(
     config.env.BROWSERLESS_TOKEN = process.env.BROWSERLESS_TOKEN;
   }
 
+  // Preview URL — agent uses this to tell the user where to see their website
+  const userRow = await db.getOne<{ subdomain: string }>(
+    'SELECT subdomain FROM users WHERE id = $1', [userId]
+  ).catch(() => null);
+  if (userRow?.subdomain) {
+    const domain = process.env.DOMAIN || 'yourdomain.com';
+    config.env.PREVIEW_URL = `https://preview-${userRow.subdomain}.${domain}`;
+    config.env.PREVIEW_PORT = '8080';
+  }
+
   // ── Model provider config ──
   // BYOK users → direct to OpenRouter (no proxy, no router, no compression)
   // Platform users → through the smart routing proxy
@@ -156,6 +166,15 @@ export async function injectApiKeys(
       every: '30m',
       model: 'openrouter/openai/gpt-4.1-nano',
     };
+
+    // Memory: auto-save before compaction + semantic search over past notes
+    if (!config.agents.defaults.compaction) config.agents.defaults.compaction = {};
+    config.agents.defaults.compaction.memoryFlush = {
+      enabled: true,
+      softThresholdTokens: 4000,
+    };
+    if (!config.agents.defaults.memorySearch) config.agents.defaults.memorySearch = {};
+    config.agents.defaults.memorySearch.enabled = true;
   } else {
     config.models = {
       providers: {
@@ -207,6 +226,15 @@ export async function injectApiKeys(
       every: '30m',
       model: 'platform/auto',
     };
+
+    // Memory: auto-save before compaction + semantic search over past notes
+    if (!config.agents.defaults.compaction) config.agents.defaults.compaction = {};
+    config.agents.defaults.compaction.memoryFlush = {
+      enabled: true,
+      softThresholdTokens: 4000,
+    };
+    if (!config.agents.defaults.memorySearch) config.agents.defaults.memorySearch = {};
+    config.agents.defaults.memorySearch.enabled = true;
   }
 
   // Ensure the main agent always exists in agents.list — the OpenClaw gateway

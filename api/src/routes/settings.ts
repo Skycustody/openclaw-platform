@@ -13,6 +13,7 @@ import { getUserContainer, readContainerConfig, writeContainerConfig, restartCon
 import { sshExec } from '../services/ssh';
 import { getNexosUsage } from '../services/nexos';
 import { VALID_CATEGORY_KEYS, MODEL_MAP } from '../services/smartRouter';
+import { invalidateProxyCache } from './proxy';
 import redis from '../lib/redis';
 
 const INSTANCE_DIR = '/opt/openclaw/instances';
@@ -36,8 +37,24 @@ function buildUserMd(settings: UserSettings): string {
   }
 
   sections.push(`\nIMPORTANT: You are the user's AI assistant. The user's name above is who you are talking to — it is NOT your name. If asked your name, say you are their AI assistant.`);
+  sections.push(`\n## Memory\nYou have persistent memory. Always save important facts, user preferences, project details, and key decisions to MEMORY.md. For daily notes and conversation context, use memory/YYYY-MM-DD.md. When you're unsure about something the user mentioned before, search your memory first.`);
+
+  sections.push(`\n## Web Preview\nWhen you build websites or web apps, always start the dev server on port 8080 (use \`--port 8080\` or equivalent). The user can preview it live at the URL in the PREVIEW_URL environment variable. Tell the user this URL when you start a dev server.`);
+
+  sections.push(`\n## AI Models\nYou are running on a platform with multiple AI models. The user may ask you to "switch to sonnet", "use GPT-4o", etc. You have a skill called "switch-model" that can change which AI model processes your responses. Available models: Claude Sonnet 4 (sonnet), Claude Opus 4 (opus), GPT-4o (gpt4o/gpt-4o), GPT-4.1 (gpt4.1), GPT-4.1 Mini (gpt4.1-mini), GPT-4.1 Nano (gpt4.1-nano), Gemini 2.5 Pro (gemini-pro), Gemini 2.5 Flash (gemini-flash), DeepSeek V3 (deepseek), DeepSeek R1 (deepseek-r1), Grok 3 (grok), or "auto" for smart automatic routing. When the user asks to switch models, use the switch-model skill.`);
 
   return sections.join('\n');
+}
+
+function buildMemoryMd(settings: UserSettings): string {
+  const parts: string[] = ['# User Profile (from onboarding)'];
+  if (settings.agent_name) parts.push(`- Name: ${settings.agent_name}`);
+  if (settings.language) parts.push(`- Preferred language: ${settings.language}`);
+  if (settings.agent_tone) parts.push(`- Communication style: ${settings.agent_tone}`);
+  if (settings.response_length) parts.push(`- Response length: ${settings.response_length}`);
+  if (settings.custom_instructions) parts.push(`- Custom instructions: ${settings.custom_instructions}`);
+  parts.push('');
+  return parts.join('\n');
 }
 
 async function syncSettingsToContainer(userId: string): Promise<void> {
@@ -59,6 +76,16 @@ async function syncSettingsToContainer(userId: string): Promise<void> {
       serverIp,
       `echo '${userMdB64}' | base64 -d > ${INSTANCE_DIR}/${userId}/USER.md`
     );
+
+    // Write user profile to a dedicated memory file that the agent's memory
+    // search can index. MEMORY.md itself is managed by the agent — we only seed
+    // it during provisioning and don't overwrite agent-curated content here.
+    const memMd = buildMemoryMd(settings);
+    const memB64 = Buffer.from(memMd).toString('base64');
+    await sshExec(serverIp, [
+      `mkdir -p ${INSTANCE_DIR}/${userId}/workspace/memory`,
+      `echo '${memB64}' | base64 -d > ${INSTANCE_DIR}/${userId}/workspace/memory/user-profile.md`,
+    ].join(' && '));
   } catch {
     // Container not provisioned or not running — settings saved to DB only
   }
@@ -173,6 +200,7 @@ router.put('/brain', async (req: AuthRequest, res: Response, next: NextFunction)
       ).catch(() => {});
     }
 
+    invalidateProxyCache(req.userId!);
     syncSettingsToContainer(req.userId!).catch(() => {});
     res.json({ ok: true });
   } catch (err) {
@@ -335,6 +363,7 @@ router.put('/routing-preferences', async (req: AuthRequest, res: Response, next:
       } while (cursor !== '0');
     } catch { /* non-critical */ }
 
+    invalidateProxyCache(req.userId!);
     res.json({ ok: true, preferences: cleaned });
   } catch (err) {
     next(err);

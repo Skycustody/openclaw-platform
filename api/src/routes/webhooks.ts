@@ -31,6 +31,7 @@ import { registerServer } from '../services/serverRegistry';
 import { confirmWhatsAppConnected } from '../services/messaging';
 import { touchActivity } from '../services/sleepWake';
 import { wakeContainer } from '../services/sleepWake';
+import { invalidateProxyCache } from './proxy';
 
 const router = Router();
 
@@ -134,6 +135,80 @@ router.post('/container/wake', async (req: Request, res: Response, next: NextFun
 
     await wakeContainer(userId);
     res.json({ status: 'active' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Model switch — agent calls this to change its own AI model
+const MODEL_ALIASES: Record<string, string> = {
+  auto: 'auto',
+  sonnet: 'anthropic/claude-sonnet-4',
+  'claude-sonnet': 'anthropic/claude-sonnet-4',
+  'claude-sonnet-4': 'anthropic/claude-sonnet-4',
+  opus: 'anthropic/claude-opus-4',
+  'claude-opus': 'anthropic/claude-opus-4',
+  'claude-opus-4': 'anthropic/claude-opus-4',
+  haiku: 'anthropic/claude-3.5-haiku',
+  'claude-haiku': 'anthropic/claude-3.5-haiku',
+  'gpt-4o': 'openai/gpt-4o',
+  gpt4o: 'openai/gpt-4o',
+  'gpt-4o-mini': 'openai/gpt-4o-mini',
+  'gpt4o-mini': 'openai/gpt-4o-mini',
+  'gpt-4.1': 'openai/gpt-4.1',
+  'gpt4.1': 'openai/gpt-4.1',
+  'gpt-4.1-mini': 'openai/gpt-4.1-mini',
+  'gpt4.1-mini': 'openai/gpt-4.1-mini',
+  'gpt-4.1-nano': 'openai/gpt-4.1-nano',
+  'gpt4.1-nano': 'openai/gpt-4.1-nano',
+  'o3-mini': 'openai/o3-mini',
+  o3: 'openai/o3-mini',
+  'gemini-pro': 'google/gemini-2.5-pro',
+  'gemini-2.5-pro': 'google/gemini-2.5-pro',
+  'gemini-flash': 'google/gemini-2.5-flash',
+  'gemini-2.5-flash': 'google/gemini-2.5-flash',
+  gemini: 'google/gemini-2.5-flash',
+  deepseek: 'deepseek/deepseek-chat-v3-0324',
+  'deepseek-v3': 'deepseek/deepseek-chat-v3-0324',
+  'deepseek-r1': 'deepseek/deepseek-r1',
+  grok: 'x-ai/grok-3-beta',
+  'grok-3': 'x-ai/grok-3-beta',
+  'grok-mini': 'x-ai/grok-3-mini-beta',
+  mistral: 'mistralai/mistral-large-2',
+  llama: 'meta-llama/llama-4-maverick',
+  qwen: 'qwen/qwen-2.5-coder-32b-instruct',
+};
+
+router.post('/container/switch-model', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { userId, model } = req.body;
+    if (!userId || !model) return res.status(400).json({ error: 'userId and model required' });
+
+    if (!verifyContainerAuth(req, userId)) {
+      return res.status(401).json({ error: 'Invalid container authentication' });
+    }
+
+    const db = (await import('../lib/db')).default;
+
+    const normalized = model.trim().toLowerCase();
+    const resolvedModel = MODEL_ALIASES[normalized] || normalized;
+
+    if (resolvedModel === 'auto') {
+      await db.query(
+        `UPDATE user_settings SET brain_mode = 'auto', manual_model = NULL WHERE user_id = $1`,
+        [userId]
+      );
+      invalidateProxyCache(userId);
+      return res.json({ ok: true, model: 'auto', mode: 'auto', message: 'Switched to smart auto-routing. I will pick the best model for each task.' });
+    }
+
+    await db.query(
+      `UPDATE user_settings SET brain_mode = 'manual', manual_model = $1 WHERE user_id = $2`,
+      [resolvedModel, userId]
+    );
+    invalidateProxyCache(userId);
+
+    res.json({ ok: true, model: resolvedModel, mode: 'manual', message: `Switched to ${resolvedModel}. All responses will now use this model.` });
   } catch (err) {
     next(err);
   }

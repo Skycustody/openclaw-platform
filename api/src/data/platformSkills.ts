@@ -52,6 +52,9 @@ export const PLATFORM_SKILLS: PlatformSkill[] = [
   // ── Search & Research ──
   { id: 'deepwiki', label: 'DeepWiki', description: 'Query GitHub repository documentation and wikis. Research open-source projects.', category: 'Search & Research', repoPath: 'arun-8687/deepwiki', emoji: '📚' },
   { id: 'read-github', label: 'Read GitHub', description: 'Access GitHub repository documentation and code via gitmcp.io.', category: 'Search & Research', repoPath: 'am-will/read-github', emoji: '🐙' },
+
+  // ── Platform ──
+  { id: 'switch-model', label: 'Switch AI Model', description: 'Switch the AI model powering your responses. Say "use Sonnet", "switch to GPT-4o", or "auto" for smart routing.', category: 'Platform', repoPath: '_platform/switch-model', emoji: '🔄' },
 ];
 
 export const SKILLS_REPO_URL = 'https://github.com/openclaw/skills.git';
