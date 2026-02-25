@@ -72,8 +72,6 @@ router.post('/checkout', async (req: AuthRequest, res: Response, next: NextFunct
     const user = await db.getOne<User>('SELECT id, email FROM users WHERE id = $1', [req.userId]);
     if (!user) throw new BadRequestError('User not found');
 
-    await db.query(`UPDATE users SET plan = $1, status = 'provisioning' WHERE id = $2`, [plan, req.userId]);
-
     const checkoutUrl = await createCheckoutSession(user.email, plan, referralCode, req.userId);
     res.json({ checkoutUrl });
   } catch (err) {
