@@ -103,9 +103,6 @@ app.set('io', io);
 // Trust the first reverse proxy (nginx/Cloudflare) for req.ip
 app.set('trust proxy', 1);
 
-// Raw body for Stripe webhooks
-app.use('/webhooks/stripe', express.raw({ type: 'application/json' }));
-
 // HTTPS redirect in production.
 // CRITICAL: /webhooks/* and /health MUST be skipped. Workers call back via
 // HTTP POST to /webhooks/servers/register. A 301 redirect converts POST→GET,
@@ -122,7 +119,17 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
-app.use(express.json({ limit: '10mb' }));
+// JSON parser with raw body capture for Stripe webhook signature verification.
+// The verify callback saves the raw Buffer before JSON parsing so constructEvent
+// can validate the HMAC signature against the untouched payload.
+app.use(express.json({
+  limit: '10mb',
+  verify: (req: any, _res, buf) => {
+    if (req.originalUrl === '/webhooks/stripe') {
+      req.rawBody = buf;
+    }
+  },
+}));
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin || ALLOWED_ORIGINS.includes(origin)) {

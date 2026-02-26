@@ -71,8 +71,12 @@ router.post(
         return res.status(400).json({ error: 'Missing stripe-signature header' });
       }
 
-      const body = (req as any).rawBody || req.body;
-      console.log(`[stripe-webhook] sig=${sig.substring(0, 20)}... secret=${secret.substring(0, 10)}... bodyType=${typeof body} isBuffer=${Buffer.isBuffer(body)} len=${body?.length || 0}`);
+      const body = (req as any).rawBody;
+      if (!body) {
+        console.error('[stripe-webhook] rawBody is missing — express.json verify callback did not fire');
+        return res.status(400).json({ error: 'Raw body not captured' });
+      }
+      console.log(`[stripe-webhook] sig=${sig.substring(0, 20)}... secret=${secret.substring(0, 10)}... bodyLen=${body.length}`);
 
       const event = stripe.webhooks.constructEvent(body, sig, secret);
 
