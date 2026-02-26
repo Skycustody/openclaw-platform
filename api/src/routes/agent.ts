@@ -266,11 +266,18 @@ router.post('/open', authenticate, async (req: AuthRequest, res: Response, next:
   try {
     const user = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [req.userId]);
     if (!user) return res.status(404).json({ error: 'User not found' });
+    if (user.status === 'pending') {
+      return res.status(403).json({ error: 'Please choose a plan and complete payment first.' });
+    }
     if (user.status === 'cancelled') {
       return res.status(403).json({ error: 'Subscription cancelled. Please resubscribe.' });
     }
     if (user.status === 'paused') {
       return res.status(403).json({ error: 'Agent paused — update your subscription or payment to resume.' });
+    }
+    if (!user.stripe_customer_id && user.status === 'provisioning') {
+      console.warn(`[agent/open] User ${user.id} in provisioning but no stripe_customer_id — rejecting (no payment)`);
+      return res.status(403).json({ error: 'Payment not confirmed. Please complete checkout.' });
     }
 
     const respond = (parts: AgentUrlParts, status: string) =>
