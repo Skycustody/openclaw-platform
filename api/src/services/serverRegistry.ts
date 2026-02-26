@@ -72,6 +72,17 @@ export async function findBestServer(requiredRamMb = 2048, allowNewServer = fals
     throw new Error('No worker server has enough free RAM and auto-provisioning is not allowed for this call');
   }
 
+  // Safety: if there are ZERO servers registered at all, that's a DB/config issue, not a capacity issue.
+  // Never auto-create when the table is empty — an admin must register at least one server first.
+  const totalServers = await db.getOne<{ count: string }>(
+    `SELECT COUNT(*) as count FROM servers WHERE status = 'active'`
+  );
+  const serverCount = parseInt(totalServers?.count || '0');
+  if (serverCount === 0) {
+    console.error('[findBestServer] ZERO servers in database — refusing to auto-create. Register a server first.');
+    throw new Error('No worker servers registered. An admin must register at least one server before auto-provisioning can work.');
+  }
+
   // Double-check: are there actually users who need a server?
   const waitingUsers = await db.getOne<{ count: string }>(
     `SELECT COUNT(*) as count FROM users WHERE status = 'provisioning' AND server_id IS NULL`
@@ -82,7 +93,17 @@ export async function findBestServer(requiredRamMb = 2048, allowNewServer = fals
     throw new Error('No capacity available and no users need a server');
   }
 
-  console.log(`[findBestServer] ${waitingCount} user(s) waiting — proceeding with new server creation`);
+  // Safety: only create a new server if ALL existing servers are above 80% RAM usage
+  const underloadedServer = await db.getOne<{ id: string }>(
+    `SELECT id FROM servers WHERE status = 'active' AND (ram_used::float / NULLIF(ram_total, 0)) < 0.8 AND ($1::text IS NULL OR ip != $1) LIMIT 1`,
+    [cpIp]
+  );
+  if (underloadedServer) {
+    console.error('[findBestServer] Existing server(s) are under 80% capacity but query missed them — possible RAM tracking drift. Refusing to create new server.');
+    throw new Error('Existing servers have capacity (RAM tracking may be stale). Run capacity check to fix.');
+  }
+
+  console.log(`[findBestServer] ${waitingCount} user(s) waiting, all ${serverCount} server(s) at 80%+ capacity — proceeding with new server creation`);
 
   if (provisionInProgress) {
     console.log('[findBestServer] Another request is already provisioning a worker — waiting');
