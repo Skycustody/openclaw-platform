@@ -21,6 +21,7 @@ import {
   Brain,
 } from 'lucide-react';
 import { GlowingEffect } from '@/components/ui/glowing-effect';
+import Image from 'next/image';
 import dynamic from 'next/dynamic';
 
 const DotScreenShader = dynamic(
@@ -434,7 +435,7 @@ function Footer() {
     <footer className="border-t border-border">
       <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-4 px-6 py-8 sm:flex-row">
         <div className="flex items-center gap-2">
-          <Zap className="h-4 w-4 text-muted-foreground" />
+          <Image src="/favicon.png" alt="Valnaa" width={18} height={18} className="rounded-sm" />
           <span className="text-sm text-muted-foreground">Valnaa — Hosted OpenClaw, smart routing, your server</span>
         </div>
         <div className="flex items-center gap-6">

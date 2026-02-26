@@ -9,6 +9,9 @@ export const metadata: Metadata = {
   title: 'Valnaa — Your Personal AI Agent',
   description:
     'The most powerful open-source AI agent, hosted for you. Zero setup. Ready in 60 seconds.',
+  icons: {
+    icon: '/favicon.png',
+  },
 };
 
 export default function RootLayout({

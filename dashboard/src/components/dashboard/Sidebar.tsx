@@ -7,6 +7,7 @@ import {
   Globe, Coins, Cpu, User, Shield, MessageSquare, FileText,
   CreditCard, Store, LogOut, ChevronLeft, Zap, HelpCircle,
 } from 'lucide-react';
+import Image from 'next/image';
 import { useStore } from '@/lib/store';
 import { GlowingEffect } from '@/components/ui/glowing-effect';
 
@@ -43,7 +44,7 @@ export function Sidebar() {
     >
       <div className="flex h-[56px] items-center gap-3 px-4 border-b border-white/[0.06]">
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg">
-          <Zap className="h-4 w-4 text-white" />
+          <Image src="/favicon.png" alt="Valnaa" width={18} height={18} className="rounded-sm" />
         </div>
         {sidebarOpen && (
           <span className="text-[15px] font-semibold text-white tracking-tight">Valnaa</span>

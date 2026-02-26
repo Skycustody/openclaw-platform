@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 import { MenuToggleIcon } from '@/components/ui/menu-toggle-icon';
 import { useScroll } from '@/components/ui/use-scroll';
 import { createPortal } from 'react-dom';
-import { Zap } from 'lucide-react';
+import Image from 'next/image';
 
 export function Header() {
   const [open, setOpen] = React.useState(false);
@@ -44,7 +44,7 @@ export function Header() {
           href="/"
           className="flex items-center gap-2.5 rounded-md p-2 hover:bg-accent"
         >
-          <Zap className="h-4 w-4" />
+          <Image src="/favicon.png" alt="Valnaa" width={20} height={20} className="rounded-sm" />
           <span className="text-sm font-semibold tracking-tight">Valnaa</span>
         </Link>
         <div className="hidden items-center gap-2 md:flex">
