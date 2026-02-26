@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import api from '@/lib/api';
+import { DASHBOARD_ALLOWED_STATUSES } from '@/lib/constants';
 import { Loader2 } from 'lucide-react';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -39,9 +40,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           subdomain: data.subdomain || null,
           isAdmin: data.isAdmin || false,
         });
-        const allowed = ['active', 'sleeping', 'grace_period', 'provisioning', 'starting'];
         const isAdmin = data.isAdmin === true;
-        if (!isAdmin && !allowed.includes(subStatus) && typeof window !== 'undefined') {
+        if (!isAdmin && !(DASHBOARD_ALLOWED_STATUSES as readonly string[]).includes(subStatus) && typeof window !== 'undefined') {
           window.location.href = '/pricing';
           return;
         }

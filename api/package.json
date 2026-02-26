@@ -7,7 +7,8 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "lint": "eslint src/",
-    "set-admin": "tsx scripts/set-admin-user.ts"
+    "set-admin": "tsx scripts/set-admin-user.ts",
+    "stripe:copy-to-live": "tsx scripts/stripe-copy-to-live.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",

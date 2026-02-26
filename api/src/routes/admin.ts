@@ -15,6 +15,19 @@ router.use(rateLimitAdmin);
 router.use(authenticate);
 router.use(requireAdmin);
 
+const UUID_RE = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+const CONTAINER_NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9_.-]+$/;
+
+function validateUuid(id: string): boolean {
+  return UUID_RE.test(id);
+}
+
+function safeContainerName(name: string | null | undefined, fallbackUserId: string): string {
+  const cn = name || `openclaw-${fallbackUserId.slice(0, 12)}`;
+  if (!CONTAINER_NAME_RE.test(cn)) throw new Error(`Invalid container name: ${cn}`);
+  return cn;
+}
+
 // ── Platform Overview ──
 router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunction) => {
   try {
@@ -297,6 +310,7 @@ router.get('/users', async (req: AuthRequest, res: Response, next: NextFunction)
 router.get('/users/:userId', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { userId } = req.params;
+    if (!validateUuid(userId)) return res.status(400).json({ error: 'Invalid user ID format' });
     const [user, tokens, activity, transactions] = await Promise.all([
       db.getOne<any>(
         `SELECT u.id, u.email, u.display_name, u.plan, u.status, u.subdomain,
@@ -333,6 +347,7 @@ router.get('/users/:userId', async (req: AuthRequest, res: Response, next: NextF
 router.put('/users/:userId', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { userId } = req.params;
+    if (!validateUuid(userId)) return res.status(400).json({ error: 'Invalid user ID format' });
     const { plan, status, is_admin, token_balance } = req.body;
 
     if (plan) {
@@ -422,6 +437,7 @@ router.post('/reprovision', async (req: AuthRequest, res: Response, next: NextFu
     let users: User[];
 
     if (userId) {
+      if (!validateUuid(userId)) return res.status(400).json({ error: 'Invalid user ID format' });
       const user = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [userId]);
       if (!user) return res.status(404).json({ error: 'User not found' });
       users = [user];
@@ -464,6 +480,7 @@ router.post('/inject-keys', async (req: AuthRequest, res: Response, next: NextFu
     let users: any[];
 
     if (userId) {
+      if (!validateUuid(userId)) return res.status(400).json({ error: 'Invalid user ID format' });
       const user = await db.getOne<any>(
         `SELECT u.*, s.ip as server_ip FROM users u
          LEFT JOIN servers s ON s.id = u.server_id
@@ -488,7 +505,7 @@ router.post('/inject-keys', async (req: AuthRequest, res: Response, next: NextFu
 
     for (const user of users) {
       try {
-        const cn = user.container_name || `openclaw-${user.id.slice(0, 12)}`;
+        const cn = safeContainerName(user.container_name, user.id);
         const nexosKey = await ensureNexosKey(user.id);
         await injectApiKeys(user.server_ip, user.id, cn, user.plan || 'starter');
         await sshExec(user.server_ip, `docker restart ${cn} 2>/dev/null || true`);

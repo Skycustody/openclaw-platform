@@ -193,15 +193,6 @@ async function handleCreditPurchase(session: Stripe.Checkout.Session): Promise<v
   validateAmounts(packInfo.priceUsdCents, packInfo.orBudgetUsd);
   verifyPackMath(pack, packInfo.priceUsdCents, packInfo.orBudgetUsd);
 
-  const existing = await db.getOne<{ id: string }>(
-    `SELECT id FROM credit_purchases WHERE stripe_session_id = $1`,
-    [session.id]
-  );
-  if (existing) {
-    console.log(`[stripe] Duplicate webhook for session ${session.id} — skipping`);
-    return;
-  }
-
   const stripeCustomerId = session.customer as string;
   if (stripeCustomerId) {
     await db.query(
@@ -212,13 +203,30 @@ async function handleCreditPurchase(session: Stripe.Checkout.Session): Promise<v
 
   const orBudgetIncrease = packInfo.orBudgetUsd;
 
-  await db.query(
+  // Atomic duplicate guard: ON CONFLICT prevents double-processing from duplicate webhooks
+  const insertResult = await db.query(
     `INSERT INTO credit_purchases (user_id, amount_eur_cents, credits_usd, stripe_session_id)
-     VALUES ($1, $2, $3, $4)`, // column stores USD cents despite legacy name
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (stripe_session_id) DO NOTHING`, // column stores USD cents despite legacy name
     [userId, packInfo.priceUsdCents, orBudgetIncrease, session.id]
   );
 
-  await addCreditsToKey(userId, orBudgetIncrease);
+  if (insertResult.rowCount === 0) {
+    console.log(`[stripe] Duplicate webhook for session ${session.id} — skipping`);
+    return;
+  }
+
+  try {
+    await addCreditsToKey(userId, orBudgetIncrease);
+  } catch (creditErr) {
+    console.error(`[stripe] addCreditsToKey FAILED for user=${userId} session=${session.id} amount=$${orBudgetIncrease}:`, creditErr);
+    // Purchase is recorded but credits weren't added — mark for manual review
+    await db.query(
+      `UPDATE credit_purchases SET notes = 'CREDIT_ADD_FAILED' WHERE stripe_session_id = $1`,
+      [session.id]
+    ).catch(() => {});
+    throw creditErr;
+  }
 
   await logCreditAudit({
     operation: 'purchase',

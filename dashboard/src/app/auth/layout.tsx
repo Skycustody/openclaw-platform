@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import Script from 'next/script';
 import api from '@/lib/api';
+import { DASHBOARD_ALLOWED_STATUSES } from '@/lib/constants';
 import Image from 'next/image';
 import { Button } from '@/components/ui/Button';
 import { ArrowRight, Loader2 } from 'lucide-react';
@@ -64,8 +65,7 @@ function AuthForm() {
       }
       try {
         const billing = await api.get<{ status: string }>('/billing');
-        const active = ['active', 'sleeping', 'grace_period', 'provisioning', 'starting'];
-        window.location.href = active.includes(billing.status) ? '/dashboard' : '/pricing';
+        window.location.href = (DASHBOARD_ALLOWED_STATUSES as readonly string[]).includes(billing.status) ? '/dashboard' : '/pricing';
       } catch {
         window.location.href = '/pricing';
       }
@@ -111,8 +111,7 @@ function AuthForm() {
       if (isLogin) {
         const data = await api.post<{ token: string; user: any }>('/auth/login', { email, password });
         api.setToken(data.token);
-        const active = ['active', 'sleeping', 'grace_period', 'provisioning', 'starting'];
-        window.location.href = active.includes(data.user?.status) ? '/dashboard' : '/pricing';
+        window.location.href = (DASHBOARD_ALLOWED_STATUSES as readonly string[]).includes(data.user?.status) ? '/dashboard' : '/pricing';
       } else {
         const data = await api.post<{ token: string }>('/auth/signup', {
           email,

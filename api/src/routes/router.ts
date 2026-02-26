@@ -1,5 +1,5 @@
 import { Router, Response, NextFunction } from 'express';
-import { AuthRequest, authenticate } from '../middleware/auth';
+import { AuthRequest, authenticate, requireActiveSubscription } from '../middleware/auth';
 import {
   getRoutingHistory,
   getTokensSavedThisMonth,
@@ -10,6 +10,7 @@ import {
 
 const router = Router();
 router.use(authenticate);
+router.use(requireActiveSubscription);
 
 // Get available models
 router.get('/models', async (_req: AuthRequest, res: Response, next: NextFunction) => {

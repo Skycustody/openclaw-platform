@@ -925,17 +925,26 @@ router.post('/:agentId/stop', async (req: AuthRequest, res: Response, next: Next
 // ─── Helpers ───
 
 const VALID_LEGACY_CHANNEL_TYPES = ['telegram', 'discord', 'slack', 'whatsapp', 'signal'] as const;
+type LegacyChannelType = typeof VALID_LEGACY_CHANNEL_TYPES[number];
+
+const LEGACY_COLUMN_MAP: Record<LegacyChannelType, string> = {
+  telegram: 'telegram_connected',
+  discord: 'discord_connected',
+  slack: 'slack_connected',
+  whatsapp: 'whatsapp_connected',
+  signal: 'signal_connected',
+};
 
 async function updateLegacyChannels(userId: string, channelType: string, connected: boolean): Promise<void> {
-  if (!(VALID_LEGACY_CHANNEL_TYPES as readonly string[]).includes(channelType)) {
+  const col = LEGACY_COLUMN_MAP[channelType as LegacyChannelType];
+  if (!col) {
     throw new Error(`Invalid channel type: ${channelType}`);
   }
-  const col = `${channelType}_connected`;
   await db.query(
     `INSERT INTO user_channels (user_id, ${col}, updated_at) VALUES ($1, $2, NOW())
      ON CONFLICT (user_id) DO UPDATE SET ${col} = $2, updated_at = NOW()`,
     [userId, connected]
-  ).catch(() => {});
+  ).catch((err) => console.warn(`[agents] Legacy channel update failed for ${channelType}:`, err.message));
 }
 
 export default router;

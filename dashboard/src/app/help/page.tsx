@@ -1,7 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { Zap, HelpCircle, FileText, Shield, ExternalLink } from 'lucide-react';
+import { Zap, HelpCircle, FileText, Shield, ExternalLink, Mail } from 'lucide-react';
+
+const SUPPORT_EMAIL = process.env.NEXT_PUBLIC_SUPPORT_EMAIL;
 
 export default function HelpPage() {
   return (
@@ -23,6 +25,21 @@ export default function HelpPage() {
         </div>
 
         <div className="space-y-4">
+          {SUPPORT_EMAIL && (
+            <a
+              href={`mailto:${SUPPORT_EMAIL}`}
+              className="flex items-center gap-4 rounded-xl border border-white/10 bg-white/[0.02] p-4 hover:border-white/20 hover:bg-white/[0.04] transition-colors"
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/5">
+                <Mail className="h-5 w-5 text-white/50" />
+              </div>
+              <div className="flex-1">
+                <h2 className="font-semibold text-white">Contact Us</h2>
+                <p className="text-[13px] text-white/50">Send us an email — we&apos;ll get back to you</p>
+              </div>
+              <ExternalLink className="h-4 w-4 text-white/30" />
+            </a>
+          )}
           <Link
             href="/privacy"
             className="flex items-center gap-4 rounded-xl border border-white/10 bg-white/[0.02] p-4 hover:border-white/20 hover:bg-white/[0.04] transition-colors"
@@ -58,9 +75,12 @@ export default function HelpPage() {
           </p>
         </div>
 
-        <div className="mt-12 pt-8 border-t border-white/10 flex gap-6 text-sm">
+        <div className="mt-12 pt-8 border-t border-white/10 flex flex-wrap gap-6 text-sm">
           <Link href="/privacy" className="text-white/50 hover:text-white/80">Privacy Policy</Link>
           <Link href="/terms" className="text-white/50 hover:text-white/80">Terms of Service</Link>
+          {SUPPORT_EMAIL && (
+            <a href={`mailto:${SUPPORT_EMAIL}`} className="text-white/50 hover:text-white/80">Contact</a>
+          )}
           <Link href="/dashboard" className="text-white/50 hover:text-white/80">Dashboard</Link>
         </div>
       </div>

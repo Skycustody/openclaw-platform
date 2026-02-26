@@ -103,7 +103,8 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
   }
 
   await db.query(
-    `UPDATE users SET provision_retries = COALESCE(provision_retries, 0) + 1 WHERE id = $1`,
+    `UPDATE users SET provision_retries = COALESCE(provision_retries, 0) + 1
+     WHERE id = $1 AND COALESCE(provision_retries, 0) < 3`,
     [userId]
   ).catch(() => {
     // Column may not exist yet — non-fatal
@@ -126,6 +127,10 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
     throw err;
   }
   console.log(`[provision] Using server ${server.ip} (${server.hostname || server.id})`);
+
+  let provisionSucceeded = false;
+  let dnsCreated = false;
+  try {
 
   // Step 2: Update user record (S3 removed — files live in container workspace)
   await db.query(
@@ -396,6 +401,7 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
 
   // Step 7: Create DNS record BEFORE waiting — gives Cloudflare time to propagate
   await cloudflareDNS.upsertRecord(subdomain, server.ip);
+  dnsCreated = true;
 
   // Re-apply gateway auth config (doctor --fix on startup may strip it) — needs running container
   await reapplyGatewayConfig(server.ip, userId, containerName);
@@ -434,8 +440,27 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
   console.log(`[provision] Complete for ${email}: https://${hostRule} (took ${elapsed}s)`);
 
+  provisionSucceeded = true;
   const user = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [userId]);
   return user!;
+
+  } catch (provisionErr) {
+    // Release RAM reservation on failure so the server isn't phantom-full
+    if (!provisionSucceeded) {
+      console.warn(`[provision] Releasing RAM for failed provisioning of ${userId} on server ${server.id}`);
+      await updateServerRam(server.id).catch((e) =>
+        console.error(`[provision] RAM release failed for server ${server.id}:`, e.message)
+      );
+      // Clean up DNS if it was created but provisioning failed
+      if (dnsCreated) {
+        console.warn(`[provision] Cleaning up DNS record for ${subdomain} after failed provisioning`);
+        await cloudflareDNS.deleteRecord(subdomain).catch((e) =>
+          console.error(`[provision] DNS cleanup failed for ${subdomain}:`, e.message)
+        );
+      }
+    }
+    throw provisionErr;
+  }
 }
 
 export async function deprovisionUser(userId: string): Promise<void> {

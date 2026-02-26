@@ -27,9 +27,18 @@ import { User, Server } from '../types';
 import { sshExec } from '../services/ssh';
 import { injectApiKeys } from '../services/apiKeys';
 import { getUserContainer, reapplyGatewayConfig } from '../services/containerConfig';
+import { rateLimitSensitive } from '../middleware/rateLimit';
 
 const router = Router();
 router.use(authenticate);
+
+const CONTAINER_NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9_.-]+$/;
+
+function safeContainerName(name: string | null | undefined, fallbackUserId: string): string {
+  const cn = name || `openclaw-${fallbackUserId.slice(0, 12)}`;
+  if (!CONTAINER_NAME_RE.test(cn)) throw new Error(`Invalid container name: ${cn}`);
+  return cn;
+}
 
 /** Track in-flight provisioning so we never duplicate work for the same user. */
 const provisioningInFlight = new Map<string, Promise<User>>();
@@ -109,8 +118,10 @@ async function agentUrlParts(subdomain: string, userId: string, server?: Server 
 
   if (!token && server) {
     try {
-      const containerName = (await db.getOne<User>('SELECT container_name FROM users WHERE id = $1', [userId]))
-        ?.container_name || `openclaw-${userId.slice(0, 12)}`;
+      const containerName = safeContainerName(
+        (await db.getOne<User>('SELECT container_name FROM users WHERE id = $1', [userId]))?.container_name,
+        userId
+      );
       const result = await sshExec(
         server.ip,
         `docker exec ${containerName} openclaw config get gateway.auth.token 2>/dev/null`
@@ -118,7 +129,7 @@ async function agentUrlParts(subdomain: string, userId: string, server?: Server 
       const fetched = result.stdout.replace(/["\s]/g, '').trim();
       if (fetched && fetched.length > 8) {
         token = fetched;
-        await db.query('UPDATE users SET gateway_token = $1 WHERE id = $2', [token, userId]).catch(() => {});
+        await db.query('UPDATE users SET gateway_token = $1 WHERE id = $2', [token, userId]).catch((e) => console.warn('[agent] gateway_token save failed:', e.message));
       }
     } catch {
       // SSH failed
@@ -222,7 +233,7 @@ router.get('/status', async (req: AuthRequest, res: Response, next: NextFunction
  * Fast embed URL lookup — returns the gateway URL + token for iframe embedding
  * without triggering provisioning or wake. Returns null fields if unavailable.
  */
-router.get('/embed-url', async (req: AuthRequest, res: Response, next: NextFunction) => {
+router.get('/embed-url', requireActiveSubscription, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const user = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [req.userId]);
     if (!user) return res.status(404).json({ error: 'User not found' });
@@ -262,7 +273,7 @@ router.get('/embed-url', async (req: AuthRequest, res: Response, next: NextFunct
  * - Sleeping → wake it
  * - Already active → return URL immediately
  */
-router.post('/open', authenticate, async (req: AuthRequest, res: Response, next: NextFunction) => {
+router.post('/open', rateLimitSensitive, authenticate, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const user = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [req.userId]);
     if (!user) return res.status(404).json({ error: 'User not found' });
@@ -317,11 +328,11 @@ router.post('/open', authenticate, async (req: AuthRequest, res: Response, next:
 
     // Proactively fix Traefik on existing workers (don't await — runs in background)
     if (server) {
-      ensureTraefik(server.ip).catch(() => {});
+      ensureTraefik(server.ip).catch((err) => console.warn(`[agent/open] ensureTraefik failed:`, err.message));
     }
 
     // Ensure API keys + model router config are injected (fixes existing users)
-    const cn = user.container_name || `openclaw-${user.id.slice(0, 12)}`;
+    const cn = safeContainerName(user.container_name, user.id);
     if (server) {
       injectApiKeys(server.ip, user.id, cn, user.plan as any)
         .then(() => new Promise(r => setTimeout(r, 5000)))
@@ -347,7 +358,7 @@ router.post('/open', authenticate, async (req: AuthRequest, res: Response, next:
     // Case 3a: provisioning completed but gateway wasn't reachable — re-check now
     if (user.status === 'starting') {
       if (server) {
-        const containerName = user.container_name || `openclaw-${user.id}`;
+        const containerName = safeContainerName(user.container_name, user.id);
         const check = await sshExec(server.ip, `docker inspect ${containerName} --format='{{.State.Running}}' 2>/dev/null`).catch(() => null);
         if (check && check.stdout.includes('true')) {
           let currentStatus = 'starting';
@@ -368,7 +379,7 @@ router.post('/open', authenticate, async (req: AuthRequest, res: Response, next:
     // Case 3b: still provisioning from a previous attempt — verify the container actually exists
     if (user.status === 'provisioning' || (user.status === 'starting' && !server)) {
       if (server) {
-        const containerName = user.container_name || `openclaw-${user.id}`;
+        const containerName = safeContainerName(user.container_name, user.id);
         const check = await sshExec(server.ip, `docker inspect ${containerName} --format='{{.State.Running}}' 2>/dev/null`).catch(() => null);
         if (check && check.stdout.includes('true')) {
           await db.query(`UPDATE users SET status = 'active', last_active = NOW() WHERE id = $1`, [user.id]);
@@ -401,7 +412,7 @@ router.post('/open', authenticate, async (req: AuthRequest, res: Response, next:
 
     // Case 4: active or grace_period — verify the container is actually running
     if (server) {
-      const containerName = user.container_name || `openclaw-${user.id}`;
+      const containerName = safeContainerName(user.container_name, user.id);
       const check = await sshExec(server.ip, `docker inspect ${containerName} --format='{{.State.Running}}' 2>/dev/null`).catch(() => null);
       if (!check || !check.stdout.includes('true')) {
         console.log(`[agent/open] Container for ${user.id} not running — restarting`);
@@ -468,7 +479,7 @@ router.post('/stop', requireActiveSubscription, async (req: AuthRequest, res: Re
 });
 
 // Restart agent
-router.post('/restart', requireActiveSubscription, async (req: AuthRequest, res: Response, next: NextFunction) => {
+router.post('/restart', rateLimitSensitive, requireActiveSubscription, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     await restartContainer(req.userId!);
     res.json({ status: 'restarting' });
@@ -487,7 +498,7 @@ router.get('/logs', requireActiveSubscription, async (req: AuthRequest, res: Res
     if (!server) return res.json({ logs: '' });
 
     const lines = Math.min(parseInt(req.query.lines as string) || 100, 500);
-    const containerName = user.container_name || `openclaw-${req.userId}`;
+    const containerName = safeContainerName(user.container_name, req.userId!);
     const result = await sshExec(server.ip, `docker logs --tail ${lines} ${containerName} 2>&1`);
 
     // Redact secrets from log output
@@ -516,7 +527,7 @@ router.get('/logs', requireActiveSubscription, async (req: AuthRequest, res: Res
  * through Traefik to confirm routing works end-to-end.
  * Auto-fixes broken Traefik (missing DOCKER_API_VERSION) when detected.
  */
-router.get('/ready', authenticate, async (req: AuthRequest, res: Response, next: NextFunction) => {
+router.get('/ready', requireActiveSubscription, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const user = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [req.userId]);
     if (!user?.server_id || !user?.subdomain) {
@@ -530,7 +541,7 @@ router.get('/ready', authenticate, async (req: AuthRequest, res: Response, next:
       return res.json({ ready: false, reason: 'no_server' });
     }
 
-    const containerName = user.container_name || `openclaw-${user.id}`;
+    const containerName = safeContainerName(user.container_name, user.id);
 
     // 1. Check if container is running
     const inspect = await sshExec(
@@ -542,8 +553,8 @@ router.get('/ready', authenticate, async (req: AuthRequest, res: Response, next:
     });
 
     if (!inspect || !inspect.stdout.includes('true')) {
-      const logs = await sshExec(server.ip, `docker logs --tail 15 ${containerName} 2>&1`).catch(() => null);
-      console.log(`[ready] Container ${containerName} not running on ${server.ip}. Logs: ${logs?.stdout?.slice(-200) || 'none'}`);
+      const readyLogs = await sshExec(server.ip, `docker logs --tail 15 ${containerName} 2>&1`).catch(() => null);
+      console.log(`[ready] Container ${containerName} not running on ${server.ip}. Logs: ${readyLogs?.stdout?.slice(-200) || 'none'}`);
       return res.json({
         ready: false,
         reason: 'container_not_running',

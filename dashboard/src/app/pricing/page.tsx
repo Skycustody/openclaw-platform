@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import api from '@/lib/api';
+import { DASHBOARD_ALLOWED_STATUSES } from '@/lib/constants';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
 import { Zap, Check, ArrowRight, Loader2, Coins } from 'lucide-react';
@@ -94,8 +95,7 @@ function PricingContent() {
     (async () => {
       try {
         const overview = await api.get<{ status: string }>('/billing');
-        const dashboard = ['active', 'sleeping', 'grace_period', 'provisioning', 'starting'];
-        if (dashboard.includes(overview?.status)) {
+        if ((DASHBOARD_ALLOWED_STATUSES as readonly string[]).includes(overview?.status)) {
           window.location.href = '/dashboard';
         }
       } catch {
