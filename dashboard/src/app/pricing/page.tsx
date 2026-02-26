@@ -94,10 +94,8 @@ function PricingContent() {
     (async () => {
       try {
         const overview = await api.get<{ status: string }>('/billing');
-        if (
-          overview?.status === 'active' ||
-          overview?.status === 'grace_period'
-        ) {
+        const dashboard = ['active', 'sleeping', 'grace_period', 'provisioning', 'starting'];
+        if (dashboard.includes(overview?.status)) {
           window.location.href = '/dashboard';
         }
       } catch {

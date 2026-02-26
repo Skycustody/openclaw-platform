@@ -64,7 +64,7 @@ function AuthForm() {
       }
       try {
         const billing = await api.get<{ status: string }>('/billing');
-        const active = ['active', 'sleeping', 'grace_period'];
+        const active = ['active', 'sleeping', 'grace_period', 'provisioning', 'starting'];
         window.location.href = active.includes(billing.status) ? '/dashboard' : '/pricing';
       } catch {
         window.location.href = '/pricing';
@@ -111,7 +111,7 @@ function AuthForm() {
       if (isLogin) {
         const data = await api.post<{ token: string; user: any }>('/auth/login', { email, password });
         api.setToken(data.token);
-        const active = ['active', 'sleeping', 'grace_period'];
+        const active = ['active', 'sleeping', 'grace_period', 'provisioning', 'starting'];
         window.location.href = active.includes(data.user?.status) ? '/dashboard' : '/pricing';
       } else {
         const data = await api.post<{ token: string }>('/auth/signup', {
