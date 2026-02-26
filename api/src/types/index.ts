@@ -1,5 +1,5 @@
 export type Plan = 'starter' | 'pro' | 'business';
-export type UserStatus = 'provisioning' | 'starting' | 'active' | 'sleeping' | 'paused' | 'cancelled' | 'grace_period';
+export type UserStatus = 'pending' | 'provisioning' | 'starting' | 'active' | 'sleeping' | 'paused' | 'cancelled' | 'grace_period';
 export type ServerStatus = 'active' | 'provisioning' | 'draining' | 'offline';
 /** @deprecated Legacy token type — billing now uses credits */
 export type TokenTransactionType = 'purchase' | 'usage' | 'bonus' | 'refund' | 'subscription_grant' | 'auto_topup';
