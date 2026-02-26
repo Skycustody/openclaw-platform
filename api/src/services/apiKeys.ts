@@ -298,6 +298,12 @@ export async function injectApiKeys(
     if (!validToolKeys.includes(key)) delete config.tools[key];
   }
 
+  // Clean known-bad sub-keys that crash the gateway (tools.exec.enabled is invalid)
+  if (config.tools.exec && typeof config.tools.exec === 'object') {
+    delete config.tools.exec.enabled;
+    if (Object.keys(config.tools.exec).length === 0) delete config.tools.exec;
+  }
+
   // Remove stale invalid top-level keys from previous versions.
   // Note: `browser` and `bindings` are valid and re-set below — only delete truly invalid ones.
   delete config.personality;
