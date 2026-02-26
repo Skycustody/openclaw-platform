@@ -6,6 +6,7 @@ import { addCreditsToKey, updateKeyLimit, RETAIL_MARKUP } from './nexos';
 import { Plan, User, CREDIT_PACKS } from '../types';
 import { v4 as uuid } from 'uuid';
 import { validateUserId, validateAmounts, verifyPackMath, logCreditAudit } from './creditAudit';
+import { grantInitialTokens } from '../routes/auth';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2024-12-18.acacia' as any,
@@ -39,7 +40,7 @@ export async function createCheckoutSession(
   } else {
     userId = uuid();
     await db.query(
-      `INSERT INTO users (id, email, plan, status) VALUES ($1, $2, $3, 'provisioning')`,
+      `INSERT INTO users (id, email, plan, status) VALUES ($1, $2, $3, 'pending')`,
       [userId, email, plan]
     );
   }
@@ -142,9 +143,13 @@ async function handleCheckoutComplete(session: Stripe.Checkout.Session): Promise
 
   const stripeCustomerId = session.customer as string;
   await db.query(
-    'UPDATE users SET stripe_customer_id = $1 WHERE id = $2',
-    [stripeCustomerId, userId]
+    'UPDATE users SET stripe_customer_id = $1, plan = $2 WHERE id = $3',
+    [stripeCustomerId, plan, userId]
   );
+
+  console.log(`[stripe] Payment confirmed for user ${userId}, plan=${plan} — granting tokens and provisioning`);
+
+  await grantInitialTokens(userId, plan as Plan);
 
   try {
     await provisionUser({

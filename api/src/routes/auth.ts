@@ -33,7 +33,7 @@ const router = Router();
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
-async function grantInitialTokens(userId: string, plan: Plan): Promise<void> {
+export async function grantInitialTokens(userId: string, plan: Plan): Promise<void> {
   const limits = PLAN_LIMITS[plan];
   await Promise.all([
     db.query(
