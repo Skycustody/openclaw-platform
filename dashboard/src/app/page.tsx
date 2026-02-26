@@ -90,7 +90,7 @@ const plans = [
   },
   {
     name: 'Pro',
-    price: 29,
+    price: 25,
     popular: true,
     tokens: '$10',
     ram: '4 GB',
@@ -109,7 +109,7 @@ const plans = [
   },
   {
     name: 'Business',
-    price: 59,
+    price: 50,
     popular: false,
     tokens: '$20',
     ram: '8 GB',

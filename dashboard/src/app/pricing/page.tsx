@@ -41,7 +41,7 @@ const PLANS: Array<{
   {
     id: 'pro',
     name: 'Pro',
-    price: 29,
+    price: 25,
     popular: true,
     tokens: '$10',
     ram: '4 GB',
@@ -59,7 +59,7 @@ const PLANS: Array<{
   {
     id: 'business',
     name: 'Business',
-    price: 59,
+    price: 50,
     tokens: '$20',
     ram: '8 GB',
     cpus: '4 vCPU',
