@@ -556,6 +556,10 @@ router.get('/ready', authenticate, async (req: AuthRequest, res: Response, next:
     const isReady = httpCode === '200' || httpCode === '101';
 
     if (isReady) {
+      if (user.status === 'starting' || user.status === 'provisioning') {
+        await db.query(`UPDATE users SET status = 'active', last_active = NOW() WHERE id = $1`, [user.id]);
+        console.log(`[ready] Auto-promoted user ${user.id} from '${user.status}' to 'active'`);
+      }
       return res.json({ ready: true, httpCode });
     }
 
