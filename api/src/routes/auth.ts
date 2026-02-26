@@ -83,17 +83,15 @@ router.post('/signup', rateLimitAuth, async (req: Request, res: Response, next: 
     const userId = uuid();
 
     await db.query(
-      `INSERT INTO users (id, email, plan, status, password_hash) VALUES ($1, $2, 'pro', 'provisioning', $3)`,
+      `INSERT INTO users (id, email, plan, status, password_hash) VALUES ($1, $2, 'starter', 'pending', $3)`,
       [userId, email, passwordHash]
     );
 
-    await grantInitialTokens(userId, 'pro');
-
-    const token = generateToken(userId, 'pro');
+    const token = generateToken(userId, 'starter');
 
     res.json({
       token,
-      user: { id: userId, email, plan: 'pro', status: 'provisioning' },
+      user: { id: userId, email, plan: 'starter', status: 'pending' },
       isNewUser: true,
     });
   } catch (err) {
@@ -197,16 +195,14 @@ router.post('/google', rateLimitAuth, async (req: Request, res: Response, next: 
     const userId = uuid();
     await db.query(
       `INSERT INTO users (id, email, plan, status, google_id, avatar_url, display_name)
-       VALUES ($1, $2, 'pro', 'provisioning', $3, $4, $5)`,
+       VALUES ($1, $2, 'starter', 'pending', $3, $4, $5)`,
       [userId, email, googleId, picture, name]
     );
 
-    await grantInitialTokens(userId, 'pro');
-
-    const token = generateToken(userId, 'pro');
+    const token = generateToken(userId, 'starter');
     res.json({
       token,
-      user: { id: userId, email, plan: 'pro', status: 'provisioning' },
+      user: { id: userId, email, plan: 'starter', status: 'pending' },
       isNewUser: true,
     });
   } catch (err: any) {
