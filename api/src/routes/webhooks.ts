@@ -60,17 +60,27 @@ router.post(
     try {
       const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
       const sig = req.headers['stripe-signature'] as string;
+      const secret = process.env.STRIPE_WEBHOOK_SECRET;
 
-      const event = stripe.webhooks.constructEvent(
-        (req as any).rawBody || req.body,
-        sig,
-        process.env.STRIPE_WEBHOOK_SECRET!
-      );
+      if (!secret) {
+        console.error('[stripe-webhook] STRIPE_WEBHOOK_SECRET is not set');
+        return res.status(500).json({ error: 'Webhook secret not configured' });
+      }
+      if (!sig) {
+        console.error('[stripe-webhook] No stripe-signature header');
+        return res.status(400).json({ error: 'Missing stripe-signature header' });
+      }
 
+      const body = (req as any).rawBody || req.body;
+      console.log(`[stripe-webhook] sig=${sig.substring(0, 20)}... secret=${secret.substring(0, 10)}... bodyType=${typeof body} isBuffer=${Buffer.isBuffer(body)} len=${body?.length || 0}`);
+
+      const event = stripe.webhooks.constructEvent(body, sig, secret);
+
+      console.log(`[stripe-webhook] Verified event: ${event.type} (${event.id})`);
       await handleWebhook(event);
       res.json({ received: true });
     } catch (err: any) {
-      console.error('Stripe webhook error:', err.message);
+      console.error(`[stripe-webhook] ERROR: ${err.message}`);
       res.status(400).json({ error: err.message });
     }
   }
