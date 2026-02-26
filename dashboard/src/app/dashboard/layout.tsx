@@ -29,6 +29,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       return;
     }
 
+    const refreshTokenSilently = async () => {
+      try {
+        const res = await api.post<{ token: string }>('/auth/refresh');
+        if (res.token) api.setToken(res.token);
+      } catch {
+        // Token still valid — refresh not needed yet
+      }
+    };
+
+    refreshTokenSilently();
+
     api.get<any>('/agent/status')
       .then((data) => {
         const subStatus = data.subscriptionStatus || data.status;

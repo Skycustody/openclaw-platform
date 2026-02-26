@@ -175,7 +175,7 @@ export function internalAuth(req: Request, _res: Response, next: NextFunction) {
 
 export function generateToken(userId: string, plan: string): string {
   return jwt.sign({ userId, plan }, JWT_SECRET, {
-    expiresIn: '7d',
+    expiresIn: '30d',
   });
 }
 

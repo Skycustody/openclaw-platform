@@ -14,7 +14,7 @@
  * │    denial-of-service (bcrypt truncates at 72 bytes, but hashing very  │
  * │    long strings is slow).                                              │
  * │                                                                        │
- * │ 4. REFRESH TOKEN: Can only be used within 24h of expiry. After that   │
+ * │ 4. REFRESH TOKEN: Can only be used within 7d of expiry. After that    │
  * │    the user must re-authenticate. This limits stolen-token window.    │
  * └─────────────────────────────────────────────────────────────────────────┘
  */
@@ -222,10 +222,10 @@ router.post('/refresh', rateLimitAuth, async (req: Request, res: Response, next:
       ignoreExpiration: true,
     }) as { userId: string; exp?: number };
 
-    // Reject tokens expired more than 24 hours ago
+    // Reject tokens expired more than 7 days ago
     if (payload.exp) {
       const expiredAgoMs = Date.now() - payload.exp * 1000;
-      if (expiredAgoMs > 24 * 60 * 60 * 1000) {
+      if (expiredAgoMs > 7 * 24 * 60 * 60 * 1000) {
         throw new UnauthorizedError('Token too old to refresh. Please sign in again.');
       }
     }
