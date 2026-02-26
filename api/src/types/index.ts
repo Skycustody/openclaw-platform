@@ -147,30 +147,31 @@ export interface PlanLimits {
   storageGb: number;
   /** Monthly AI budget in USD (matches OpenRouter key limit) */
   includedBudgetUsd: number;
-  priceEurCents: number;
+  /** Plan retail price in USD cents */
+  priceUsdCents: number;
   hasBrowser: boolean;
   allChannels: boolean;
   maxAgents: number;
   /**
-   * OpenRouter credit budget per user per month (our wholesale cost in EUR cents).
+   * OpenRouter credit budget per user per month (our wholesale cost in USD cents).
    * This is what OpenRouter charges us (no markup on provider pricing).
    * Plan retail price must be ≥1.5× this + server cost for ≥50% profit margin.
    */
-  nexosCreditBudgetEurCents: number;
-  /** Estimated server cost share per user per month in EUR cents */
-  serverCostShareEurCents: number;
+  nexosCreditBudgetUsdCents: number;
+  /** Estimated server cost share per user per month in USD cents */
+  serverCostShareUsdCents: number;
 }
 
 /**
  * ┌────────────────────────────────────────────────────────────────────────┐
- * │ PLAN PRICING — 50% profit target                                      │
+ * │ PLAN PRICING (USD) — 50% profit target                                │
  * │                                                                       │
  * │ Formula:  retailPrice ≥ (nexosCost + serverCost) × 1.5               │
  * │                                                                       │
- * │ Plan      API€    Server€  Total€  Retail€  Margin                   │
- * │ starter    2.00    3.33     5.33    10.00    47% ✓                    │
- * │ pro        5.00    6.67    11.67    20.00    42% (scales up w/ users) │
- * │ business  12.00   10.00    22.00    50.00    56% ✓                    │
+ * │ Plan      AI$    Server$  Total$  Retail$  Margin                    │
+ * │ starter    3.00    4.00     7.00    15.00    53% ✓                    │
+ * │ pro       10.00    8.00    18.00    29.00    38% (smart routing ~50%)│
+ * │ business  20.00   11.00    31.00    59.00    47% ✓                    │
  * │                                                                       │
  * │ Smart routing (cheap default models) further reduces API costs       │
  * │ by 40-60%, improving actual margins above targets.                    │
@@ -183,10 +184,10 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     maxSkills: 10,
     maxCronJobs: 3,
     storageGb: 10,
-    includedBudgetUsd: 2,
-    priceEurCents: 1000,
-    nexosCreditBudgetEurCents: 185,
-    serverCostShareEurCents: 333,
+    includedBudgetUsd: 3,
+    priceUsdCents: 1500,
+    nexosCreditBudgetUsdCents: 300,
+    serverCostShareUsdCents: 400,
     hasBrowser: false,
     allChannels: false,
     maxAgents: 1,
@@ -197,10 +198,10 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     maxSkills: 53,
     maxCronJobs: 20,
     storageGb: 50,
-    includedBudgetUsd: 7,
-    priceEurCents: 2000,
-    nexosCreditBudgetEurCents: 650,
-    serverCostShareEurCents: 667,
+    includedBudgetUsd: 10,
+    priceUsdCents: 2900,
+    nexosCreditBudgetUsdCents: 1000,
+    serverCostShareUsdCents: 800,
     hasBrowser: true,
     allChannels: true,
     maxAgents: 2,
@@ -211,10 +212,10 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     maxSkills: 53,
     maxCronJobs: 100,
     storageGb: 100,
-    includedBudgetUsd: 12,
-    priceEurCents: 5000,
-    nexosCreditBudgetEurCents: 1115,
-    serverCostShareEurCents: 1000,
+    includedBudgetUsd: 20,
+    priceUsdCents: 5900,
+    nexosCreditBudgetUsdCents: 2000,
+    serverCostShareUsdCents: 1100,
     hasBrowser: true,
     allChannels: true,
     maxAgents: 4,
@@ -230,7 +231,8 @@ export const TOKEN_PACKAGES: any[] = [];
 export interface CreditPurchase {
   id: string;
   user_id: string;
-  amount_eur_cents: number;
+  /** Stored as USD cents (DB column is still named amount_eur_cents for compat) */
+  amount_usd_cents: number;
   credits_usd: number;
   stripe_session_id: string | null;
   created_at: Date;
@@ -238,27 +240,26 @@ export interface CreditPurchase {
 
 /**
  * Credit top-up packs. Backend split: 6% OpenRouter, 25% platform, rest → API limit.
- * orBudgetUsd = (1 - 0.06 - 0.25) * eur * 1.08 = 0.69 * eur * 1.08
- * Frontend shows amount paid (€5 → "$5 bought") and consumption reduces proportionally.
+ * orBudgetUsd = (1 - 0.06 - 0.25) * usd = 0.69 * usd
+ * Frontend shows amount paid ($5 → "$5 bought") and consumption reduces proportionally.
  */
-const EUR_TO_USD = 1.08;
 const OPENROUTER_FEE = 0.06;
 const PLATFORM_FEE = 0.25;
 const TO_API_FRACTION = 1 - OPENROUTER_FEE - PLATFORM_FEE; // 0.69
 
-function orBudgetFromEur(eur: number): number {
-  return Math.round(eur * TO_API_FRACTION * EUR_TO_USD * 100) / 100;
+function orBudgetFromUsd(usd: number): number {
+  return Math.round(usd * TO_API_FRACTION * 100) / 100;
 }
 
 export const CREDIT_PACKS: Record<string, {
-  priceEurCents: number;
+  priceUsdCents: number;
   label: string;
   orBudgetUsd: number;
   displayAmount: number;
   envKey: string;
 }> = {
-  '500k':  { priceEurCents: 500,  label: '€5 Credits',  orBudgetUsd: orBudgetFromEur(5),  displayAmount: 5,  envKey: 'STRIPE_PRICE_CREDITS_500K'  },
-  '1200k': { priceEurCents: 1000, label: '€10 Credits', orBudgetUsd: orBudgetFromEur(10), displayAmount: 10, envKey: 'STRIPE_PRICE_CREDITS_1200K' },
-  '3500k': { priceEurCents: 2500, label: '€25 Credits', orBudgetUsd: orBudgetFromEur(25), displayAmount: 25, envKey: 'STRIPE_PRICE_CREDITS_3500K' },
-  '8m':    { priceEurCents: 5000, label: '€50 Credits', orBudgetUsd: orBudgetFromEur(50), displayAmount: 50, envKey: 'STRIPE_PRICE_CREDITS_8M'    },
+  '500k':  { priceUsdCents: 500,  label: '$5 Credits',  orBudgetUsd: orBudgetFromUsd(5),  displayAmount: 5,  envKey: 'STRIPE_PRICE_CREDITS_500K'  },
+  '1200k': { priceUsdCents: 1000, label: '$10 Credits', orBudgetUsd: orBudgetFromUsd(10), displayAmount: 10, envKey: 'STRIPE_PRICE_CREDITS_1200K' },
+  '3500k': { priceUsdCents: 2500, label: '$25 Credits', orBudgetUsd: orBudgetFromUsd(25), displayAmount: 25, envKey: 'STRIPE_PRICE_CREDITS_3500K' },
+  '8m':    { priceUsdCents: 5000, label: '$50 Credits', orBudgetUsd: orBudgetFromUsd(50), displayAmount: 50, envKey: 'STRIPE_PRICE_CREDITS_8M'    },
 };

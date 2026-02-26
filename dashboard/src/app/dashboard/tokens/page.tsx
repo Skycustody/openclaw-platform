@@ -42,10 +42,10 @@ interface Invoice {
 type TabId = 'overview' | 'billing';
 
 const TOPUP_PACKS = [
-  { id: '500k',  price: '€5',  displayAmount: 5,  desc: 'Adds $5 balance' },
-  { id: '1200k', price: '€10', displayAmount: 10, desc: 'Adds $10 balance' },
-  { id: '3500k', price: '€25', displayAmount: 25, desc: 'Adds $25 balance' },
-  { id: '8m',    price: '€50', displayAmount: 50, desc: 'Adds $50 balance' },
+  { id: '500k',  price: '$5',  displayAmount: 5,  desc: 'Adds $5 balance' },
+  { id: '1200k', price: '$10', displayAmount: 10, desc: 'Adds $10 balance' },
+  { id: '3500k', price: '$25', displayAmount: 25, desc: 'Adds $25 balance' },
+  { id: '8m',    price: '$50', displayAmount: 50, desc: 'Adds $50 balance' },
 ];
 
 export default function TokensPage() {

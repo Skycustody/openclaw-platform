@@ -6,17 +6,17 @@ import {
   Users, Server, Coins, TrendingUp, Activity, Search,
   Shield, Loader2, RefreshCw, AlertTriangle, Edit3,
   BarChart3, Zap, HardDrive, LogOut, ChevronLeft, ChevronRight,
-  Lock, Euro,
+  Lock, DollarSign,
 } from 'lucide-react';
 
 interface PlanDetail {
   count: number;
-  priceEurCents: number;
-  revenueEurCents: number;
-  nexosCostEurCents: number;
-  serverCostEurCents: number;
-  totalCostEurCents: number;
-  profitEurCents: number;
+  priceUsdCents: number;
+  revenueUsdCents: number;
+  nexosCostUsdCents: number;
+  serverCostUsdCents: number;
+  totalCostUsdCents: number;
+  profitUsdCents: number;
   marginPercent: number;
 }
 
@@ -67,19 +67,19 @@ interface AdminUser {
 
 interface RevenueData {
   currency: string;
-  totalRevenueEurCents: number;
-  totalNexosCostEurCents: number;
-  totalServerCostEurCents: number;
+  totalRevenueUsdCents: number;
+  totalNexosCostUsdCents: number;
+  totalServerCostUsdCents: number;
   totalServerCostNet: number;
   totalServerCostVat: number;
   serverCount: number;
   serverCostNetPerMonth: number;
   serverCostGrossPerMonth: number;
   vatRate: number;
-  totalProfitEurCents: number;
+  totalProfitUsdCents: number;
   profitMarginPercent: number;
   profitMarginTarget: number;
-  subscriptionRevenue: Record<string, { count: number; revenueEurCents: number; nexosCostEurCents: number; profitEurCents: number }>;
+  subscriptionRevenue: Record<string, { count: number; revenueUsdCents: number; nexosCostUsdCents: number; profitUsdCents: number }>;
   topUsers: Array<{ email: string; plan: string; status: string; last_active: string | null }>;
   signupsByMonth: Array<{ month: string; signups: string; active: string }>;
 }
@@ -100,6 +100,9 @@ const STATUS_COLORS: Record<string, string> = {
   grace_period: 'text-amber-400 bg-amber-500/10',
 };
 
+/** Plan prices in USD (display only — must match backend priceUsdCents / 100) */
+const PLAN_PRICE_USD: Record<string, number> = { starter: 15, pro: 29, business: 59 };
+
 function formatNum(n: string | number): string {
   return Number(n).toLocaleString();
 }
@@ -109,9 +112,9 @@ function formatUsdVal(n: number | string | null): string {
   return `$${v.toFixed(2)}`;
 }
 
-function formatEur(cents: number): string {
-  const eur = cents / 100;
-  return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(eur);
+function formatUsd(cents: number): string {
+  const usd = cents / 100;
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(usd);
 }
 
 function timeAgo(d: string): string {
@@ -411,7 +414,7 @@ export default function AdminPanel() {
           {([
             { id: 'overview' as Tab, label: 'Overview', icon: BarChart3 },
             { id: 'users' as Tab, label: 'Users', icon: Users },
-            { id: 'revenue' as Tab, label: 'Revenue & Costs', icon: Euro },
+            { id: 'revenue' as Tab, label: 'Revenue & Costs', icon: DollarSign },
             { id: 'servers' as Tab, label: 'Servers', icon: Server },
           ]).map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
@@ -427,14 +430,14 @@ export default function AdminPanel() {
         {tab === 'overview' && o && f && (
           <div className="space-y-6">
             <div className="grid grid-cols-4 gap-4">
-              <StatCard icon={Euro} label="Monthly Revenue" value={formatEur(f.monthlySubscriptionRevenue)}
+              <StatCard icon={DollarSign} label="Monthly Revenue" value={formatUsd(f.monthlySubscriptionRevenue)}
                 sub="Subscriptions" color="green" />
-              <StatCard icon={HardDrive} label="Server Costs" value={formatEur(f.monthlyServerCosts)}
-                sub={`${o.servers.total} server × ${formatEur(f.serverCostGrossPerMonth)} (incl. ${Math.round(f.vatRate * 100)}% VAT)`} color="red" />
-              <StatCard icon={Coins} label="AI Costs" value={formatEur(f.monthlyCreditCosts)}
+              <StatCard icon={HardDrive} label="Server Costs" value={formatUsd(f.monthlyServerCosts)}
+                sub={`${o.servers.total} server × ${formatUsd(f.serverCostGrossPerMonth)} (incl. ${Math.round(f.vatRate * 100)}% VAT)`} color="red" />
+              <StatCard icon={Coins} label="AI Costs" value={formatUsd(f.monthlyCreditCosts)}
                 sub={`${formatUsdVal(o.credits.total_used)} used`} color="amber" />
               <StatCard icon={TrendingUp} label="Monthly Profit"
-                value={formatEur(f.monthlyProfit)}
+                value={formatUsd(f.monthlyProfit)}
                 sub={`${f.profitMarginPercent}% margin (target: ${f.profitMarginTarget}%)`}
                 color={f.monthlyProfit >= 0 ? 'green' : 'red'} />
             </div>
@@ -452,7 +455,7 @@ export default function AdminPanel() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
-                <h3 className="text-[14px] font-semibold text-white mb-4">Per-Plan Breakdown (EUR/month)</h3>
+                <h3 className="text-[14px] font-semibold text-white mb-4">Per-Plan Breakdown (USD/month)</h3>
                 <div className="space-y-4">
                   {([
                     { name: 'Starter', data: f.perPlan.starter, color: 'border-white/10' },
@@ -461,26 +464,26 @@ export default function AdminPanel() {
                   ] as const).map(p => (
                     <div key={p.name} className={`rounded-lg border ${p.color} bg-white/[0.01] p-3`}>
                       <div className="flex justify-between items-center mb-2">
-                        <span className="text-[13px] font-medium text-white">{p.name} ({formatEur(p.data.priceEurCents)}/mo)</span>
+                        <span className="text-[13px] font-medium text-white">{p.name} (${PLAN_PRICE_USD[p.name.toLowerCase()] ?? 0}/mo)</span>
                         <span className="text-[12px] text-white/40">{p.data.count} users</span>
                       </div>
                       <div className="grid grid-cols-4 gap-2 text-[11px]">
                         <div>
                           <p className="text-white/25">Revenue</p>
-                          <p className="text-green-400 font-medium">{formatEur(p.data.revenueEurCents)}</p>
+                          <p className="text-green-400 font-medium">{formatUsd(p.data.revenueUsdCents)}</p>
                         </div>
                         <div>
                           <p className="text-white/25">AI Cost</p>
-                          <p className="text-red-400/70">{formatEur(p.data.nexosCostEurCents)}</p>
+                          <p className="text-red-400/70">{formatUsd(p.data.nexosCostUsdCents)}</p>
                         </div>
                         <div>
                           <p className="text-white/25">Server Cost</p>
-                          <p className="text-red-400/70">{formatEur(p.data.serverCostEurCents)}</p>
+                          <p className="text-red-400/70">{formatUsd(p.data.serverCostUsdCents)}</p>
                         </div>
                         <div>
                           <p className="text-white/25">Profit ({p.data.marginPercent}%)</p>
-                          <p className={p.data.profitEurCents >= 0 ? 'text-green-400 font-medium' : 'text-red-400 font-medium'}>
-                            {formatEur(p.data.profitEurCents)}
+                          <p className={p.data.profitUsdCents >= 0 ? 'text-green-400 font-medium' : 'text-red-400 font-medium'}>
+                            {formatUsd(p.data.profitUsdCents)}
                           </p>
                         </div>
                       </div>
@@ -511,19 +514,19 @@ export default function AdminPanel() {
                   <div className="border-t border-white/[0.04] my-2" />
                   <div className="flex justify-between text-[13px]">
                     <span className="text-white/40">Cost per Server (net)</span>
-                    <span className="text-white">{formatEur(f.serverCostNetPerMonth)}/mo</span>
+                    <span className="text-white">{formatUsd(f.serverCostNetPerMonth)}/mo</span>
                   </div>
                   <div className="flex justify-between text-[13px]">
                     <span className="text-white/40">VAT ({Math.round(f.vatRate * 100)}%)</span>
-                    <span className="text-white/50">+{formatEur(f.serverCostVatPerMonth)}/mo</span>
+                    <span className="text-white/50">+{formatUsd(f.serverCostVatPerMonth)}/mo</span>
                   </div>
                   <div className="flex justify-between text-[13px] font-medium">
                     <span className="text-white/60">Cost per Server (gross)</span>
-                    <span className="text-white">{formatEur(f.serverCostGrossPerMonth)}/mo</span>
+                    <span className="text-white">{formatUsd(f.serverCostGrossPerMonth)}/mo</span>
                   </div>
                   <div className="flex justify-between text-[13px] font-medium">
                     <span className="text-white/60">Total Server Cost</span>
-                    <span className="text-red-400">{formatEur(f.monthlyServerCosts)}/mo</span>
+                    <span className="text-red-400">{formatUsd(f.monthlyServerCosts)}/mo</span>
                   </div>
                   <div className="border-t border-white/[0.04] my-2" />
                   <div className="flex justify-between text-[13px]">
@@ -541,14 +544,14 @@ export default function AdminPanel() {
             </div>
 
             <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
-              <h3 className="text-[14px] font-semibold text-white mb-4">Profit & Loss Statement (EUR/month)</h3>
+              <h3 className="text-[14px] font-semibold text-white mb-4">Profit & Loss Statement (USD/month)</h3>
               <div className="space-y-4">
                 <div>
                   <p className="text-[11px] text-green-400/50 uppercase tracking-wider mb-2">Revenue</p>
                   <div className="space-y-1.5">
                     <div className="flex justify-between text-[13px]">
                       <span className="text-white/50">Subscription Revenue</span>
-                      <span className="text-green-400 font-medium">{formatEur(f.monthlySubscriptionRevenue)}</span>
+                      <span className="text-green-400 font-medium">{formatUsd(f.monthlySubscriptionRevenue)}</span>
                     </div>
                     <div className="flex justify-between text-[13px]">
                       <span className="text-white/50">Extra Credit Purchases (this month)</span>
@@ -564,23 +567,23 @@ export default function AdminPanel() {
                   <div className="space-y-1.5">
                     <div className="flex justify-between text-[13px]">
                       <span className="text-white/50">Servers (net, {o.servers.total}×)</span>
-                      <span className="text-red-400/70">-{formatEur(f.monthlyServerCostsNet)}</span>
+                      <span className="text-red-400/70">-{formatUsd(f.monthlyServerCostsNet)}</span>
                     </div>
                     <div className="flex justify-between text-[13px]">
                       <span className="text-white/50">Server VAT ({Math.round(f.vatRate * 100)}%)</span>
-                      <span className="text-red-400/70">-{formatEur(f.monthlyServerCostsVat)}</span>
+                      <span className="text-red-400/70">-{formatUsd(f.monthlyServerCostsVat)}</span>
                     </div>
                     <div className="flex justify-between text-[13px] font-medium">
                       <span className="text-white/60">Total Server Costs (gross)</span>
-                      <span className="text-red-400">-{formatEur(f.monthlyServerCosts)}</span>
+                      <span className="text-red-400">-{formatUsd(f.monthlyServerCosts)}</span>
                     </div>
                     <div className="flex justify-between text-[13px]">
                       <span className="text-white/50">AI Provider Costs (OpenRouter)</span>
-                      <span className="text-red-400">-{formatEur(f.monthlyCreditCosts)}</span>
+                      <span className="text-red-400">-{formatUsd(f.monthlyCreditCosts)}</span>
                     </div>
                     <div className="flex justify-between text-[13px] font-medium">
                       <span className="text-white/60">Total Costs</span>
-                      <span className="text-red-400">-{formatEur(f.totalCosts)}</span>
+                      <span className="text-red-400">-{formatUsd(f.totalCosts)}</span>
                     </div>
                   </div>
                 </div>
@@ -591,7 +594,7 @@ export default function AdminPanel() {
                   <div>
                     <p className="text-[11px] text-white/30 uppercase tracking-wider mb-1">Net Profit</p>
                     <p className={`text-[28px] font-bold ${f.monthlyProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {formatEur(f.monthlyProfit)}
+                      {formatUsd(f.monthlyProfit)}
                     </p>
                   </div>
                   <div className="text-right">
@@ -668,7 +671,6 @@ export default function AdminPanel() {
                 </thead>
                 <tbody>
                   {users.map(u => {
-                    const planPrice: Record<string, number> = { starter: 1000, pro: 2000, business: 5000 };
                     return (
                       <tr key={u.id} className="border-b border-white/[0.04] hover:bg-white/[0.02] transition-colors">
                         <td className="px-4 py-3">
@@ -696,7 +698,7 @@ export default function AdminPanel() {
                           <p className="text-[10px] text-white/20">used: {formatUsdVal(u.total_used)}</p>
                         </td>
                         <td className="px-4 py-3">
-                          <p className="text-[12px] text-green-400/70 tabular-nums">{formatEur(planPrice[u.plan] || 0)}/mo</p>
+                          <p className="text-[12px] text-green-400/70 tabular-nums">${(PLAN_PRICE_USD[u.plan] ?? 0)}/mo</p>
                         </td>
                         <td className="px-4 py-3">
                           <p className="text-[11px] text-white/30">{u.server_hostname || u.server_ip || '—'}</p>
@@ -740,20 +742,20 @@ export default function AdminPanel() {
         {tab === 'revenue' && revenueData && (
           <div className="space-y-6">
             <div className="grid grid-cols-4 gap-4">
-              <StatCard icon={Euro} label="Total Revenue" value={formatEur(revenueData.totalRevenueEurCents)}
+              <StatCard icon={DollarSign} label="Total Revenue" value={formatUsd(revenueData.totalRevenueUsdCents)}
                 sub="Subscriptions/month" color="green" />
-              <StatCard icon={HardDrive} label="Server Costs" value={formatEur(revenueData.totalServerCostEurCents)}
-                sub={`${revenueData.serverCount} server × ${formatEur(revenueData.serverCostGrossPerMonth)} (incl. ${Math.round(revenueData.vatRate * 100)}% VAT)`} color="red" />
-              <StatCard icon={Coins} label="AI Costs" value={formatEur(revenueData.totalNexosCostEurCents)}
+              <StatCard icon={HardDrive} label="Server Costs" value={formatUsd(revenueData.totalServerCostUsdCents)}
+                sub={`${revenueData.serverCount} server × ${formatUsd(revenueData.serverCostGrossPerMonth)} (incl. ${Math.round(revenueData.vatRate * 100)}% VAT)`} color="red" />
+              <StatCard icon={Coins} label="AI Costs" value={formatUsd(revenueData.totalNexosCostUsdCents)}
                 sub="OpenRouter budget" color="amber" />
               <StatCard icon={TrendingUp} label="Net Profit"
-                value={formatEur(revenueData.totalProfitEurCents)}
+                value={formatUsd(revenueData.totalProfitUsdCents)}
                 sub={`${revenueData.profitMarginPercent}% margin (target: ${revenueData.profitMarginTarget}%)`}
-                color={revenueData.totalProfitEurCents >= 0 ? 'green' : 'red'} />
+                color={revenueData.totalProfitUsdCents >= 0 ? 'green' : 'red'} />
             </div>
 
             <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
-              <h3 className="text-[14px] font-semibold text-white mb-4">Revenue by Plan (EUR/month)</h3>
+              <h3 className="text-[14px] font-semibold text-white mb-4">Revenue by Plan (USD/month)</h3>
               <div className="space-y-3">
                 {Object.entries(revenueData.subscriptionRevenue || {}).map(([plan, data]) => (
                   <div key={plan} className="rounded-lg border border-white/[0.04] bg-white/[0.01] p-3">
@@ -764,16 +766,16 @@ export default function AdminPanel() {
                     <div className="grid grid-cols-3 gap-3 text-[11px]">
                       <div>
                         <p className="text-white/25">Revenue</p>
-                        <p className="text-green-400 font-medium">{formatEur(data.revenueEurCents)}</p>
+                        <p className="text-green-400 font-medium">{formatUsd(data.revenueUsdCents)}</p>
                       </div>
                       <div>
                         <p className="text-white/25">AI Cost</p>
-                        <p className="text-red-400/70">{formatEur(data.nexosCostEurCents)}</p>
+                        <p className="text-red-400/70">{formatUsd(data.nexosCostUsdCents)}</p>
                       </div>
                       <div>
                         <p className="text-white/25">Profit</p>
-                        <p className={data.profitEurCents >= 0 ? 'text-green-400 font-medium' : 'text-red-400 font-medium'}>
-                          {formatEur(data.profitEurCents)}
+                        <p className={data.profitUsdCents >= 0 ? 'text-green-400 font-medium' : 'text-red-400 font-medium'}>
+                          {formatUsd(data.profitUsdCents)}
                         </p>
                       </div>
                     </div>
@@ -791,28 +793,28 @@ export default function AdminPanel() {
                 </div>
                 <div className="flex justify-between text-[13px]">
                   <span className="text-white/40">Cost per Server (net)</span>
-                  <span className="text-white">{formatEur(revenueData.serverCostNetPerMonth)}/mo</span>
+                  <span className="text-white">{formatUsd(revenueData.serverCostNetPerMonth)}/mo</span>
                 </div>
                 <div className="flex justify-between text-[13px]">
                   <span className="text-white/40">VAT ({Math.round(revenueData.vatRate * 100)}%)</span>
-                  <span className="text-white/50">+{formatEur(Math.round(revenueData.serverCostNetPerMonth * revenueData.vatRate))}/mo</span>
+                  <span className="text-white/50">+{formatUsd(Math.round(revenueData.serverCostNetPerMonth * revenueData.vatRate))}/mo</span>
                 </div>
                 <div className="flex justify-between text-[13px] font-medium">
                   <span className="text-white/60">Cost per Server (gross)</span>
-                  <span className="text-white">{formatEur(revenueData.serverCostGrossPerMonth)}/mo</span>
+                  <span className="text-white">{formatUsd(revenueData.serverCostGrossPerMonth)}/mo</span>
                 </div>
                 <div className="border-t border-white/[0.04] my-1" />
                 <div className="flex justify-between text-[13px]">
                   <span className="text-white/40">Total Server (net)</span>
-                  <span className="text-white">{formatEur(revenueData.totalServerCostNet)}</span>
+                  <span className="text-white">{formatUsd(revenueData.totalServerCostNet)}</span>
                 </div>
                 <div className="flex justify-between text-[13px]">
                   <span className="text-white/40">Total Server VAT</span>
-                  <span className="text-white/50">+{formatEur(revenueData.totalServerCostVat)}</span>
+                  <span className="text-white/50">+{formatUsd(revenueData.totalServerCostVat)}</span>
                 </div>
                 <div className="flex justify-between text-[13px] font-medium">
                   <span className="text-white/60">Total Server (gross)</span>
-                  <span className="text-red-400">{formatEur(revenueData.totalServerCostEurCents)}/mo</span>
+                  <span className="text-red-400">{formatUsd(revenueData.totalServerCostUsdCents)}/mo</span>
                 </div>
               </div>
             </div>
@@ -893,7 +895,7 @@ export default function AdminPanel() {
                           <p className="text-[12px] text-white/25 mt-0.5">{s.ip}</p>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="text-[11px] text-white/30">{formatEur(serverCost)}/mo</span>
+                          <span className="text-[11px] text-white/30">{formatUsd(serverCost)}/mo</span>
                           <span className={`text-[11px] px-2 py-0.5 rounded-full ${STATUS_COLORS[s.status] || 'text-white/30 bg-white/5'}`}>
                             {s.status}
                           </span>
@@ -936,9 +938,9 @@ export default function AdminPanel() {
                 <label className="text-[12px] text-white/30 block mb-1">Plan</label>
                 <select value={editForm.plan} onChange={e => setEditForm({ ...editForm, plan: e.target.value })}
                   className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[13px] text-white focus:border-white/20 focus:outline-none">
-                  <option value="starter">Starter (€10/mo)</option>
-                  <option value="pro">Pro (€20/mo)</option>
-                  <option value="business">Business (€50/mo)</option>
+                  <option value="starter">Starter — $15/mo</option>
+                  <option value="pro">Pro — $29/mo</option>
+                  <option value="business">Business — $59/mo</option>
                 </select>
               </div>
               <div>

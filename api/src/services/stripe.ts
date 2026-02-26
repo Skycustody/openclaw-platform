@@ -2,7 +2,7 @@ import Stripe from 'stripe';
 import db from '../lib/db';
 import { provisionUser, deprovisionUser } from './provisioning';
 import { handlePaymentFailure } from './gracePeriod';
-import { addCreditsToKey, updateKeyLimit, RETAIL_MARKUP, USD_TO_EUR_CENTS } from './nexos';
+import { addCreditsToKey, updateKeyLimit, RETAIL_MARKUP } from './nexos';
 import { Plan, User, CREDIT_PACKS } from '../types';
 import { v4 as uuid } from 'uuid';
 import { validateUserId, validateAmounts, verifyPackMath, logCreditAudit } from './creditAudit';
@@ -72,7 +72,7 @@ export async function createCheckoutSession(
 
 /**
  * Create a one-time Stripe Checkout session for credit top-ups.
- * The pack amount (€5/€10/€20) increases the user's OpenRouter spending limit.
+ * The pack amount ($5/$10/$25/$50) increases the user's OpenRouter spending limit.
  */
 export async function createCreditCheckoutSession(
   email: string,
@@ -185,8 +185,8 @@ async function handleCreditPurchase(session: Stripe.Checkout.Session): Promise<v
     return;
   }
 
-  validateAmounts(packInfo.priceEurCents, packInfo.orBudgetUsd);
-  verifyPackMath(pack, packInfo.priceEurCents, packInfo.orBudgetUsd);
+  validateAmounts(packInfo.priceUsdCents, packInfo.orBudgetUsd);
+  verifyPackMath(pack, packInfo.priceUsdCents, packInfo.orBudgetUsd);
 
   const existing = await db.getOne<{ id: string }>(
     `SELECT id FROM credit_purchases WHERE stripe_session_id = $1`,
@@ -209,8 +209,8 @@ async function handleCreditPurchase(session: Stripe.Checkout.Session): Promise<v
 
   await db.query(
     `INSERT INTO credit_purchases (user_id, amount_eur_cents, credits_usd, stripe_session_id)
-     VALUES ($1, $2, $3, $4)`,
-    [userId, packInfo.priceEurCents, orBudgetIncrease, session.id]
+     VALUES ($1, $2, $3, $4)`, // column stores USD cents despite legacy name
+    [userId, packInfo.priceUsdCents, orBudgetIncrease, session.id]
   );
 
   await addCreditsToKey(userId, orBudgetIncrease);
@@ -218,7 +218,7 @@ async function handleCreditPurchase(session: Stripe.Checkout.Session): Promise<v
   await logCreditAudit({
     operation: 'purchase',
     userId,
-    amountEurCents: packInfo.priceEurCents,
+    amountEurCents: packInfo.priceUsdCents, // field stores USD cents despite legacy name
     creditsUsd: orBudgetIncrease,
     stripeSessionId: session.id,
     metadata: { pack, paymentStatus: session.payment_status },

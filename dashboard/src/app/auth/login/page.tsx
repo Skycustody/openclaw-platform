@@ -20,6 +20,10 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [googleReady, setGoogleReady] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => { setMounted(true); }, []);
 
   const handleGoogleResponse = useCallback(
     async (response: any) => {
@@ -80,6 +84,7 @@ export default function LoginPage() {
           logo_alignment: 'left',
         }
       );
+      setGoogleReady(true);
     };
 
     if (window.google?.accounts) {
@@ -126,7 +131,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-background px-4">
+    <div className={`relative flex min-h-screen items-center justify-center bg-background px-4 transition-opacity duration-500 ${mounted ? 'opacity-100' : 'opacity-0'}`}>
       {/* Background glow */}
       <div
         aria-hidden="true"
@@ -164,8 +169,13 @@ export default function LoginPage() {
               </div>
             )}
 
-            <div className="flex justify-center">
-              <div id="google-signin-button" className="flex justify-center" />
+            <div className="flex justify-center" style={{ minHeight: 44 }}>
+              {!googleReady && (
+                <div className="flex h-[44px] w-[360px] max-w-full items-center justify-center rounded-md border border-border bg-card">
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                </div>
+              )}
+              <div id="google-signin-button" className={`flex justify-center transition-opacity duration-300 ${googleReady ? 'opacity-100' : 'opacity-0 absolute'}`} />
             </div>
 
             <div className="flex items-center gap-4">

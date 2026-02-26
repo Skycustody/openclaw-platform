@@ -7,7 +7,7 @@ import { provisionUser } from '../services/provisioning';
 import { User, PLAN_LIMITS, PROFIT_MARGIN_TARGET } from '../types';
 import { sshExec } from '../services/ssh';
 import { injectApiKeys } from '../services/apiKeys';
-import { ensureNexosKey, RETAIL_MARKUP, AVG_COST_PER_1M_USD, USD_TO_EUR_CENTS } from '../services/nexos';
+import { ensureNexosKey, RETAIL_MARKUP, AVG_COST_PER_1M_USD } from '../services/nexos';
 
 const router = Router();
 
@@ -71,14 +71,14 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
 
     const planCounts: Record<string, number> = { starter: starterCount, pro: proCount, business: businessCount };
 
-    // Monthly subscription revenue (what users pay us, EUR cents)
+    // Monthly subscription revenue (what users pay us, USD cents)
     const monthlySubscriptionRevenue = Object.entries(planCounts).reduce(
-      (sum, [plan, count]) => sum + count * (PLAN_LIMITS[plan as keyof typeof PLAN_LIMITS]?.priceEurCents || 0), 0
+      (sum, [plan, count]) => sum + count * (PLAN_LIMITS[plan as keyof typeof PLAN_LIMITS]?.priceUsdCents || 0), 0
     );
 
-    // Server costs (with VAT — Hetzner charges 21% VAT for EU)
+    // Server costs (with VAT — Hetzner charges 21% VAT for EU, tracked in USD cents)
     const serverCount = parseInt(servers?.total || '0');
-    const serverCostNetPerMonth = parseInt(process.env.SERVER_COST_EUR_CENTS || '3999');
+    const serverCostNetPerMonth = parseInt(process.env.SERVER_COST_USD_CENTS || process.env.SERVER_COST_EUR_CENTS || '4300');
     const vatRate = parseFloat(process.env.SERVER_VAT_RATE || '0.21');
     const serverCostVatPerMonth = Math.round(serverCostNetPerMonth * vatRate);
     const serverCostGrossPerMonth = serverCostNetPerMonth + serverCostVatPerMonth;
@@ -86,9 +86,9 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
     const monthlyServerCostsVat = serverCount * serverCostVatPerMonth;
     const monthlyServerCosts = serverCount * serverCostGrossPerMonth;
 
-    // OpenRouter credit costs (estimated from per-plan budget allocations)
+    // OpenRouter credit costs (estimated from per-plan budget allocations, USD cents)
     const monthlyNexosCosts = Object.entries(planCounts).reduce(
-      (sum, [plan, count]) => sum + count * (PLAN_LIMITS[plan as keyof typeof PLAN_LIMITS]?.nexosCreditBudgetEurCents || 0), 0
+      (sum, [plan, count]) => sum + count * (PLAN_LIMITS[plan as keyof typeof PLAN_LIMITS]?.nexosCreditBudgetUsdCents || 0), 0
     );
 
     const totalCosts = monthlyServerCosts + monthlyNexosCosts;
@@ -97,7 +97,7 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
       ? Math.round((monthlyProfit / monthlySubscriptionRevenue) * 100) : 0;
 
     const financials = {
-      currency: 'EUR',
+      currency: 'USD',
       monthlySubscriptionRevenue,
       monthlyServerCosts,
       monthlyServerCostsNet,
@@ -116,17 +116,17 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
       perPlan: Object.fromEntries(
         Object.entries(planCounts).map(([plan, count]) => {
           const limits = PLAN_LIMITS[plan as keyof typeof PLAN_LIMITS];
-          const revenue = count * (limits?.priceEurCents || 0);
-          const nexosCost = count * (limits?.nexosCreditBudgetEurCents || 0);
-          const serverCost = count * (limits?.serverCostShareEurCents || 0);
+          const revenue = count * (limits?.priceUsdCents || 0);
+          const nexosCost = count * (limits?.nexosCreditBudgetUsdCents || 0);
+          const serverCost = count * (limits?.serverCostShareUsdCents || 0);
           return [plan, {
             count,
-            priceEurCents: limits?.priceEurCents || 0,
-            revenueEurCents: revenue,
-            nexosCostEurCents: nexosCost,
-            serverCostEurCents: serverCost,
-            totalCostEurCents: nexosCost + serverCost,
-            profitEurCents: revenue - nexosCost - serverCost,
+            priceUsdCents: limits?.priceUsdCents || 0,
+            revenueUsdCents: revenue,
+            nexosCostUsdCents: nexosCost,
+            serverCostUsdCents: serverCost,
+            totalCostUsdCents: nexosCost + serverCost,
+            profitUsdCents: revenue - nexosCost - serverCost,
             marginPercent: revenue > 0 ? Math.round(((revenue - nexosCost - serverCost) / revenue) * 100) : 0,
           }];
         })
@@ -148,7 +148,7 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
   }
 });
 
-// ── Revenue & Billing Stats (EUR) ──
+// ── Revenue & Billing Stats (USD) ──
 router.get('/revenue', async (_req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const [subscriptions, topUsers, signupsByMonth] = await Promise.all([
@@ -176,58 +176,56 @@ router.get('/revenue', async (_req: AuthRequest, res: Response, next: NextFuncti
       `),
     ]);
 
-    const subscriptionRevenue: Record<string, { count: number; revenueEurCents: number; nexosCostEurCents: number; profitEurCents: number }> = {};
-    let totalRevenueEurCents = 0;
-    let totalNexosCostEurCents = 0;
-    let totalServerCostEurCents = 0;
+    const subscriptionRevenue: Record<string, { count: number; revenueUsdCents: number; nexosCostUsdCents: number; profitUsdCents: number }> = {};
+    let totalRevenueUsdCents = 0;
+    let totalNexosCostUsdCents = 0;
 
     for (const s of subscriptions) {
       const count = parseInt(s.count);
       const limits = PLAN_LIMITS[s.plan as keyof typeof PLAN_LIMITS];
       if (!limits) continue;
 
-      const revenue = count * limits.priceEurCents;
-      const nexosCost = count * limits.nexosCreditBudgetEurCents;
-      const serverCost = count * limits.serverCostShareEurCents;
+      const revenue = count * limits.priceUsdCents;
+      const nexosCost = count * limits.nexosCreditBudgetUsdCents;
+      const serverCost = count * limits.serverCostShareUsdCents;
 
       subscriptionRevenue[s.plan] = {
         count,
-        revenueEurCents: revenue,
-        nexosCostEurCents: nexosCost,
-        profitEurCents: revenue - nexosCost - serverCost,
+        revenueUsdCents: revenue,
+        nexosCostUsdCents: nexosCost,
+        profitUsdCents: revenue - nexosCost - serverCost,
       };
 
-      totalRevenueEurCents += revenue;
-      totalNexosCostEurCents += nexosCost;
-      totalServerCostEurCents += serverCost;
+      totalRevenueUsdCents += revenue;
+      totalNexosCostUsdCents += nexosCost;
     }
 
-    // Server costs with VAT
+    // Server costs with VAT (tracked in USD cents)
     const serverCount2 = await db.getOne<any>(`SELECT COUNT(*) as total FROM servers WHERE status = 'active'`);
     const sCount = parseInt(serverCount2?.total || '0');
-    const sNetPerMonth = parseInt(process.env.SERVER_COST_EUR_CENTS || '3999');
+    const sNetPerMonth = parseInt(process.env.SERVER_COST_USD_CENTS || process.env.SERVER_COST_EUR_CENTS || '4300');
     const sVatRate = parseFloat(process.env.SERVER_VAT_RATE || '0.21');
     const sVatPerMonth = Math.round(sNetPerMonth * sVatRate);
     const sGrossPerMonth = sNetPerMonth + sVatPerMonth;
     const totalServerCostGross = sCount * sGrossPerMonth;
     const totalServerCostVat = sCount * sVatPerMonth;
 
-    const totalProfitEurCents = totalRevenueEurCents - totalNexosCostEurCents - totalServerCostGross;
-    const profitMarginPercent = totalRevenueEurCents > 0
-      ? Math.round((totalProfitEurCents / totalRevenueEurCents) * 100) : 0;
+    const totalProfitUsdCents = totalRevenueUsdCents - totalNexosCostUsdCents - totalServerCostGross;
+    const profitMarginPercent = totalRevenueUsdCents > 0
+      ? Math.round((totalProfitUsdCents / totalRevenueUsdCents) * 100) : 0;
 
     res.json({
-      currency: 'EUR',
-      totalRevenueEurCents,
-      totalNexosCostEurCents,
-      totalServerCostEurCents: totalServerCostGross,
+      currency: 'USD',
+      totalRevenueUsdCents: totalRevenueUsdCents,
+      totalNexosCostUsdCents,
+      totalServerCostUsdCents: totalServerCostGross,
       totalServerCostNet: sCount * sNetPerMonth,
       totalServerCostVat,
       serverCount: sCount,
       serverCostNetPerMonth: sNetPerMonth,
       serverCostGrossPerMonth: sGrossPerMonth,
       vatRate: sVatRate,
-      totalProfitEurCents,
+      totalProfitUsdCents,
       profitMarginPercent,
       profitMarginTarget: Math.round(PROFIT_MARGIN_TARGET * 100),
       retailMarkup: RETAIL_MARKUP,

@@ -6,7 +6,7 @@ import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const buttonVariants = cva(
-  'inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-all duration-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50',
+  'inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50',
   {
     variants: {
       variant: {
@@ -78,22 +78,14 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         {showGlass && (
           <>
             <span
-              className="pointer-events-none absolute inset-0 z-0 overflow-hidden rounded-[inherit]"
-              style={{
-                backdropFilter: 'blur(4px)',
-                filter: 'url(#glass-distortion)',
-                isolation: 'isolate',
-              }}
+              className="pointer-events-none absolute inset-0 z-0 rounded-[inherit]"
+              style={{ background: 'rgba(255, 255, 255, 0.06)' }}
             />
             <span
-              className="pointer-events-none absolute inset-0 z-[1] rounded-[inherit]"
-              style={{ background: 'rgba(255, 255, 255, 0.12)' }}
-            />
-            <span
-              className="pointer-events-none absolute inset-0 z-[2] overflow-hidden rounded-[inherit]"
+              className="pointer-events-none absolute inset-0 z-[1] overflow-hidden rounded-[inherit]"
               style={{
                 boxShadow:
-                  'inset 2px 2px 2px 0 rgba(255,255,255,0.2), inset -1px -1px 1px 0 rgba(255,255,255,0.15)',
+                  'inset 1px 1px 1px 0 rgba(255,255,255,0.15), inset -1px -1px 1px 0 rgba(255,255,255,0.08)',
               }}
             />
           </>

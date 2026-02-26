@@ -10,7 +10,7 @@
 import db from '../lib/db';
 import { CREDIT_PACKS } from '../types';
 
-const MAX_EUR_CENTS = 1_000_000; // €10,000 max per purchase
+const MAX_USD_CENTS = 1_000_000; // $10,000 max per purchase
 const MAX_CREDITS_USD = 100_000;
 const MAX_ADDON_USD = 50_000;
 
@@ -30,10 +30,10 @@ function assertMathCorrect(): void {
 export function verifyCreditMathAtStartup(): void {
   assertMathCorrect();
   for (const [packId, pack] of Object.entries(CREDIT_PACKS)) {
-    const eur = pack.priceEurCents / 100;
-    const expected = Math.round(eur * TO_API_FRACTION * 1.08 * 100) / 100;
+    const usd = pack.priceUsdCents / 100;
+    const expected = Math.round(usd * TO_API_FRACTION * 100) / 100;
     if (Math.abs(pack.orBudgetUsd - expected) > 0.02) {
-      throw new Error(`[credit] Pack ${packId} orBudgetUsd=${pack.orBudgetUsd} != expected ${expected} for €${eur}`);
+      throw new Error(`[credit] Pack ${packId} orBudgetUsd=${pack.orBudgetUsd} != expected ${expected} for $${usd}`);
     }
   }
 }
@@ -46,31 +46,31 @@ export async function validateUserId(userId: string): Promise<{ id: string } | n
   return db.getOne<{ id: string }>('SELECT id FROM users WHERE id = $1', [userId]);
 }
 
-/** Validate amount_eur_cents and credits_usd are in valid range */
-export function validateAmounts(amountEurCents: number, creditsUsd: number): void {
-  if (amountEurCents < 0 || creditsUsd < 0) {
-    throw new Error(`[credit] Negative amounts rejected: eur=${amountEurCents} credits=${creditsUsd}`);
+/** Validate amount in USD cents and credits_usd are in valid range */
+export function validateAmounts(amountUsdCents: number, creditsUsd: number): void {
+  if (amountUsdCents < 0 || creditsUsd < 0) {
+    throw new Error(`[credit] Negative amounts rejected: usd=${amountUsdCents} credits=${creditsUsd}`);
   }
-  if (amountEurCents > MAX_EUR_CENTS || creditsUsd > MAX_CREDITS_USD) {
-    throw new Error(`[credit] Amount overflow rejected: eur=${amountEurCents} credits=${creditsUsd}`);
+  if (amountUsdCents > MAX_USD_CENTS || creditsUsd > MAX_CREDITS_USD) {
+    throw new Error(`[credit] Amount overflow rejected: usd=${amountUsdCents} credits=${creditsUsd}`);
   }
-  if (!Number.isFinite(amountEurCents) || !Number.isFinite(creditsUsd)) {
+  if (!Number.isFinite(amountUsdCents) || !Number.isFinite(creditsUsd)) {
     throw new Error(`[credit] Non-finite amounts rejected`);
   }
 }
 
-/** Verify pack orBudgetUsd matches expected formula for given priceEurCents */
-export function verifyPackMath(packId: string, priceEurCents: number, expectedCreditsUsd: number): void {
+/** Verify pack orBudgetUsd matches expected formula for given priceUsdCents */
+export function verifyPackMath(packId: string, priceUsdCents: number, expectedCreditsUsd: number): void {
   assertMathCorrect();
   const pack = CREDIT_PACKS[packId];
   if (!pack) return;
 
-  const eur = priceEurCents / 100;
-  const expected = Math.round(eur * TO_API_FRACTION * 1.08 * 100) / 100;
+  const usd = priceUsdCents / 100;
+  const expected = Math.round(usd * TO_API_FRACTION * 100) / 100;
   const diff = Math.abs(expectedCreditsUsd - expected);
 
   if (diff > 0.02) {
-    console.warn(`[credit] Pack math mismatch: ${packId} eur=${eur} expected=$${expected} got=$${expectedCreditsUsd}`);
+    console.warn(`[credit] Pack math mismatch: ${packId} usd=${usd} expected=$${expected} got=$${expectedCreditsUsd}`);
   }
 }
 

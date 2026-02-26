@@ -71,13 +71,13 @@ const howItWorks = [
 const plans = [
   {
     name: 'Starter',
-    price: 10,
-    tokens: '$2',
+    price: 15,
+    tokens: '$3',
     ram: '2 GB',
     cpus: '1 vCPU',
     storage: '10 GB',
     features: [
-      '$2 of AI credits every month',
+      '$3 of AI credits every month',
       '2 GB RAM · 1 vCPU',
       '1 AI agent',
       'Smart AI routing & cost optimization',
@@ -89,14 +89,14 @@ const plans = [
   },
   {
     name: 'Pro',
-    price: 20,
+    price: 29,
     popular: true,
-    tokens: '$7',
+    tokens: '$10',
     ram: '4 GB',
     cpus: '2 vCPU',
     storage: '50 GB',
     features: [
-      '$7 of AI credits every month',
+      '$10 of AI credits every month',
       '4 GB RAM · 2 vCPU',
       '2 AI agents',
       'Smart AI routing & cost optimization',
@@ -108,13 +108,14 @@ const plans = [
   },
   {
     name: 'Business',
-    price: 50,
-    tokens: '$12',
+    price: 59,
+    popular: false,
+    tokens: '$20',
     ram: '8 GB',
     cpus: '4 vCPU',
     storage: '100 GB',
     features: [
-      '$12 of AI credits every month',
+      '$20 of AI credits every month',
       '8 GB RAM · 4 vCPU',
       '4 AI agents',
       'Smart AI routing & cost optimization',
@@ -334,7 +335,7 @@ function PricingSection() {
         </div>
         <h2 className="text-3xl font-bold tracking-tight md:text-4xl">Pick your plan</h2>
         <p className="mt-3 text-base text-muted-foreground">
-          Every plan includes a dedicated server, smart routing, and AI credits starting at $2/mo.
+          Every plan includes a dedicated server, smart routing, and AI credits starting at $3/mo.
         </p>
       </div>
 
@@ -439,6 +440,9 @@ function Footer() {
         <div className="flex items-center gap-6">
           <a href="#features" className="text-sm text-muted-foreground transition-colors hover:text-foreground">Features</a>
           <a href="#pricing" className="text-sm text-muted-foreground transition-colors hover:text-foreground">Pricing</a>
+          {process.env.NEXT_PUBLIC_SUPPORT_EMAIL && (
+            <a href={`mailto:${process.env.NEXT_PUBLIC_SUPPORT_EMAIL}`} className="text-sm text-muted-foreground transition-colors hover:text-foreground">Contact</a>
+          )}
           <Link href="/auth/login" className="text-sm text-muted-foreground transition-colors hover:text-foreground">Sign In</Link>
         </div>
       </div>

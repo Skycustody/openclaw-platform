@@ -101,8 +101,8 @@ export const OPENROUTER_MODEL_COSTS: Record<string, { inputPer1M: number; output
  */
 export const AVG_COST_PER_1M_USD = 1.80;
 
-/** Convert USD to EUR cents (approximate, update periodically) */
-export const USD_TO_EUR_CENTS = 92;
+/** @deprecated EUR conversion removed — all pricing is now USD */
+export const USD_TO_EUR_CENTS = 100;
 
 export interface OpenRouterUsage {
   /** Display: amount used (reduces proportionally with real usage) */
@@ -119,12 +119,12 @@ export interface OpenRouterUsage {
 /**
  * Per-plan spending limits (USD) set on each user's OpenRouter key.
  * These are the max OpenRouter can charge per month for that key.
- * Must align with PLAN_LIMITS.nexosCreditBudgetEurCents (after EUR→USD conversion).
+ * Must align with PLAN_LIMITS.nexosCreditBudgetUsdCents.
  */
 const PLAN_SPEND_LIMITS_USD: Record<Plan, number> = {
-  starter: 2,
-  pro: 7,
-  business: 12,
+  starter: 3,
+  pro: 10,
+  business: 20,
 };
 
 /**
@@ -252,7 +252,7 @@ export async function deleteNexosKey(userId: string): Promise<void> {
 /**
  * Query OpenRouter for a user's credit/usage info.
  * Uses the Management API to look up key usage stats.
- * Returns display-scaled values: user sees amount paid (€5 → $5), consumption reduces proportionally.
+ * Returns display-scaled values: user sees amount paid ($5 → $5 bought), consumption reduces proportionally.
  */
 export async function getNexosUsage(userId: string): Promise<OpenRouterUsage | null> {
   const row = await db.getOne<{ nexos_api_key: string | null; plan: string }>(
@@ -265,7 +265,7 @@ export async function getNexosUsage(userId: string): Promise<OpenRouterUsage | n
   const planBase = PLAN_SPEND_LIMITS_USD[plan] || PLAN_SPEND_LIMITS_USD.starter;
 
   const creditSum = await db.getOne<{ total: string }>(
-    'SELECT COALESCE(SUM(amount_eur_cents / 100.0), 0) as total FROM credit_purchases WHERE user_id = $1',
+    'SELECT COALESCE(SUM(amount_eur_cents / 100.0), 0) as total FROM credit_purchases WHERE user_id = $1', // column stores USD cents despite name
     [userId]
   );
   let creditDisplayTotal = parseFloat(creditSum?.total || '0');
@@ -449,17 +449,23 @@ async function findUserKeyHash(userId: string): Promise<string | null> {
 export { PLAN_SPEND_LIMITS_USD };
 
 /**
- * Estimate API cost for a given number of tokens (EUR cents).
+ * Estimate API cost for a given number of tokens (USD cents).
  * Uses weighted average cost across models.
  */
-export function estimateCostEurCents(tokens: number): number {
-  return Math.round((tokens / 1_000_000) * AVG_COST_PER_1M_USD * USD_TO_EUR_CENTS);
+export function estimateCostUsdCents(tokens: number): number {
+  return Math.round((tokens / 1_000_000) * AVG_COST_PER_1M_USD * 100);
 }
 
+/** @deprecated Use estimateCostUsdCents — kept for backwards compat */
+export const estimateCostEurCents = estimateCostUsdCents;
+
 /**
- * Calculate the retail price (what we charge users) for API usage (EUR cents).
+ * Calculate the retail price (what we charge users) for API usage (USD cents).
  * Applies the 1.5× markup for 50% profit margin.
  */
-export function retailPriceEurCents(wholesaleCostEurCents: number): number {
-  return Math.round(wholesaleCostEurCents * RETAIL_MARKUP);
+export function retailPriceUsdCents(wholesaleCostUsdCents: number): number {
+  return Math.round(wholesaleCostUsdCents * RETAIL_MARKUP);
 }
+
+/** @deprecated Use retailPriceUsdCents — kept for backwards compat */
+export const retailPriceEurCents = retailPriceUsdCents;
