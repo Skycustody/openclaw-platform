@@ -27,9 +27,12 @@ type Invoice = {
 export default function BillingPage() {
   const [loading, setLoading] = useState(true);
   const [portalLoading, setPortalLoading] = useState(false);
+  const [cancelLoading, setCancelLoading] = useState(false);
+  const [cancelConfirm, setCancelConfirm] = useState(false);
   const [overview, setOverview] = useState<BillingOverview | null>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [error, setError] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -63,6 +66,24 @@ export default function BillingPage() {
     }
   };
 
+  const cancelSubscription = async () => {
+    setCancelLoading(true);
+    setError('');
+    setSuccessMsg('');
+    try {
+      const res = await api.post<{ cancelled: boolean; endsAt: string }>('/billing/cancel');
+      if (res?.cancelled) {
+        setSuccessMsg(`Subscription cancelled. You'll have access until ${new Date(res.endsAt).toLocaleDateString()}.`);
+        setCancelConfirm(false);
+        load();
+      }
+    } catch (e: any) {
+      setError(e?.message || 'Failed to cancel subscription');
+    } finally {
+      setCancelLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -81,6 +102,12 @@ export default function BillingPage() {
       {error && (
         <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-3 text-[13px] text-red-400">
           {error}
+        </div>
+      )}
+
+      {successMsg && (
+        <div className="rounded-lg bg-green-500/10 border border-green-500/20 p-3 text-[13px] text-green-400">
+          {successMsg}
         </div>
       )}
 
@@ -112,7 +139,7 @@ export default function BillingPage() {
             </GlassPanel>
           </div>
 
-          <div className="mt-5 flex gap-2">
+          <div className="mt-5 flex flex-wrap gap-2">
             <Button variant="primary" onClick={openPortal} loading={portalLoading}>
               <ExternalLink className="h-4 w-4" />
               Manage in Stripe
@@ -121,6 +148,38 @@ export default function BillingPage() {
               Refresh
             </Button>
           </div>
+
+          {overview?.status === 'active' && (
+            <div className="mt-4 border-t border-white/[0.06] pt-4">
+              {!cancelConfirm ? (
+                <button
+                  onClick={() => setCancelConfirm(true)}
+                  className="text-[13px] text-white/30 hover:text-red-400 transition-colors"
+                >
+                  Cancel subscription
+                </button>
+              ) : (
+                <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-4">
+                  <p className="text-[13px] text-white/60">
+                    Are you sure? Your agent will stay active until the end of your billing period, then be deactivated.
+                  </p>
+                  <div className="mt-3 flex gap-2">
+                    <Button
+                      variant="glass"
+                      onClick={cancelSubscription}
+                      loading={cancelLoading}
+                      className="!border-red-500/30 !text-red-400 hover:!bg-red-500/10"
+                    >
+                      Yes, cancel
+                    </Button>
+                    <Button variant="glass" onClick={() => setCancelConfirm(false)}>
+                      Keep subscription
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </Card>
 
         <Card>

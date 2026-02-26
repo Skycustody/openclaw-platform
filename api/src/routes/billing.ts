@@ -1,7 +1,7 @@
 import { Router, Response, NextFunction } from 'express';
 import { AuthRequest, authenticate } from '../middleware/auth';
 import db from '../lib/db';
-import { createCheckoutSession, createCreditCheckoutSession, getCustomerPortalUrl, getInvoices } from '../services/stripe';
+import { createCheckoutSession, createCreditCheckoutSession, getCustomerPortalUrl, getInvoices, stripe } from '../services/stripe';
 import { BadRequestError } from '../lib/errors';
 import { Plan, User, CREDIT_PACKS } from '../types';
 
@@ -97,6 +97,35 @@ router.post('/buy-credits', async (req: AuthRequest, res: Response, next: NextFu
       user.stripe_customer_id || undefined,
     );
     res.json({ checkoutUrl });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Cancel subscription at end of billing period
+router.post('/cancel', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const user = await db.getOne<User>('SELECT stripe_customer_id FROM users WHERE id = $1', [req.userId]);
+    if (!user?.stripe_customer_id) {
+      return res.status(400).json({ error: 'No billing account found' });
+    }
+
+    const subscriptions = await stripe.subscriptions.list({
+      customer: user.stripe_customer_id,
+      status: 'active',
+      limit: 1,
+    });
+
+    if (subscriptions.data.length === 0) {
+      return res.status(400).json({ error: 'No active subscription found' });
+    }
+
+    await stripe.subscriptions.update(subscriptions.data[0].id, {
+      cancel_at_period_end: true,
+    });
+
+    console.log(`[billing] User ${req.userId} cancelled subscription (end of period)`);
+    res.json({ cancelled: true, endsAt: new Date((subscriptions.data[0].current_period_end) * 1000).toISOString() });
   } catch (err) {
     next(err);
   }
