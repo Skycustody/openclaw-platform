@@ -211,7 +211,7 @@ async function handleCreditPurchase(session: Stripe.Checkout.Session): Promise<v
     [userId, packInfo.priceUsdCents, orBudgetIncrease, session.id]
   );
 
-  if (insertResult.rowCount === 0) {
+  if ((insertResult.rowCount ?? 0) === 0) {
     console.log(`[stripe] Duplicate webhook for session ${session.id} — skipping`);
     return;
   }

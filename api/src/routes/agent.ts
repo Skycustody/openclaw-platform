@@ -273,7 +273,7 @@ router.get('/embed-url', requireActiveSubscription, async (req: AuthRequest, res
  * - Sleeping → wake it
  * - Already active → return URL immediately
  */
-router.post('/open', rateLimitSensitive, authenticate, async (req: AuthRequest, res: Response, next: NextFunction) => {
+router.post('/open', rateLimitSensitive, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const user = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [req.userId]);
     if (!user) return res.status(404).json({ error: 'User not found' });
