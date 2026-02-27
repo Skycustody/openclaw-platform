@@ -188,7 +188,7 @@ mkdir -p /tmp/openclaw-build
 
 cat > /tmp/openclaw-build/Dockerfile <<'DEOF'
 FROM node:22-slim
-RUN apt-get update && apt-get install -y curl git python3 make g++ chromium libopus-dev --no-install-recommends && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y ca-certificates curl git python3 make g++ chromium libopus-dev --no-install-recommends && rm -rf /var/lib/apt/lists/*
 RUN printf '[url "https://github.com/"]\n\tinsteadOf = ssh://git@github.com/\n\tinsteadOf = git@github.com:\n' > /root/.gitconfig && npm install -g openclaw@latest
 WORKDIR /data
 EXPOSE 18789
