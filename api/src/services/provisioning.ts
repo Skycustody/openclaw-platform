@@ -118,13 +118,24 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
 
   console.log(`[provision] Starting for ${email} (${userId}), plan=${plan}, retry=${retryCount}`);
 
-  // Step 1: Find best server (allowNewServer=true because a real user is waiting)
-  let server;
-  try {
-    server = await findBestServer(limits.ramMb, true);
-  } catch (err: any) {
-    console.error(`[provision] findBestServer failed for ${userId}: ${err.message}`);
-    throw err;
+  // Step 1: Find server — reuse existing if user already has one (re-provision case)
+  let server: Server | null = null;
+  if (existing.server_id) {
+    server = await db.getOne<Server>(
+      `SELECT * FROM servers WHERE id = $1 AND status = 'active'`,
+      [existing.server_id]
+    );
+    if (server) {
+      console.log(`[provision] Reusing existing server ${server.ip} for re-provision of ${userId}`);
+    }
+  }
+  if (!server) {
+    try {
+      server = await findBestServer(limits.ramMb, true);
+    } catch (err: any) {
+      console.error(`[provision] findBestServer failed for ${userId}: ${err.message}`);
+      throw err;
+    }
   }
   console.log(`[provision] Using server ${server.ip} (${server.hostname || server.id})`);
 
