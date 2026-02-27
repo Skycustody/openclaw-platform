@@ -417,6 +417,7 @@ export async function injectApiKeys(
         enabled: true,
         allowInsecureAuth: true,
         dangerouslyDisableDeviceAuth: true,
+        dangerouslyAllowHostHeaderOriginFallback: true,
         allowedOrigins: ['https://valnaa.com', 'https://www.valnaa.com'],
       },
       auth: {
@@ -468,6 +469,7 @@ export function buildOpenclawConfig(gatewayToken: string): Record<string, any> {
         enabled: true,
         allowInsecureAuth: true,
         dangerouslyDisableDeviceAuth: true,
+        dangerouslyAllowHostHeaderOriginFallback: true,
         allowedOrigins: ['https://valnaa.com', 'https://www.valnaa.com'],
       },
       auth: {
