@@ -164,17 +164,20 @@ export interface PlanLimits {
 
 /**
  * ┌────────────────────────────────────────────────────────────────────────┐
- * │ PLAN PRICING (USD) — 50% profit target                                │
+ * │ PLAN PRICING (USD) — 50%+ profit target                               │
  * │                                                                       │
  * │ Formula:  retailPrice ≥ (nexosCost + serverCost) × 1.5               │
  * │                                                                       │
- * │ Plan      AI$    Server$  Total$  Retail$  Margin                    │
- * │ starter    3.00    4.00     7.00    15.00    53% ✓                    │
- * │ pro       10.00    8.00    18.00    29.00    38% (smart routing ~50%)│
- * │ business  20.00   11.00    31.00    59.00    47% ✓                    │
+ * │ Plan      AI$(real) Server$ Total$  Retail$  Margin                   │
+ * │ starter    1.38     4.00    5.38    15.00    64% ✓                    │
+ * │ pro        2.07     8.00   10.07    25.00    60% ✓                    │
+ * │ business   6.90    11.00   17.90    50.00    64% ✓                    │
  * │                                                                       │
  * │ Smart routing (cheap default models) further reduces API costs       │
  * │ by 40-60%, improving actual margins above targets.                    │
+ * │                                                                       │
+ * │ Credit purchases: 6% OpenRouter fee + 25% platform margin.           │
+ * │ User pays $5 → $3.45 API budget. User sees $5 in dashboard.         │
  * └────────────────────────────────────────────────────────────────────────┘
  */
 export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
@@ -184,9 +187,9 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     maxSkills: 10,
     maxCronJobs: 3,
     storageGb: 10,
-    includedBudgetUsd: 3,
+    includedBudgetUsd: 2,
     priceUsdCents: 1500,
-    nexosCreditBudgetUsdCents: 300,
+    nexosCreditBudgetUsdCents: 138,   // $2 × 0.69 (after 6% OR + 25% platform)
     serverCostShareUsdCents: 400,
     hasBrowser: false,
     allChannels: false,
@@ -198,9 +201,9 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     maxSkills: 53,
     maxCronJobs: 20,
     storageGb: 50,
-    includedBudgetUsd: 10,
-    priceUsdCents: 2900,
-    nexosCreditBudgetUsdCents: 1000,
+    includedBudgetUsd: 3,
+    priceUsdCents: 2500,
+    nexosCreditBudgetUsdCents: 207,   // $3 × 0.69 (after 6% OR + 25% platform)
     serverCostShareUsdCents: 800,
     hasBrowser: true,
     allChannels: true,
@@ -212,9 +215,9 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     maxSkills: 53,
     maxCronJobs: 100,
     storageGb: 100,
-    includedBudgetUsd: 20,
-    priceUsdCents: 5900,
-    nexosCreditBudgetUsdCents: 2000,
+    includedBudgetUsd: 10,
+    priceUsdCents: 5000,
+    nexosCreditBudgetUsdCents: 690,   // $10 × 0.69 (after 6% OR + 25% platform)
     serverCostShareUsdCents: 1100,
     hasBrowser: true,
     allChannels: true,

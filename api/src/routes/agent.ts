@@ -254,12 +254,14 @@ router.get('/embed-url', requireActiveSubscription, async (req: AuthRequest, res
       : null;
 
     const parts = await agentUrlParts(user.subdomain, user.id, server);
+    const domain = process.env.DOMAIN || 'yourdomain.com';
     return res.json({
       available: true,
       url: parts.url,
       gatewayUrl: parts.gatewayUrl,
       gatewayWsUrl: parts.gatewayWsUrl,
       gatewayToken: parts.gatewayToken,
+      previewUrl: `https://preview-${user.subdomain}.${domain}`,
       subscriptionStatus: user.status,
     });
   } catch (err) {
@@ -291,8 +293,9 @@ router.post('/open', rateLimitSensitive, async (req: AuthRequest, res: Response,
       return res.status(403).json({ error: 'Payment not confirmed. Please complete checkout.' });
     }
 
+    const domain = process.env.DOMAIN || 'yourdomain.com';
     const respond = (parts: AgentUrlParts, status: string) =>
-      res.json({ url: parts.url, status, gatewayUrl: parts.gatewayUrl, gatewayWsUrl: parts.gatewayWsUrl, gatewayToken: parts.gatewayToken });
+      res.json({ url: parts.url, status, gatewayUrl: parts.gatewayUrl, gatewayWsUrl: parts.gatewayWsUrl, gatewayToken: parts.gatewayToken, previewUrl: user.subdomain ? `https://preview-${user.subdomain}.${domain}` : null });
 
     // Case 1: never provisioned (no server assigned)
     if (!user.server_id || !user.subdomain) {

@@ -64,8 +64,8 @@ export const RETAIL_MARKUP = 1.5;
  */
 export const DISPLAY_FACTOR = 1.0;
 
-/** Revenue split for top-up purchases. */
-export const PURCHASE_SPLIT = { openrouter: 0.06, platform: 0.50, userCredit: 0.44 } as const;
+/** Revenue split for top-up purchases: 6% OpenRouter fee + 25% platform margin = 31% taken, 69% → API. */
+export const PURCHASE_SPLIT = { openrouter: 0.06, platform: 0.25, userCredit: 0.69 } as const;
 
 /**
  * OpenRouter wholesale costs per 1M tokens (USD).
@@ -121,10 +121,15 @@ export interface OpenRouterUsage {
  * These are the max OpenRouter can charge per month for that key.
  * Must align with PLAN_LIMITS.nexosCreditBudgetUsdCents.
  */
+/**
+ * Actual OpenRouter API budget per plan (after 6% OR fee + 25% platform margin).
+ * User sees the full display amount ($2/$3/$10) in the dashboard, but the
+ * OpenRouter key limit is displayAmount × 0.69.
+ */
 const PLAN_SPEND_LIMITS_USD: Record<Plan, number> = {
-  starter: 3,
-  pro: 10,
-  business: 20,
+  starter: 1.38,   // $2 × 0.69
+  pro: 2.07,       // $3 × 0.69
+  business: 6.90,  // $10 × 0.69
 };
 
 /**

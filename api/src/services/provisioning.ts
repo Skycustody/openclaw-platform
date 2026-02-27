@@ -270,7 +270,7 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
       if (settings.custom_instructions) parts.push(`\n## Instructions\n${settings.custom_instructions}`);
       parts.push(`\nIMPORTANT: You are the user's AI assistant. The user's name above is who you are talking to — it is NOT your name. If asked your name, say you are their AI assistant.`);
       parts.push(`\n## Memory\nYou have persistent memory. Always save important facts, user preferences, project details, and key decisions to MEMORY.md. For daily notes and conversation context, use memory/YYYY-MM-DD.md. When you're unsure about something the user mentioned before, search your memory first.`);
-      parts.push(`\n## Web Preview\nWhen you build websites or web apps, always start the dev server on port 8080 (use \`--port 8080\` or equivalent). The user can preview it live at the URL in the PREVIEW_URL environment variable. Tell the user this URL when you start a dev server.`);
+      parts.push(`\n## Web Preview\nWhen you build websites or web apps, always start the dev server on port 8080 (use \`--port 8080\` or equivalent). The user can preview it live at the URL in the PREVIEW_URL environment variable. Tell the user this URL when you start a dev server.\n\nIMPORTANT: After starting a dev server, also send the preview link to ALL connected messaging apps (Telegram, WhatsApp, Discord, Slack — whichever are connected). This way the user can view the site from their phone even when away from the computer. Format the message like: "Your website preview is ready: [URL]"`);
       parts.push(`\n## AI Models\nYou are running on a platform with multiple AI models. The user may ask you to "switch to sonnet", "use GPT-4o", etc. You have a skill called "switch-model" that can change which AI model processes your responses. Available models: Claude Sonnet 4 (sonnet), Claude Opus 4 (opus), GPT-4o (gpt4o/gpt-4o), GPT-4.1 (gpt4.1), GPT-4.1 Mini (gpt4.1-mini), GPT-4.1 Nano (gpt4.1-nano), Gemini 2.5 Pro (gemini-pro), Gemini 2.5 Flash (gemini-flash), DeepSeek V3 (deepseek), DeepSeek R1 (deepseek-r1), Grok 3 (grok), or "auto" for smart automatic routing. When the user asks to switch models, use the switch-model skill.`);
       const userMdB64 = Buffer.from(parts.join('\n')).toString('base64');
       await sshExec(server.ip, `echo '${userMdB64}' | base64 -d > /opt/openclaw/instances/${userId}/USER.md`);
@@ -409,8 +409,11 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
     await new Promise(r => setTimeout(r, 3000));
   }
 
-  // Step 7: Create DNS record BEFORE waiting — gives Cloudflare time to propagate
-  await cloudflareDNS.upsertRecord(subdomain, server.ip);
+  // Step 7: Create DNS records BEFORE waiting — gives Cloudflare time to propagate
+  await Promise.all([
+    cloudflareDNS.upsertRecord(subdomain, server.ip),
+    cloudflareDNS.upsertRecord(`preview-${subdomain}`, server.ip),
+  ]);
   dnsCreated = true;
 
   // Re-apply gateway auth config (doctor --fix on startup may strip it) — needs running container
@@ -463,10 +466,15 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
       );
       // Clean up DNS if it was created but provisioning failed
       if (dnsCreated) {
-        console.warn(`[provision] Cleaning up DNS record for ${subdomain} after failed provisioning`);
-        await cloudflareDNS.deleteRecord(subdomain).catch((e) =>
-          console.error(`[provision] DNS cleanup failed for ${subdomain}:`, e.message)
-        );
+        console.warn(`[provision] Cleaning up DNS records for ${subdomain} after failed provisioning`);
+        await Promise.all([
+          cloudflareDNS.deleteRecord(subdomain).catch((e) =>
+            console.error(`[provision] DNS cleanup failed for ${subdomain}:`, e.message)
+          ),
+          cloudflareDNS.deleteRecord(`preview-${subdomain}`).catch((e) =>
+            console.error(`[provision] DNS cleanup failed for preview-${subdomain}:`, e.message)
+          ),
+        ]);
       }
     }
     throw provisionErr;
@@ -492,7 +500,10 @@ export async function deprovisionUser(userId: string): Promise<void> {
   }
 
   if (user.subdomain) {
-    await cloudflareDNS.deleteRecord(user.subdomain);
+    await Promise.all([
+      cloudflareDNS.deleteRecord(user.subdomain),
+      cloudflareDNS.deleteRecord(`preview-${user.subdomain}`).catch(() => {}),
+    ]);
   }
 
   await db.query(

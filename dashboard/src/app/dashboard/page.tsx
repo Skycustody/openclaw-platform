@@ -9,7 +9,7 @@ import { useStore } from '@/lib/store';
 import GatewayChat from '@/components/dashboard/GatewayChat';
 import {
   Bot, Sparkles, Loader2, Cpu, Zap,
-  AlertTriangle, RefreshCw, ExternalLink,
+  AlertTriangle, RefreshCw, ExternalLink, Globe,
 } from 'lucide-react';
 
 type AgentDisplayStatus = 'active' | 'online' | 'sleeping' | 'paused' | 'provisioning' | 'cancelled' | 'offline' | 'grace_period';
@@ -37,6 +37,7 @@ export default function DashboardHome() {
   const [balanceUsd, setBalanceUsd] = useState<number | null>(null);
   const [agentStatus, setAgentStatus] = useState<AgentDisplayStatus>('offline');
 
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [uploadingFile, setUploadingFile] = useState(false);
   const [uploadMsg, setUploadMsg] = useState<string | null>(null);
 
@@ -80,9 +81,10 @@ export default function DashboardHome() {
     setErrorMsg('Agent took too long to start. Try refreshing.');
   }, []);
 
-  const storeGatewayInfo = useCallback((data: { gatewayWsUrl?: string | null; gatewayUrl?: string | null; gatewayToken?: string | null; url?: string }) => {
+  const storeGatewayInfo = useCallback((data: { gatewayWsUrl?: string | null; gatewayUrl?: string | null; gatewayToken?: string | null; url?: string; previewUrl?: string | null }) => {
     if (data.url) setAgentUrl(data.url);
     if (data.gatewayToken) setGatewayToken(data.gatewayToken);
+    if (data.previewUrl) setPreviewUrl(data.previewUrl);
 
     if (data.gatewayWsUrl) {
       setGatewayWsUrl(data.gatewayWsUrl);
@@ -352,6 +354,15 @@ export default function DashboardHome() {
               <p className="text-[9px] text-white/20">{mode.desc}</p>
             </div>
           </button>
+
+          {previewUrl && phase === 'ready' && (
+            <button onClick={() => window.open(previewUrl, '_blank')}
+              className="flex items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-1.5 hover:border-white/15 hover:bg-white/[0.04] transition-all"
+              title="Preview websites built by your agent">
+              <Globe className="h-3.5 w-3.5 text-white/20" />
+              <span className="text-[12px] font-medium text-white/50">Preview</span>
+            </button>
+          )}
 
           <button onClick={() => window.location.href = '/dashboard/tokens'}
             className="flex items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-1.5 hover:border-white/15 hover:bg-white/[0.04] transition-all"
