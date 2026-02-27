@@ -423,6 +423,8 @@ router.post('/open', rateLimitSensitive, async (req: AuthRequest, res: Response,
           }
 
           console.log(`[agent/open] Container missing — background re-provisioning`);
+          // Reset retry counter — this is a re-create, not a failed first provision
+          await db.query(`UPDATE users SET provision_retries = 0 WHERE id = $1`, [user.id]).catch(() => {});
           const promise = provisionUser({
             userId: user.id,
             email: user.email,
