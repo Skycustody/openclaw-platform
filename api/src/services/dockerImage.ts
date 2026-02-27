@@ -21,6 +21,7 @@ export async function ensureDockerImage(serverIp: string): Promise<void> {
   const dockerfile = [
     'FROM node:22-slim',
     'RUN apt-get update && apt-get install -y curl git openssh-client python3 make g++ chromium libopus-dev --no-install-recommends && rm -rf /var/lib/apt/lists/*',
+    'RUN git config --global url."https://github.com/".insteadOf ssh://git@github.com/ && git config --global url."https://github.com/".insteadOf git@github.com:',
     'RUN npm install -g openclaw@latest',
     'WORKDIR /data',
     'EXPOSE 18789',
