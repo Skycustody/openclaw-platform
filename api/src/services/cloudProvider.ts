@@ -188,9 +188,8 @@ mkdir -p /tmp/openclaw-build
 
 cat > /tmp/openclaw-build/Dockerfile <<'DEOF'
 FROM node:22-slim
-RUN apt-get update && apt-get install -y curl git openssh-client python3 make g++ chromium libopus-dev --no-install-recommends && rm -rf /var/lib/apt/lists/*
-RUN git config --global url."https://github.com/".insteadOf ssh://git@github.com/ && git config --global url."https://github.com/".insteadOf git@github.com:
-RUN npm install -g openclaw@latest
+RUN apt-get update && apt-get install -y curl git python3 make g++ chromium libopus-dev --no-install-recommends && rm -rf /var/lib/apt/lists/*
+RUN printf '[url "https://github.com/"]\n\tinsteadOf = ssh://git@github.com/\n\tinsteadOf = git@github.com:\n' > /root/.gitconfig && npm install -g openclaw@latest
 WORKDIR /data
 EXPOSE 18789
 CMD ["sh", "-c", "openclaw doctor --fix 2>/dev/null || true; exec openclaw gateway --port 18789 --bind lan --allow-unconfigured run"]
