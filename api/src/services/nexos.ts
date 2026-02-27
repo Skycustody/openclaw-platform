@@ -128,7 +128,7 @@ export interface OpenRouterUsage {
  */
 const PLAN_SPEND_LIMITS_USD: Record<Plan, number> = {
   starter: 1.38,   // $2 × 0.69
-  pro: 2.07,       // $3 × 0.69
+  pro: 3.45,       // $5 × 0.69
   business: 6.90,  // $10 × 0.69
 };
 

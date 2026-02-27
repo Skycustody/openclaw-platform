@@ -170,7 +170,7 @@ export interface PlanLimits {
  * │                                                                       │
  * │ Plan      AI$(real) Server$ Total$  Retail$  Margin                   │
  * │ starter    1.38     4.00    5.38    15.00    64% ✓                    │
- * │ pro        2.07     8.00   10.07    25.00    60% ✓                    │
+ * │ pro        3.45     8.00   11.45    25.00    54% ✓                    │
  * │ business   6.90    11.00   17.90    50.00    64% ✓                    │
  * │                                                                       │
  * │ Smart routing (cheap default models) further reduces API costs       │
@@ -201,9 +201,9 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     maxSkills: 53,
     maxCronJobs: 20,
     storageGb: 50,
-    includedBudgetUsd: 3,
+    includedBudgetUsd: 5,
     priceUsdCents: 2500,
-    nexosCreditBudgetUsdCents: 207,   // $3 × 0.69 (after 6% OR + 25% platform)
+    nexosCreditBudgetUsdCents: 345,   // $5 × 0.69 (after 6% OR + 25% platform)
     serverCostShareUsdCents: 800,
     hasBrowser: true,
     allChannels: true,
