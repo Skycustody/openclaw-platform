@@ -153,6 +153,72 @@ function smartTrimToolCall(tc: any): any {
 }
 
 /**
+ * Add Anthropic prompt caching breakpoints to messages.
+ * Only applies to anthropic/* models. Adds cache_control to the system
+ * message and a strategic mid-conversation breakpoint so repeated context
+ * (system prompt + conversation history) is cached at 90% discount.
+ *
+ * OpenRouter passes these through to Anthropic's API.
+ * Max 4 breakpoints, cache TTL = 5 min, min ~1024 tokens.
+ */
+function addPromptCaching(messages: any[], model: string): any[] {
+  if (!model.startsWith('anthropic/')) return messages;
+  if (!Array.isArray(messages) || messages.length < 3) return messages;
+
+  const result = messages.map((m: any) => ({ ...m }));
+
+  // Breakpoint 1: Cache the system message (never changes between turns)
+  const sysIdx = result.findIndex((m: any) => m.role === 'system');
+  if (sysIdx !== -1) {
+    const sys = result[sysIdx];
+    if (typeof sys.content === 'string') {
+      result[sysIdx] = {
+        ...sys,
+        content: [{
+          type: 'text',
+          text: sys.content,
+          cache_control: { type: 'ephemeral' },
+        }],
+      };
+    } else if (Array.isArray(sys.content) && sys.content.length > 0) {
+      const parts = sys.content.map((p: any) => ({ ...p }));
+      parts[parts.length - 1] = {
+        ...parts[parts.length - 1],
+        cache_control: { type: 'ephemeral' },
+      };
+      result[sysIdx] = { ...sys, content: parts };
+    }
+  }
+
+  // Breakpoint 2: Cache everything up to the last 4 messages.
+  // This means the stable conversation history is cached, and only
+  // the most recent messages (which change each turn) are uncached.
+  const cacheUpTo = result.length - 4;
+  if (cacheUpTo > (sysIdx + 1)) {
+    const msg = result[cacheUpTo];
+    if (typeof msg.content === 'string' && msg.content.length > 0) {
+      result[cacheUpTo] = {
+        ...msg,
+        content: [{
+          type: 'text',
+          text: msg.content,
+          cache_control: { type: 'ephemeral' },
+        }],
+      };
+    } else if (Array.isArray(msg.content) && msg.content.length > 0) {
+      const parts = msg.content.map((p: any) => ({ ...p }));
+      parts[parts.length - 1] = {
+        ...parts[parts.length - 1],
+        cache_control: { type: 'ephemeral' },
+      };
+      result[cacheUpTo] = { ...msg, content: parts };
+    }
+  }
+
+  return result;
+}
+
+/**
  * Get appropriate max_tokens for a model based on its cost tier.
  * Caps output to save cost — doesn't affect quality since most useful
  * responses are well under these limits.
@@ -404,6 +470,9 @@ router.post('/v1/chat/completions', async (req: Request, res: Response) => {
     if (modelCost >= 0.50) {
       body.messages = compressMessages(body.messages);
     }
+
+    // Anthropic prompt caching — 90% discount on repeated context
+    body.messages = addPromptCaching(body.messages, selectedModel);
 
     if (modelCost >= 3.0) {
       body.max_tokens = getMaxTokens(selectedModel, body.max_tokens);
