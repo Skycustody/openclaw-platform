@@ -124,10 +124,10 @@ router.post('/container/message', async (req: Request, res: Response, next: Next
     );
 
     await db.query(
-      `INSERT INTO activity_log (user_id, type, channel, summary, tokens_used, model_used)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
+      `INSERT INTO activity_log (user_id, type, channel, summary, status, tokens_used, model_used)
+       VALUES ($1, $2, $3, $4, 'completed', $5, $6)`,
       [userId, 'message', channel, (content || '').slice(0, 200), tokens || 0, model]
-    );
+    ).catch(() => {});
 
     await touchActivity(userId);
 

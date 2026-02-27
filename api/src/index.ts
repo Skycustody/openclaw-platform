@@ -37,6 +37,7 @@ import morgan from 'morgan';
 import { createServer } from 'http';
 import { Server as SocketServer } from 'socket.io';
 
+import db from './lib/db';
 import { errorHandler } from './middleware/errorHandler';
 import { rateLimitGeneral, rateLimitProxy } from './middleware/rateLimit';
 import jwt from 'jsonwebtoken';
@@ -187,6 +188,11 @@ async function start() {
   } catch (err) {
     console.warn('Credit math verification failed (non-fatal):', err);
   }
+
+  // Ensure activity_log has status column (safe migration — no-op if exists)
+  try {
+    await db.query(`ALTER TABLE activity_log ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'completed'`);
+  } catch { /* table or column may already exist */ }
 
   try {
     await redis.connect();

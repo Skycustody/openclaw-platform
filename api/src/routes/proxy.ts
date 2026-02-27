@@ -417,6 +417,8 @@ router.post('/v1/chat/completions', async (req: Request, res: Response) => {
 
     const incomingModel = (body.model || '').toString().trim();
     const isAutoRouting = !incomingModel || incomingModel === 'auto' || incomingModel === 'platform/auto';
+    const lastMessage = extractLastUserMessage(body.messages);
+    const ctx = extractConversationContext(body.messages);
 
     let selectedModel: string;
     let routingReason: string;
@@ -452,10 +454,8 @@ router.post('/v1/chat/completions', async (req: Request, res: Response) => {
         user.brain_mode = 'auto';
         user.manual_model = null;
       }
-      const lastMessage = extractLastUserMessage(body.messages);
       const hasImage = hasImageContent(body.messages);
       const hasToolHistory = hasToolCallsInHistory(body.messages);
-      const ctx = extractConversationContext(body.messages);
 
       const userPrefs = user?.routing_preferences && Object.keys(user.routing_preferences).length > 0
         ? user.routing_preferences : undefined;
@@ -537,6 +537,26 @@ router.post('/v1/chat/completions', async (req: Request, res: Response) => {
               res.write(`data: {"error":{"message":"Upstream connection lost","type":"proxy_error"}}\n\ndata: [DONE]\n\n`);
             }
             res.end();
+          }
+          if (user) {
+            db.query(
+              `INSERT INTO activity_log (user_id, type, summary, status, model_used, details)
+               VALUES ($1, 'message', $2, 'failed', $3, $4)`,
+              [user.id, lastMessage.slice(0, 200), selectedModel, 'Upstream error']
+            ).catch(() => {});
+          }
+        });
+
+        // Log activity on successful response
+        proxyRes.on('end', () => {
+          if (user && proxyRes.statusCode && proxyRes.statusCode < 400) {
+            const hasToolCalls = ctx.toolCallCount > 0;
+            const actType = hasToolCalls ? 'task' : 'message';
+            db.query(
+              `INSERT INTO activity_log (user_id, type, summary, status, model_used, tokens_used, details)
+               VALUES ($1, $2, $3, 'completed', $4, $5, $6)`,
+              [user.id, actType, lastMessage.slice(0, 200), selectedModel, ctx.messageCount, routingReason]
+            ).catch(() => {});
           }
         });
 
