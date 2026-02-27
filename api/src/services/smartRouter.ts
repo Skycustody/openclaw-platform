@@ -561,7 +561,7 @@ export function selectModel(
   } else if (needsCode) {
     model = 'anthropic/claude-sonnet-4';
     reason = 'Code task - best code generation model';
-  } else if (needsAgentic && complexity !== 'simple') {
+  } else if (needsAgentic) {
     model = 'google/gemini-2.5-flash';
     reason = 'Agentic/tool task - fast and capable';
   } else if (needsVision) {
