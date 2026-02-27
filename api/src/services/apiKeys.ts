@@ -417,12 +417,12 @@ export async function injectApiKeys(
         enabled: true,
         allowInsecureAuth: true,
         dangerouslyDisableDeviceAuth: true,
-        dangerouslyAllowHostHeaderOriginFallback: true,
         allowedOrigins: ['https://valnaa.com', 'https://www.valnaa.com'],
       },
       auth: {
         mode: 'token',
         token: gatewayToken,
+        rateLimit: { maxAttempts: 10, windowMs: 60000, lockoutMs: 300000 },
       },
     };
   }
@@ -468,10 +468,13 @@ export function buildOpenclawConfig(gatewayToken: string): Record<string, any> {
         enabled: true,
         allowInsecureAuth: true,
         dangerouslyDisableDeviceAuth: true,
-        dangerouslyAllowHostHeaderOriginFallback: true,
         allowedOrigins: ['https://valnaa.com', 'https://www.valnaa.com'],
       },
-      auth: { mode: 'token', token: gatewayToken },
+      auth: {
+        mode: 'token',
+        token: gatewayToken,
+        rateLimit: { maxAttempts: 10, windowMs: 60000, lockoutMs: 300000 },
+      },
     },
   };
 }

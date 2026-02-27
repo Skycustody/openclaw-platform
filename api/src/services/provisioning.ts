@@ -172,7 +172,7 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
     `docker rm -f ${containerName} 2>/dev/null || true`,
     `docker network create --opt com.docker.network.bridge.enable_icc=false openclaw-net 2>/dev/null || true`,
     `docker network create ${containerName}-net 2>/dev/null || true`,
-    `mkdir -p /opt/openclaw/instances/${userId}`,
+    `mkdir -p /opt/openclaw/instances/${userId} && chmod 700 /opt/openclaw/instances/${userId}`,
   ].join(' && '));
   if (setupResult.code !== 0) {
     console.error(`[provision] setup failed:`, setupResult.stderr);
@@ -247,7 +247,7 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
 
     // Ensure workspace + memory directories exist
     await sshExec(server.ip,
-      `mkdir -p /opt/openclaw/instances/${userId}/workspace/memory /opt/openclaw/instances/${userId}/agents/main/agent`
+      `mkdir -p /opt/openclaw/instances/${userId}/workspace/memory /opt/openclaw/instances/${userId}/agents/main/agent /opt/openclaw/instances/${userId}/credentials && chmod 700 /opt/openclaw/instances/${userId}/credentials`
     );
 
     if (settings?.agent_name || settings?.custom_instructions) {
