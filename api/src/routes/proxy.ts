@@ -425,11 +425,33 @@ router.post('/v1/chat/completions', async (req: Request, res: Response) => {
     if (!isAutoRouting) {
       selectedModel = incomingModel;
       routingReason = `Direct: ${incomingModel}`;
+      // Sync to dashboard: if agent switched model via chat, update user_settings
+      if (user && incomingModel !== user.manual_model) {
+        db.query(
+          `INSERT INTO user_settings (user_id, brain_mode, manual_model)
+           VALUES ($1, 'manual', $2)
+           ON CONFLICT (user_id) DO UPDATE SET brain_mode = 'manual', manual_model = $2`,
+          [user.id, incomingModel]
+        ).catch(() => {});
+        user.manual_model = incomingModel;
+        user.brain_mode = 'manual';
+      }
     } else if (user && user.brain_mode === 'manual' && user.manual_model) {
       selectedModel = user.manual_model;
       routingReason = 'Manual override';
       routerUsed = 'manual';
     } else {
+      // If user was on manual but container switched back to auto, sync to dashboard
+      if (user && user.brain_mode === 'manual') {
+        db.query(
+          `INSERT INTO user_settings (user_id, brain_mode, manual_model)
+           VALUES ($1, 'auto', NULL)
+           ON CONFLICT (user_id) DO UPDATE SET brain_mode = 'auto', manual_model = NULL`,
+          [user.id]
+        ).catch(() => {});
+        user.brain_mode = 'auto';
+        user.manual_model = null;
+      }
       const lastMessage = extractLastUserMessage(body.messages);
       const hasImage = hasImageContent(body.messages);
       const hasToolHistory = hasToolCallsInHistory(body.messages);

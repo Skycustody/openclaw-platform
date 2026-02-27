@@ -462,6 +462,17 @@ export default function GatewayChat({ gatewayUrl, token, agentName, modelName, o
           setActiveRunId(null);
           if (pollTimer.current) { clearInterval(pollTimer.current); pollTimer.current = null; }
           setMessages(prev => prev.map(m => m.streaming ? { ...m, streaming: false } : m));
+          // Re-sync model display — agent may have switched model during the run
+          api.get<{ settings: { brain_mode?: string; manual_model?: string | null } }>('/settings')
+            .then(res => {
+              const s = res.settings;
+              if (s?.brain_mode === 'manual' && s?.manual_model) {
+                setSelectedModel(s.manual_model);
+              } else {
+                setSelectedModel('auto');
+              }
+            })
+            .catch(() => {});
         }
 
         const isError = pay.type === 'error' || ev === 'chat.error' || ev === 'run.error';

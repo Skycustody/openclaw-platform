@@ -92,14 +92,26 @@ export async function injectApiKeys(
   delete config.personality; // invalid key — user context lives in USER.md
 
   // ── Environment variables ──
-  // Inject the OpenRouter key under multiple names so skills that expect
-  // OPENAI_API_KEY or GEMINI_API_KEY work automatically through OpenRouter.
+  // BYOK users → all env vars point to OpenRouter directly.
+  // Platform users → OPENAI_BASE_URL points to our proxy so skills using the
+  // OpenAI SDK also go through smart routing/caching/tracking. We intentionally
+  // omit ANTHROPIC_BASE_URL for platform users so OpenClaw doesn't create an
+  // implicit "anthropic" provider that bypasses our proxy when users switch
+  // models (e.g. "switch to sonnet" → anthropic/claude-sonnet-4).
   if (!config.env) config.env = {};
   config.env.OPENROUTER_API_KEY = apiKey;
   config.env.OPENAI_API_KEY = apiKey;
-  config.env.OPENAI_BASE_URL = 'https://openrouter.ai/api/v1';
-  config.env.ANTHROPIC_API_KEY = apiKey;
-  config.env.ANTHROPIC_BASE_URL = 'https://openrouter.ai/api/v1';
+  if (usingOwnKey) {
+    config.env.OPENAI_BASE_URL = 'https://openrouter.ai/api/v1';
+    config.env.ANTHROPIC_API_KEY = apiKey;
+    config.env.ANTHROPIC_BASE_URL = 'https://openrouter.ai/api/v1';
+  } else {
+    config.env.OPENAI_BASE_URL = PROXY_BASE_URL;
+    // No ANTHROPIC_* env vars — forces all anthropic/ model requests
+    // through the "platform" provider where they're listed.
+    delete config.env.ANTHROPIC_API_KEY;
+    delete config.env.ANTHROPIC_BASE_URL;
+  }
   if (process.env.BROWSERLESS_TOKEN) {
     config.env.BROWSERLESS_TOKEN = process.env.BROWSERLESS_TOKEN;
   }
