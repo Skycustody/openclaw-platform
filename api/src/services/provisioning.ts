@@ -35,7 +35,7 @@ import crypto from 'crypto';
 import db from '../lib/db';
 import { sshExec, waitForReady } from './ssh';
 import { findBestServer, updateServerRam } from './serverRegistry';
-import { PLAN_LIMITS, Plan, User } from '../types';
+import { PLAN_LIMITS, Plan, Server, User } from '../types';
 import { sendWelcomeEmail } from './email';
 import { cloudflareDNS } from './cloudflare';
 import { v4 as uuid } from 'uuid';
