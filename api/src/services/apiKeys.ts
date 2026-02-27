@@ -340,18 +340,18 @@ export async function injectApiKeys(
 
         if (ch.channel_type === 'telegram' && ch.token) {
           config.channels[channelKey] = {
-            enabled: true, botToken: ch.token,
+            botToken: ch.token,
             dmPolicy: 'open', allowFrom: ['*'],
             groups: { '*': { requireMention: true } },
           };
         } else if (ch.channel_type === 'discord' && ch.token) {
           config.channels[channelKey] = {
-            enabled: true, token: ch.token,
+            token: ch.token,
             dmPolicy: 'open', allowFrom: ['*'],
             ...(ch.config?.guildId ? { guildId: ch.config.guildId } : {}),
           };
         } else if (ch.channel_type === 'slack' && ch.token) {
-          config.channels[channelKey] = { enabled: true, token: ch.token };
+          config.channels[channelKey] = { token: ch.token };
         } else if (ch.channel_type === 'whatsapp') {
           config.channels[channelKey] = { dmPolicy: 'open', allowFrom: ['*'] };
         }
@@ -361,6 +361,17 @@ export async function injectApiKeys(
     }
   } catch (err) {
     console.warn(`[apiKeys] Failed to sync agent channels:`, err);
+  }
+
+  // Strip "enabled" from all channel entries — OpenClaw schema doesn't recognize it
+  if (config.channels && typeof config.channels === 'object') {
+    for (const key of Object.keys(config.channels)) {
+      const ch = config.channels[key];
+      if (ch && typeof ch === 'object') {
+        delete ch.enabled;
+        if (Object.keys(ch).length === 0) delete config.channels[key];
+      }
+    }
   }
 
   // ── Per-agent communication permissions ──
