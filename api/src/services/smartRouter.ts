@@ -197,16 +197,16 @@ export interface TaskCategory {
 export const TASK_CATEGORIES: TaskCategory[] = [
   { key: 'greeting',       label: 'Simple Q&A',            description: 'Greetings, thanks, basic questions, translations, short answers',                  defaultModel: 'openai/gpt-4.1-nano',              ruleNumber: 1 },
   { key: 'browser',        label: 'Browser Automation',    description: 'Fill forms, visit websites, apply to jobs, sign up, scrape pages, web interaction', defaultModel: 'google/gemini-2.5-flash',           ruleNumber: 2 },
-  { key: 'coding',         label: 'Coding',                description: 'Coding, debugging, code review, build apps, fix bugs, write scripts',               defaultModel: 'google/gemini-2.5-flash',           ruleNumber: 3 },
+  { key: 'coding',         label: 'Coding',                description: 'Coding, debugging, code review, build apps, fix bugs, write scripts',               defaultModel: 'anthropic/claude-sonnet-4',         ruleNumber: 3 },
   { key: 'math',           label: 'Math & Reasoning',      description: 'Math, logic, proofs, complex reasoning, puzzles',                                  defaultModel: 'deepseek/deepseek-r1',              ruleNumber: 4 },
-  { key: 'research',       label: 'Research & Summarize',  description: 'Research, summarize, analyze documents, compare options',                           defaultModel: 'google/gemini-2.5-flash',           ruleNumber: 5 },
-  { key: 'creative',       label: 'Creative Writing',      description: 'Creative writing, stories, essays',                                                defaultModel: 'google/gemini-2.5-flash',           ruleNumber: 6 },
+  { key: 'research',       label: 'Research & Summarize',  description: 'Research, summarize, analyze documents, compare options',                           defaultModel: 'deepseek/deepseek-chat-v3-0324',    ruleNumber: 5 },
+  { key: 'creative',       label: 'Creative Writing',      description: 'Creative writing, stories, essays',                                                defaultModel: 'openai/gpt-4.1-mini',              ruleNumber: 6 },
   { key: 'vision',         label: 'Image & Vision',        description: 'Image/vision analysis',                                                            defaultModel: 'google/gemini-2.5-flash',           ruleNumber: 7 },
   { key: 'large_context',  label: 'Large Documents',       description: 'Very large documents (>50K tokens)',                                               defaultModel: 'google/gemini-2.5-flash',           ruleNumber: 8 },
   { key: 'general',        label: 'General Tasks',         description: 'General medium-complexity tasks',                                                  defaultModel: 'google/gemini-2.5-flash',           ruleNumber: 9 },
   { key: 'shell',          label: 'Shell & Sysadmin',      description: 'Shell commands, install software, system administration',                           defaultModel: 'google/gemini-2.5-flash',           ruleNumber: 10 },
   { key: 'messaging',      label: 'Messaging & Files',     description: 'Send messages, schedule tasks, manage files',                                      defaultModel: 'openai/gpt-4o-mini',                ruleNumber: 11 },
-  { key: 'complex',        label: 'Extremely Complex',     description: 'Extremely complex multi-hour analysis tasks',                                      defaultModel: 'google/gemini-2.5-pro',             ruleNumber: 12 },
+  { key: 'complex',        label: 'Extremely Complex',     description: 'Extremely complex multi-hour analysis tasks',                                      defaultModel: 'anthropic/claude-sonnet-4',         ruleNumber: 12 },
 ];
 
 const VALID_CATEGORY_KEYS = new Set(TASK_CATEGORIES.map(c => c.key));
@@ -218,33 +218,35 @@ Your job: pick the CHEAPEST model that can handle the user's CURRENT message wel
 AVAILABLE MODELS (sorted cheapest first):
 ${MODEL_CATALOG}
 
-ROUTING RULES (CHEAPEST FIRST — always prefer the cheapest model that works):
-1. Simple greetings, thanks, "hi", "hello", "yes", "no", basic Q&A, short factual answers, status checks → openai/gpt-4.1-nano ($0.10)
-2. Browser automation, fill forms, scrape pages, navigate websites → google/gemini-2.5-flash ($0.30) — it handles tool orchestration well
-3. Coding: build apps, debug, scripts, code review → google/gemini-2.5-flash ($0.30). Only use openai/gpt-4.1 ($2.00) for very complex full-app builds
-4. Math, logic, proofs, complex reasoning → deepseek/deepseek-r1 ($0.70)
-5. Research, summarize, analyze documents → google/gemini-2.5-flash ($0.30)
-6. Creative writing, stories, essays → google/gemini-2.5-flash ($0.30)
-7. Image/vision → google/gemini-2.5-flash ($0.30)
-8. Very large documents (>50K tokens) → google/gemini-2.5-flash ($0.30) — it has 1M context
+ROUTING RULES (use the right model for the job — smart AND cheap):
+1. Simple greetings, thanks, "hi", "hello", "yes", "no", basic Q&A, short factual answers → openai/gpt-4.1-nano ($0.10)
+2. Browser automation, fill forms, scrape pages, navigate websites → google/gemini-2.5-flash ($0.30) — fast and good with tools
+3. Coding: build apps, debug, write code, fix bugs, code review → anthropic/claude-sonnet-4 ($3.00) — best for code quality. Simple code questions or short scripts → google/gemini-2.5-flash ($0.30)
+4. Math, logic, proofs, complex reasoning, puzzles → deepseek/deepseek-r1 ($0.70) — strong reasoning at low cost
+5. Research, summarize, analyze documents → deepseek/deepseek-chat-v3-0324 ($0.19) — great analysis very cheap
+6. Creative writing, stories, essays → openai/gpt-4.1-mini ($0.40) — good writing at low cost
+7. Image/vision analysis → google/gemini-2.5-flash ($0.30)
+8. Very large documents (>50K tokens) → google/gemini-2.5-flash ($0.30) — 1M context
 9. General medium tasks, explanations, planning → google/gemini-2.5-flash ($0.30)
-10. Shell commands, install software, file operations → google/gemini-2.5-flash ($0.30)
+10. Shell commands, install software, sysadmin → google/gemini-2.5-flash ($0.30)
 11. Send messages, manage files, schedule tasks → openai/gpt-4o-mini ($0.15)
-12. ONLY use google/gemini-2.5-pro ($1.25) for extremely complex analysis requiring deep multi-step reasoning
-13. NEVER use anthropic/claude-sonnet-4 ($3.00) or anthropic/claude-opus-4 ($15.00) unless the user explicitly asks for them
+12. Extremely complex multi-step tasks needing top-tier quality → anthropic/claude-sonnet-4 ($3.00)
+13. NEVER use anthropic/claude-opus-4 ($15.00) — almost never justified
 
 CONTINUATION MESSAGES:
-If the user's message is "continue", "do it", "go ahead", "next", "fix that", "try again" — look at what the agent was LAST DOING:
+If the user's message is "continue", "do it", "go ahead", "next", "fix that", "try again" — match the previous task:
 - If the agent was browsing/automating → google/gemini-2.5-flash
-- If the agent was coding → google/gemini-2.5-flash
+- If the agent was coding → anthropic/claude-sonnet-4
+- If the agent was researching → deepseek/deepseek-chat-v3-0324
 - If the agent was doing simple tasks → openai/gpt-4.1-nano
 
 COST RULES:
-- google/gemini-2.5-flash ($0.30) is your DEFAULT for almost everything. It is fast, smart, has 1M context, and handles tools well.
-- NEVER pick a model costing >$1/1M unless the task absolutely requires it.
-- Models >$2/1M (claude-sonnet-4, gpt-4o, grok-3) should almost NEVER be selected — only if user explicitly requests them.
-- A user saying "thanks" after a coding session → gpt-4.1-nano, not the coding model.
-- When in doubt, ALWAYS pick the cheaper one.
+- Use the BEST model for each task type, not the most expensive.
+- DeepSeek models are excellent for research ($0.19) and math ($0.70) — use them.
+- Gemini Flash is great for browser, vision, general tasks ($0.30) — use it.
+- Claude Sonnet is for coding and complex tasks ($3.00) — only when code quality matters.
+- A user saying "thanks" or "ok" after any session → gpt-4.1-nano.
+- When in doubt between two models of similar capability, pick the cheaper one.
 - You must return EXACTLY one of the model IDs listed above.
 
 Return JSON: {"model":"<exact_model_id_from_list>","reason":"<why in max 10 words>"}`;
@@ -316,6 +318,9 @@ function quickClassify(
   }
 
   if (trimmed.length <= 40 && CONTINUATION_RE.test(trimmed)) {
+    if (ctx?.taskSummary?.includes('coding')) {
+      return { model: 'anthropic/claude-sonnet-4', reason: 'Continue coding task' };
+    }
     return { model: 'google/gemini-2.5-flash', reason: 'Continue previous task' };
   }
 
@@ -553,24 +558,24 @@ export function selectModel(
   if (complexity === 'simple') {
     model = 'openai/gpt-4.1-nano';
     reason = 'Simple task - cheapest model';
-  } else if (needsAgentic) {
+  } else if (needsCode) {
+    model = 'anthropic/claude-sonnet-4';
+    reason = 'Code task - best code generation model';
+  } else if (needsAgentic && complexity !== 'simple') {
     model = 'google/gemini-2.5-flash';
     reason = 'Agentic/tool task - fast and capable';
   } else if (needsVision) {
     model = 'google/gemini-2.5-flash';
     reason = 'Vision task - cheap with strong vision';
-  } else if (needsInternet) {
-    model = 'google/gemini-2.5-flash';
-    reason = 'Internet task - fast and cheap';
-  } else if (needsCode) {
-    model = 'google/gemini-2.5-flash';
-    reason = 'Code task - strong and cost-efficient';
   } else if (needsDeepAnalysis) {
     model = 'deepseek/deepseek-r1';
-    reason = 'Deep analysis - reasoning model at low cost';
+    reason = 'Deep analysis - strong reasoning at low cost';
+  } else if (needsInternet) {
+    model = 'deepseek/deepseek-chat-v3-0324';
+    reason = 'Research/internet task - strong and very cheap';
   } else if (estimatedTokens > 100000) {
     model = 'google/gemini-2.5-flash';
-    reason = `Large context (${estimatedTokens} est. tokens) - 1M context at low cost`;
+    reason = `Large context (${estimatedTokens} est. tokens) - 1M context`;
   } else {
     model = 'google/gemini-2.5-flash';
     reason = 'Default - best cost/quality ratio';
