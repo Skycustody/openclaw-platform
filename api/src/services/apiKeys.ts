@@ -159,8 +159,8 @@ export async function injectApiKeys(
     if (!config.agents) config.agents = {};
     if (!config.agents.defaults) config.agents.defaults = {};
     config.agents.defaults.model = {
-      primary: 'openrouter/anthropic/claude-sonnet-4',
-      fallbacks: ['openrouter/openai/gpt-4o', 'openrouter/google/gemini-2.5-flash'],
+      primary: 'openrouter/google/gemini-2.5-flash',
+      fallbacks: ['openrouter/openai/gpt-4.1-mini', 'openrouter/deepseek/deepseek-chat-v3-0324'],
     };
     config.agents.defaults.heartbeat = {
       every: '30m',
@@ -220,7 +220,7 @@ export async function injectApiKeys(
     if (!config.agents.defaults) config.agents.defaults = {};
     config.agents.defaults.model = {
       primary: 'platform/auto',
-      fallbacks: ['openrouter/anthropic/claude-sonnet-4', 'openrouter/openai/gpt-4o'],
+      fallbacks: ['openrouter/google/gemini-2.5-flash', 'openrouter/openai/gpt-4.1-mini'],
     };
     config.agents.defaults.heartbeat = {
       every: '30m',
