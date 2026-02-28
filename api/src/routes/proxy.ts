@@ -505,6 +505,37 @@ router.post('/v1/chat/completions', async (req: Request, res: Response) => {
       body.transforms = ['middle-out'];
     }
 
+    // Log in_progress activity at request start (deduplicated)
+    let activityId: string | undefined;
+    if (user) {
+      const summary = lastMessage.slice(0, 200);
+      const key = user.id;
+      const now = Date.now();
+      const recent = recentActivity.get(key);
+      const hasToolCalls = ctx.toolCallCount > 0;
+      const actType = hasToolCalls ? 'task' : 'message';
+
+      if (recent && recent.summary === summary && (now - recent.ts) < ACTIVITY_DEDUP_MS && recent.id) {
+        activityId = recent.id;
+        recent.ts = now;
+        db.query(
+          `UPDATE activity_log SET model_used = $1, type = $2, status = 'in_progress', created_at = NOW() WHERE id = $3`,
+          [selectedModel, actType, recent.id]
+        ).catch(() => {});
+      } else {
+        db.query(
+          `INSERT INTO activity_log (user_id, type, channel, summary, status, model_used, details)
+           VALUES ($1, $2, $3, $4, 'in_progress', $5, $6)
+           RETURNING id`,
+          [user.id, actType, ctx.taskSummary ? 'auto' : 'direct', summary, selectedModel, ctx.taskSummary || routerUsed]
+        ).then(r => {
+          const id = r.rows[0]?.id;
+          activityId = id;
+          recentActivity.set(key, { summary, ts: now, id });
+        }).catch(() => {});
+      }
+    }
+
     const payload = JSON.stringify(body);
     const isStream = body.stream !== false;
     const url = new URL(OPENROUTER_COMPLETIONS);
@@ -543,43 +574,27 @@ router.post('/v1/chat/completions', async (req: Request, res: Response) => {
             res.end();
           }
           if (user) {
-            db.query(
-              `INSERT INTO activity_log (user_id, type, summary, status, model_used, details)
-               VALUES ($1, 'message', $2, 'failed', $3, $4)`,
-              [user.id, lastMessage.slice(0, 200), selectedModel, 'Upstream error']
-            ).catch(() => {});
+            const id = activityId || recentActivity.get(user.id)?.id;
+            if (id) {
+              db.query(
+                `UPDATE activity_log SET status = 'failed', details = 'Upstream error' WHERE id = $1`,
+                [id]
+              ).catch(() => {});
+            }
           }
         });
 
-        // Log activity on successful response (deduplicated per task)
+        // Mark activity completed when response finishes
         proxyRes.on('end', () => {
-          if (!user || !proxyRes.statusCode || proxyRes.statusCode >= 400) return;
-
-          const now = Date.now();
-          const hasToolCalls = ctx.toolCallCount > 0;
-          const actType = hasToolCalls ? 'task' : 'message';
-          const summary = lastMessage.slice(0, 200);
-          const key = user.id;
-          const recent = recentActivity.get(key);
-
-          if (recent && recent.summary === summary && (now - recent.ts) < ACTIVITY_DEDUP_MS && recent.id) {
-            // Same task still running — update existing entry instead of creating a new one
+          if (!user || !proxyRes.statusCode) return;
+          const status = proxyRes.statusCode < 400 ? 'completed' : 'failed';
+          const recent = recentActivity.get(user.id);
+          const id = activityId || recent?.id;
+          if (id) {
             db.query(
-              `UPDATE activity_log SET model_used = $1, type = $2, status = 'completed', created_at = NOW()
-               WHERE id = $3`,
-              [selectedModel, actType, recent.id]
+              `UPDATE activity_log SET status = $1, model_used = $2, created_at = NOW() WHERE id = $3`,
+              [status, selectedModel, id]
             ).catch(() => {});
-            recent.ts = now;
-          } else {
-            // New activity — insert and track for dedup
-            db.query(
-              `INSERT INTO activity_log (user_id, type, channel, summary, status, model_used, details)
-               VALUES ($1, $2, $3, $4, 'completed', $5, $6)
-               RETURNING id`,
-              [user.id, actType, ctx.taskSummary ? 'auto' : 'direct', summary, selectedModel, ctx.taskSummary || routerUsed]
-            ).then(r => {
-              recentActivity.set(key, { summary, ts: now, id: r.rows[0]?.id });
-            }).catch(() => {});
           }
         });
 

@@ -15,8 +15,10 @@ interface ActivityEntry {
   id: string;
   type: 'message' | 'browsing' | 'email' | 'task' | 'shopping';
   summary: string;
-  timestamp: string;
-  status: 'completed' | 'attention' | 'failed';
+  created_at: string;
+  status: 'completed' | 'in_progress' | 'attention' | 'failed';
+  channel?: string;
+  model_used?: string;
   detail?: string;
 }
 
@@ -47,12 +49,14 @@ const typeColors: Record<string, string> = {
 
 const statusIcons: Record<string, typeof CheckCircle2> = {
   completed: CheckCircle2,
+  in_progress: Loader2,
   attention: AlertTriangle,
   failed: XCircle,
 };
 
 const statusColors: Record<string, string> = {
   completed: 'text-emerald-400',
+  in_progress: 'text-blue-400',
   attention: 'text-amber-400',
   failed: 'text-red-400',
 };
@@ -63,8 +67,8 @@ function groupByDay(entries: ActivityEntry[]): { label: string; items: ActivityE
   const yesterday = new Date(Date.now() - 86400000).toDateString();
 
   for (const entry of entries) {
-    const day = new Date(entry.timestamp).toDateString();
-    const label = day === today ? 'Today' : day === yesterday ? 'Yesterday' : new Date(entry.timestamp).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+    const day = new Date(entry.created_at).toDateString();
+    const label = day === today ? 'Today' : day === yesterday ? 'Yesterday' : new Date(entry.created_at).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
     if (!groups[label]) groups[label] = [];
     groups[label].push(entry);
   }
@@ -95,8 +99,8 @@ export default function ActivityFeed() {
         setEntries(data);
         if (data.length > 0) {
           const latest = data[0];
-          const ageMs = Date.now() - new Date(latest.timestamp).getTime();
-          if (ageMs < 120_000 && latest.status !== 'completed' && latest.status !== 'failed') {
+          const ageMs = Date.now() - new Date(latest.created_at).getTime();
+          if (latest.status === 'in_progress' || (ageMs < 120_000 && latest.status !== 'completed' && latest.status !== 'failed')) {
             setIsAgentActive(true);
             setCurrentAction(latest.summary);
           } else {
@@ -120,6 +124,8 @@ export default function ActivityFeed() {
     setEntries([]);
     setHasMore(true);
     fetchEntries(0, true);
+    const interval = setInterval(() => fetchEntries(0, true), 10000);
+    return () => clearInterval(interval);
   }, [fetchEntries]);
 
   const loadMore = () => {
@@ -212,9 +218,9 @@ export default function ActivityFeed() {
                           )}
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
-                          <SIcon className={cn('h-3.5 w-3.5', sColor)} />
+                          <SIcon className={cn('h-3.5 w-3.5', sColor, entry.status === 'in_progress' && 'animate-spin')} />
                           <span className="text-[12px] text-white/25 whitespace-nowrap">
-                            {formatTime(entry.timestamp)}
+                            {formatTime(entry.created_at)}
                           </span>
                         </div>
                       </div>
