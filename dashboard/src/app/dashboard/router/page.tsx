@@ -135,7 +135,11 @@ export default function RouterPage() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    fetchData();
+    const interval = setInterval(fetchData, 15000);
+    return () => clearInterval(interval);
+  }, [fetchData]);
 
   const updateBrain = async (mode: 'auto' | 'manual', model?: string) => {
     setSaving(true);
