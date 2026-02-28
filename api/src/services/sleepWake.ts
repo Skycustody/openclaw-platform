@@ -26,10 +26,15 @@ const SLEEP_AFTER_MINUTES = 30;
 export async function runSleepCycle(): Promise<{ slept: number }> {
   let slept = 0;
 
-  const users = await db.getMany<User & { server_ip: string }>(
-    `SELECT u.*, s.ip as server_ip
+  const users = await db.getMany<User & { server_ip: string; has_channels: boolean }>(
+    `SELECT u.*, s.ip as server_ip,
+       COALESCE(
+         c.telegram_connected OR c.discord_connected OR c.slack_connected OR c.whatsapp_connected,
+         false
+       ) as has_channels
      FROM users u
      JOIN servers s ON s.id = u.server_id
+     LEFT JOIN user_channels c ON c.user_id = u.id
      WHERE u.status = 'active'`
   );
 
@@ -42,6 +47,8 @@ export async function runSleepCycle(): Promise<{ slept: number }> {
     const ageMinutes = (Date.now() - new Date(user.created_at).getTime()) / 60000;
 
     if (ageMinutes < 60) continue;
+
+    if (user.has_channels) continue;
 
     if (idleMinutes >= SLEEP_AFTER_MINUTES) {
       try {
