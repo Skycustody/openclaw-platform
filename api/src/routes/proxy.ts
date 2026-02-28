@@ -661,4 +661,49 @@ router.get('/v1/models', async (req: Request, res: Response) => {
   }
 });
 
+// Embeddings proxy — forward to OpenRouter so memory_search works
+router.post('/v1/embeddings', async (req: Request, res: Response) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) {
+      return res.status(401).json({ error: { message: 'Missing API key', type: 'auth_error' } });
+    }
+
+    const payload = JSON.stringify(req.body);
+    const url = new URL('https://openrouter.ai/api/v1/embeddings');
+
+    const proxyReq = https.request(
+      {
+        hostname: url.hostname,
+        port: 443,
+        path: url.pathname,
+        method: 'POST',
+        timeout: 30_000,
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(payload),
+          Authorization: authHeader,
+          'HTTP-Referer': 'https://valnaa.com',
+          'X-Title': 'OpenClaw Platform',
+        },
+      },
+      (proxyRes) => {
+        res.writeHead(proxyRes.statusCode || 200, {
+          'Content-Type': proxyRes.headers['content-type'] || 'application/json',
+        });
+        proxyRes.pipe(res);
+      }
+    );
+    proxyReq.on('error', (err) => {
+      console.error('[proxy] Embeddings request failed:', err.message);
+      if (!res.headersSent) res.status(502).json({ error: { message: 'Upstream error' } });
+    });
+    proxyReq.on('timeout', () => proxyReq.destroy(new Error('Embeddings timeout')));
+    proxyReq.write(payload);
+    proxyReq.end();
+  } catch (err) {
+    if (!res.headersSent) res.status(500).json({ error: { message: 'Internal error' } });
+  }
+});
+
 export default router;
