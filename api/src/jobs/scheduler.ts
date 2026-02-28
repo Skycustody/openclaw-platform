@@ -2,6 +2,7 @@ import cron from 'node-cron';
 import { runSleepCycle } from '../services/sleepWake';
 import { runDueCronJobs } from '../services/cronScheduler';
 import { checkCapacity } from '../services/serverRegistry';
+import { processGracePeriods } from '../services/gracePeriod';
 
 
 export function startScheduler() {
@@ -42,5 +43,16 @@ export function startScheduler() {
     }
   });
 
-  console.log('[scheduler] Started: sleep=*/5min, cron=*/1min, capacity=*/10min');
+  // Grace period processing — every 6 hours
+  cron.schedule('0 */6 * * *', async () => {
+    const start = Date.now();
+    try {
+      await processGracePeriods();
+      console.log(`[scheduler] Grace period check completed (${Date.now() - start}ms)`);
+    } catch (err: any) {
+      console.error(`[scheduler] Grace period check error (${Date.now() - start}ms):`, err.message);
+    }
+  });
+
+  console.log('[scheduler] Started: sleep=*/5min, cron=*/1min, capacity=*/10min, grace=*/6h');
 }

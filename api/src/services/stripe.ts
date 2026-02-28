@@ -272,8 +272,22 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription): Pro
 
 async function handleInvoicePaid(invoice: Stripe.Invoice): Promise<void> {
   if (!invoice.subscription) return;
-  // Subscription renewal: no action needed for credits.
-  // Purchased credits never expire — they persist across billing cycles.
+
+  const customerId = invoice.customer as string;
+  const user = await db.getOne<User>(
+    'SELECT * FROM users WHERE stripe_customer_id = $1',
+    [customerId]
+  );
+  if (!user) return;
+
+  // Restore access if user was in a non-active state due to prior payment failure
+  if (['grace_period', 'paused', 'cancelled'].includes(user.status)) {
+    await db.query(
+      `UPDATE users SET status = 'active', grace_period_end = NULL WHERE id = $1`,
+      [user.id]
+    );
+    console.log(`[stripe] Invoice paid — restored user ${user.id} from '${user.status}' to 'active'`);
+  }
 }
 
 async function handlePaymentFailed(invoice: Stripe.Invoice): Promise<void> {
