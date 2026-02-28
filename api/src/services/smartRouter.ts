@@ -196,7 +196,7 @@ export interface TaskCategory {
 
 export const TASK_CATEGORIES: TaskCategory[] = [
   { key: 'greeting',       label: 'Simple Q&A',            description: 'Greetings, thanks, basic questions, translations, short answers',                  defaultModel: 'openai/gpt-4.1-nano',              ruleNumber: 1 },
-  { key: 'browser',        label: 'Browser Automation',    description: 'Fill forms, visit websites, apply to jobs, sign up, scrape pages, web interaction', defaultModel: 'google/gemini-2.5-flash',           ruleNumber: 2 },
+  { key: 'browser',        label: 'Browser Automation',    description: 'Fill forms, visit websites, apply to jobs, sign up, scrape pages, web interaction', defaultModel: 'anthropic/claude-sonnet-4',         ruleNumber: 2 },
   { key: 'coding',         label: 'Coding',                description: 'Coding, debugging, code review, build apps, fix bugs, write scripts',               defaultModel: 'anthropic/claude-sonnet-4',         ruleNumber: 3 },
   { key: 'math',           label: 'Math & Reasoning',      description: 'Math, logic, proofs, complex reasoning, puzzles',                                  defaultModel: 'deepseek/deepseek-r1',              ruleNumber: 4 },
   { key: 'research',       label: 'Research & Summarize',  description: 'Research, summarize, analyze documents, compare options',                           defaultModel: 'deepseek/deepseek-chat-v3-0324',    ruleNumber: 5 },
@@ -220,7 +220,7 @@ ${MODEL_CATALOG}
 
 ROUTING RULES (use the right model for the job — smart AND cheap):
 1. Simple greetings, thanks, "hi", "hello", "yes", "no", basic Q&A, short factual answers → openai/gpt-4.1-nano ($0.10)
-2. Browser automation, fill forms, scrape pages, navigate websites → google/gemini-2.5-flash ($0.30) — fast and good with tools
+2. Browser automation, fill forms, scrape pages, navigate websites → anthropic/claude-sonnet-4 ($3.00) — best tool orchestration, prompt caching cuts cost 90%
 3. Coding: build apps, debug, write code, fix bugs, code review → anthropic/claude-sonnet-4 ($3.00) — best for code quality. Simple code questions or short scripts → google/gemini-2.5-flash ($0.30)
 4. Math, logic, proofs, complex reasoning, puzzles → deepseek/deepseek-r1 ($0.70) — strong reasoning at low cost
 5. Research, summarize, analyze documents → deepseek/deepseek-chat-v3-0324 ($0.19) — great analysis very cheap
@@ -233,9 +233,12 @@ ROUTING RULES (use the right model for the job — smart AND cheap):
 12. Extremely complex multi-step tasks needing top-tier quality → anthropic/claude-sonnet-4 ($3.00)
 13. NEVER use anthropic/claude-opus-4 ($15.00) — almost never justified
 
+FRUSTRATED / REPEATED USER:
+If the user repeats a previous request, says "I already said", "that's not what I asked", "wrong", "doesn't work", "try again", "still not working", etc. — they are frustrated with the previous model's result. ALWAYS escalate to anthropic/claude-sonnet-4 ($3.00) regardless of task type. Caching makes repeated context cheap. Better to spend more and satisfy the user than fail again on a cheap model.
+
 CONTINUATION MESSAGES:
 If the user's message is "continue", "do it", "go ahead", "next", "fix that", "try again" — match the previous task:
-- If the agent was browsing/automating → google/gemini-2.5-flash
+- If the agent was browsing/automating → anthropic/claude-sonnet-4
 - If the agent was coding → anthropic/claude-sonnet-4
 - If the agent was researching → deepseek/deepseek-chat-v3-0324
 - If the agent was doing simple tasks → openai/gpt-4.1-nano
@@ -321,6 +324,9 @@ function quickClassify(
     if (ctx?.taskSummary?.includes('coding')) {
       return { model: 'anthropic/claude-sonnet-4', reason: 'Continue coding task' };
     }
+    if (ctx?.taskSummary?.includes('browser')) {
+      return { model: 'anthropic/claude-sonnet-4', reason: 'Continue browser task (cached)' };
+    }
     return { model: 'google/gemini-2.5-flash', reason: 'Continue previous task' };
   }
 
@@ -340,6 +346,8 @@ export interface RouterContext {
   recentToolNames?: string[];
   previousUserMessage?: string;
   taskSummary?: string;
+  frustrated?: boolean;
+  repeatedMessage?: boolean;
 }
 
 /**
@@ -394,7 +402,8 @@ export async function pickModelWithAI(
   const skillHash = installedSkills?.length ? Buffer.from(installedSkills.sort().join(',')).toString('base64').slice(0, 20) : '';
   const userKey = userId ? userId.slice(0, 12) : 'anon';
   const msgKey = userMessage.slice(0, 200);
-  const cacheKey = `aiRoute7:${userKey}:${Buffer.from(msgKey).toString('base64')}:${hasImage}:${hasToolHistory}:${depth}:${toolCalls}:${prefHash}:${skillHash}`;
+  const frustrated = ctx?.frustrated ? '1' : '0';
+  const cacheKey = `aiRoute8:${userKey}:${Buffer.from(msgKey).toString('base64')}:${hasImage}:${hasToolHistory}:${depth}:${toolCalls}:${prefHash}:${skillHash}:${frustrated}`;
 
   try {
     const cached = await redis.get(cacheKey);
@@ -410,6 +419,7 @@ export async function pickModelWithAI(
   if (ctx?.lastAssistantSnippet) contextLines.push(`Agent's last response: "${ctx.lastAssistantSnippet}"`);
   if (ctx?.recentToolNames && ctx.recentToolNames.length > 0) contextLines.push(`Tools agent recently used: ${ctx.recentToolNames.join(', ')}`);
   if (ctx?.taskSummary) contextLines.push(`Recent task type: ${ctx.taskSummary}`);
+  if (ctx?.frustrated) contextLines.push(`⚠️ USER APPEARS FRUSTRATED${ctx.repeatedMessage ? ' (repeated same request)' : ''} — escalate to anthropic/claude-sonnet-4`);
   if (depth > 0) contextLines.push(`Conversation depth: ${depth} messages`);
   const userContent = contextLines.join('\n');
 
@@ -562,8 +572,8 @@ export function selectModel(
     model = 'anthropic/claude-sonnet-4';
     reason = 'Code task - best code generation model';
   } else if (needsAgentic) {
-    model = 'google/gemini-2.5-flash';
-    reason = 'Agentic/tool task - fast and capable';
+    model = 'anthropic/claude-sonnet-4';
+    reason = 'Agentic/browser task - best tool orchestration (cached)';
   } else if (needsVision) {
     model = 'google/gemini-2.5-flash';
     reason = 'Vision task - cheap with strong vision';

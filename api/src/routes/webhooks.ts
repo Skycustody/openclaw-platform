@@ -302,4 +302,58 @@ router.post('/container/history', async (req: Request, res: Response, next: Next
   }
 });
 
+// Skills catalog — agent queries available and installed skills
+router.post('/container/skills', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ error: 'userId required' });
+
+    if (!verifyContainerAuth(req, userId)) {
+      return res.status(401).json({ error: 'Invalid container authentication' });
+    }
+
+    const { PLATFORM_SKILLS } = await import('../data/platformSkills');
+
+    const db = (await import('../lib/db')).default;
+    const user = await db.getOne<{ server_id: string; container_name: string }>(
+      'SELECT server_id, container_name FROM users WHERE id = $1', [userId]
+    );
+
+    // Check which skills are installed by reading the container's openclaw.json
+    let installed: string[] = [];
+    if (user?.server_id) {
+      const server = await db.getOne<{ ip: string }>('SELECT ip FROM servers WHERE id = $1', [user.server_id]);
+      if (server) {
+        const { sshExec } = await import('../services/ssh');
+        const configResult = await sshExec(
+          server.ip,
+          `cat /opt/openclaw/instances/${userId}/openclaw.json 2>/dev/null || echo '{}'`
+        ).catch(() => ({ stdout: '{}', stderr: '', code: 0 }));
+        try {
+          const config = JSON.parse(configResult.stdout);
+          installed = Object.keys(config.skills?.entries || {}).filter(
+            k => config.skills.entries[k]?.enabled !== false
+          );
+        } catch {}
+      }
+    }
+
+    const catalog = PLATFORM_SKILLS.map(s => ({
+      id: s.id,
+      name: s.label,
+      description: s.description,
+      category: s.category,
+      installed: installed.includes(s.id),
+    }));
+
+    res.json({
+      installed_skills: catalog.filter(s => s.installed),
+      available_skills: catalog.filter(s => !s.installed),
+      install_instructions: 'To install a skill, tell the user to go to Dashboard > Skills and click Install. Or the user can ask you to install it and you relay the skill name.',
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;

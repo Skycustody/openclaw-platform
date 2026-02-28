@@ -53,11 +53,23 @@ const OPENROUTER_COMPLETIONS = 'https://openrouter.ai/api/v1/chat/completions';
  * 6. Tool call args → summarize long arguments
  * 7. Always tell the model what was removed so it doesn't hallucinate
  */
+function isBrowserSession(messages: any[]): boolean {
+  for (let i = messages.length - 1; i >= Math.max(0, messages.length - 12); i--) {
+    const m = messages[i];
+    if (m.role === 'assistant' && Array.isArray(m.tool_calls)) {
+      if (m.tool_calls.some((tc: any) => /browser|navigate|click|snapshot|fill|type|scroll/i.test(tc?.function?.name || ''))) return true;
+    }
+    if (m.role === 'tool' && typeof m.content === 'string' && m.content.includes('ref=') && m.content.includes('[')) return true;
+  }
+  return false;
+}
+
 function compressMessages(messages: any[]): any[] {
   if (!Array.isArray(messages) || messages.length <= 10) return messages;
 
-  // Find the boundary: keep the last 8 messages fully intact
-  const keepFullFrom = messages.length - 8;
+  const isBrowser = isBrowserSession(messages);
+  const keepFullFrom = messages.length - (isBrowser ? 4 : 8);
+  const deepTrimFrom = isBrowser ? messages.length - 12 : -1;
 
   return messages.map((m, i) => {
     if (i >= keepFullFrom) return m;
@@ -65,7 +77,11 @@ function compressMessages(messages: any[]): any[] {
     if (m.role === 'user') return m;
 
     if (m.role === 'tool') {
-      return { ...m, content: smartTrimToolResult(typeof m.content === 'string' ? m.content : '') };
+      const content = typeof m.content === 'string' ? m.content : '';
+      if (isBrowser && i < deepTrimFrom) {
+        return { ...m, content: collapseBrowserSnapshot(content) };
+      }
+      return { ...m, content: smartTrimToolResult(content) };
     }
 
     if (m.role === 'assistant') {
@@ -81,6 +97,16 @@ function compressMessages(messages: any[]): any[] {
 
     return m;
   });
+}
+
+function collapseBrowserSnapshot(content: string): string {
+  if (content.length < 200) return content;
+  const isBrowserDom = content.includes('ref=') && content.includes('[');
+  if (!isBrowserDom) return smartTrimToolResult(content);
+  const lines = content.split('\n');
+  const titleMatch = content.match(/title[=:]\s*["']?([^"'\n]{1,80})/i);
+  const title = titleMatch ? titleMatch[1].trim() : 'unknown page';
+  return `[Old page snapshot: "${title}", ${lines.length} elements — content omitted, see recent snapshots for current state]`;
 }
 
 function smartTrimToolResult(content: string): string {
@@ -222,17 +248,13 @@ function addPromptCaching(messages: any[], model: string): any[] {
   return result;
 }
 
-/**
- * Get appropriate max_tokens for a model based on its cost tier.
- * Caps output to save cost — doesn't affect quality since most useful
- * responses are well under these limits.
- */
-function getMaxTokens(model: string, requestedMax?: number): number {
+function getMaxTokens(model: string, requestedMax?: number, browserMode?: boolean): number {
   const info = MODEL_MAP[model];
   const cost = info?.costPer1MTokens ?? 1.0;
 
   let cap: number;
-  if (cost >= 10.0) cap = 4096;
+  if (browserMode && cost >= 3.0) cap = 2048;
+  else if (cost >= 10.0) cap = 4096;
   else if (cost >= 3.0) cap = 6144;
   else cap = 16384;
 
@@ -392,6 +414,20 @@ function extractConversationContext(messages: any[]): RouterContext {
   else if (hasMemory) taskSummary = 'memory operations';
   else if (toolCallCount > 0) taskSummary = 'tool-assisted task';
 
+  // Detect repeated messages — user asked same thing before
+  const currentMsg = extractLastUserMessage(messages);
+  const currentNorm = currentMsg.toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
+  const prevNorm = (prevUserMsg || '').toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
+  const repeatedMessage = !!(currentNorm && prevNorm && (
+    currentNorm === prevNorm ||
+    (currentNorm.length > 15 && prevNorm.includes(currentNorm)) ||
+    (prevNorm.length > 15 && currentNorm.includes(prevNorm))
+  ));
+
+  // Detect frustration — explicit signals the user is unhappy with previous result
+  const FRUSTRATION_RE = /\b(i (already|just) (said|told|asked)|again|not what i (asked|wanted|meant)|wrong|doesn'?t work|still not|try again|you('re| are) not (listening|understanding)|i said|that'?s not (right|correct|it)|same (thing|error|problem)|broken|useless|please (actually|just)|why (can'?t|won'?t|isn'?t|doesn'?t)|wtf|ffs|smh|ugh)\b/i;
+  const frustrated = FRUSTRATION_RE.test(currentMsg) || repeatedMessage;
+
   return {
     messageCount: messages.length,
     toolCallCount,
@@ -399,6 +435,8 @@ function extractConversationContext(messages: any[]): RouterContext {
     recentToolNames: toolNames.length > 0 ? toolNames.slice(-10) : undefined,
     previousUserMessage: prevUserMsg,
     taskSummary,
+    frustrated,
+    repeatedMessage,
   };
 }
 
@@ -493,6 +531,7 @@ router.post('/v1/chat/completions', async (req: Request, res: Response) => {
     body.model = selectedModel;
 
     const modelCost = MODEL_MAP[selectedModel]?.costPer1MTokens ?? 1.0;
+    const browserMode = isBrowserSession(body.messages);
     if (modelCost >= 0.50) {
       body.messages = compressMessages(body.messages);
     }
@@ -501,7 +540,7 @@ router.post('/v1/chat/completions', async (req: Request, res: Response) => {
     body.messages = addPromptCaching(body.messages, selectedModel);
 
     if (modelCost >= 3.0) {
-      body.max_tokens = getMaxTokens(selectedModel, body.max_tokens);
+      body.max_tokens = getMaxTokens(selectedModel, body.max_tokens, browserMode);
       body.transforms = ['middle-out'];
     }
 
