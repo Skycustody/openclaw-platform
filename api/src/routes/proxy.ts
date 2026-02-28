@@ -35,6 +35,10 @@ function touchIfNeeded(userId: string): void {
   touchActivity(userId).catch(() => {});
 }
 
+// Deduplicate activity log — collapse multi-step tasks into one entry
+const recentActivity = new Map<string, { summary: string; ts: number; id?: string }>();
+const ACTIVITY_DEDUP_MS = 120_000;
+
 const OPENROUTER_COMPLETIONS = 'https://openrouter.ai/api/v1/chat/completions';
 
 /**
@@ -547,16 +551,35 @@ router.post('/v1/chat/completions', async (req: Request, res: Response) => {
           }
         });
 
-        // Log activity on successful response
+        // Log activity on successful response (deduplicated per task)
         proxyRes.on('end', () => {
-          if (user && proxyRes.statusCode && proxyRes.statusCode < 400) {
-            const hasToolCalls = ctx.toolCallCount > 0;
-            const actType = hasToolCalls ? 'task' : 'message';
+          if (!user || !proxyRes.statusCode || proxyRes.statusCode >= 400) return;
+
+          const now = Date.now();
+          const hasToolCalls = ctx.toolCallCount > 0;
+          const actType = hasToolCalls ? 'task' : 'message';
+          const summary = lastMessage.slice(0, 200);
+          const key = user.id;
+          const recent = recentActivity.get(key);
+
+          if (recent && recent.summary === summary && (now - recent.ts) < ACTIVITY_DEDUP_MS && recent.id) {
+            // Same task still running — update existing entry instead of creating a new one
             db.query(
-              `INSERT INTO activity_log (user_id, type, summary, status, model_used, tokens_used, details)
-               VALUES ($1, $2, $3, 'completed', $4, $5, $6)`,
-              [user.id, actType, lastMessage.slice(0, 200), selectedModel, ctx.messageCount, routingReason]
+              `UPDATE activity_log SET model_used = $1, type = $2, status = 'completed', created_at = NOW()
+               WHERE id = $3`,
+              [selectedModel, actType, recent.id]
             ).catch(() => {});
+            recent.ts = now;
+          } else {
+            // New activity — insert and track for dedup
+            db.query(
+              `INSERT INTO activity_log (user_id, type, channel, summary, status, model_used, details)
+               VALUES ($1, $2, $3, $4, 'completed', $5, $6)
+               RETURNING id`,
+              [user.id, actType, ctx.taskSummary ? 'auto' : 'direct', summary, selectedModel, ctx.taskSummary || routerUsed]
+            ).then(r => {
+              recentActivity.set(key, { summary, ts: now, id: r.rows[0]?.id });
+            }).catch(() => {});
           }
         });
 

@@ -54,13 +54,12 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
       id: row.id,
       type: TYPE_MAP[row.type] || 'task',
       summary: row.summary || 'Agent activity',
-      timestamp: row.created_at,
+      created_at: row.created_at,
       status: row.status || 'completed',
-      detail: [
-        row.model_used ? `Model: ${row.model_used}` : null,
-        row.channel ? `Channel: ${row.channel}` : null,
-        row.details || null,
-      ].filter(Boolean).join(' · ') || undefined,
+      channel: row.channel || undefined,
+      model_used: row.model_used || undefined,
+      tokens_used: row.tokens_used || undefined,
+      detail: row.details || undefined,
     }));
 
     const countResult = await db.getOne<{ count: string }>(
