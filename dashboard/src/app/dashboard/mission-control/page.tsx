@@ -153,6 +153,7 @@ export default function MissionControlPage() {
 
   const latest = recentActivity[0] ?? null;
   const isLive = latest && (Date.now() - new Date(latest.created_at).getTime()) < 120_000;
+  const isAgentWorking = latest && (latest.status === 'in_progress' || (isLive && latest.status !== 'completed' && latest.status !== 'failed'));
 
   const handleAction = async (action: 'stop' | 'restart') => {
     setActionLoading(action);
@@ -360,6 +361,19 @@ export default function MissionControlPage() {
             </button>
           </div>
           <div className="h-[380px] overflow-y-auto custom-scrollbar">
+            {isAgentWorking && latest && (
+              <div className="flex items-center gap-3 px-4 py-3 border-b border-blue-500/10 bg-blue-500/[0.03]">
+                <div className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-blue-500/10">
+                  <Sparkles className="h-3.5 w-3.5 text-blue-400" />
+                  <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-blue-400 animate-pulse" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] font-medium text-blue-400/70 uppercase tracking-wider">Working now</p>
+                  <p className="text-[12px] text-white/70 mt-0.5 truncate">{latest.summary}</p>
+                </div>
+                <Loader2 className="h-3.5 w-3.5 text-blue-400 animate-spin shrink-0" />
+              </div>
+            )}
             {recentActivity.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center px-4">
                 <Activity className="h-10 w-10 text-white/[0.06] mb-3" />
@@ -372,7 +386,7 @@ export default function MissionControlPage() {
                   const isRecent = (Date.now() - new Date(entry.created_at).getTime()) < 120_000;
                   return (
                     <div key={entry.id}
-                      className={`flex items-start gap-3 px-4 py-3 hover:bg-white/[0.02] transition-colors ${isRecent ? 'bg-green-500/[0.02]' : ''}`}>
+                      className={`flex items-start gap-3 px-4 py-3 hover:bg-white/[0.02] transition-colors ${entry.status === 'in_progress' ? 'bg-blue-500/[0.02]' : isRecent ? 'bg-green-500/[0.02]' : ''}`}>
                       <div className="flex h-7 w-7 mt-0.5 items-center justify-center rounded-lg bg-white/[0.04] shrink-0">
                         {typeIcon(entry.type)}
                       </div>
@@ -391,6 +405,7 @@ export default function MissionControlPage() {
                           {entry.tokens_used ? <span className="text-[10px] text-white/15">{formatUsd(entry.tokens_used)}</span> : null}
                         </div>
                       </div>
+                      {entry.status === 'in_progress' && <Loader2 className="h-3.5 w-3.5 text-blue-400 animate-spin shrink-0 mt-1" />}
                       {entry.status === 'completed' && <CheckCircle className="h-3.5 w-3.5 text-emerald-400/40 shrink-0 mt-1" />}
                       {entry.status === 'failed' && <XCircle className="h-3.5 w-3.5 text-red-400/40 shrink-0 mt-1" />}
                     </div>
