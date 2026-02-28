@@ -55,6 +55,7 @@ export const PLATFORM_SKILLS: PlatformSkill[] = [
 
   // ── Platform ──
   { id: 'switch-model', label: 'Switch AI Model', description: 'Switch the AI model powering your responses. Say "use Sonnet", "switch to GPT-4o", or "auto" for smart routing.', category: 'Platform', repoPath: '_platform/switch-model', emoji: '🔄' },
+  { id: 'conversation-history', label: 'Conversation History', description: 'Look up past conversations by date, channel, or keyword. Ask "what did we discuss Friday?" or "find where I mentioned X".', category: 'Platform', repoPath: '_platform/conversation-history', emoji: '📜' },
 ];
 
 export const SKILLS_REPO_URL = 'https://github.com/openclaw/skills.git';

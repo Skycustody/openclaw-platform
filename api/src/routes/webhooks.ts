@@ -245,4 +245,61 @@ router.post('/container/whatsapp-connected', async (req: Request, res: Response,
   }
 });
 
+// Conversation history — agent queries its own past conversations
+router.post('/container/history', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { userId, date, channel, search, limit: rawLimit } = req.body;
+    if (!userId) return res.status(400).json({ error: 'userId required' });
+
+    if (!verifyContainerAuth(req, userId)) {
+      return res.status(401).json({ error: 'Invalid container authentication' });
+    }
+
+    const db = (await import('../lib/db')).default;
+    const conditions = ['user_id = $1'];
+    const params: any[] = [userId];
+    let idx = 2;
+
+    if (date) {
+      conditions.push(`created_at::date = $${idx++}::date`);
+      params.push(date);
+    }
+    if (channel) {
+      conditions.push(`channel = $${idx++}`);
+      params.push(channel);
+    }
+    if (search) {
+      conditions.push(`content ILIKE $${idx++}`);
+      params.push(`%${search}%`);
+    }
+
+    const limit = Math.min(parseInt(rawLimit) || 50, 200);
+    const where = conditions.join(' AND ');
+
+    const rows = await db.getMany(
+      `SELECT role, channel, content, model_used, created_at
+       FROM conversations
+       WHERE ${where}
+       ORDER BY created_at DESC
+       LIMIT $${idx}`,
+      [...params, limit]
+    );
+
+    // Also return available dates for browsing
+    const dates = await db.getMany<{ day: string; count: string }>(
+      `SELECT created_at::date as day, COUNT(*) as count
+       FROM conversations WHERE user_id = $1
+       GROUP BY created_at::date ORDER BY day DESC LIMIT 30`,
+      [userId]
+    );
+
+    res.json({
+      conversations: rows,
+      available_dates: dates.map(d => ({ date: d.day, messages: parseInt(d.count) })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;
