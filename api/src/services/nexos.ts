@@ -132,6 +132,13 @@ const PLAN_SPEND_LIMITS_USD: Record<Plan, number> = {
   business: 6.90,  // $10 × 0.69
 };
 
+/** What the user paid — shown in the dashboard. API limit stays at PLAN_SPEND_LIMITS_USD. */
+const PLAN_DISPLAY_USD: Record<Plan, number> = {
+  starter: 2,
+  pro: 5,
+  business: 10,
+};
+
 /**
  * Ensure a user has an OpenRouter API key. Creates one via the Management API
  * if available, otherwise falls back to a shared key.
@@ -267,7 +274,7 @@ export async function getNexosUsage(userId: string): Promise<OpenRouterUsage | n
   if (!row?.nexos_api_key) return null;
 
   const plan = (row.plan || 'starter') as Plan;
-  const planBase = PLAN_SPEND_LIMITS_USD[plan] || PLAN_SPEND_LIMITS_USD.starter;
+  const planDisplayBase = PLAN_DISPLAY_USD[plan] || PLAN_DISPLAY_USD.starter;
 
   const creditSum = await db.getOne<{ total: string }>(
     'SELECT COALESCE(SUM(amount_eur_cents / 100.0), 0) as total FROM credit_purchases WHERE user_id = $1', // column stores USD cents despite name
@@ -277,8 +284,9 @@ export async function getNexosUsage(userId: string): Promise<OpenRouterUsage | n
   if (!Number.isFinite(creditDisplayTotal) || creditDisplayTotal < 0) creditDisplayTotal = 0;
   if (creditDisplayTotal > MAX_ADDON_USD) creditDisplayTotal = MAX_ADDON_USD;
 
-  let totalDisplay = planBase + creditDisplayTotal;
-  if (!Number.isFinite(totalDisplay) || totalDisplay < 0) totalDisplay = planBase;
+  // User sees what they paid (plan price + credit purchases)
+  let totalDisplay = planDisplayBase + creditDisplayTotal;
+  if (!Number.isFinite(totalDisplay) || totalDisplay < 0) totalDisplay = planDisplayBase;
 
   if (OPENROUTER_MGMT_KEY) {
     try {
