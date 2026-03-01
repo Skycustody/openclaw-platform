@@ -59,7 +59,7 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
       channel: row.channel || undefined,
       model_used: row.model_used || undefined,
       tokens_used: row.tokens_used || undefined,
-      detail: row.details || undefined,
+      detail: row.details ? (typeof row.details === 'string' ? row.details : JSON.stringify(row.details)) : undefined,
     }));
 
     const countResult = await db.getOne<{ count: string }>(

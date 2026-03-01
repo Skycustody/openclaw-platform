@@ -214,7 +214,9 @@ export default function ActivityFeed() {
                         <div className="min-w-0 flex-1">
                           <p className="text-[14px] text-white/80 leading-relaxed">{entry.summary}</p>
                           {entry.detail && (
-                            <p className="text-[12px] text-white/30 mt-1">{entry.detail}</p>
+                            <p className="text-[12px] text-white/30 mt-1">
+                              {typeof entry.detail === 'string' ? entry.detail : JSON.stringify(entry.detail)}
+                            </p>
                           )}
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
