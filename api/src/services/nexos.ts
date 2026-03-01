@@ -545,42 +545,25 @@ export async function resetKeyForBillingCycle(userId: string): Promise<void> {
 
 /**
  * Migrate an existing key from limitReset:'monthly' to limitReset:null.
- * Also fixes keys that already have limitReset:null but are over-limit
- * (e.g. usage > limit after the switch from monthly resets).
- * Sets the limit to currentUsage + planBudget + addonCredits so the user
- * gets a fresh cycle of credits.
+ * Preserves whatever remaining budget the user had — does NOT grant new credits.
+ * New limit = totalUsage + max(0, oldLimit - usageMonthly).
  */
 export async function migrateKeyToNoReset(userId: string): Promise<boolean> {
   if (!OPENROUTER_MGMT_KEY) return false;
 
-  const userRow = await db.getOne<{ plan: string; api_budget_addon_usd: number }>(
-    'SELECT plan, COALESCE(api_budget_addon_usd, 0) as api_budget_addon_usd FROM users WHERE id = $1',
-    [userId]
-  );
-  if (!userRow) return false;
-
-  const plan = (userRow.plan || 'starter') as Plan;
-  const planBudget = PLAN_SPEND_LIMITS_USD[plan] || PLAN_SPEND_LIMITS_USD.starter;
-  const addon = userRow.api_budget_addon_usd || 0;
-
   const userKey = await findUserKey(userId);
   if (!userKey?.hash) return false;
 
-  const currentUsage = userKey.usage ?? 0;
-  const currentLimit = userKey.limit ?? 0;
   const alreadyNoReset = !userKey.limit_reset || userKey.limit_reset === 'none';
-  const isOverLimit = currentUsage >= currentLimit;
+  if (alreadyNoReset) return true;
 
-  // Skip only if already on no-reset AND has adequate budget remaining
-  if (alreadyNoReset && !isOverLimit) {
-    return true;
-  }
+  const totalUsage = userKey.usage ?? 0;
+  const monthlyUsage = userKey.usage_monthly ?? 0;
+  const currentLimit = userKey.limit ?? 0;
 
-  const newLimit = Math.round((currentUsage + planBudget + addon) * 100) / 100;
-  const patchBody: Record<string, any> = { limit: newLimit };
-  if (!alreadyNoReset) {
-    patchBody.limit_reset = null;
-  }
+  // Carry over only the remaining budget from the current month
+  const monthlyRemaining = Math.max(0, currentLimit - monthlyUsage);
+  const newLimit = Math.round((totalUsage + monthlyRemaining) * 100) / 100;
 
   try {
     await fetch(`${OPENROUTER_BASE}/keys/${userKey.hash}`, {
@@ -589,10 +572,10 @@ export async function migrateKeyToNoReset(userId: string): Promise<boolean> {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${OPENROUTER_MGMT_KEY}`,
       },
-      body: JSON.stringify(patchBody),
+      body: JSON.stringify({ limit: newLimit, limit_reset: null }),
     });
 
-    console.log(`[openrouter] Migrated key for ${userId}: usage=$${currentUsage}, limit $${currentLimit} → $${newLimit}`);
+    console.log(`[openrouter] Migrated key for ${userId}: totalUsage=$${totalUsage}, monthlyRemaining=$${monthlyRemaining}, newLimit=$${newLimit}`);
     return true;
   } catch (err) {
     console.error(`[openrouter] Failed to migrate key for ${userId}:`, err);
