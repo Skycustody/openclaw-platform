@@ -68,17 +68,25 @@ function compressMessages(messages: any[]): any[] {
   if (!Array.isArray(messages) || messages.length <= 10) return messages;
 
   const isBrowser = isBrowserSession(messages);
-  const keepFullFrom = messages.length - (isBrowser ? 4 : 8);
-  const deepTrimFrom = isBrowser ? messages.length - 12 : -1;
+
+  // Use the last user message as the STABLE compression boundary (matches cache breakpoint).
+  // Everything before it gets compressed; everything after stays full.
+  // This ensures the cached prefix content doesn't change between tool-loop calls.
+  let lastUserIdx = messages.length;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === 'user') { lastUserIdx = i; break; }
+  }
+
+  const deepTrimBefore = isBrowser ? Math.max(0, lastUserIdx - 10) : -1;
 
   return messages.map((m, i) => {
-    if (i >= keepFullFrom) return m;
+    if (i >= lastUserIdx) return m;
     if (m.role === 'system') return m;
     if (m.role === 'user') return m;
 
     if (m.role === 'tool') {
       const content = typeof m.content === 'string' ? m.content : '';
-      if (isBrowser && i < deepTrimFrom) {
+      if (isBrowser && i < deepTrimBefore) {
         return { ...m, content: collapseBrowserSnapshot(content) };
       }
       return { ...m, content: smartTrimToolResult(content) };
@@ -184,12 +192,20 @@ function smartTrimToolCall(tc: any): any {
 
 /**
  * Add Anthropic prompt caching breakpoints to messages.
- * Only applies to anthropic/* models. Adds cache_control to the system
- * message and a strategic mid-conversation breakpoint so repeated context
- * (system prompt + conversation history) is cached at 90% discount.
+ * Only applies to anthropic/* models. Uses up to 4 breakpoints (Anthropic max).
  *
- * OpenRouter passes these through to Anthropic's API.
- * Max 4 breakpoints, cache TTL = 5 min, min ~1024 tokens.
+ * Strategy: place breakpoints at STABLE positions that don't move between
+ * consecutive API calls within the same tool loop. During agentic execution,
+ * the agent makes many back-to-back calls adding tool_call + tool_result each
+ * time. A sliding breakpoint (e.g., length-4) invalidates the cache every call.
+ *
+ * Stable breakpoints:
+ *   1. System message — never changes
+ *   2. Last user message — stable throughout the entire tool loop
+ *   3. Midpoint of pre-user history — stable for long conversations
+ *
+ * OpenRouter passes cache_control through to Anthropic's API.
+ * Cache TTL = 5 min, min ~1024 tokens per cached prefix.
  */
 function addPromptCaching(messages: any[], model: string): any[] {
   if (!model.startsWith('anthropic/')) return messages;
@@ -197,55 +213,54 @@ function addPromptCaching(messages: any[], model: string): any[] {
 
   const result = messages.map((m: any) => ({ ...m }));
 
-  // Breakpoint 1: Cache the system message (never changes between turns)
+  // Breakpoint 1: System message (never changes between turns)
   const sysIdx = result.findIndex((m: any) => m.role === 'system');
   if (sysIdx !== -1) {
-    const sys = result[sysIdx];
-    if (typeof sys.content === 'string') {
-      result[sysIdx] = {
-        ...sys,
-        content: [{
-          type: 'text',
-          text: sys.content,
-          cache_control: { type: 'ephemeral' },
-        }],
-      };
-    } else if (Array.isArray(sys.content) && sys.content.length > 0) {
-      const parts = sys.content.map((p: any) => ({ ...p }));
-      parts[parts.length - 1] = {
-        ...parts[parts.length - 1],
-        cache_control: { type: 'ephemeral' },
-      };
-      result[sysIdx] = { ...sys, content: parts };
-    }
+    markCacheControl(result, sysIdx);
   }
 
-  // Breakpoint 2: Cache everything up to the last 4 messages.
-  // This means the stable conversation history is cached, and only
-  // the most recent messages (which change each turn) are uncached.
-  const cacheUpTo = result.length - 4;
-  if (cacheUpTo > (sysIdx + 1)) {
-    const msg = result[cacheUpTo];
-    if (typeof msg.content === 'string' && msg.content.length > 0) {
-      result[cacheUpTo] = {
-        ...msg,
-        content: [{
-          type: 'text',
-          text: msg.content,
-          cache_control: { type: 'ephemeral' },
-        }],
-      };
-    } else if (Array.isArray(msg.content) && msg.content.length > 0) {
-      const parts = msg.content.map((p: any) => ({ ...p }));
-      parts[parts.length - 1] = {
-        ...parts[parts.length - 1],
-        cache_control: { type: 'ephemeral' },
-      };
-      result[cacheUpTo] = { ...msg, content: parts };
+  // Find the last user message — this is STABLE during a tool loop.
+  // The agent adds tool_call+tool_result pairs after it, but no new user messages.
+  let lastUserIdx = -1;
+  for (let i = result.length - 1; i >= 0; i--) {
+    if (result[i].role === 'user') { lastUserIdx = i; break; }
+  }
+
+  // Breakpoint 2: Last user message (stable during entire tool-calling sequence)
+  if (lastUserIdx > sysIdx + 1) {
+    markCacheControl(result, lastUserIdx);
+  }
+
+  // Breakpoint 3: Midpoint of history before last user message (for long conversations)
+  if (lastUserIdx > sysIdx + 8) {
+    const midIdx = sysIdx + 1 + Math.floor((lastUserIdx - sysIdx - 1) / 2);
+    if (midIdx > sysIdx + 1 && midIdx < lastUserIdx) {
+      markCacheControl(result, midIdx);
     }
   }
 
   return result;
+}
+
+function markCacheControl(messages: any[], idx: number): void {
+  const msg = messages[idx];
+  if (typeof msg.content === 'string' && msg.content.length > 0) {
+    messages[idx] = {
+      ...msg,
+      content: [{
+        type: 'text',
+        text: msg.content,
+        cache_control: { type: 'ephemeral' },
+      }],
+    };
+  } else if (Array.isArray(msg.content) && msg.content.length > 0) {
+    const parts = msg.content.map((p: any) => ({ ...p }));
+    parts[parts.length - 1] = {
+      ...parts[parts.length - 1],
+      cache_control: { type: 'ephemeral' },
+    };
+    messages[idx] = { ...msg, content: parts };
+  }
 }
 
 function getMaxTokens(model: string, requestedMax?: number, browserMode?: boolean): number {
