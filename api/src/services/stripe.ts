@@ -2,7 +2,7 @@ import Stripe from 'stripe';
 import db from '../lib/db';
 import { provisionUser, deprovisionUser } from './provisioning';
 import { handlePaymentFailure } from './gracePeriod';
-import { addCreditsToKey, updateKeyLimit, RETAIL_MARKUP } from './nexos';
+import { addCreditsToKey, RETAIL_MARKUP, resetKeyForBillingCycle } from './nexos';
 import { Plan, User, CREDIT_PACKS } from '../types';
 import { v4 as uuid } from 'uuid';
 import { validateUserId, validateAmounts, verifyPackMath, logCreditAudit } from './creditAudit';
@@ -287,6 +287,24 @@ async function handleInvoicePaid(invoice: Stripe.Invoice): Promise<void> {
       [user.id]
     );
     console.log(`[stripe] Invoice paid — restored user ${user.id} from '${user.status}' to 'active'`);
+  }
+
+  // Only grant billing cycle credits for recurring payments (not initial subscription).
+  // Initial payment is handled by handleCheckoutComplete → provisionUser → createOpenRouterKey.
+  const billingReason = (invoice as any).billing_reason;
+  if (billingReason === 'subscription_create') {
+    console.log(`[stripe] Initial invoice for ${user.id} — skipping cycle reset (handled by checkout)`);
+    return;
+  }
+
+  // Grant one billing cycle's worth of credits by bumping the OpenRouter key limit.
+  // With limitReset:'none', credits only increase when we explicitly call this —
+  // no payment means no new credits, regardless of calendar month.
+  try {
+    await resetKeyForBillingCycle(user.id);
+    console.log(`[stripe] Billing cycle credits granted for user ${user.id}`);
+  } catch (err) {
+    console.error(`[stripe] Failed to reset billing cycle credits for ${user.id}:`, err);
   }
 }
 

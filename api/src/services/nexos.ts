@@ -10,10 +10,10 @@
  * │ PER-USER KEY MANAGEMENT                                               │
  * │                                                                       │
  * │ OpenRouter's Management API lets us create per-user API keys with     │
- * │ spending limits and monthly resets. Each user gets their own key so:  │
+ * │ spending limits. Each user gets their own key so:                     │
  * │   - Usage is isolated per user (no shared budget)                     │
  * │   - Spending limits enforce plan tiers automatically                  │
- * │   - Monthly resets align with billing cycles                          │
+ * │   - Credits only refresh when Stripe payment is confirmed             │
  * │   - Keys can be disabled/deleted on cancellation                      │
  * │                                                                       │
  * │ Setup: create a Management API key at                                 │
@@ -51,7 +51,15 @@ interface CreateKeyResponse {
 
 /** OpenRouter Management API: list-keys response shape */
 interface ListKeysResponse {
-  data?: Array<{ name?: string; hash?: string; usage_monthly?: number; usage?: number; limit?: number }>;
+  data?: Array<{
+    name?: string;
+    hash?: string;
+    usage?: number;
+    usage_monthly?: number;
+    limit?: number;
+    limit_remaining?: number;
+    limit_reset?: string | null;
+  }>;
 }
 
 /** Retail price multiplier over OpenRouter wholesale cost. 1.5 = 50% margin. */
@@ -199,7 +207,7 @@ async function createOpenRouterKey(userId: string): Promise<string | null> {
       body: JSON.stringify({
         name: `openclaw-${userId.slice(0, 8)}`,
         limit: spendLimit,
-        limitReset: 'monthly',
+        limitReset: 'none',
       }),
     });
 
@@ -288,43 +296,48 @@ export async function getNexosUsage(userId: string): Promise<OpenRouterUsage | n
   let totalDisplay = planDisplayBase + creditDisplayTotal;
   if (!Number.isFinite(totalDisplay) || totalDisplay < 0) totalDisplay = planDisplayBase;
 
+  const planSpendLimit = PLAN_SPEND_LIMITS_USD[plan] || PLAN_SPEND_LIMITS_USD.starter;
+
   if (OPENROUTER_MGMT_KEY) {
     try {
-      const listRes = await fetch(`${OPENROUTER_BASE}/keys`, {
-        headers: { 'Authorization': `Bearer ${OPENROUTER_MGMT_KEY}` },
-      });
-      if (listRes.ok) {
-        const listData = (await listRes.json()) as ListKeysResponse;
-        const keys = listData.data || [];
-        const userKey = keys.find((k) => k.name === `openclaw-${userId.slice(0, 8)}`);
-        if (userKey) {
-          const realUsed = userKey.usage_monthly ?? userKey.usage ?? 0;
-          const realLimit = userKey.limit ?? 0;
-          const realRemaining = Math.max(0, realLimit - realUsed);
+      const userKey = await findUserKey(userId);
+      if (userKey) {
+        // With limitReset:'none', use total usage against the cumulative limit
+        const realUsage = userKey.usage ?? 0;
+        const realLimit = userKey.limit ?? 0;
+        const realRemaining = Math.max(0, realLimit - realUsage);
 
-          let usedUsd: number;
-          let remainingUsd: number;
-          let limitUsd: number;
+        // The cycle budget is the actual API spend limit for the current billing cycle
+        const addonOrBudget = await db.getOne<{ total: string }>(
+          'SELECT COALESCE(api_budget_addon_usd, 0)::text as total FROM users WHERE id = $1',
+          [userId]
+        );
+        const addonBudget = parseFloat(addonOrBudget?.total || '0');
+        const cycleBudget = planSpendLimit + addonBudget;
 
-          if (realLimit > 0) {
-            const ratio = realRemaining / realLimit;
-            remainingUsd = Math.round(totalDisplay * ratio * 100) / 100;
-            usedUsd = Math.round((totalDisplay - remainingUsd) * 100) / 100;
-            limitUsd = Math.round(totalDisplay * 100) / 100;
-          } else {
-            usedUsd = 0;
-            remainingUsd = totalDisplay;
-            limitUsd = totalDisplay;
-          }
+        let usedUsd: number;
+        let remainingUsd: number;
+        let limitUsd: number;
 
-          return {
-            usedUsd,
-            remainingUsd,
-            limitUsd,
-            displayAmountBought: Math.round(creditDisplayTotal * 100) / 100,
-            lastUpdated: new Date().toISOString(),
-          };
+        if (cycleBudget > 0) {
+          // Scale real API remaining to display amount
+          const ratio = Math.min(1, realRemaining / cycleBudget);
+          remainingUsd = Math.round(totalDisplay * ratio * 100) / 100;
+          usedUsd = Math.round((totalDisplay - remainingUsd) * 100) / 100;
+          limitUsd = Math.round(totalDisplay * 100) / 100;
+        } else {
+          usedUsd = 0;
+          remainingUsd = totalDisplay;
+          limitUsd = totalDisplay;
         }
+
+        return {
+          usedUsd,
+          remainingUsd,
+          limitUsd,
+          displayAmountBought: Math.round(creditDisplayTotal * 100) / 100,
+          lastUpdated: new Date().toISOString(),
+        };
       }
     } catch {
       // Fall through to fallback
@@ -353,8 +366,9 @@ export async function getUserNexosKey(userId: string): Promise<string | null> {
 }
 
 /**
- * Update the spending limit on a user's OpenRouter key.
- * Combines plan base limit + any purchased add-on credits.
+ * @deprecated Use resetKeyForBillingCycle (for monthly resets) or addCreditsToKey (for addons).
+ * Kept for backwards compatibility. Sets an absolute limit — does NOT work correctly with
+ * the cumulative limitReset:'none' model.
  */
 export async function updateKeyLimit(userId: string, plan: Plan, extraCreditsUsd?: number): Promise<void> {
   if (!OPENROUTER_MGMT_KEY) return;
@@ -386,8 +400,7 @@ const MAX_ADDON_USD = 50_000;
 
 /**
  * Add purchased credits to a user's OpenRouter spending limit.
- * Recalculates total addon from credit_purchases table to prevent
- * accumulated errors from previous bugs.
+ * Bumps the current key limit by the new addon amount (cumulative model).
  */
 export async function addCreditsToKey(userId: string, creditsUsd: number): Promise<void> {
   const user = await validateUserId(userId);
@@ -396,41 +409,55 @@ export async function addCreditsToKey(userId: string, creditsUsd: number): Promi
     return;
   }
 
-  const sum = await db.getOne<{ total: string; cnt: string }>(
-    'SELECT COALESCE(SUM(credits_usd), 0) as total, COUNT(*)::text as cnt FROM credit_purchases WHERE user_id = $1',
+  if (creditsUsd <= 0 || creditsUsd > MAX_ADDON_USD) {
+    console.error(`[nexos] addCreditsToKey: invalid amount $${creditsUsd} for user ${userId}`);
+    return;
+  }
+
+  // Track total addon spend in DB for display purposes
+  const sum = await db.getOne<{ total: string }>(
+    'SELECT COALESCE(SUM(credits_usd), 0) as total FROM credit_purchases WHERE user_id = $1',
     [userId]
   );
   const totalAddon = Math.round(parseFloat(sum?.total || '0') * 100) / 100;
-  const purchaseCount = parseInt(sum?.cnt || '0', 10);
-
-  if (totalAddon < 0 || totalAddon > MAX_ADDON_USD) {
-    console.error(`[nexos] addCreditsToKey: invalid totalAddon ${totalAddon} for user ${userId}`);
-    return;
-  }
 
   await db.query(
     'UPDATE users SET api_budget_addon_usd = $1 WHERE id = $2',
     [totalAddon, userId]
   );
 
-  const userRow = await db.getOne<{ plan: string }>(
-    'SELECT plan FROM users WHERE id = $1',
-    [userId]
-  );
-  if (!userRow) return;
+  // Bump the OpenRouter key limit by the new addon amount
+  const userKey = await findUserKey(userId);
+  if (!userKey?.hash) {
+    console.warn(`[nexos] addCreditsToKey: no OpenRouter key for user ${userId}`);
+    return;
+  }
 
-  const plan = (userRow.plan || 'starter') as Plan;
-  const base = PLAN_SPEND_LIMITS_USD[plan] || PLAN_SPEND_LIMITS_USD.starter;
-  const newLimit = Math.round((base + totalAddon) * 100) / 100;
+  const currentLimit = userKey.limit ?? 0;
+  const newLimit = Math.round((currentLimit + creditsUsd) * 100) / 100;
 
-  await updateKeyLimit(userId, plan, totalAddon);
+  try {
+    await fetch(`${OPENROUTER_BASE}/keys/${userKey.hash}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${OPENROUTER_MGMT_KEY}`,
+      },
+      body: JSON.stringify({ limit: newLimit }),
+    });
+
+    console.log(`[openrouter] Addon credits for ${userId}: limit $${currentLimit} → $${newLimit} (+$${creditsUsd})`);
+  } catch (err) {
+    console.error(`[openrouter] Failed to add credits for ${userId}:`, err);
+    throw err;
+  }
 
   await logCreditAudit({
     operation: 'recalculation',
     userId,
-    creditsUsd: totalAddon,
+    creditsUsd,
     openrouterLimitAfter: newLimit,
-    metadata: { purchaseCount, base },
+    metadata: { totalAddon },
   });
 }
 
@@ -444,6 +471,13 @@ export async function resetMonthlyAddons(): Promise<string[]> {
 
 /** Look up a user's OpenRouter key hash for Management API operations. */
 async function findUserKeyHash(userId: string): Promise<string | null> {
+  const key = await findUserKey(userId);
+  return key?.hash || null;
+}
+
+/** Look up a user's full OpenRouter key data for Management API operations. */
+async function findUserKey(userId: string) {
+  if (!OPENROUTER_MGMT_KEY) return null;
   try {
     const listRes = await fetch(`${OPENROUTER_BASE}/keys`, {
       headers: { 'Authorization': `Bearer ${OPENROUTER_MGMT_KEY}` },
@@ -452,10 +486,106 @@ async function findUserKeyHash(userId: string): Promise<string | null> {
 
     const listData = (await listRes.json()) as ListKeysResponse;
     const keys = listData.data || [];
-    const userKey = keys.find((k) => k.name === `openclaw-${userId.slice(0, 8)}`);
-    return userKey?.hash || null;
+    return keys.find((k) => k.name === `openclaw-${userId.slice(0, 8)}`) || null;
   } catch {
     return null;
+  }
+}
+
+/**
+ * Grant one billing cycle's worth of credits by bumping the OpenRouter key limit.
+ * Called on each successful Stripe subscription invoice payment.
+ *
+ * With limitReset: 'none', usage accumulates against the limit. To give fresh
+ * credits we add planBudget to the current limit. Unused credits carry over.
+ */
+export async function resetKeyForBillingCycle(userId: string): Promise<void> {
+  if (!OPENROUTER_MGMT_KEY) return;
+
+  const userRow = await db.getOne<{ plan: string; api_budget_addon_usd: number }>(
+    'SELECT plan, COALESCE(api_budget_addon_usd, 0) as api_budget_addon_usd FROM users WHERE id = $1',
+    [userId]
+  );
+  if (!userRow) return;
+
+  const plan = (userRow.plan || 'starter') as Plan;
+  const planBudget = PLAN_SPEND_LIMITS_USD[plan] || PLAN_SPEND_LIMITS_USD.starter;
+
+  const userKey = await findUserKey(userId);
+  if (!userKey?.hash) {
+    console.warn(`[openrouter] resetKeyForBillingCycle: no key found for ${userId}`);
+    return;
+  }
+
+  const currentLimit = userKey.limit ?? 0;
+  const newLimit = Math.round((currentLimit + planBudget) * 100) / 100;
+
+  try {
+    const patchBody: Record<string, any> = { limit: newLimit };
+
+    // Ensure key doesn't auto-reset (fix for existing keys created with 'monthly')
+    if (userKey.limit_reset && userKey.limit_reset !== 'none') {
+      patchBody.limit_reset = null;
+    }
+
+    await fetch(`${OPENROUTER_BASE}/keys/${userKey.hash}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${OPENROUTER_MGMT_KEY}`,
+      },
+      body: JSON.stringify(patchBody),
+    });
+
+    console.log(`[openrouter] Billing cycle reset for ${userId}: limit $${currentLimit} → $${newLimit} (plan=${plan}, +$${planBudget})`);
+  } catch (err) {
+    console.error(`[openrouter] Failed billing cycle reset for ${userId}:`, err);
+  }
+}
+
+/**
+ * Migrate an existing key from limitReset:'monthly' to limitReset:null.
+ * Sets the limit to currentUsage + planBudget + addonCredits so the user
+ * doesn't lose any remaining credits from the current cycle.
+ */
+export async function migrateKeyToNoReset(userId: string): Promise<boolean> {
+  if (!OPENROUTER_MGMT_KEY) return false;
+
+  const userRow = await db.getOne<{ plan: string; api_budget_addon_usd: number }>(
+    'SELECT plan, COALESCE(api_budget_addon_usd, 0) as api_budget_addon_usd FROM users WHERE id = $1',
+    [userId]
+  );
+  if (!userRow) return false;
+
+  const plan = (userRow.plan || 'starter') as Plan;
+  const planBudget = PLAN_SPEND_LIMITS_USD[plan] || PLAN_SPEND_LIMITS_USD.starter;
+  const addon = userRow.api_budget_addon_usd || 0;
+
+  const userKey = await findUserKey(userId);
+  if (!userKey?.hash) return false;
+
+  if (!userKey.limit_reset || userKey.limit_reset === 'none') {
+    return true; // already migrated
+  }
+
+  const currentUsage = userKey.usage ?? 0;
+  const newLimit = Math.round((currentUsage + planBudget + addon) * 100) / 100;
+
+  try {
+    await fetch(`${OPENROUTER_BASE}/keys/${userKey.hash}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${OPENROUTER_MGMT_KEY}`,
+      },
+      body: JSON.stringify({ limit: newLimit, limit_reset: null }),
+    });
+
+    console.log(`[openrouter] Migrated key for ${userId} to no-reset: usage=$${currentUsage}, newLimit=$${newLimit}`);
+    return true;
+  } catch (err) {
+    console.error(`[openrouter] Failed to migrate key for ${userId}:`, err);
+    return false;
   }
 }
 

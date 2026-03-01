@@ -280,6 +280,7 @@ function getMaxTokens(model: string, requestedMax?: number, browserMode?: boolea
 interface ProxyUser {
   id: string;
   plan: Plan;
+  status: string;
   brain_mode?: string;
   manual_model?: string | null;
   routing_preferences?: Record<string, string>;
@@ -302,8 +303,8 @@ async function lookupUser(apiKey: string): Promise<ProxyUser | null> {
   const cached = userCache.get(apiKey);
   if (cached && cached.expires > Date.now()) return cached.user;
 
-  const row = await db.getOne<{ id: string; plan: string }>(
-    `SELECT u.id, u.plan FROM users u
+  const row = await db.getOne<{ id: string; plan: string; status: string }>(
+    `SELECT u.id, u.plan, u.status FROM users u
      WHERE u.nexos_api_key = $1
      LIMIT 1`,
     [apiKey]
@@ -327,6 +328,7 @@ async function lookupUser(apiKey: string): Promise<ProxyUser | null> {
   const user: ProxyUser = {
     id: row.id,
     plan: row.plan as Plan,
+    status: row.status,
     brain_mode: settings?.brain_mode || 'auto',
     manual_model: settings?.manual_model || null,
     routing_preferences: prefs,
@@ -466,6 +468,17 @@ router.post('/v1/chat/completions', async (req: Request, res: Response) => {
     const user = await lookupUser(apiKey).catch(() => null);
 
     if (user) touchIfNeeded(user.id);
+
+    const BLOCKED_STATUSES = ['cancelled', 'paused', 'pending'];
+    if (user && BLOCKED_STATUSES.includes(user.status)) {
+      return res.status(402).json({
+        error: {
+          message: 'Subscription inactive. Please renew your subscription to continue.',
+          type: 'billing_error',
+          code: 'subscription_required',
+        },
+      });
+    }
 
     const body = req.body;
     if (!body?.messages) {
