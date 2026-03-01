@@ -588,18 +588,19 @@ router.post('/v1/chat/completions', async (req: Request, res: Response) => {
         db.query(
           `UPDATE activity_log SET model_used = $1, type = $2, status = 'in_progress', created_at = NOW() WHERE id = $3`,
           [selectedModel, actType, recent.id]
-        ).catch(() => {});
+        ).catch((e) => console.warn('[activity] update failed:', e.message));
       } else {
+        const detail = JSON.stringify({ router: routerUsed, task: ctx.taskSummary || null });
         db.query(
           `INSERT INTO activity_log (user_id, type, channel, summary, status, model_used, details)
-           VALUES ($1, $2, $3, $4, 'in_progress', $5, $6)
+           VALUES ($1, $2, $3, $4, 'in_progress', $5, $6::jsonb)
            RETURNING id`,
-          [user.id, actType, ctx.taskSummary ? 'auto' : 'direct', summary, selectedModel, ctx.taskSummary || routerUsed]
+          [user.id, actType, ctx.taskSummary ? 'auto' : 'direct', summary, selectedModel, detail]
         ).then(r => {
           const id = r.rows[0]?.id;
           activityId = id;
           recentActivity.set(key, { summary, ts: now, id });
-        }).catch(() => {});
+        }).catch((e) => console.warn('[activity] insert failed:', e.message));
       }
     }
 
@@ -644,8 +645,8 @@ router.post('/v1/chat/completions', async (req: Request, res: Response) => {
             const id = activityId || recentActivity.get(user.id)?.id;
             if (id) {
               db.query(
-                `UPDATE activity_log SET status = 'failed', details = 'Upstream error' WHERE id = $1`,
-                [id]
+                `UPDATE activity_log SET status = 'failed', details = $1::jsonb WHERE id = $2`,
+                [JSON.stringify({ error: 'Upstream error' }), id]
               ).catch(() => {});
             }
           }
