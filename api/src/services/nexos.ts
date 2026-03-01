@@ -545,8 +545,10 @@ export async function resetKeyForBillingCycle(userId: string): Promise<void> {
 
 /**
  * Migrate an existing key from limitReset:'monthly' to limitReset:null.
+ * Also fixes keys that already have limitReset:null but are over-limit
+ * (e.g. usage > limit after the switch from monthly resets).
  * Sets the limit to currentUsage + planBudget + addonCredits so the user
- * doesn't lose any remaining credits from the current cycle.
+ * gets a fresh cycle of credits.
  */
 export async function migrateKeyToNoReset(userId: string): Promise<boolean> {
   if (!OPENROUTER_MGMT_KEY) return false;
@@ -564,12 +566,21 @@ export async function migrateKeyToNoReset(userId: string): Promise<boolean> {
   const userKey = await findUserKey(userId);
   if (!userKey?.hash) return false;
 
-  if (!userKey.limit_reset || userKey.limit_reset === 'none') {
-    return true; // already migrated
+  const currentUsage = userKey.usage ?? 0;
+  const currentLimit = userKey.limit ?? 0;
+  const alreadyNoReset = !userKey.limit_reset || userKey.limit_reset === 'none';
+  const isOverLimit = currentUsage >= currentLimit;
+
+  // Skip only if already on no-reset AND has adequate budget remaining
+  if (alreadyNoReset && !isOverLimit) {
+    return true;
   }
 
-  const currentUsage = userKey.usage ?? 0;
   const newLimit = Math.round((currentUsage + planBudget + addon) * 100) / 100;
+  const patchBody: Record<string, any> = { limit: newLimit };
+  if (!alreadyNoReset) {
+    patchBody.limit_reset = null;
+  }
 
   try {
     await fetch(`${OPENROUTER_BASE}/keys/${userKey.hash}`, {
@@ -578,10 +589,10 @@ export async function migrateKeyToNoReset(userId: string): Promise<boolean> {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${OPENROUTER_MGMT_KEY}`,
       },
-      body: JSON.stringify({ limit: newLimit, limit_reset: null }),
+      body: JSON.stringify(patchBody),
     });
 
-    console.log(`[openrouter] Migrated key for ${userId} to no-reset: usage=$${currentUsage}, newLimit=$${newLimit}`);
+    console.log(`[openrouter] Migrated key for ${userId}: usage=$${currentUsage}, limit $${currentLimit} → $${newLimit}`);
     return true;
   } catch (err) {
     console.error(`[openrouter] Failed to migrate key for ${userId}:`, err);
