@@ -67,11 +67,18 @@ function isBrowserSession(messages: any[]): boolean {
 function compressMessages(messages: any[]): any[] {
   if (!Array.isArray(messages) || messages.length <= 10) return messages;
 
+  // Detect tool-calling loop: if the last message is a tool result or assistant
+  // with tool_calls, the agent is mid-task. Skip compression entirely so the
+  // cached prefix stays identical between consecutive calls → cache hits.
+  const last = messages[messages.length - 1];
+  const inToolLoop = last?.role === 'tool' ||
+    (last?.role === 'assistant' && Array.isArray(last?.tool_calls) && last.tool_calls.length > 0);
+
+  if (inToolLoop) return messages;
+
+  // New user message = new task boundary. Compress old messages now.
   const isBrowser = isBrowserSession(messages);
 
-  // Use the last user message as the STABLE compression boundary (matches cache breakpoint).
-  // Everything before it gets compressed; everything after stays full.
-  // This ensures the cached prefix content doesn't change between tool-loop calls.
   let lastUserIdx = messages.length;
   for (let i = messages.length - 1; i >= 0; i--) {
     if (messages[i].role === 'user') { lastUserIdx = i; break; }
