@@ -22,7 +22,7 @@ import { Router, Response, NextFunction } from 'express';
 import { AuthRequest, authenticate, requireActiveSubscription } from '../middleware/auth';
 import db from '../lib/db';
 import { wakeContainer, sleepContainer, getContainerStatus, touchActivity } from '../services/sleepWake';
-import { restartContainer, provisionUser } from '../services/provisioning';
+import { restartContainer, provisionUser, regenerateUserMd } from '../services/provisioning';
 import { User, Server } from '../types';
 import { sshExec } from '../services/ssh';
 import { injectApiKeys } from '../services/apiKeys';
@@ -334,7 +334,7 @@ router.post('/open', rateLimitSensitive, async (req: AuthRequest, res: Response,
       ensureTraefik(server.ip).catch((err) => console.warn(`[agent/open] ensureTraefik failed:`, err.message));
     }
 
-    // Ensure API keys + model router config are injected (fixes existing users)
+    // Ensure API keys + model router config + USER.md are current (fixes existing users)
     const cn = safeContainerName(user.container_name, user.id);
     if (server) {
       injectApiKeys(server.ip, user.id, cn, user.plan as any)
@@ -342,6 +342,10 @@ router.post('/open', rateLimitSensitive, async (req: AuthRequest, res: Response,
         .then(() => reapplyGatewayConfig(server.ip, user.id, cn))
         .catch((err) =>
           console.warn(`[agent/open] Key injection failed for ${user.id}:`, err.message)
+        );
+      regenerateUserMd(server.ip, user.id)
+        .catch((err) =>
+          console.warn(`[agent/open] USER.md regeneration failed for ${user.id}:`, err.message)
         );
     }
 

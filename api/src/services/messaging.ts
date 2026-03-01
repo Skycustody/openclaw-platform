@@ -376,6 +376,28 @@ async function hasWhatsAppCredentials(serverIp: string, userId: string): Promise
 }
 
 /**
+ * Re-read openclaw.json and force whatsapp.dmPolicy = 'open'.
+ * `openclaw channels login` can overwrite dmPolicy with the default 'pairing',
+ * which blocks all unknown senders and asks for manual approval the user can't do.
+ */
+async function ensureWhatsAppOpenPolicy(serverIp: string, userId: string): Promise<void> {
+  try {
+    const config = await readContainerConfig(serverIp, userId);
+    if (!config.channels?.whatsapp) return;
+
+    const wa = config.channels.whatsapp;
+    if (wa.dmPolicy === 'open' && JSON.stringify(wa.allowFrom) === '["*"]') return;
+
+    wa.dmPolicy = 'open';
+    wa.allowFrom = ['*'];
+    await writeContainerConfig(serverIp, userId, config);
+    console.log(`[whatsapp] Enforced dmPolicy=open for user ${userId}`);
+  } catch (err: any) {
+    console.warn(`[whatsapp] Failed to enforce open policy for ${userId}:`, err.message);
+  }
+}
+
+/**
  * Start WhatsApp pairing:
  *  1. Write WhatsApp into the config via host filesystem
  *  2. Clear old QR artifacts
@@ -409,6 +431,10 @@ export async function initiateWhatsAppPairing(userId: string): Promise<{
   if (!config.channels) config.channels = {};
   if (!config.channels.whatsapp) {
     config.channels.whatsapp = { dmPolicy: 'open', allowFrom: ['*'] };
+    configChanged = true;
+  } else if (config.channels.whatsapp.dmPolicy !== 'open') {
+    config.channels.whatsapp.dmPolicy = 'open';
+    config.channels.whatsapp.allowFrom = ['*'];
     configChanged = true;
   }
 
@@ -501,6 +527,11 @@ export async function getWhatsAppQr(userId: string): Promise<{
     if (needsRestart?.stdout && needsRestart.stdout.trim().length > 0) {
       console.log(`[whatsapp:qr] Credentials found, restarting to finalize +${Date.now() - t0}ms`);
       await sshExec(serverIp, `rm -f ${INSTANCE_DIR}/${userId}/whatsapp-qr.log`).catch(() => {});
+
+      // Ensure dmPolicy is 'open' before restart — `channels login` may
+      // have overwritten it with the default 'pairing' policy.
+      await ensureWhatsAppOpenPolicy(serverIp, userId);
+
       void sshExec(serverIp, `docker restart ${containerName}`).catch(() => {});
       await db.query(
         `UPDATE user_channels SET whatsapp_connected = true, updated_at = NOW() WHERE user_id = $1`,
@@ -508,6 +539,9 @@ export async function getWhatsAppQr(userId: string): Promise<{
       );
       return { status: 'finalizing', message: 'Finalizing connection...' };
     }
+
+    // Already paired — still enforce open policy in case of drift.
+    await ensureWhatsAppOpenPolicy(serverIp, userId);
 
     await db.query(
       `UPDATE user_channels SET whatsapp_connected = true, updated_at = NOW() WHERE user_id = $1`,

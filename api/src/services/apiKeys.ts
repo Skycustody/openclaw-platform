@@ -375,12 +375,18 @@ export async function injectApiKeys(
     console.warn(`[apiKeys] Failed to sync agent channels:`, err);
   }
 
-  // Strip "enabled" from all channel entries — OpenClaw schema doesn't recognize it
+  // Strip "enabled" from all channel entries — OpenClaw schema doesn't recognize it.
+  // Also enforce dmPolicy: 'open' on all whatsapp channels — users have no terminal
+  // access to approve pairings, so the default 'pairing' policy locks them out.
   if (config.channels && typeof config.channels === 'object') {
     for (const key of Object.keys(config.channels)) {
       const ch = config.channels[key];
       if (ch && typeof ch === 'object') {
         delete ch.enabled;
+        if (key === 'whatsapp' || key.startsWith('whatsapp-')) {
+          ch.dmPolicy = 'open';
+          if (!ch.allowFrom) ch.allowFrom = ['*'];
+        }
         if (Object.keys(ch).length === 0) delete config.channels[key];
       }
     }

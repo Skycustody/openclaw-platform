@@ -383,6 +383,119 @@ function hasToolCallsInHistory(messages: any[]): boolean {
   );
 }
 
+// ── Rich activity extraction from conversation messages ──
+
+const TOOL_CATEGORY: Record<string, string> = {
+  // Shell & execution
+  bash: 'task', Bash: 'task', Shell: 'task', shell: 'task', execute: 'task',
+  // File operations
+  Read: 'task', Write: 'task', Edit: 'task', read_file: 'task', write_file: 'task',
+  edit_file: 'task', create_file: 'task', Glob: 'task', Grep: 'task',
+  StrReplace: 'task', str_replace: 'task',
+  // Browser & web
+  'browser-use': 'browsing', BrowserUse: 'browsing', browser_use: 'browsing',
+  navigate: 'browsing', click: 'browsing', snapshot: 'browsing', fill: 'browsing',
+  web_search: 'browsing', web_fetch: 'browsing', WebSearch: 'browsing', WebFetch: 'browsing',
+  deep_scrape: 'browsing', firecrawl: 'browsing',
+  // Email
+  'smtp-send': 'email', send_email: 'email', smtp_send: 'email',
+};
+
+function categorizeToolsToType(toolNames: string[]): string {
+  if (toolNames.length === 0) return 'message';
+  const cats = toolNames.map(n => TOOL_CATEGORY[n] || 'task');
+  if (cats.includes('browsing')) return 'browsing';
+  if (cats.includes('email')) return 'email';
+  return 'task';
+}
+
+interface ToolAction {
+  name: string;
+  summary: string;
+}
+
+function describeToolCall(name: string, argsRaw: string | undefined): string {
+  let args: any = {};
+  try { args = JSON.parse(argsRaw || '{}'); } catch {}
+  switch (name) {
+    case 'bash': case 'Bash': case 'Shell': case 'shell': case 'execute':
+      return `Running: ${(args.command || args.cmd || '').slice(0, 120)}`;
+    case 'Read': case 'read_file':
+      return `Reading: ${(args.path || args.file || '').slice(0, 120)}`;
+    case 'Write': case 'write_file': case 'create_file':
+      return `Writing: ${(args.path || args.file || '').slice(0, 120)}`;
+    case 'Edit': case 'edit_file': case 'StrReplace': case 'str_replace':
+      return `Editing: ${(args.path || args.file || '').slice(0, 120)}`;
+    case 'web_search': case 'WebSearch':
+      return `Searching: ${(args.query || args.search_term || '').slice(0, 120)}`;
+    case 'web_fetch': case 'WebFetch':
+      return `Fetching: ${(args.url || '').slice(0, 120)}`;
+    case 'browser-use': case 'BrowserUse': case 'browser_use':
+      return `Browser: ${(args.action || args.url || name).slice(0, 120)}`;
+    case 'navigate': case 'click': case 'fill': case 'snapshot':
+      return `Browser ${name}: ${(args.url || args.selector || '').slice(0, 80)}`;
+    case 'smtp-send': case 'send_email': case 'smtp_send':
+      return `Emailing: ${(args.to || args.recipient || '').slice(0, 80)}`;
+    case 'Glob': case 'Grep':
+      return `Searching files: ${(args.pattern || args.glob_pattern || '').slice(0, 80)}`;
+    default:
+      return `Tool: ${name}`;
+  }
+}
+
+function extractRecentToolActions(messages: any[]): ToolAction[] {
+  const actions: ToolAction[] = [];
+  const toolCallMap = new Map<string, { name: string; args: string }>();
+
+  for (let i = messages.length - 1; i >= Math.max(0, messages.length - 20); i--) {
+    const m = messages[i];
+    if (m.role === 'assistant' && Array.isArray(m.tool_calls)) {
+      for (const tc of m.tool_calls) {
+        if (tc.id && tc.function?.name) {
+          toolCallMap.set(tc.id, { name: tc.function.name, args: tc.function.arguments || '' });
+        }
+      }
+    }
+  }
+
+  for (const [, tc] of toolCallMap) {
+    actions.push({ name: tc.name, summary: describeToolCall(tc.name, tc.args) });
+  }
+  return actions;
+}
+
+function buildActivitySummary(
+  userMessage: string,
+  taskSummary: string | undefined,
+  toolActions: ToolAction[],
+): string {
+  if (toolActions.length > 0) {
+    const last = toolActions[toolActions.length - 1];
+    return last.summary;
+  }
+  if (taskSummary) {
+    return taskSummary.charAt(0).toUpperCase() + taskSummary.slice(1);
+  }
+  return userMessage.slice(0, 200);
+}
+
+function buildActivityDetails(
+  userMessage: string,
+  taskSummary: string | undefined,
+  toolActions: ToolAction[],
+  routerUsed: string,
+  stepCount: number,
+): Record<string, any> {
+  return {
+    userRequest: userMessage.slice(0, 300),
+    taskSummary: taskSummary || null,
+    router: routerUsed,
+    stepCount,
+    tools: toolActions.slice(-10).map(a => ({ name: a.name, action: a.summary })),
+    lastAction: toolActions.length > 0 ? toolActions[toolActions.length - 1].summary : null,
+  };
+}
+
 function extractConversationContext(messages: any[]): RouterContext {
   if (!Array.isArray(messages)) return { messageCount: 0, toolCallCount: 0 };
 
@@ -601,34 +714,47 @@ router.post('/v1/chat/completions', async (req: Request, res: Response) => {
       body.transforms = ['middle-out'];
     }
 
-    // Log in_progress activity at request start (deduplicated)
+    // ── Rich activity logging ──
+    // Extract tool actions from the conversation to show what the agent is actually doing
+    const toolActions = extractRecentToolActions(body.messages);
+    const toolNames = toolActions.map(a => a.name);
+    const actType = categorizeToolsToType(toolNames);
+    const actSummary = buildActivitySummary(lastMessage, ctx.taskSummary, toolActions);
+
     let activityId: string | undefined;
     if (user) {
-      const summary = lastMessage.slice(0, 200);
       const key = user.id;
       const now = Date.now();
       const recent = recentActivity.get(key);
-      const hasToolCalls = ctx.toolCallCount > 0;
-      const actType = hasToolCalls ? 'task' : 'message';
+      const stepCount = ctx.toolCallCount;
 
-      if (recent && recent.summary === summary && (now - recent.ts) < ACTIVITY_DEDUP_MS && recent.id) {
+      // Deduplicate: same user within the time window = same activity entry
+      if (recent && (now - recent.ts) < ACTIVITY_DEDUP_MS && recent.id) {
         activityId = recent.id;
         recent.ts = now;
+        const details = buildActivityDetails(
+          recent.summary, ctx.taskSummary, toolActions, routerUsed, stepCount,
+        );
         db.query(
-          `UPDATE activity_log SET model_used = $1, type = $2, status = 'in_progress', created_at = NOW() WHERE id = $3`,
-          [selectedModel, actType, recent.id]
+          `UPDATE activity_log
+           SET model_used = $1, type = $2, summary = $3,
+               details = $4::jsonb, status = 'in_progress', created_at = NOW()
+           WHERE id = $5`,
+          [selectedModel, actType, actSummary, JSON.stringify(details), recent.id]
         ).catch((e) => console.warn('[activity] update failed:', e.message));
       } else {
-        const detail = JSON.stringify({ router: routerUsed, task: ctx.taskSummary || null });
+        const details = buildActivityDetails(
+          lastMessage, ctx.taskSummary, toolActions, routerUsed, stepCount,
+        );
         db.query(
           `INSERT INTO activity_log (user_id, type, channel, summary, status, model_used, details)
            VALUES ($1, $2, $3, $4, 'in_progress', $5, $6::jsonb)
            RETURNING id`,
-          [user.id, actType, ctx.taskSummary ? 'auto' : 'direct', summary, selectedModel, detail]
+          [user.id, actType, ctx.taskSummary ? 'auto' : 'direct', actSummary, selectedModel, JSON.stringify(details)]
         ).then(r => {
           const id = r.rows[0]?.id;
           activityId = id;
-          recentActivity.set(key, { summary, ts: now, id });
+          recentActivity.set(key, { summary: lastMessage.slice(0, 200), ts: now, id });
         }).catch((e) => console.warn('[activity] insert failed:', e.message));
       }
     }
@@ -662,6 +788,33 @@ router.post('/v1/chat/completions', async (req: Request, res: Response) => {
           'X-Routing-Reason': safeReason,
         });
 
+        // Lightweight SSE parser — detect tool calls in the AI response
+        // so we know what the agent is dispatching next
+        const responseToolNames: string[] = [];
+        let sseBuf = '';
+        let responseHasToolCalls = false;
+
+        if (isStream) {
+          proxyRes.on('data', (chunk: Buffer) => {
+            sseBuf += chunk.toString();
+            const lines = sseBuf.split('\n');
+            sseBuf = lines.pop() || '';
+            for (const line of lines) {
+              if (!line.startsWith('data: ') || line === 'data: [DONE]') continue;
+              try {
+                const d = JSON.parse(line.slice(6));
+                const tc = d.choices?.[0]?.delta?.tool_calls;
+                if (tc) {
+                  responseHasToolCalls = true;
+                  for (const t of tc) {
+                    if (t.function?.name) responseToolNames.push(t.function.name);
+                  }
+                }
+              } catch {}
+            }
+          });
+        }
+
         proxyRes.on('error', (err) => {
           console.error(`[proxy] Upstream response error mid-stream: ${err.message}`);
           if (!res.writableEnded) {
@@ -681,18 +834,34 @@ router.post('/v1/chat/completions', async (req: Request, res: Response) => {
           }
         });
 
-        // Mark activity completed when response finishes
         proxyRes.on('end', () => {
           if (!user || !proxyRes.statusCode) return;
-          const status = proxyRes.statusCode < 400 ? 'completed' : 'failed';
-          const recent = recentActivity.get(user.id);
-          const id = activityId || recent?.id;
-          if (id) {
-            db.query(
-              `UPDATE activity_log SET status = $1, model_used = $2, created_at = NOW() WHERE id = $3`,
-              [status, selectedModel, id]
-            ).catch(() => {});
+          const id = activityId || recentActivity.get(user.id)?.id;
+          if (!id) return;
+
+          const httpOk = proxyRes.statusCode < 400;
+          // If the response contains tool calls, the agent is still working
+          // → keep status as in_progress. Only mark completed on a final text response.
+          const status = !httpOk ? 'failed' : responseHasToolCalls ? 'in_progress' : 'completed';
+
+          const respType = responseToolNames.length > 0
+            ? categorizeToolsToType(responseToolNames) : undefined;
+
+          const updates: string[] = ['status = $1', 'model_used = $2', 'created_at = NOW()'];
+          const params: any[] = [status, selectedModel];
+          let idx = 3;
+
+          if (respType) {
+            updates.push(`type = $${idx}`);
+            params.push(respType);
+            idx++;
           }
+
+          params.push(id);
+          db.query(
+            `UPDATE activity_log SET ${updates.join(', ')} WHERE id = $${idx}`,
+            params
+          ).catch(() => {});
         });
 
         proxyRes.pipe(res);
