@@ -80,17 +80,6 @@ interface ProvisionParams {
   stripeCustomerId?: string;
 }
 
-interface UserSettings {
-  agent_name?: string;
-  language?: string;
-  agent_tone?: string;
-  response_length?: string;
-  custom_instructions?: string;
-  brain_mode?: string;
-  manual_model?: string;
-  routing_preferences?: any;
-}
-
 /**
  * Regenerate USER.md for a user's container.
  * Called during provisioning and on agent/open to keep instructions current.
