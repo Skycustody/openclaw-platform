@@ -39,6 +39,10 @@ function touchIfNeeded(userId: string): void {
 const recentActivity = new Map<string, { summary: string; ts: number; id?: string }>();
 const ACTIVITY_DEDUP_MS = 120_000;
 
+// Per-user routing cache — reuse model during tool loops to skip router overhead
+const lastRouting = new Map<string, { model: string; reason: string; routerUsed: string; ts: number }>();
+const ROUTING_REUSE_MS = 180_000;
+
 const OPENROUTER_COMPLETIONS = 'https://openrouter.ai/api/v1/chat/completions';
 
 /**
@@ -531,35 +535,53 @@ router.post('/v1/chat/completions', async (req: Request, res: Response) => {
         user.brain_mode = 'auto';
         user.manual_model = null;
       }
-      const hasImage = hasImageContent(body.messages);
-      const hasToolHistory = hasToolCallsInHistory(body.messages);
 
-      const userPrefs = user?.routing_preferences && Object.keys(user.routing_preferences).length > 0
-        ? user.routing_preferences : undefined;
-      const skills = user ? await getCachedUserSkills(user.id) : [];
-      const installedSkills = skills.length > 0 ? skills : undefined;
+      // Tool-loop fast path: if the last message is a tool result, the agent is
+      // mid-task. Reuse the previous routing decision instead of calling the
+      // router again — saves ~0.7s per tool-loop call.
+      const msgs = body.messages;
+      const lastMsg = Array.isArray(msgs) && msgs.length > 0 ? msgs[msgs.length - 1] : null;
+      const inToolLoop = lastMsg?.role === 'tool' ||
+        (lastMsg?.role === 'assistant' && Array.isArray(lastMsg?.tool_calls) && lastMsg.tool_calls.length > 0);
 
-      const aiPick = await pickModelWithAI(
-        lastMessage,
-        hasImage,
-        hasToolHistory,
-        ctx,
-        apiKey,
-        userPrefs,
-        installedSkills,
-        user?.id,
-      );
+      const cachedRoute = user ? lastRouting.get(user.id) : null;
 
-      selectedModel = aiPick.model;
-      routingReason = aiPick.reason;
-      routerUsed = aiPick.routerUsed;
+      if (inToolLoop && cachedRoute && (Date.now() - cachedRoute.ts) < ROUTING_REUSE_MS) {
+        selectedModel = cachedRoute.model;
+        routingReason = cachedRoute.reason + ' (reused)';
+        routerUsed = cachedRoute.routerUsed;
+      } else {
+        const hasImage = hasImageContent(body.messages);
+        const hasToolHistory = hasToolCallsInHistory(body.messages);
 
-      if (user) {
-        db.query(
-          `INSERT INTO routing_decisions (user_id, message_preview, classification, model_selected, reason, tokens_saved)
-           VALUES ($1, $2, $3, $4, $5, $6)`,
-          [user.id, lastMessage.slice(0, 200), JSON.stringify({ method: 'ai', routerUsed, depth: ctx.messageCount, toolCalls: ctx.toolCallCount }), selectedModel, routingReason, 0]
-        ).catch(() => {});
+        const userPrefs = user?.routing_preferences && Object.keys(user.routing_preferences).length > 0
+          ? user.routing_preferences : undefined;
+        const skills = user ? await getCachedUserSkills(user.id) : [];
+        const installedSkills = skills.length > 0 ? skills : undefined;
+
+        const aiPick = await pickModelWithAI(
+          lastMessage,
+          hasImage,
+          hasToolHistory,
+          ctx,
+          apiKey,
+          userPrefs,
+          installedSkills,
+          user?.id,
+        );
+
+        selectedModel = aiPick.model;
+        routingReason = aiPick.reason;
+        routerUsed = aiPick.routerUsed;
+
+        if (user) {
+          lastRouting.set(user.id, { model: selectedModel, reason: routingReason, routerUsed, ts: Date.now() });
+          db.query(
+            `INSERT INTO routing_decisions (user_id, message_preview, classification, model_selected, reason, tokens_saved)
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            [user.id, lastMessage.slice(0, 200), JSON.stringify({ method: 'ai', routerUsed, depth: ctx.messageCount, toolCalls: ctx.toolCallCount }), selectedModel, routingReason, 0]
+          ).catch(() => {});
+        }
       }
     }
 
