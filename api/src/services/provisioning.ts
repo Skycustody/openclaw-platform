@@ -94,6 +94,24 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
   // Check retry count — don't infinite-loop server creation
   const retryCount = (existing as any)?.provision_retries || 0;
   if (retryCount >= 3) {
+    // Before giving up, check if the container is actually running (partial success from earlier attempt)
+    if (existing.container_name && existing.server_id) {
+      try {
+        const srv = await db.getOne<Server>('SELECT ip FROM servers WHERE id = $1', [existing.server_id]);
+        if (srv) {
+          const check = await sshExec(srv.ip, `docker inspect ${existing.container_name} --format '{{.State.Running}}' 2>/dev/null || echo false`);
+          if (check.stdout.trim() === 'true') {
+            console.log(`[provision] User ${userId} hit retry limit but container is running — setting active`);
+            await db.query(
+              `UPDATE users SET status = 'active', provision_retries = 0, last_active = NOW() WHERE id = $1`,
+              [userId]
+            );
+            const user = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [userId]);
+            return user!;
+          }
+        }
+      } catch {}
+    }
     console.error(`[provision] User ${userId} has failed provisioning ${retryCount} times — halting. Manual intervention needed.`);
     await db.query(
       `UPDATE users SET status = 'paused' WHERE id = $1`,
