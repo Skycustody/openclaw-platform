@@ -544,26 +544,14 @@ export async function resetKeyForBillingCycle(userId: string): Promise<void> {
 }
 
 /**
- * Migrate an existing key from limitReset:'monthly' to limitReset:null.
- * Preserves whatever remaining budget the user had — does NOT grant new credits.
- * New limit = totalUsage + max(0, oldLimit - usageMonthly).
+ * Migrate an existing key: turn off auto-reset. Limit stays the same.
  */
 export async function migrateKeyToNoReset(userId: string): Promise<boolean> {
   if (!OPENROUTER_MGMT_KEY) return false;
 
   const userKey = await findUserKey(userId);
   if (!userKey?.hash) return false;
-
-  const alreadyNoReset = !userKey.limit_reset || userKey.limit_reset === 'none';
-  if (alreadyNoReset) return true;
-
-  const totalUsage = userKey.usage ?? 0;
-  const monthlyUsage = userKey.usage_monthly ?? 0;
-  const currentLimit = userKey.limit ?? 0;
-
-  // Carry over only the remaining budget from the current month
-  const monthlyRemaining = Math.max(0, currentLimit - monthlyUsage);
-  const newLimit = Math.round((totalUsage + monthlyRemaining) * 100) / 100;
+  if (!userKey.limit_reset || userKey.limit_reset === 'none') return true;
 
   try {
     await fetch(`${OPENROUTER_BASE}/keys/${userKey.hash}`, {
@@ -572,13 +560,11 @@ export async function migrateKeyToNoReset(userId: string): Promise<boolean> {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${OPENROUTER_MGMT_KEY}`,
       },
-      body: JSON.stringify({ limit: newLimit, limit_reset: null }),
+      body: JSON.stringify({ limit_reset: null }),
     });
-
-    console.log(`[openrouter] Migrated key for ${userId}: totalUsage=$${totalUsage}, monthlyRemaining=$${monthlyRemaining}, newLimit=$${newLimit}`);
+    console.log(`[openrouter] Disabled auto-reset for ${userId}`);
     return true;
-  } catch (err) {
-    console.error(`[openrouter] Failed to migrate key for ${userId}:`, err);
+  } catch {
     return false;
   }
 }
