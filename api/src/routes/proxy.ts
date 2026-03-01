@@ -376,6 +376,65 @@ function hasImageContent(messages: any[]): boolean {
   return false;
 }
 
+const GUARDRAIL_MARKER = '⚙ PLATFORM RULES';
+const GUARDRAIL_TEXT = `${GUARDRAIL_MARKER} (auto-injected, always follow):
+1. NEVER send localhost or 127.0.0.1 links to the user. They are on a different computer. Always use PREVIEW_URL.
+2. If a tool fails, do NOT retry it more than once. Tell the user it's unavailable and suggest an alternative.
+3. NEVER ask the user to run commands, check terminals, edit files, or do anything technical. You do it.
+4. Do NOT combine "Okay" text with tool calls — text won't be delivered until tools finish. Either just work silently or use openclaw message send for immediate status.
+5. When something fails, say so plainly. Never pretend it worked or silently try a different approach.`;
+
+function detectFailedTools(messages: any[]): string[] {
+  const failedTools = new Set<string>();
+  const toolCallMap = new Map<string, string>();
+
+  for (const m of messages) {
+    if (m.role === 'assistant' && Array.isArray(m.tool_calls)) {
+      for (const tc of m.tool_calls) {
+        if (tc.id && tc.function?.name) toolCallMap.set(tc.id, tc.function.name);
+      }
+    }
+    if (m.role === 'tool' && m.tool_call_id && typeof m.content === 'string') {
+      const content = m.content.toLowerCase();
+      if (content.includes('error') || content.includes('failed') || content.includes('timed out')
+          || content.includes('unavailable') || content.includes('not found')
+          || content.includes('cannot') || content.includes('node required')) {
+        const name = toolCallMap.get(m.tool_call_id);
+        if (name) failedTools.add(name);
+      }
+    }
+  }
+  return [...failedTools];
+}
+
+function injectGuardrails(messages: any[]): void {
+  if (!Array.isArray(messages)) return;
+
+  // Remove any previously injected guardrail to avoid accumulation
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === 'system' && typeof messages[i].content === 'string'
+        && messages[i].content.includes(GUARDRAIL_MARKER)) {
+      messages.splice(i, 1);
+    }
+  }
+
+  // Detect tools that have already failed in this conversation
+  const failed = detectFailedTools(messages);
+  let text = GUARDRAIL_TEXT;
+  if (failed.length > 0) {
+    text += `\n6. BROKEN TOOLS IN THIS SESSION: ${failed.join(', ')} — these have already failed. Do NOT use them again. Use alternatives or tell the user they're unavailable.`;
+  }
+
+  // Find the last system message index, insert guardrail right after it
+  let insertIdx = 0;
+  for (let i = 0; i < messages.length; i++) {
+    if (messages[i].role === 'system') insertIdx = i + 1;
+    else break;
+  }
+
+  messages.splice(insertIdx, 0, { role: 'system', content: text });
+}
+
 function hasToolCallsInHistory(messages: any[]): boolean {
   if (!Array.isArray(messages)) return false;
   return messages.some(
@@ -699,6 +758,12 @@ router.post('/v1/chat/completions', async (req: Request, res: Response) => {
     }
 
     body.model = selectedModel;
+
+    // ── Inject guardrails ──
+    // Short, high-priority rules injected as the last system message so the
+    // model sees them right before responding. USER.md rules get lost in long
+    // conversations; this ensures critical constraints are always visible.
+    injectGuardrails(body.messages);
 
     const modelCost = MODEL_MAP[selectedModel]?.costPer1MTokens ?? 1.0;
     const browserMode = isBrowserSession(body.messages);
