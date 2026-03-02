@@ -787,6 +787,7 @@ router.post('/v1/chat/completions', async (req: Request, res: Response) => {
     const actSummary = buildActivitySummary(lastMessage, ctx.taskSummary, toolActions);
 
     let activityId: string | undefined;
+    let isNewTask = false;
     if (user) {
       const key = user.id;
       const now = Date.now();
@@ -819,6 +820,7 @@ router.post('/v1/chat/completions', async (req: Request, res: Response) => {
         ).then(r => {
           const id = r.rows[0]?.id;
           activityId = id;
+          isNewTask = true;
           recentActivity.set(key, { summary: lastMessage.slice(0, 200), ts: now, id });
         }).catch((e) => console.warn('[activity] insert failed:', e.message));
       }
@@ -853,9 +855,9 @@ router.post('/v1/chat/completions', async (req: Request, res: Response) => {
           'X-Routing-Reason': safeReason,
         });
 
-        // Lightweight SSE parser — detect tool calls in the AI response
-        // so we know what the agent is dispatching next
+        // Lightweight SSE parser — detect tool calls and capture assistant text
         const responseToolNames: string[] = [];
+        const responseTextParts: string[] = [];
         let sseBuf = '';
         let responseHasToolCalls = false;
 
@@ -868,13 +870,14 @@ router.post('/v1/chat/completions', async (req: Request, res: Response) => {
               if (!line.startsWith('data: ') || line === 'data: [DONE]') continue;
               try {
                 const d = JSON.parse(line.slice(6));
-                const tc = d.choices?.[0]?.delta?.tool_calls;
-                if (tc) {
+                const delta = d.choices?.[0]?.delta;
+                if (delta?.tool_calls) {
                   responseHasToolCalls = true;
-                  for (const t of tc) {
+                  for (const t of delta.tool_calls) {
                     if (t.function?.name) responseToolNames.push(t.function.name);
                   }
                 }
+                if (delta?.content) responseTextParts.push(delta.content);
               } catch {}
             }
           });
@@ -905,8 +908,6 @@ router.post('/v1/chat/completions', async (req: Request, res: Response) => {
           if (!id) return;
 
           const httpOk = proxyRes.statusCode < 400;
-          // If the response contains tool calls, the agent is still working
-          // → keep status as in_progress. Only mark completed on a final text response.
           const status = !httpOk ? 'failed' : responseHasToolCalls ? 'in_progress' : 'completed';
 
           const respType = responseToolNames.length > 0
@@ -927,6 +928,30 @@ router.post('/v1/chat/completions', async (req: Request, res: Response) => {
             `UPDATE activity_log SET ${updates.join(', ')} WHERE id = $${idx}`,
             params
           ).catch(() => {});
+
+          // ── Log to conversations table ──
+          // Log user message only on new tasks (not every tool loop step).
+          // Log assistant response only on the final reply (no more tool calls).
+          if (httpOk) {
+            const channel = ctx.taskSummary ? 'auto' : 'direct';
+            if (isNewTask && lastMessage.trim()) {
+              db.query(
+                `INSERT INTO conversations (user_id, channel, role, content, model_used)
+                 VALUES ($1, $2, 'user', $3, $4)`,
+                [user.id, channel, lastMessage.slice(0, 10000), selectedModel]
+              ).catch(() => {});
+            }
+            if (!responseHasToolCalls) {
+              const responseText = responseTextParts.join('').trim();
+              if (responseText) {
+                db.query(
+                  `INSERT INTO conversations (user_id, channel, role, content, model_used)
+                   VALUES ($1, $2, 'assistant', $3, $4)`,
+                  [user.id, channel, responseText.slice(0, 10000), selectedModel]
+                ).catch(() => {});
+              }
+            }
+          }
         });
 
         proxyRes.pipe(res);

@@ -117,17 +117,14 @@ router.post('/container/message', async (req: Request, res: Response, next: Next
 
     const db = (await import('../lib/db')).default;
 
+    // Log with channel name (whatsapp, telegram, etc.) for history filtering.
+    // The proxy also logs to conversations with channel=direct/auto, but
+    // container webhooks carry the real channel name for channel messages.
     await db.query(
       `INSERT INTO conversations (user_id, channel, role, content, model_used, tokens_used)
        VALUES ($1, $2, $3, $4, $5, $6)`,
       [userId, channel || 'direct', role || 'user', content, model, tokens || 0]
     );
-
-    await db.query(
-      `INSERT INTO activity_log (user_id, type, channel, summary, status, tokens_used, model_used)
-       VALUES ($1, $2, $3, $4, 'completed', $5, $6)`,
-      [userId, 'message', channel, (content || '').slice(0, 200), tokens || 0, model]
-    ).catch(() => {});
 
     await touchActivity(userId);
 

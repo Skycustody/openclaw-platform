@@ -23,13 +23,14 @@ interface Conversation {
 }
 
 const CHANNEL_LABELS: Record<string, { label: string; color: string }> = {
+  direct:     { label: 'Chat',       color: 'bg-blue-500/10 text-blue-400' },
   dashboard:  { label: 'Dashboard',  color: 'bg-blue-500/10 text-blue-400' },
   telegram:   { label: 'Telegram',   color: 'bg-sky-500/10 text-sky-400' },
   discord:    { label: 'Discord',    color: 'bg-indigo-500/10 text-indigo-400' },
   whatsapp:   { label: 'WhatsApp',   color: 'bg-green-500/10 text-green-400' },
   slack:      { label: 'Slack',      color: 'bg-purple-500/10 text-purple-400' },
   web:        { label: 'Web',        color: 'bg-white/10 text-white/60' },
-  auto:       { label: 'Auto',       color: 'bg-amber-500/10 text-amber-400' },
+  auto:       { label: 'Agent Task', color: 'bg-amber-500/10 text-amber-400' },
   cron:       { label: 'Scheduled',  color: 'bg-emerald-500/10 text-emerald-400' },
 };
 
@@ -151,7 +152,7 @@ export default function ConversationsPage() {
 
         <div className="flex items-center gap-1.5">
           <Filter className="h-3.5 w-3.5 text-white/20" />
-          {['', 'dashboard', 'telegram', 'discord', 'whatsapp', 'slack'].map(ch => (
+          {['', 'direct', 'whatsapp', 'telegram', 'discord', 'slack'].map(ch => (
             <button
               key={ch}
               onClick={() => setChannelFilter(ch)}
