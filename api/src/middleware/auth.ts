@@ -131,24 +131,28 @@ export async function requireAdmin(req: AuthRequest, _res: Response, next: NextF
       return next(err);
     }
 
-    // Admin password check (required for all admin endpoints)
-    // Uses 403 (not 401) to avoid the frontend's auto-redirect to login
+    // Admin password is always required — never skip this check.
+    // Uses 403 (not 401) to avoid the frontend's auto-redirect to login.
     const adminPassword = process.env.ADMIN_PASSWORD;
-    if (adminPassword) {
-      const providedPassword = req.headers['x-admin-password'] as string;
-      if (!providedPassword) {
-        const err: any = new Error('Admin password required');
-        err.statusCode = 403;
-        err.code = 'ADMIN_PASSWORD_REQUIRED';
-        return next(err);
-      }
-      if (providedPassword.length !== adminPassword.length ||
-          !crypto.timingSafeEqual(Buffer.from(providedPassword), Buffer.from(adminPassword))) {
-        const err: any = new Error('Invalid admin password');
-        err.statusCode = 403;
-        err.code = 'ADMIN_PASSWORD_INVALID';
-        return next(err);
-      }
+    if (!adminPassword) {
+      console.error('[admin] ADMIN_PASSWORD env var is not set — blocking all admin access');
+      const err: any = new Error('Admin panel not configured. Set ADMIN_PASSWORD in your .env file.');
+      err.statusCode = 403;
+      return next(err);
+    }
+    const providedPassword = req.headers['x-admin-password'] as string;
+    if (!providedPassword) {
+      const err: any = new Error('Admin password required');
+      err.statusCode = 403;
+      err.code = 'ADMIN_PASSWORD_REQUIRED';
+      return next(err);
+    }
+    if (providedPassword.length !== adminPassword.length ||
+        !crypto.timingSafeEqual(Buffer.from(providedPassword), Buffer.from(adminPassword))) {
+      const err: any = new Error('Invalid admin password');
+      err.statusCode = 403;
+      err.code = 'ADMIN_PASSWORD_INVALID';
+      return next(err);
     }
 
     next();
