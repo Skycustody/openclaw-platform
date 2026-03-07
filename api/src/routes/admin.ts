@@ -61,7 +61,8 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
           COUNT(*) FILTER (WHERE plan = 'starter') as starter,
           COUNT(*) FILTER (WHERE plan = 'pro') as pro,
           COUNT(*) FILTER (WHERE plan = 'business') as business
-        FROM users WHERE status != 'cancelled'
+        FROM users WHERE status IN ('active', 'sleeping', 'grace_period')
+          AND stripe_customer_id IS NOT NULL
       `),
       db.getOne<any>(`
         SELECT
@@ -167,7 +168,8 @@ router.get('/revenue', async (_req: AuthRequest, res: Response, next: NextFuncti
     const [subscriptions, topUsers, signupsByMonth] = await Promise.all([
       db.getMany<any>(`
         SELECT plan, COUNT(*) as count
-        FROM users WHERE status != 'cancelled'
+        FROM users WHERE status IN ('active', 'sleeping', 'grace_period')
+          AND stripe_customer_id IS NOT NULL
         GROUP BY plan
       `),
       db.getMany<any>(`
