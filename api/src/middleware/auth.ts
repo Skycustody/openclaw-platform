@@ -102,23 +102,11 @@ export async function requireAdmin(req: AuthRequest, _res: Response, next: NextF
       throw new UnauthorizedError('Authentication required');
     }
 
-    // Admin panel lives on the control plane only. By default only localhost can access.
-    // Set ADMIN_ALLOWED_IPS to allow specific IPs (e.g. your VPN or office).
-    // When behind Cloudflare, req.ip can be the proxy IP; use X-Forwarded-For leftmost (real client).
-    const forwarded = req.headers['x-forwarded-for'];
-    const clientIpRaw = typeof forwarded === 'string'
-      ? forwarded.split(',')[0].trim()
-      : (req.ip || req.socket.remoteAddress || '');
-    const clientIp = String(clientIpRaw).replace('::ffff:', '');
-    const allowedIpsRaw = (process.env.ADMIN_ALLOWED_IPS || '').split(',').map(s => s.trim()).filter(Boolean);
-    const allowedIps = allowedIpsRaw.length > 0 ? allowedIpsRaw : ['127.0.0.1', '::1'];
-    const ipAllowed = allowedIps.includes('*') || allowedIps.includes('0.0.0.0/0') || allowedIps.some(allowed => allowed === clientIp);
-    if (!ipAllowed) {
-      console.warn(`[admin] Blocked IP: ${clientIp} (allowed: ${allowedIps.join(', ')})`);
-      const err: any = new Error('Admin panel is only available from the control plane. Use SSH port-forward or set ADMIN_ALLOWED_IPS.');
-      err.statusCode = 403;
-      return next(err);
-    }
+    // Security: 3 layers protect the admin panel
+    //   1. JWT auth (handled by authenticate middleware before this)
+    //   2. is_admin flag in database (checked below)
+    //   3. ADMIN_PASSWORD env var (checked below)
+    // IP allowlisting removed — unreliable behind Cloudflare/proxies.
 
     const user = await db.getOne<{ is_admin: boolean }>(
       'SELECT is_admin FROM users WHERE id = $1',
@@ -133,29 +121,22 @@ export async function requireAdmin(req: AuthRequest, _res: Response, next: NextF
 
     // Admin password is always required — never skip this check.
     // Uses 403 (not 401) to avoid the frontend's auto-redirect to login.
-    const adminPassword = (process.env.ADMIN_PASSWORD || '').trim();
+    const adminPassword = process.env.ADMIN_PASSWORD;
     if (!adminPassword) {
       console.error('[admin] ADMIN_PASSWORD env var is not set — blocking all admin access');
       const err: any = new Error('Admin panel not configured. Set ADMIN_PASSWORD in your .env file.');
       err.statusCode = 403;
       return next(err);
     }
-    const providedRaw = req.headers['x-admin-password'] as string;
-    const providedPassword = (typeof providedRaw === 'string' ? providedRaw : '').trim();
+    const providedPassword = req.headers['x-admin-password'] as string;
     if (!providedPassword) {
       const err: any = new Error('Admin password required');
       err.statusCode = 403;
       err.code = 'ADMIN_PASSWORD_REQUIRED';
       return next(err);
     }
-    if (providedPassword.length !== adminPassword.length) {
-      console.warn(`[admin] Password length mismatch: expected ${adminPassword.length}, got ${providedPassword.length}`);
-      const err: any = new Error('Invalid admin password');
-      err.statusCode = 403;
-      err.code = 'ADMIN_PASSWORD_INVALID';
-      return next(err);
-    }
-    if (!crypto.timingSafeEqual(Buffer.from(providedPassword, 'utf8'), Buffer.from(adminPassword, 'utf8'))) {
+    if (providedPassword.length !== adminPassword.length ||
+        !crypto.timingSafeEqual(Buffer.from(providedPassword), Buffer.from(adminPassword))) {
       const err: any = new Error('Invalid admin password');
       err.statusCode = 403;
       err.code = 'ADMIN_PASSWORD_INVALID';
