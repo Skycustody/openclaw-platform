@@ -112,7 +112,8 @@ export async function requireAdmin(req: AuthRequest, _res: Response, next: NextF
     const clientIp = String(clientIpRaw).replace('::ffff:', '');
     const allowedIpsRaw = (process.env.ADMIN_ALLOWED_IPS || '').split(',').map(s => s.trim()).filter(Boolean);
     const allowedIps = allowedIpsRaw.length > 0 ? allowedIpsRaw : ['127.0.0.1', '::1'];
-    if (!allowedIps.some(allowed => allowed === clientIp)) {
+    const allowAll = allowedIps.some(ip => ip === '*' || ip === '0.0.0.0/0' || ip === '0.0.0.0');
+    if (!allowAll && !allowedIps.some(allowed => allowed === clientIp)) {
       console.warn(`[admin] Blocked IP: ${clientIp} (allowed: ${allowedIps.join(', ')})`);
       const err: any = new Error('Admin panel is only available from the control plane. Use SSH port-forward or set ADMIN_ALLOWED_IPS.');
       err.statusCode = 403;
