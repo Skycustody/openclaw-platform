@@ -133,22 +133,29 @@ export async function requireAdmin(req: AuthRequest, _res: Response, next: NextF
 
     // Admin password is always required — never skip this check.
     // Uses 403 (not 401) to avoid the frontend's auto-redirect to login.
-    const adminPassword = process.env.ADMIN_PASSWORD;
+    const adminPassword = (process.env.ADMIN_PASSWORD || '').trim();
     if (!adminPassword) {
       console.error('[admin] ADMIN_PASSWORD env var is not set — blocking all admin access');
       const err: any = new Error('Admin panel not configured. Set ADMIN_PASSWORD in your .env file.');
       err.statusCode = 403;
       return next(err);
     }
-    const providedPassword = req.headers['x-admin-password'] as string;
+    const providedRaw = req.headers['x-admin-password'] as string;
+    const providedPassword = (typeof providedRaw === 'string' ? providedRaw : '').trim();
     if (!providedPassword) {
       const err: any = new Error('Admin password required');
       err.statusCode = 403;
       err.code = 'ADMIN_PASSWORD_REQUIRED';
       return next(err);
     }
-    if (providedPassword.length !== adminPassword.length ||
-        !crypto.timingSafeEqual(Buffer.from(providedPassword), Buffer.from(adminPassword))) {
+    if (providedPassword.length !== adminPassword.length) {
+      console.warn(`[admin] Password length mismatch: expected ${adminPassword.length}, got ${providedPassword.length}`);
+      const err: any = new Error('Invalid admin password');
+      err.statusCode = 403;
+      err.code = 'ADMIN_PASSWORD_INVALID';
+      return next(err);
+    }
+    if (!crypto.timingSafeEqual(Buffer.from(providedPassword, 'utf8'), Buffer.from(adminPassword, 'utf8'))) {
       const err: any = new Error('Invalid admin password');
       err.statusCode = 403;
       err.code = 'ADMIN_PASSWORD_INVALID';
