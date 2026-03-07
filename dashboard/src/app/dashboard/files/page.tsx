@@ -172,14 +172,14 @@ export default function FilesPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-start justify-between animate-fade-up">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 animate-fade-up">
         <div>
-          <h1 className="text-[28px] font-bold text-white tracking-tight">Workspace Files</h1>
-          <p className="mt-1.5 text-[15px] text-white/50">
+          <h1 className="text-[22px] sm:text-[28px] font-bold text-white tracking-tight">Workspace Files</h1>
+          <p className="mt-1.5 text-[14px] sm:text-[15px] text-white/50">
             Files in your agent&apos;s OpenClaw workspace. Upload files here for your agent to access.
           </p>
         </div>
-        <Button onClick={handleUploadClick} loading={uploading} disabled={!!error}>
+        <Button onClick={handleUploadClick} loading={uploading} disabled={!!error} className="self-start sm:self-auto shrink-0">
           <Upload className="h-4 w-4" />
           Upload to Workspace
         </Button>

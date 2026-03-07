@@ -289,10 +289,10 @@ export default function AgentsPage() {
                     <p className="text-[13px] text-white/40 mt-1 line-clamp-1">{agent.purpose}</p>
                   )}
 
-                  <div className="flex items-center gap-3 mt-3">
+                  <div className="flex items-center gap-3 mt-3 flex-wrap">
                     <div className="flex items-center gap-1">
                       <Info className="h-3 w-3 text-white/15" />
-                      <span className="text-[11px] text-white/20 font-mono">{agent.openclawAgentId}</span>
+                      <span className="text-[11px] text-white/20 font-mono truncate max-w-[120px] sm:max-w-none">{agent.openclawAgentId}</span>
                     </div>
                     {agent.channelCount > 0 && (
                       <div className="flex items-center gap-1">

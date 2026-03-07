@@ -129,7 +129,7 @@ export default function ConversationsPage() {
       </div>
 
       {/* Search & Filters */}
-      <div className="flex items-center gap-3 animate-fade-up">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 animate-fade-up">
         <form onSubmit={handleSearch} className="flex-1 relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/20" />
           <input
@@ -150,8 +150,8 @@ export default function ConversationsPage() {
           )}
         </form>
 
-        <div className="flex items-center gap-1.5">
-          <Filter className="h-3.5 w-3.5 text-white/20" />
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+          <Filter className="h-3.5 w-3.5 text-white/20 shrink-0" />
           {['', 'direct', 'whatsapp', 'telegram', 'discord', 'slack'].map(ch => (
             <button
               key={ch}

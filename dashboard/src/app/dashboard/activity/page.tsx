@@ -215,8 +215,8 @@ export default function ActivityFeed() {
       </div>
 
       {/* Status filter pills */}
-      <div className="flex items-center gap-1.5 animate-fade-up">
-        <span className="text-[12px] text-white/30 mr-1">Status:</span>
+      <div className="flex items-center gap-1.5 animate-fade-up overflow-x-auto pb-1 sm:pb-0">
+        <span className="text-[12px] text-white/30 mr-1 shrink-0">Status:</span>
         {statusFilters.map((f) => {
           const count = f.key === 'all'
             ? (counts.byStatus.all || 0)

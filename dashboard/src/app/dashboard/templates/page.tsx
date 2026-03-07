@@ -130,14 +130,14 @@ export default function TemplatesPage() {
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-[28px] font-bold text-white tracking-tight">Agent Templates</h1>
-          <p className="mt-2 text-[15px] text-white/50 leading-relaxed">
+          <h1 className="text-[22px] sm:text-[28px] font-bold text-white tracking-tight">Agent Templates</h1>
+          <p className="mt-2 text-[14px] sm:text-[15px] text-white/50 leading-relaxed">
             Pre-built agent configurations. Install to apply personality, skills, tools, and automations in one click.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <Button variant="glass" size="sm" onClick={() => { setLoading(true); api.get<{ templates: Template[] }>('/templates').then((res) => setTemplates(res.templates || [])).catch(() => {}).finally(() => setLoading(false)); }}>
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
           </Button>

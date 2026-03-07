@@ -122,7 +122,7 @@ export default function ProtectionPage() {
           </div>
           <h1 className="text-[28px] font-bold text-white tracking-tight">Protect Your Budget</h1>
         </div>
-        <p className="text-[15px] text-white/50 ml-[52px]">
+        <p className="text-[15px] text-white/50 sm:ml-[52px]">
           Stop your agent from overspending accidentally.
         </p>
       </div>
@@ -216,7 +216,7 @@ export default function ProtectionPage() {
           description="Your agent won't start new tasks during this time"
         />
         {settings.quietHours.enabled && (
-          <div className="mt-5 grid grid-cols-2 gap-4 ml-14">
+          <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-4 sm:ml-14">
             <Input
               label="From"
               type="time"

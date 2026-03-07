@@ -192,7 +192,7 @@ export default function MemoryPage() {
             Facts, preferences, and context your agent has learned about you
           </p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
           <Button variant="primary" size="sm" onClick={() => setShowAddModal(true)}>
             <Plus className="h-4 w-4" />
             Add Memory

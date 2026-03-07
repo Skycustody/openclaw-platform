@@ -410,21 +410,23 @@ export default function RouterPage() {
                 return (
                   <div
                     key={cat.key}
-                    className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors ${
+                    className={`flex flex-col sm:flex-row sm:items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors ${
                       isOverridden
                         ? 'border-indigo-500/20 bg-indigo-500/[0.03]'
                         : 'border-white/[0.04] bg-white/[0.01]'
                     }`}
                   >
-                    <div className={`flex h-8 w-8 items-center justify-center rounded-lg shrink-0 ${
-                      isOverridden ? 'bg-indigo-500/15 text-indigo-400' : 'bg-white/[0.04] text-white/30'
-                    }`}>
-                      {CATEGORY_ICONS[cat.key] || <Layers className="h-4 w-4" />}
-                    </div>
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <div className={`flex h-8 w-8 items-center justify-center rounded-lg shrink-0 ${
+                        isOverridden ? 'bg-indigo-500/15 text-indigo-400' : 'bg-white/[0.04] text-white/30'
+                      }`}>
+                        {CATEGORY_ICONS[cat.key] || <Layers className="h-4 w-4" />}
+                      </div>
 
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-medium text-white/80">{cat.label}</p>
-                      <p className="text-[11px] text-white/30 truncate">{cat.description}</p>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px] font-medium text-white/80">{cat.label}</p>
+                        <p className="text-[11px] text-white/30 truncate">{cat.description}</p>
+                      </div>
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
@@ -445,7 +447,7 @@ export default function RouterPage() {
                             return next;
                           });
                         }}
-                        className="rounded-md border border-white/[0.08] bg-white/[0.03] px-2 py-1.5 text-[12px] text-white/70 focus:border-indigo-500/40 focus:outline-none appearance-none cursor-pointer min-w-[160px]"
+                        className="rounded-md border border-white/[0.08] bg-white/[0.03] px-2 py-1.5 text-[12px] text-white/70 focus:border-indigo-500/40 focus:outline-none appearance-none cursor-pointer w-full sm:min-w-[160px] sm:w-auto"
                       >
                         <option value="" className="bg-[#1a1a2e] text-white/70">
                           Default ({defaultModelName})

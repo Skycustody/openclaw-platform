@@ -155,7 +155,7 @@ export default function TokensPage() {
             <div className="flex items-start justify-between mb-6">
               <div>
                 <p className="text-[14px] text-white/40 mb-2">AI Balance</p>
-                <p className="text-[42px] font-bold text-white tracking-tight leading-none">
+                <p className="text-[32px] sm:text-[42px] font-bold text-white tracking-tight leading-none">
                   {nexosUsage ? `$${nexosUsage.remainingUsd.toFixed(2)}` : 'Unlimited*'}
                 </p>
                 <p className="text-[14px] text-white/40 mt-1">remaining this month</p>
@@ -259,12 +259,12 @@ export default function TokensPage() {
                 { model: 'Claude Sonnet 4',  input: '$3.00',  output: '$15.00', tag: 'Default (Pro)' },
                 { model: 'O3 Mini',          input: '$1.10',  output: '$4.40',  tag: 'Reasoning' },
               ].map(m => (
-                <div key={m.model} className="flex items-center justify-between py-2.5 border-b border-white/[0.04] last:border-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[13px] text-white/70">{m.model}</span>
-                    {m.tag && <Badge variant="amber" className="text-[10px]">{m.tag}</Badge>}
+                <div key={m.model} className="flex flex-col sm:flex-row sm:items-center justify-between py-2.5 border-b border-white/[0.04] last:border-0 gap-1 sm:gap-0">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-[13px] text-white/70 truncate">{m.model}</span>
+                    {m.tag && <Badge variant="amber" className="text-[10px] shrink-0">{m.tag}</Badge>}
                   </div>
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-4 shrink-0">
                     <span className="text-[12px] text-white/30">{m.input} in</span>
                     <span className="text-[12px] text-white/30">{m.output} out</span>
                   </div>
@@ -290,7 +290,7 @@ export default function TokensPage() {
                 Manage
               </Button>
             </div>
-            <div className="mt-5 grid grid-cols-2 gap-4">
+            <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
                 <p className="text-[12px] text-white/30 mb-1">Plan</p>
                 <p className="text-[18px] font-bold text-white capitalize">{billingInfo?.plan || 'Pro'}</p>

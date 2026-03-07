@@ -107,12 +107,12 @@ export default function PersonalityPage() {
 
       {/* Agent selector tabs */}
       {agents.length > 1 && (
-        <div className="flex gap-2 animate-fade-up">
+        <div className="flex gap-2 animate-fade-up overflow-x-auto pb-1">
           {agents.map(agent => (
             <button
               key={agent.id}
               onClick={() => selectAgent(agent)}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all text-[13px] ${
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all text-[13px] shrink-0 ${
                 selectedAgent?.id === agent.id
                   ? 'border-white/20 bg-white/[0.06] text-white'
                   : 'border-white/[0.06] bg-white/[0.02] text-white/40 hover:text-white/60 hover:border-white/10'

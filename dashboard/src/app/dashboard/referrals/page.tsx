@@ -152,11 +152,11 @@ export default function ReferralsPage() {
             <CardDescription>Share this link and start earning when your friends sign up.</CardDescription>
           </div>
 
-          <div className="flex items-center gap-3 mb-5">
-            <div className="flex-1 truncate rounded-2xl glass-subtle px-5 py-3.5 font-mono text-[15px] text-white/60 border border-white/[0.08]">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-5">
+            <div className="flex-1 truncate rounded-2xl glass-subtle px-4 sm:px-5 py-3.5 font-mono text-[13px] sm:text-[15px] text-white/60 border border-white/[0.08]">
               {data?.referralLink || 'https://valnaa.com/ref/...'}
             </div>
-            <Button variant={copied ? 'glass' : 'primary'} onClick={copyLink}>
+            <Button variant={copied ? 'glass' : 'primary'} onClick={copyLink} className="shrink-0">
               {copied ? (
                 <>
                   <Check className="h-4 w-4 text-emerald-400" />
@@ -171,7 +171,7 @@ export default function ReferralsPage() {
             </Button>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[13px] text-white/30 mr-1">Share via:</span>
             <Button variant="glass" size="sm" onClick={shareWhatsApp}>
               <Send className="h-3.5 w-3.5" />

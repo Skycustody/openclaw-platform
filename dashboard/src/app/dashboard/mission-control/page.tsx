@@ -196,9 +196,9 @@ export default function MissionControlPage() {
   return (
     <div className="space-y-5">
       {/* ─── Header ─── */}
-      <div className="flex items-center justify-between animate-fade-up">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-up">
         <div>
-          <h1 className="text-[26px] font-bold text-white tracking-tight">Mission Control</h1>
+          <h1 className="text-[22px] sm:text-[26px] font-bold text-white tracking-tight">Mission Control</h1>
           <div className="flex items-center gap-3 mt-0.5">
             <span className="text-[12px] text-white/20">
               {lastFetch.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
@@ -253,7 +253,7 @@ export default function MissionControlPage() {
 
           <div className="flex-1 min-w-0">
             <p className="text-[17px] font-semibold text-white truncate">{subdomain}.valnaa.com</p>
-            <div className="flex items-center gap-2 mt-1">
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
               <StatusBadge status={displayStatus} />
               <Badge variant={apiData?.plan === 'business' ? 'amber' : apiData?.plan === 'pro' ? 'blue' : 'default'}>
                 {apiData?.plan?.toUpperCase() || 'STARTER'}

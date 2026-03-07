@@ -266,9 +266,9 @@ export default function SkillsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <div className="flex items-center justify-between mb-1">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1">
           <div className="flex items-center gap-3">
-            <h1 className="text-[26px] font-bold text-white tracking-tight">Skills & Tools</h1>
+            <h1 className="text-[22px] sm:text-[26px] font-bold text-white tracking-tight">Skills & Tools</h1>
             {loading ? (
               <Badge variant="default"><Loader2 className="h-3 w-3 animate-spin" /></Badge>
             ) : (
@@ -291,7 +291,7 @@ export default function SkillsPage() {
       )}
 
       {/* Tab switcher */}
-      <div className="flex gap-2">
+      <div className="flex gap-2 overflow-x-auto pb-1">
         <button
           onClick={() => setTab('tools')}
           className={`px-4 py-2 rounded-lg text-[14px] font-medium transition-all ${

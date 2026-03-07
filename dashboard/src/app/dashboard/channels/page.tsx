@@ -676,7 +676,7 @@ export default function ConnectApps() {
               <>
                 <div className="bg-white p-4 rounded-xl mb-4">
                   {!whatsAppQr.includes('\n') && whatsAppQr.length > 20 ? (
-                    <QRCodeSVG value={whatsAppQr} size={260} level="M" bgColor="#ffffff" fgColor="#000000" />
+                    <QRCodeSVG value={whatsAppQr} size={220} level="M" bgColor="#ffffff" fgColor="#000000" className="w-full max-w-[260px] h-auto" />
                   ) : (
                     <pre
                       className="text-[5px] sm:text-[6px] md:text-[7px] leading-[1.05] text-black whitespace-pre font-mono select-none"

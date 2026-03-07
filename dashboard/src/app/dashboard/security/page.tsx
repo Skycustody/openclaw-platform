@@ -191,9 +191,9 @@ export default function SecurityPage() {
 
       {/* Two-Factor Authentication */}
       <Card>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-400/10">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-400/10">
               <ShieldCheck className="h-5 w-5 text-emerald-400" />
             </div>
             <div>
@@ -236,15 +236,13 @@ export default function SecurityPage() {
           {data.sessions.map((session) => {
             const DeviceIcon = deviceIcons[session.type] || Monitor;
             return (
-              <GlassPanel key={session.id} className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <DeviceIcon className="h-5 w-5 text-white/40" />
-                  <div>
-                    <div className="flex items-center gap-2">
+              <GlassPanel key={session.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-4 min-w-0">
+                  <DeviceIcon className="h-5 w-5 text-white/40 shrink-0" />
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-[14px] font-medium text-white">{session.device}</span>
-                      <span className="text-[13px] text-white/30">—</span>
                       <span className="text-[13px] text-white/50">{session.location}</span>
-                      <span className="text-[13px] text-white/30">—</span>
                       <span className="text-[13px] text-white/50">
                         {session.current ? 'Now' : timeAgo(session.lastActive)}
                       </span>
@@ -255,7 +253,7 @@ export default function SecurityPage() {
                   </div>
                 </div>
                 {!session.current && (
-                  <Button variant="ghost" size="sm" onClick={() => revokeSession(session.id)}>
+                  <Button variant="ghost" size="sm" onClick={() => revokeSession(session.id)} className="self-start sm:self-auto shrink-0">
                     <LogOut className="h-4 w-4 text-red-400" />
                     <span className="text-red-400">Sign Out</span>
                   </Button>

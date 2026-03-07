@@ -158,12 +158,12 @@ export default function SchedulePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between animate-fade-up">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-up">
         <div>
-          <h1 className="text-[26px] font-bold text-white tracking-tight">Scheduled Tasks</h1>
-          <p className="mt-1 text-[15px] text-white/40">Automate things your agent does on a schedule</p>
+          <h1 className="text-[22px] sm:text-[26px] font-bold text-white tracking-tight">Scheduled Tasks</h1>
+          <p className="mt-1 text-[14px] sm:text-[15px] text-white/40">Automate things your agent does on a schedule</p>
         </div>
-        <Button variant="primary" size="md" onClick={() => setShowCreate(true)}>
+        <Button variant="primary" size="md" onClick={() => setShowCreate(true)} className="self-start sm:self-auto">
           <Plus className="h-4 w-4" />
           New Task
         </Button>
@@ -337,7 +337,7 @@ export default function SchedulePage() {
           {/* Frequency */}
           <div className="space-y-2">
             <label className="block text-[13px] font-medium text-white/60">How often?</label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {FREQ_OPTIONS.map((opt) => (
                 <button
                   key={opt.value}
