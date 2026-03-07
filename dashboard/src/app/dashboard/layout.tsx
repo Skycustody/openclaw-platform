@@ -14,11 +14,12 @@ import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import api from '@/lib/api';
 import { DASHBOARD_ALLOWED_STATUSES } from '@/lib/constants';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Menu } from 'lucide-react';
+import Image from 'next/image';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { sidebarOpen, setUser } = useStore();
+  const { sidebarOpen, setUser, setMobileSidebarOpen } = useStore();
   const [checking, setChecking] = useState(true);
   const isHome = pathname === '/dashboard' || pathname === '/dashboard/' || (pathname?.startsWith?.('/dashboard') && pathname.replace(/\/$/, '').split('/').length <= 2);
 
@@ -76,11 +77,28 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <div className="h-screen overflow-hidden bg-black text-white" style={{ backgroundImage: 'none' }}>
       <Sidebar />
+
+      {/* Mobile top bar — visible only below md */}
+      <header className="fixed top-0 left-0 right-0 z-30 flex h-[56px] items-center gap-3 border-b border-white/[0.06] bg-black px-4 md:hidden">
+        <button
+          onClick={() => setMobileSidebarOpen(true)}
+          className="rounded-md p-1.5 text-white/50 hover:text-white hover:bg-white/5 transition-colors"
+          aria-label="Open menu"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+        <Image src="/favicon.png" alt="Valnaa" width={18} height={18} className="rounded-sm" />
+        <span className="text-[15px] font-semibold text-white tracking-tight">Valnaa</span>
+      </header>
+
       <main
         className={cn(
           'h-screen transition-all duration-300 flex flex-col',
-          sidebarOpen ? 'ml-[220px]' : 'ml-[68px]',
-          isHome ? 'p-0 overflow-hidden' : 'p-5 pt-6 overflow-y-auto'
+          sidebarOpen ? 'md:ml-[220px]' : 'md:ml-[68px]',
+          'ml-0',
+          isHome
+            ? 'pt-[56px] md:pt-0 overflow-hidden'
+            : 'px-4 pt-[72px] md:px-5 md:pt-6 pb-4 md:pb-5 overflow-y-auto'
         )}
       >
         <div className={cn('flex-1 flex flex-col min-h-0', isHome ? 'overflow-hidden' : 'mx-auto max-w-6xl w-full')}>{children}</div>

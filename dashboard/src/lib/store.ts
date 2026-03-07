@@ -14,6 +14,8 @@ interface StoreState {
   setUser: (user: UserData | null) => void;
   sidebarOpen: boolean;
   toggleSidebar: () => void;
+  mobileSidebarOpen: boolean;
+  setMobileSidebarOpen: (open: boolean) => void;
 }
 
 export const useStore = create<StoreState>((set) => ({
@@ -21,4 +23,6 @@ export const useStore = create<StoreState>((set) => ({
   setUser: (user) => set({ user }),
   sidebarOpen: true,
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
+  mobileSidebarOpen: false,
+  setMobileSidebarOpen: (open) => set({ mobileSidebarOpen: open }),
 }));

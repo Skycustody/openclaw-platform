@@ -190,7 +190,7 @@ export default function ReferralsPage() {
       </Card>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Card>
           <div className="flex items-center gap-3 mb-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-400/10">
@@ -230,7 +230,7 @@ export default function ReferralsPage() {
       {/* How It Works */}
       <div>
         <h2 className="text-[15px] font-semibold text-white/60 mb-4">How It Works</h2>
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {steps.map((step, i) => {
             const StepIcon = step.icon;
             return (

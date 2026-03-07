@@ -340,7 +340,7 @@ function PricingSection() {
         </p>
       </div>
 
-      <div className="mt-16 grid grid-cols-1 gap-5 sm:grid-cols-3">
+      <div className="mt-16 grid grid-cols-1 gap-5 md:grid-cols-3">
         {plans.map((plan) => (
           <div key={plan.name} className="min-h-[24rem]">
             <div className="relative h-full rounded-[1.25rem] border-[0.75px] border-border p-2 md:rounded-[1.5rem] md:p-3">
