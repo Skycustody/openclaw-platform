@@ -146,6 +146,12 @@ export default function AdminPanel() {
   const [editUser, setEditUser] = useState<AdminUser | null>(null);
   const [editForm, setEditForm] = useState({ plan: '', status: '', is_admin: false, credit_balance: '' });
   const [saving, setSaving] = useState(false);
+  const [actionMsg, setActionMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const showMsg = (type: 'success' | 'error', text: string) => {
+    setActionMsg({ type, text });
+    setTimeout(() => setActionMsg(null), 4000);
+  };
 
   const tryAuth = useCallback(async (pw: string) => {
     api.setHeader('x-admin-password', pw);
@@ -274,27 +280,38 @@ export default function AdminPanel() {
         token_balance: parseInt(editForm.credit_balance) || 0,
       });
       setEditUser(null);
+      showMsg('success', 'User updated');
       fetchUsers(userPage, userSearch);
       fetchOverview();
-    } catch {}
+    } catch (err: any) {
+      showMsg('error', err.message || 'Failed to save');
+    }
     setSaving(false);
   };
 
   const handleReprovision = async (userId?: string) => {
     try {
-      await api.post('/admin/reprovision', userId ? { userId } : {});
+      const data = await api.post<{ results: Array<{ email: string; status: string }> }>('/admin/reprovision', userId ? { userId } : {});
+      const ok = data.results?.filter(r => r.status === 'success').length || 0;
+      const fail = data.results?.filter(r => r.status !== 'success').length || 0;
+      showMsg(fail > 0 ? 'error' : 'success', `Provisioned: ${ok} success, ${fail} failed`);
       fetchUsers(userPage, userSearch);
       fetchOverview();
-    } catch {}
+    } catch (err: any) {
+      showMsg('error', err.message || 'Reprovision failed');
+    }
   };
 
   const handleRemoveServer = async (serverId: string) => {
     if (!confirm('Remove this server? Only works if no active users are on it.')) return;
     try {
       await api.delete(`/admin/servers/${serverId}`);
+      showMsg('success', 'Server removed');
       fetchServers();
       fetchOverview();
-    } catch {}
+    } catch (err: any) {
+      showMsg('error', err.message || 'Failed to remove server');
+    }
   };
 
   const handleLogout = () => {
@@ -408,6 +425,16 @@ export default function AdminPanel() {
           </a>
         </div>
       </div>
+
+      {actionMsg && (
+        <div className={`fixed top-4 right-4 z-[60] rounded-lg border px-4 py-3 text-[13px] shadow-lg transition-all ${
+          actionMsg.type === 'success'
+            ? 'border-green-500/20 bg-green-500/10 text-green-400'
+            : 'border-red-500/20 bg-red-500/10 text-red-400'
+        }`}>
+          {actionMsg.text}
+        </div>
+      )}
 
       <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
         <div className="flex items-center gap-1 border-b border-white/[0.06] pb-0">
@@ -707,10 +734,20 @@ export default function AdminPanel() {
                           <p className="text-[11px] text-white/30">{timeAgo(u.created_at)}</p>
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <button onClick={() => openEdit(u)}
-                            className="p-1.5 rounded-lg text-white/20 hover:text-white/50 hover:bg-white/[0.06] transition-all">
-                            <Edit3 className="h-3.5 w-3.5" />
-                          </button>
+                          <div className="flex items-center justify-end gap-1">
+                            {(u.status === 'provisioning' || u.status === 'paused') && (
+                              <button onClick={() => handleReprovision(u.id)}
+                                title="Re-provision"
+                                className="p-1.5 rounded-lg text-amber-400/40 hover:text-amber-400 hover:bg-amber-400/10 transition-all">
+                                <Zap className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                            <button onClick={() => openEdit(u)}
+                              title="Edit user"
+                              className="p-1.5 rounded-lg text-white/20 hover:text-white/50 hover:bg-white/[0.06] transition-all">
+                              <Edit3 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
