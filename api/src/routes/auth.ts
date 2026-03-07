@@ -109,7 +109,7 @@ router.post('/login', rateLimitAuth, async (req: Request, res: Response, next: N
     }
 
     const user = await db.getOne<any>(
-      'SELECT id, email, password_hash, plan, status FROM users WHERE email = $1',
+      'SELECT id, email, password_hash, plan, status, stripe_customer_id FROM users WHERE email = $1',
       [email]
     );
 
@@ -124,7 +124,7 @@ router.post('/login', rateLimitAuth, async (req: Request, res: Response, next: N
 
     res.json({
       token,
-      user: { id: user.id, email: user.email, plan: user.plan, status: user.status },
+      user: { id: user.id, email: user.email, plan: user.plan, status: user.status, hasPaid: !!user.stripe_customer_id },
     });
   } catch (err) {
     next(err);
@@ -173,7 +173,7 @@ router.post('/google', rateLimitAuth, async (req: Request, res: Response, next: 
     const { email, name, picture, sub: googleId } = payload;
 
     const existingUser = await db.getOne<any>(
-      'SELECT id, email, plan, status FROM users WHERE email = $1',
+      'SELECT id, email, plan, status, stripe_customer_id FROM users WHERE email = $1',
       [email]
     );
 
@@ -187,7 +187,7 @@ router.post('/google', rateLimitAuth, async (req: Request, res: Response, next: 
 
       return res.json({
         token,
-        user: { id: existingUser.id, email: existingUser.email, plan: existingUser.plan, status: existingUser.status },
+        user: { id: existingUser.id, email: existingUser.email, plan: existingUser.plan, status: existingUser.status, hasPaid: !!existingUser.stripe_customer_id },
         isNewUser: false,
       });
     }

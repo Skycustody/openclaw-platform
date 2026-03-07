@@ -53,14 +53,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           isAdmin: data.isAdmin || false,
         });
         const isAdmin = data.isAdmin === true;
-        if (!isAdmin && !(DASHBOARD_ALLOWED_STATUSES as readonly string[]).includes(subStatus) && typeof window !== 'undefined') {
+        const hasPaid = data.hasPaid === true;
+        const statusOk = (DASHBOARD_ALLOWED_STATUSES as readonly string[]).includes(subStatus);
+        if (!isAdmin && !statusOk && !hasPaid && typeof window !== 'undefined') {
           window.location.href = '/pricing';
           return;
         }
       })
       .catch(() => {
         if (typeof window !== 'undefined') {
-          window.location.href = '/pricing';
+          window.location.href = '/auth/login';
         }
       })
       .finally(() => setChecking(false));

@@ -64,8 +64,10 @@ function AuthForm() {
         return;
       }
       try {
-        const billing = await api.get<{ status: string }>('/billing');
-        window.location.href = (DASHBOARD_ALLOWED_STATUSES as readonly string[]).includes(billing.status) ? '/dashboard' : '/pricing';
+        const billing = await api.get<{ status: string; stripeCustomerId?: string }>('/billing');
+        const hasPaid = !!billing.stripeCustomerId;
+        const statusOk = (DASHBOARD_ALLOWED_STATUSES as readonly string[]).includes(billing.status);
+        window.location.href = (statusOk || hasPaid) ? '/dashboard' : '/pricing';
       } catch {
         window.location.href = '/pricing';
       }
@@ -111,7 +113,9 @@ function AuthForm() {
       if (isLogin) {
         const data = await api.post<{ token: string; user: any }>('/auth/login', { email, password });
         api.setToken(data.token);
-        window.location.href = (DASHBOARD_ALLOWED_STATUSES as readonly string[]).includes(data.user?.status) ? '/dashboard' : '/pricing';
+        const statusOk = (DASHBOARD_ALLOWED_STATUSES as readonly string[]).includes(data.user?.status);
+        const hasPaid = data.user?.hasPaid === true;
+        window.location.href = (statusOk || hasPaid) ? '/dashboard' : '/pricing';
       } else {
         const data = await api.post<{ token: string }>('/auth/signup', {
           email,

@@ -217,6 +217,7 @@ router.get('/status', async (req: AuthRequest, res: Response, next: NextFunction
       lastActive: user.last_active,
       createdAt: user.created_at,
       isAdmin: user.is_admin || false,
+      hasPaid: !!user.stripe_customer_id,
       previewUrl,
       stats: {
         messagesToday,
