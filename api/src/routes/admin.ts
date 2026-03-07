@@ -40,6 +40,9 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
           COUNT(*) FILTER (WHERE status = 'paused') as paused,
           COUNT(*) FILTER (WHERE status = 'provisioning') as provisioning,
           COUNT(*) FILTER (WHERE status = 'cancelled') as cancelled,
+          COUNT(*) FILTER (WHERE status = 'pending') as pending,
+          COUNT(*) FILTER (WHERE stripe_customer_id IS NOT NULL) as paid,
+          COUNT(*) FILTER (WHERE stripe_customer_id IS NULL AND status != 'cancelled') as unpaid,
           COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '24 hours') as new_24h,
           COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days') as new_7d,
           COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '30 days') as new_30d
@@ -286,6 +289,7 @@ router.get('/users', async (req: AuthRequest, res: Response, next: NextFunction)
       db.getMany<any>(
         `SELECT u.id, u.email, u.display_name, u.plan, u.status, u.subdomain,
                 u.created_at, u.last_active, u.is_admin,
+                (u.stripe_customer_id IS NOT NULL) as has_paid,
                 tb.balance as credit_balance, tb.total_used, tb.total_purchased,
                 s.ip as server_ip, s.hostname as server_hostname
          FROM users u

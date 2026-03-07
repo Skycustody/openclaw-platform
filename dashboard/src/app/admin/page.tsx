@@ -46,7 +46,8 @@ interface Financials {
 interface Overview {
   users: {
     total: string; active: string; sleeping: string; paused: string;
-    provisioning: string; cancelled: string;
+    provisioning: string; cancelled: string; pending: string;
+    paid: string; unpaid: string;
     new_24h: string; new_7d: string; new_30d: string;
   };
   servers: { total: string; total_ram: string; used_ram: string };
@@ -60,7 +61,7 @@ interface Overview {
 interface AdminUser {
   id: string; email: string; display_name: string | null; plan: string;
   status: string; subdomain: string | null; created_at: string;
-  last_active: string | null; is_admin: boolean;
+  last_active: string | null; is_admin: boolean; has_paid: boolean;
   credit_balance: number | null; total_used: number | null; total_purchased: number | null;
   server_ip: string | null; server_hostname: string | null;
 }
@@ -214,7 +215,9 @@ export default function AdminPanel() {
     try {
       const data = await api.get<Overview>('/admin/overview');
       setOverview(data);
-    } catch {}
+    } catch (err: any) {
+      console.error('[admin] fetchOverview failed:', err.message);
+    }
   }, []);
 
   const fetchUsers = useCallback(async (page = 0, search = '') => {
@@ -224,21 +227,30 @@ export default function AdminPanel() {
       const data = await api.get<{ users: AdminUser[]; total: number }>(`/admin/users?${params}`);
       setUsers(data.users);
       setUserTotal(data.total);
-    } catch {}
+    } catch (err: any) {
+      console.error('[admin] fetchUsers failed:', err.message);
+      showMsg('error', `Failed to load users: ${err.message}`);
+    }
   }, []);
 
   const fetchRevenue = useCallback(async () => {
     try {
       const data = await api.get<RevenueData>('/admin/revenue');
       setRevenueData(data);
-    } catch {}
+    } catch (err: any) {
+      console.error('[admin] fetchRevenue failed:', err.message);
+      showMsg('error', `Failed to load revenue: ${err.message}`);
+    }
   }, []);
 
   const fetchServers = useCallback(async () => {
     try {
       const data = await api.get<{ servers: ServerInfo[] }>('/admin/servers');
       setServers(data.servers);
-    } catch {}
+    } catch (err: any) {
+      console.error('[admin] fetchServers failed:', err.message);
+      showMsg('error', `Failed to load servers: ${err.message}`);
+    }
   }, []);
 
   useEffect(() => {
@@ -470,12 +482,12 @@ export default function AdminPanel() {
             </div>
 
             <div className="grid grid-cols-4 gap-4">
-              <StatCard icon={Users} label="Total Users" value={formatNum(o.users.total)}
+              <StatCard icon={Users} label="Total Signups" value={formatNum(o.users.total)}
                 sub={`+${o.users.new_24h} today`} color="blue" />
+              <StatCard icon={DollarSign} label="Paid Users" value={formatNum(o.users.paid)}
+                sub={`${o.users.unpaid} unpaid / ${o.users.pending} pending`} color="green" />
               <StatCard icon={Activity} label="Active" value={formatNum(o.users.active)}
                 sub={`${o.users.sleeping} sleeping`} color="green" />
-              <StatCard icon={Coins} label="Balance Remaining" value={formatUsdVal(o.credits.total_balance)}
-                sub={`${formatUsdVal(o.credits.total_purchased)} purchased total`} color="purple" />
               <StatCard icon={Zap} label="New (30d)" value={formatNum(o.users.new_30d)}
                 sub={`${o.users.new_7d} this week`} color="amber" />
             </div>
@@ -716,9 +728,15 @@ export default function AdminPanel() {
                           <span className="text-[12px] text-white/50 capitalize">{u.plan}</span>
                         </td>
                         <td className="px-4 py-3">
-                          <span className={`text-[11px] px-2 py-0.5 rounded-full ${STATUS_COLORS[u.status] || 'text-white/30 bg-white/5'}`}>
-                            {u.status}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className={`text-[11px] px-2 py-0.5 rounded-full ${STATUS_COLORS[u.status] || 'text-white/30 bg-white/5'}`}>
+                              {u.status}
+                            </span>
+                            {u.has_paid
+                              ? <span className="text-[10px] px-1.5 py-0.5 rounded-full text-green-400 bg-green-500/10">paid</span>
+                              : <span className="text-[10px] px-1.5 py-0.5 rounded-full text-white/20 bg-white/5">unpaid</span>
+                            }
+                          </div>
                         </td>
                         <td className="px-4 py-3">
                           <p className="text-[12px] text-white/50 tabular-nums">{formatUsdVal(u.credit_balance)}</p>
