@@ -102,7 +102,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 /** Plan prices in USD (display only — must match backend priceUsdCents / 100) */
-const PLAN_PRICE_USD: Record<string, number> = { starter: 15, pro: 29, business: 59 };
+const PLAN_PRICE_USD: Record<string, number> = { starter: 15, pro: 25, business: 50 };
 
 function formatNum(n: string | number): string {
   return Number(n).toLocaleString();
