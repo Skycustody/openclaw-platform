@@ -43,13 +43,27 @@ interface Financials {
   };
 }
 
+interface Metrics {
+  mrr: number;
+  arpu: number;
+  payingActive: number;
+  churnRate: number;
+  churned: number;
+  totalEverPaid: number;
+  conversionRate: number;
+  converted: number;
+  totalSignups: number;
+  ltv: number;
+}
+
 interface Overview {
   users: {
     total: string; active: string; sleeping: string; paused: string;
     provisioning: string; cancelled: string; pending: string;
-    paid: string; unpaid: string;
+    paid: string; unpaid: string; paying_active: string;
     new_24h: string; new_7d: string; new_30d: string;
   };
+  metrics: Metrics;
   servers: { total: string; total_ram: string; used_ram: string };
   revenue: { month_credit_purchases: string; total_credit_purchases: string };
   credits: { total_used: string; total_balance: string; total_purchased: string };
@@ -82,7 +96,7 @@ interface RevenueData {
   profitMarginTarget: number;
   subscriptionRevenue: Record<string, { count: number; revenueUsdCents: number; nexosCostUsdCents: number; profitUsdCents: number }>;
   topUsers: Array<{ email: string; plan: string; status: string; last_active: string | null }>;
-  signupsByMonth: Array<{ month: string; signups: string; active: string }>;
+  signupsByMonth: Array<{ month: string; signups: string; paid: string; paying_active: string }>;
 }
 
 interface ServerInfo {
@@ -141,6 +155,7 @@ export default function AdminPanel() {
   const [userTotal, setUserTotal] = useState(0);
   const [userPage, setUserPage] = useState(0);
   const [userSearch, setUserSearch] = useState('');
+  const [userFilter, setUserFilter] = useState<'all' | 'paid' | 'unpaid' | 'active' | 'paused' | 'pending' | 'cancelled'>('all');
   const [servers, setServers] = useState<ServerInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -220,10 +235,13 @@ export default function AdminPanel() {
     }
   }, []);
 
-  const fetchUsers = useCallback(async (page = 0, search = '') => {
+  const fetchUsers = useCallback(async (page = 0, search = '', filter = 'all') => {
     try {
       const params = new URLSearchParams({ limit: '20', offset: String(page * 20) });
       if (search) params.set('search', search);
+      if (filter === 'paid') params.set('paid', 'true');
+      else if (filter === 'unpaid') params.set('paid', 'false');
+      else if (filter !== 'all') params.set('status', filter);
       const data = await api.get<{ users: AdminUser[]; total: number }>(`/admin/users?${params}`);
       setUsers(data.users);
       setUserTotal(data.total);
@@ -262,13 +280,13 @@ export default function AdminPanel() {
 
   const refresh = async () => {
     setRefreshing(true);
-    await Promise.all([fetchOverview(), fetchUsers(userPage, userSearch), fetchRevenue(), fetchServers()]);
+    await Promise.all([fetchOverview(), fetchUsers(userPage, userSearch, userFilter), fetchRevenue(), fetchServers()]);
     setRefreshing(false);
   };
 
   const handleUserSearch = () => {
     setUserPage(0);
-    fetchUsers(0, userSearch);
+    fetchUsers(0, userSearch, userFilter);
   };
 
   const openEdit = (u: AdminUser) => {
@@ -481,15 +499,29 @@ export default function AdminPanel() {
                 color={f.monthlyProfit >= 0 ? 'green' : 'red'} />
             </div>
 
+            {/* SaaS Metrics */}
+            <div className="grid grid-cols-5 gap-4">
+              <StatCard icon={DollarSign} label="MRR" value={formatUsd(o.metrics.mrr)}
+                sub={`${o.metrics.payingActive} paying user${o.metrics.payingActive !== 1 ? 's' : ''}`} color="green" />
+              <StatCard icon={Coins} label="ARPU" value={formatUsd(o.metrics.arpu)}
+                sub="avg revenue per user" color="blue" />
+              <StatCard icon={TrendingUp} label="Conversion" value={`${o.metrics.conversionRate}%`}
+                sub={`${o.metrics.converted} of ${o.metrics.totalSignups} signups`} color="purple" />
+              <StatCard icon={AlertTriangle} label="Churn" value={`${o.metrics.churnRate}%`}
+                sub={`${o.metrics.churned} of ${o.metrics.totalEverPaid} paid users`} color="red" />
+              <StatCard icon={Activity} label="LTV" value={formatUsd(o.metrics.ltv)}
+                sub="lifetime value est." color="amber" />
+            </div>
+
             <div className="grid grid-cols-4 gap-4">
               <StatCard icon={Users} label="Total Signups" value={formatNum(o.users.total)}
-                sub={`+${o.users.new_24h} today`} color="blue" />
-              <StatCard icon={DollarSign} label="Paid Users" value={formatNum(o.users.paid)}
-                sub={`${o.users.unpaid} unpaid / ${o.users.pending} pending`} color="green" />
-              <StatCard icon={Activity} label="Active" value={formatNum(o.users.active)}
-                sub={`${o.users.sleeping} sleeping`} color="green" />
-              <StatCard icon={Zap} label="New (30d)" value={formatNum(o.users.new_30d)}
-                sub={`${o.users.new_7d} this week`} color="amber" />
+                sub={`+${o.users.new_24h} today / +${o.users.new_7d} this week`} color="blue" />
+              <StatCard icon={Zap} label="Paying Active" value={formatNum(o.users.paying_active)}
+                sub={`${o.users.active} active / ${o.users.sleeping} sleeping`} color="green" />
+              <StatCard icon={Users} label="Unpaid Signups" value={formatNum(o.users.unpaid)}
+                sub={`${o.users.pending} pending / never paid`} color="amber" />
+              <StatCard icon={AlertTriangle} label="Churned / Paused" value={formatNum(Number(o.users.paused) + Number(o.users.cancelled))}
+                sub={`${o.users.paused} paused / ${o.users.cancelled} cancelled`} color="red" />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -649,7 +681,7 @@ export default function AdminPanel() {
             <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
               <h3 className="text-[14px] font-semibold text-white mb-4">Recent Signups</h3>
               <div className="space-y-1">
-                {o.recentSignups.map(u => (
+                {o.recentSignups.map((u: any) => (
                   <div key={u.id} className="flex items-center justify-between py-2 border-b border-white/[0.04] last:border-0">
                     <div className="flex items-center gap-3">
                       <div className="h-8 w-8 rounded-full bg-white/5 flex items-center justify-center text-[12px] text-white/30 font-medium">
@@ -664,6 +696,10 @@ export default function AdminPanel() {
                       <span className={`text-[11px] px-2 py-0.5 rounded-full ${STATUS_COLORS[u.status] || 'text-white/30 bg-white/5'}`}>
                         {u.status}
                       </span>
+                      {u.has_paid
+                        ? <span className="text-[10px] px-1.5 py-0.5 rounded-full text-green-400 bg-green-500/10">paid</span>
+                        : <span className="text-[10px] px-1.5 py-0.5 rounded-full text-white/20 bg-white/5">unpaid</span>
+                      }
                       <span className="text-[11px] text-white/30 capitalize">{u.plan}</span>
                     </div>
                   </div>
@@ -692,6 +728,28 @@ export default function AdminPanel() {
                 Search
               </button>
               <span className="text-[12px] text-white/30">{userTotal} total</span>
+            </div>
+
+            <div className="flex items-center gap-1.5 overflow-x-auto">
+              {([
+                { id: 'all' as const, label: 'All' },
+                { id: 'paid' as const, label: 'Paid' },
+                { id: 'unpaid' as const, label: 'Unpaid' },
+                { id: 'active' as const, label: 'Active' },
+                { id: 'pending' as const, label: 'Pending' },
+                { id: 'paused' as const, label: 'Paused' },
+                { id: 'cancelled' as const, label: 'Cancelled' },
+              ]).map(f => (
+                <button key={f.id}
+                  onClick={() => { setUserFilter(f.id); setUserPage(0); fetchUsers(0, userSearch, f.id); }}
+                  className={`px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all whitespace-nowrap ${
+                    userFilter === f.id
+                      ? 'bg-white/10 text-white'
+                      : 'text-white/30 hover:text-white/50 hover:bg-white/[0.04]'
+                  }`}>
+                  {f.label}
+                </button>
+              ))}
             </div>
 
             <div className="rounded-xl border border-white/[0.06] overflow-hidden">
@@ -779,12 +837,12 @@ export default function AdminPanel() {
                 Showing {userTotal > 0 ? userPage * 20 + 1 : 0}–{Math.min((userPage + 1) * 20, userTotal)} of {userTotal}
               </p>
               <div className="flex items-center gap-2">
-                <button onClick={() => { setUserPage(p => Math.max(0, p - 1)); fetchUsers(Math.max(0, userPage - 1), userSearch); }}
+                <button onClick={() => { setUserPage(p => Math.max(0, p - 1)); fetchUsers(Math.max(0, userPage - 1), userSearch, userFilter); }}
                   disabled={userPage === 0}
                   className="p-2 rounded-lg text-white/30 hover:text-white/50 hover:bg-white/[0.06] disabled:opacity-20 transition-all">
                   <ChevronLeft className="h-4 w-4" />
                 </button>
-                <button onClick={() => { setUserPage(p => p + 1); fetchUsers(userPage + 1, userSearch); }}
+                <button onClick={() => { setUserPage(p => p + 1); fetchUsers(userPage + 1, userSearch, userFilter); }}
                   disabled={(userPage + 1) * 20 >= userTotal}
                   className="p-2 rounded-lg text-white/30 hover:text-white/50 hover:bg-white/[0.06] disabled:opacity-20 transition-all">
                   <ChevronRight className="h-4 w-4" />
@@ -875,28 +933,39 @@ export default function AdminPanel() {
             </div>
 
             <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
-              <h3 className="text-[14px] font-semibold text-white mb-4">Signups by Month</h3>
+              <h3 className="text-[14px] font-semibold text-white mb-4">Signups &rarr; Paid Conversion by Month</h3>
               {(revenueData.signupsByMonth?.length ?? 0) === 0 ? (
                 <p className="text-[13px] text-white/30 text-center py-8">No data yet</p>
               ) : (
-                <div className="space-y-1">
+                <div className="space-y-2">
                   {revenueData.signupsByMonth.map(m => {
+                    const signups = Number(m.signups);
+                    const paid = Number(m.paid);
+                    const convPct = signups > 0 ? Math.round((paid / signups) * 100) : 0;
                     const maxSignups = Math.max(...revenueData.signupsByMonth.map(x => Number(x.signups)));
-                    const pct = maxSignups > 0 ? (Number(m.signups) / maxSignups * 100) : 0;
+                    const barPct = maxSignups > 0 ? (signups / maxSignups * 100) : 0;
+                    const paidBarPct = maxSignups > 0 ? (paid / maxSignups * 100) : 0;
                     return (
                       <div key={m.month} className="flex items-center gap-3 py-1">
                         <span className="text-[11px] text-white/25 w-20 shrink-0">
                           {new Date(m.month).toLocaleDateString([], { month: 'short', year: 'numeric' })}
                         </span>
-                        <div className="flex-1 h-5 rounded bg-white/[0.03] overflow-hidden">
-                          <div className="h-full bg-blue-500/30 rounded" style={{ width: `${pct}%` }} />
+                        <div className="flex-1 h-6 rounded bg-white/[0.03] overflow-hidden relative">
+                          <div className="absolute inset-y-0 left-0 bg-blue-500/20 rounded" style={{ width: `${barPct}%` }} />
+                          <div className="absolute inset-y-0 left-0 bg-green-500/40 rounded" style={{ width: `${paidBarPct}%` }} />
                         </div>
-                        <span className="text-[11px] text-white/40 w-28 text-right tabular-nums">
-                          {m.signups} signups ({m.active} active)
-                        </span>
+                        <div className="text-right w-40 shrink-0">
+                          <span className="text-[11px] text-white/40 tabular-nums">
+                            {m.signups} signups &middot; <span className="text-green-400">{m.paid} paid</span> &middot; {convPct}%
+                          </span>
+                        </div>
                       </div>
                     );
                   })}
+                  <div className="flex items-center gap-4 mt-2 text-[10px] text-white/20">
+                    <span className="flex items-center gap-1.5"><span className="w-3 h-2 rounded bg-blue-500/20 inline-block" /> signups</span>
+                    <span className="flex items-center gap-1.5"><span className="w-3 h-2 rounded bg-green-500/40 inline-block" /> paid</span>
+                  </div>
                 </div>
               )}
             </div>

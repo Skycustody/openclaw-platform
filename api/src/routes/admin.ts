@@ -31,7 +31,7 @@ function safeContainerName(name: string | null | undefined, fallbackUserId: stri
 // ── Platform Overview ──
 router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const [users, servers, recentSignups, plans, creditsRow, revenueRow] = await Promise.all([
+    const [users, servers, recentSignups, plans, creditsRow, revenueRow, churnRow, conversionRow] = await Promise.all([
       db.getOne<any>(`
         SELECT
           COUNT(*) as total,
@@ -43,6 +43,7 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
           COUNT(*) FILTER (WHERE status = 'pending') as pending,
           COUNT(*) FILTER (WHERE stripe_customer_id IS NOT NULL) as paid,
           COUNT(*) FILTER (WHERE stripe_customer_id IS NULL AND status != 'cancelled') as unpaid,
+          COUNT(*) FILTER (WHERE stripe_customer_id IS NOT NULL AND status IN ('active', 'sleeping', 'grace_period')) as paying_active,
           COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '24 hours') as new_24h,
           COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days') as new_7d,
           COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '30 days') as new_30d
@@ -56,7 +57,7 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
         FROM servers WHERE status = 'active'
       `),
       db.getMany<any>(`
-        SELECT id, email, plan, status, created_at
+        SELECT id, email, plan, status, created_at, (stripe_customer_id IS NOT NULL) as has_paid
         FROM users ORDER BY created_at DESC LIMIT 10
       `),
       db.getOne<any>(`
@@ -80,6 +81,20 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
           COALESCE(SUM(credits_usd), 0)::text as total_credit_purchases
         FROM credit_purchases
       `).catch(() => ({ month_credit_purchases: '0', total_credit_purchases: '0' })),
+      // Churn: users who paid but are now cancelled/paused
+      db.getOne<any>(`
+        SELECT
+          COUNT(*) FILTER (WHERE stripe_customer_id IS NOT NULL AND status IN ('cancelled', 'paused')) as churned,
+          COUNT(*) FILTER (WHERE stripe_customer_id IS NOT NULL) as total_ever_paid
+        FROM users
+      `).catch(() => ({ churned: '0', total_ever_paid: '0' })),
+      // Conversion: signups → paid
+      db.getOne<any>(`
+        SELECT
+          COUNT(*) as total_signups,
+          COUNT(*) FILTER (WHERE stripe_customer_id IS NOT NULL) as converted
+        FROM users
+      `).catch(() => ({ total_signups: '0', converted: '0' })),
     ]);
 
     const starterCount = parseInt(plans?.starter || '0');
@@ -87,13 +102,12 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
     const businessCount = parseInt(plans?.business || '0');
 
     const planCounts: Record<string, number> = { starter: starterCount, pro: proCount, business: businessCount };
+    const payingActiveCount = parseInt(users?.paying_active || '0');
 
-    // Monthly subscription revenue (what users pay us, USD cents)
     const monthlySubscriptionRevenue = Object.entries(planCounts).reduce(
       (sum, [plan, count]) => sum + count * (PLAN_LIMITS[plan as keyof typeof PLAN_LIMITS]?.priceUsdCents || 0), 0
     );
 
-    // Server costs (with VAT — Hetzner charges 21% VAT for EU, tracked in USD cents)
     const serverCount = parseInt(servers?.total || '0');
     const serverCostNetPerMonth = parseInt(process.env.SERVER_COST_USD_CENTS || process.env.SERVER_COST_EUR_CENTS || '4300');
     const vatRate = parseFloat(process.env.SERVER_VAT_RATE || '0.21');
@@ -103,7 +117,6 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
     const monthlyServerCostsVat = serverCount * serverCostVatPerMonth;
     const monthlyServerCosts = serverCount * serverCostGrossPerMonth;
 
-    // OpenRouter credit costs (estimated from per-plan budget allocations, USD cents)
     const monthlyNexosCosts = Object.entries(planCounts).reduce(
       (sum, [plan, count]) => sum + count * (PLAN_LIMITS[plan as keyof typeof PLAN_LIMITS]?.nexosCreditBudgetUsdCents || 0), 0
     );
@@ -112,6 +125,16 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
     const monthlyProfit = monthlySubscriptionRevenue - totalCosts;
     const profitMarginPercent = monthlySubscriptionRevenue > 0
       ? Math.round((monthlyProfit / monthlySubscriptionRevenue) * 100) : 0;
+
+    // Key SaaS metrics
+    const arpu = payingActiveCount > 0 ? Math.round(monthlySubscriptionRevenue / payingActiveCount) : 0;
+    const totalEverPaid = parseInt(churnRow?.total_ever_paid || '0');
+    const churned = parseInt(churnRow?.churned || '0');
+    const churnRate = totalEverPaid > 0 ? Math.round((churned / totalEverPaid) * 100) : 0;
+    const totalSignups = parseInt(conversionRow?.total_signups || '0');
+    const converted = parseInt(conversionRow?.converted || '0');
+    const conversionRate = totalSignups > 0 ? Math.round((converted / totalSignups) * 100) : 0;
+    const ltv = churnRate > 0 ? Math.round(arpu * (100 / churnRate)) : 0;
 
     const financials = {
       currency: 'USD',
@@ -150,6 +173,19 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
       ),
     };
 
+    const metrics = {
+      mrr: monthlySubscriptionRevenue,
+      arpu,
+      payingActive: payingActiveCount,
+      churnRate,
+      churned,
+      totalEverPaid,
+      conversionRate,
+      converted,
+      totalSignups,
+      ltv,
+    };
+
     const revenue = {
       month_credit_purchases: revenueRow?.month_credit_purchases ?? '0',
       total_credit_purchases: revenueRow?.total_credit_purchases ?? '0',
@@ -159,7 +195,7 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
       total_balance: creditsRow?.total_balance ?? '0',
       total_purchased: creditsRow?.total_purchased ?? '0',
     };
-    res.json({ users, servers, recentSignups, plans, financials, revenue, credits });
+    res.json({ users, servers, recentSignups, plans, financials, metrics, revenue, credits });
   } catch (err) {
     next(err);
   }
@@ -186,7 +222,8 @@ router.get('/revenue', async (_req: AuthRequest, res: Response, next: NextFuncti
         SELECT
           DATE_TRUNC('month', created_at) as month,
           COUNT(*) as signups,
-          COUNT(*) FILTER (WHERE status != 'cancelled') as active
+          COUNT(*) FILTER (WHERE stripe_customer_id IS NOT NULL) as paid,
+          COUNT(*) FILTER (WHERE status IN ('active', 'sleeping', 'grace_period') AND stripe_customer_id IS NOT NULL) as paying_active
         FROM users
         GROUP BY month
         ORDER BY month DESC
@@ -264,6 +301,7 @@ router.get('/users', async (req: AuthRequest, res: Response, next: NextFunction)
     const search = (req.query.search as string || '').trim();
     const status = req.query.status as string || '';
     const plan = req.query.plan as string || '';
+    const paid = req.query.paid as string || '';
 
     let where = 'WHERE 1=1';
     const params: any[] = [];
@@ -283,6 +321,11 @@ router.get('/users', async (req: AuthRequest, res: Response, next: NextFunction)
       where += ` AND u.plan = $${paramIdx}`;
       params.push(plan);
       paramIdx++;
+    }
+    if (paid === 'true') {
+      where += ` AND u.stripe_customer_id IS NOT NULL`;
+    } else if (paid === 'false') {
+      where += ` AND u.stripe_customer_id IS NULL`;
     }
 
     const [users, countResult] = await Promise.all([
