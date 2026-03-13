@@ -5,10 +5,10 @@ const IMAGE_BUILD_TIMEOUT = 10 * 60 * 1000; // 10 minutes for docker build
 
 const OPENCLAW_IMAGE = `${process.env.DOCKER_REGISTRY || 'openclaw/openclaw'}:latest`;
 
-// Pin to 2026.3.6 — v2026.3.7+ broke dangerouslyDisableDeviceAuth
+// Pin to 2026.3.2 — v2026.3.7+ broke dangerouslyDisableDeviceAuth
 // (https://github.com/openclaw/openclaw/issues/40812)
 // Update this when the upstream fix is released.
-const OPENCLAW_VERSION = process.env.OPENCLAW_VERSION || '2026.3.6';
+const OPENCLAW_VERSION = process.env.OPENCLAW_VERSION || '2026.3.2';
 
 function getDockerfile(): string {
   return [
