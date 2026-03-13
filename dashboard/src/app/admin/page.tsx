@@ -332,6 +332,16 @@ export default function AdminPanel() {
     }
   };
 
+  const handleUpdateOpenclaw = async () => {
+    if (!confirm('This will rebuild the OpenClaw image on all workers (3-5 min) and restart all containers. Proceed?')) return;
+    try {
+      await api.post('/admin/update-openclaw', {});
+      showMsg('success', 'OpenClaw update started on all workers. Takes 3-5 minutes — check API logs for progress.');
+    } catch (err: any) {
+      showMsg('error', err.message || 'Failed to start update');
+    }
+  };
+
   const handleRemoveServer = async (serverId: string) => {
     if (!confirm('Remove this server? Only works if no active users are on it.')) return;
     try {
@@ -611,6 +621,10 @@ export default function AdminPanel() {
                     Re-provision stuck users
                   </button>
                 )}
+                <button onClick={handleUpdateOpenclaw}
+                  className="mt-2 w-full text-[12px] text-blue-400 border border-blue-400/20 rounded-lg py-2 hover:bg-blue-400/5 transition-all">
+                  Update OpenClaw on all workers
+                </button>
               </div>
             </div>
 

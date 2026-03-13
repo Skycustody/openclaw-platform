@@ -8,6 +8,7 @@ import { User, PLAN_LIMITS, PROFIT_MARGIN_TARGET } from '../types';
 import { sshExec } from '../services/ssh';
 import { injectApiKeys } from '../services/apiKeys';
 import { ensureNexosKey, RETAIL_MARKUP, AVG_COST_PER_1M_USD } from '../services/nexos';
+import { updateImageOnAllWorkers } from '../services/dockerImage';
 
 const router = Router();
 
@@ -566,6 +567,21 @@ router.post('/inject-keys', async (req: AuthRequest, res: Response, next: NextFu
     }
 
     res.json({ fixed: results.filter(r => r.status === 'success').length, total: users.length, results });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/update-openclaw', async (_req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    res.json({ status: 'started', message: 'Rebuilding OpenClaw image on all workers. This takes 3-5 minutes.' });
+    updateImageOnAllWorkers()
+      .then(({ updated, failed }) => {
+        console.log(`[admin] OpenClaw image update complete: ${updated.length} updated, ${failed.length} failed`);
+      })
+      .catch((err) => {
+        console.error(`[admin] OpenClaw image update error:`, err.message);
+      });
   } catch (err) {
     next(err);
   }
