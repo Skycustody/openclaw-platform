@@ -5,11 +5,16 @@ const IMAGE_BUILD_TIMEOUT = 10 * 60 * 1000; // 10 minutes for docker build
 
 const OPENCLAW_IMAGE = `${process.env.DOCKER_REGISTRY || 'openclaw/openclaw'}:latest`;
 
+// Pin to 2026.3.6 — v2026.3.7+ broke dangerouslyDisableDeviceAuth
+// (https://github.com/openclaw/openclaw/issues/40812)
+// Update this when the upstream fix is released.
+const OPENCLAW_VERSION = process.env.OPENCLAW_VERSION || '2026.3.6';
+
 function getDockerfile(): string {
   return [
     'FROM node:22-slim',
     'RUN apt-get update && apt-get install -y ca-certificates curl git python3 make g++ chromium libopus-dev --no-install-recommends && rm -rf /var/lib/apt/lists/*',
-    'RUN git config --global url.https://github.com/.insteadOf ssh://git@github.com/ && git config --global --add url.https://github.com/.insteadOf git@github.com: && npm install -g openclaw@latest',
+    `RUN git config --global url.https://github.com/.insteadOf ssh://git@github.com/ && git config --global --add url.https://github.com/.insteadOf git@github.com: && npm install -g openclaw@${OPENCLAW_VERSION}`,
     'WORKDIR /data',
     'EXPOSE 18789',
     'CMD ["sh", "-c", "exec openclaw gateway --port 18789 --bind lan --allow-unconfigured run"]',
