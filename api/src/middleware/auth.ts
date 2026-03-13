@@ -6,8 +6,7 @@
  * │                                                                        │
  * │ 1. TRUST PROXY: app.set('trust proxy', 1) is set in index.ts so       │
  * │    req.ip returns the real client IP (from X-Forwarded-For via         │
- * │    Nginx/Cloudflare). requireAdmin uses req.ip for the IP allowlist.  │
- * │    Never use X-Forwarded-For directly — it's spoofable.               │
+ * │    Nginx/Cloudflare). Never use X-Forwarded-For directly.             │
  * │                                                                        │
  * │ 2. INTERNAL AUTH (internalAuth): Checks x-internal-secret header      │
  * │    against INTERNAL_SECRET. Used for server registration only.        │
@@ -102,44 +101,22 @@ export async function requireAdmin(req: AuthRequest, _res: Response, next: NextF
       throw new UnauthorizedError('Authentication required');
     }
 
-    // Security: 3 layers protect the admin panel
-    //   1. JWT auth (handled by authenticate middleware before this)
-    //   2. is_admin flag in database (checked below)
-    //   3. ADMIN_PASSWORD env var (checked below)
-    // IP allowlisting removed — unreliable behind Cloudflare/proxies.
+    const adminEmail = process.env.ADMIN_EMAIL;
+    if (!adminEmail) {
+      console.error('[admin] ADMIN_EMAIL env var is not set — blocking all admin access');
+      const err: any = new Error('Admin panel not configured');
+      err.statusCode = 403;
+      return next(err);
+    }
 
-    const user = await db.getOne<{ is_admin: boolean }>(
-      'SELECT is_admin FROM users WHERE id = $1',
+    const user = await db.getOne<{ email: string }>(
+      'SELECT email FROM users WHERE id = $1',
       [req.userId]
     );
 
-    if (!user || !user.is_admin) {
+    if (!user || user.email.toLowerCase() !== adminEmail.toLowerCase()) {
       const err: any = new Error('Admin access required');
       err.statusCode = 403;
-      return next(err);
-    }
-
-    // Admin password is always required — never skip this check.
-    // Uses 403 (not 401) to avoid the frontend's auto-redirect to login.
-    const adminPassword = process.env.ADMIN_PASSWORD;
-    if (!adminPassword) {
-      console.error('[admin] ADMIN_PASSWORD env var is not set — blocking all admin access');
-      const err: any = new Error('Admin panel not configured. Set ADMIN_PASSWORD in your .env file.');
-      err.statusCode = 403;
-      return next(err);
-    }
-    const providedPassword = req.headers['x-admin-password'] as string;
-    if (!providedPassword) {
-      const err: any = new Error('Admin password required');
-      err.statusCode = 403;
-      err.code = 'ADMIN_PASSWORD_REQUIRED';
-      return next(err);
-    }
-    if (providedPassword.length !== adminPassword.length ||
-        !crypto.timingSafeEqual(Buffer.from(providedPassword), Buffer.from(adminPassword))) {
-      const err: any = new Error('Invalid admin password');
-      err.statusCode = 403;
-      err.code = 'ADMIN_PASSWORD_INVALID';
       return next(err);
     }
 

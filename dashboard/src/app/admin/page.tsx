@@ -6,7 +6,7 @@ import {
   Users, Server, Coins, TrendingUp, Activity, Search,
   Shield, Loader2, RefreshCw, AlertTriangle, Edit3,
   BarChart3, Zap, HardDrive, LogOut, ChevronLeft, ChevronRight,
-  Lock, DollarSign,
+  DollarSign,
 } from 'lucide-react';
 
 interface PlanDetail {
@@ -144,10 +144,7 @@ function timeAgo(d: string): string {
 }
 
 export default function AdminPanel() {
-  const [adminPassword, setAdminPassword] = useState('');
-  const [passwordInput, setPasswordInput] = useState('');
-  const [authState, setAuthState] = useState<'loading' | 'needs_password' | 'authed' | 'denied'>('loading');
-  const [authError, setAuthError] = useState('');
+  const [authState, setAuthState] = useState<'loading' | 'authed' | 'denied'>('loading');
   const [tab, setTab] = useState<Tab>('overview');
   const [overview, setOverview] = useState<Overview | null>(null);
   const [revenueData, setRevenueData] = useState<RevenueData | null>(null);
@@ -169,62 +166,16 @@ export default function AdminPanel() {
     setTimeout(() => setActionMsg(null), 4000);
   };
 
-  const tryAuth = useCallback(async (pw: string) => {
-    api.setHeader('x-admin-password', pw);
-    try {
-      const data = await api.get<Overview>('/admin/overview');
-      setAdminPassword(pw);
-      if (typeof window !== 'undefined') {
-        sessionStorage.setItem('_ap', pw);
-      }
-      setAuthState('authed');
-      setOverview(data);
-      return true;
-    } catch (err: any) {
-      api.removeHeader('x-admin-password');
-      const msg = err.message || '';
-      if (msg.includes('Admin password') || msg.includes('Invalid admin')) {
-        setAuthState('needs_password');
-        setAuthError(pw ? 'Invalid admin password' : '');
-      } else if (msg.includes('Admin access') || msg.includes('Access denied')) {
-        setAuthState('denied');
-      } else if (msg.includes('Session expired')) {
-        setAuthState('denied');
-      } else {
-        setAuthState('needs_password');
-        setAuthError(msg);
-      }
-      return false;
-    }
-  }, []);
-
   useEffect(() => {
-    // Redirect non-admin users immediately — they must not see any admin UI
-    api.get<{ isAdmin?: boolean }>('/agent/status')
+    api.get<Overview>('/admin/overview')
       .then((data) => {
-        if (data.isAdmin !== true && typeof window !== 'undefined') {
-          window.location.href = '/dashboard';
-          return;
-        }
-        const saved = sessionStorage.getItem('_ap');
-        if (saved) {
-          tryAuth(saved);
-        } else {
-          tryAuth('');
-        }
+        setOverview(data);
+        setAuthState('authed');
       })
       .catch(() => {
-        if (typeof window !== 'undefined') window.location.href = '/dashboard';
+        setAuthState('denied');
       });
-  }, [tryAuth]);
-
-  const handlePasswordSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!passwordInput.trim()) return;
-    setAuthError('');
-    const ok = await tryAuth(passwordInput.trim());
-    if (!ok) setPasswordInput('');
-  };
+  }, []);
 
   const fetchOverview = useCallback(async () => {
     try {
@@ -354,14 +305,6 @@ export default function AdminPanel() {
     }
   };
 
-  const handleLogout = () => {
-    api.removeHeader('x-admin-password');
-    sessionStorage.removeItem('_ap');
-    setAuthState('needs_password');
-    setAdminPassword('');
-    setPasswordInput('');
-  };
-
   if (authState === 'loading') {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
@@ -376,54 +319,10 @@ export default function AdminPanel() {
         <div className="text-center">
           <Shield className="h-12 w-12 text-red-400/50 mx-auto mb-4" />
           <h1 className="text-xl font-bold text-white mb-2">Access Denied</h1>
-          <p className="text-sm text-white/40 mb-6">Admin privileges required. You must be logged in as an admin user.</p>
+          <p className="text-sm text-white/40 mb-6">You must be signed in with the admin Google account.</p>
           <a href="/dashboard" className="text-sm text-white/30 hover:text-white/50 transition-colors">
             Back to Dashboard
           </a>
-        </div>
-      </div>
-    );
-  }
-
-  if (authState === 'needs_password') {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="w-full max-w-sm">
-          <div className="text-center mb-8">
-            <div className="flex items-center justify-center gap-2 mb-4">
-              <Lock className="h-8 w-8 text-red-400/60" />
-              <Shield className="h-8 w-8 text-red-400/60" />
-            </div>
-            <h1 className="text-xl font-bold text-white mb-2">Admin Authentication</h1>
-            <p className="text-sm text-white/30">Enter your admin password to continue</p>
-          </div>
-          <form onSubmit={handlePasswordSubmit} className="space-y-4">
-            <div>
-              <input
-                type="password"
-                value={passwordInput}
-                onChange={e => setPasswordInput(e.target.value)}
-                placeholder="Admin password"
-                autoFocus
-                className="w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-[14px] text-white placeholder:text-white/20 focus:border-red-400/40 focus:outline-none focus:ring-1 focus:ring-red-400/20"
-              />
-            </div>
-            {authError && (
-              <div className="flex items-center gap-2 text-red-400 text-[13px]">
-                <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                {authError}
-              </div>
-            )}
-            <button type="submit"
-              className="w-full rounded-xl bg-red-500/20 border border-red-400/20 py-3 text-[14px] font-medium text-red-300 hover:bg-red-500/30 transition-all">
-              Authenticate
-            </button>
-          </form>
-          <div className="mt-6 text-center">
-            <a href="/dashboard" className="text-[12px] text-white/20 hover:text-white/40 transition-colors">
-              Back to Dashboard
-            </a>
-          </div>
         </div>
       </div>
     );
@@ -452,11 +351,6 @@ export default function AdminPanel() {
           <button onClick={refresh}
             className={`p-2 rounded-lg text-white/30 hover:text-white/60 hover:bg-white/[0.06] transition-all ${refreshing ? 'animate-spin' : ''}`}>
             <RefreshCw className="h-4 w-4" />
-          </button>
-          <button onClick={handleLogout}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] text-red-400/50 hover:text-red-400 hover:bg-red-400/5 transition-all">
-            <Lock className="h-3.5 w-3.5" />
-            Lock
           </button>
           <a href="/dashboard"
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] text-white/30 hover:text-white/50 hover:bg-white/[0.06] transition-all">
