@@ -4,7 +4,6 @@ import { runDueCronJobs } from '../services/cronScheduler';
 import { checkCapacity } from '../services/serverRegistry';
 import { processGracePeriods } from '../services/gracePeriod';
 import { migrateKeyToNoReset } from '../services/nexos';
-import { updateImageOnAllWorkers } from '../services/dockerImage';
 import db from '../lib/db';
 
 async function migrateExistingKeysOnce() {
@@ -74,21 +73,8 @@ export function startScheduler() {
     }
   });
 
-  // OpenClaw image update — weekly (Sunday 3am) so users get latest version
-  const openclawUpdateSchedule = process.env.OPENCLAW_AUTO_UPDATE_SCHEDULE || '0 3 * * 0';
-  cron.schedule(openclawUpdateSchedule, async () => {
-    const start = Date.now();
-    try {
-      const { updated, failed } = await updateImageOnAllWorkers();
-      const elapsed = ((Date.now() - start) / 1000).toFixed(0);
-      console.log(`[scheduler] OpenClaw update: ${updated.length} workers updated, ${failed.length} failed (${elapsed}s)`);
-    } catch (err: any) {
-      console.error(`[scheduler] OpenClaw update error:`, err.message);
-    }
-  });
-
   // One-time migration: convert existing keys from monthly auto-reset to no-reset
   setTimeout(() => migrateExistingKeysOnce(), 10_000);
 
-  console.log(`[scheduler] Started: sleep=*/5min, cron=*/1min, capacity=*/10min, grace=*/6h, openclaw=${openclawUpdateSchedule}`);
+  console.log('[scheduler] Started: sleep=*/5min, cron=*/1min, capacity=*/10min, grace=*/6h');
 }
