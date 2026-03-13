@@ -1,6 +1,8 @@
 import { sshExec } from './ssh';
 import db from '../lib/db';
 
+const CONTAINER_NAME_RE = /^openclaw-[a-z0-9]{12}$/;
+
 const IMAGE_BUILD_TIMEOUT = 10 * 60 * 1000; // 10 minutes for docker build
 
 const OPENCLAW_IMAGE = `${process.env.DOCKER_REGISTRY || 'openclaw/openclaw'}:latest`;
@@ -66,7 +68,7 @@ export async function updateImageOnAllWorkers(): Promise<{ updated: string[]; fa
       const containers = await sshExec(s.ip,
         `docker ps --filter name=openclaw- --format '{{.Names}}' | grep -v traefik`
       );
-      const names = containers.stdout.trim().split('\n').filter(Boolean);
+      const names = containers.stdout.trim().split('\n').filter(Boolean).filter(n => CONTAINER_NAME_RE.test(n));
       if (names.length > 0) {
         const restartCmd = names.map(n => `docker restart ${n}`).join(' && ');
         await sshExec(s.ip, restartCmd);

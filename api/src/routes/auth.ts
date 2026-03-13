@@ -219,6 +219,7 @@ router.post('/refresh', rateLimitAuth, async (req: Request, res: Response, next:
     }
     const currentToken = header.slice(7);
     const payload = jwt.verify(currentToken, process.env.JWT_SECRET!, {
+      algorithms: ['HS256'],
       ignoreExpiration: true,
     }) as { userId: string; exp?: number };
 

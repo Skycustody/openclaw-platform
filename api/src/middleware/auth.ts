@@ -48,7 +48,7 @@ export function authenticate(req: AuthRequest, _res: Response, next: NextFunctio
     }
 
     const token = header.slice(7);
-    const payload = jwt.verify(token, JWT_SECRET) as {
+    const payload = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as {
       userId: string;
       plan: string;
     };
@@ -168,6 +168,7 @@ export function internalAuth(req: Request, _res: Response, next: NextFunction) {
 
 export function generateToken(userId: string, plan: string): string {
   return jwt.sign({ userId, plan }, JWT_SECRET, {
+    algorithm: 'HS256',
     expiresIn: '30d',
   });
 }

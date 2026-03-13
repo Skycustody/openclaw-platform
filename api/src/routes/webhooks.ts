@@ -34,6 +34,7 @@ import { wakeContainer } from '../services/sleepWake';
 import { invalidateProxyCache } from './proxy';
 
 const router = Router();
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Verify that a container webhook request is authorized for the given userId.
@@ -76,7 +77,7 @@ router.post(
         console.error('[stripe-webhook] rawBody is missing — express.json verify callback did not fire');
         return res.status(400).json({ error: 'Raw body not captured' });
       }
-      console.log(`[stripe-webhook] sig=${sig.substring(0, 20)}... secret=${secret.substring(0, 10)}... bodyLen=${body.length}`);
+      console.log(`[stripe-webhook] sig=${sig.substring(0, 20)}... bodyLen=${body.length}`);
 
       const event = stripe.webhooks.constructEvent(body, sig, secret);
 
@@ -85,7 +86,7 @@ router.post(
       res.json({ received: true });
     } catch (err: any) {
       console.error(`[stripe-webhook] ERROR: ${err.message}`);
-      res.status(400).json({ error: err.message });
+      res.status(400).json({ error: 'Webhook processing failed' });
     }
   }
 );
@@ -109,7 +110,7 @@ router.post('/servers/register', internalAuth, async (req: Request, res: Respons
 router.post('/container/message', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { userId, channel, role, content, model, tokens } = req.body;
-    if (!userId) return res.status(400).json({ error: 'userId required' });
+    if (!userId || !UUID_RE.test(userId)) return res.status(400).json({ error: 'Valid userId required' });
 
     if (!verifyContainerAuth(req, userId)) {
       return res.status(401).json({ error: 'Invalid container authentication' });
@@ -138,7 +139,7 @@ router.post('/container/message', async (req: Request, res: Response, next: Next
 router.post('/container/wake', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { userId } = req.body;
-    if (!userId) return res.status(400).json({ error: 'userId required' });
+    if (!userId || !UUID_RE.test(userId)) return res.status(400).json({ error: 'Valid userId required' });
 
     if (!verifyContainerAuth(req, userId)) {
       return res.status(401).json({ error: 'Invalid container authentication' });
@@ -193,7 +194,7 @@ const MODEL_ALIASES: Record<string, string> = {
 router.post('/container/switch-model', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { userId, model } = req.body;
-    if (!userId || !model) return res.status(400).json({ error: 'userId and model required' });
+    if (!userId || !UUID_RE.test(userId) || !model) return res.status(400).json({ error: 'Valid userId and model required' });
 
     if (!verifyContainerAuth(req, userId)) {
       return res.status(401).json({ error: 'Invalid container authentication' });
@@ -229,7 +230,7 @@ router.post('/container/switch-model', async (req: Request, res: Response, next:
 router.post('/container/whatsapp-connected', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { userId } = req.body;
-    if (!userId) return res.status(400).json({ error: 'userId required' });
+    if (!userId || !UUID_RE.test(userId)) return res.status(400).json({ error: 'Valid userId required' });
 
     if (!verifyContainerAuth(req, userId)) {
       return res.status(401).json({ error: 'Invalid container authentication' });
@@ -246,7 +247,7 @@ router.post('/container/whatsapp-connected', async (req: Request, res: Response,
 router.post('/container/history', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { userId, date, channel, search, limit: rawLimit } = req.body;
-    if (!userId) return res.status(400).json({ error: 'userId required' });
+    if (!userId || !UUID_RE.test(userId)) return res.status(400).json({ error: 'Valid userId required' });
 
     if (!verifyContainerAuth(req, userId)) {
       return res.status(401).json({ error: 'Invalid container authentication' });
@@ -303,7 +304,7 @@ router.post('/container/history', async (req: Request, res: Response, next: Next
 router.post('/container/skills', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { userId } = req.body;
-    if (!userId) return res.status(400).json({ error: 'userId required' });
+    if (!userId || !UUID_RE.test(userId)) return res.status(400).json({ error: 'Valid userId required' });
 
     if (!verifyContainerAuth(req, userId)) {
       return res.status(401).json({ error: 'Invalid container authentication' });

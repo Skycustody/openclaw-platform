@@ -379,7 +379,12 @@ export async function sshUploadDir(
   });
 }
 
+const CONTAINER_NAME_RE = /^openclaw-[a-z0-9]{12}$/;
+
 export async function waitForReady(ip: string, containerName: string, timeoutMs = 60000): Promise<void> {
+  if (!CONTAINER_NAME_RE.test(containerName)) {
+    throw new Error(`Invalid container name: ${containerName}`);
+  }
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     try {

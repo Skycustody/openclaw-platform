@@ -11,6 +11,15 @@
  * ALL user AI interactions go through the OpenClaw container, never direct.
  * See AGENTS.md and .cursor/rules/openclaw-saas-mission.mdc for full details.
  */
+process.on('uncaughtException', (err) => {
+  console.error('FATAL uncaught exception:', err);
+  process.exit(1);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('FATAL unhandled rejection:', reason);
+  process.exit(1);
+});
+
 import path from 'path';
 import { config } from 'dotenv';
 
@@ -25,7 +34,7 @@ const sshKeyPath = process.env.SSH_PRIVATE_KEY_PATH?.trim();
 if (sshKey) {
   console.log(`SSH key loaded from env (${sshKey.replace(/\s/g, '').length} chars) for worker SSH`);
 } else if (sshKeyPath) {
-  console.log(`SSH key will be read from file: ${sshKeyPath}`);
+  console.log(`SSH key will be read from file`);
 } else {
   console.warn('SSH_PRIVATE_KEY or SSH_PRIVATE_KEY_PATH not set — SSH to workers will fail');
 }
@@ -81,7 +90,7 @@ io.use((socket, next) => {
   const token = socket.handshake.auth?.token;
   if (!token) return next(new Error('Authentication required'));
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET!) as { userId: string };
+    const payload = jwt.verify(token, process.env.JWT_SECRET!, { algorithms: ['HS256'] }) as { userId: string };
     socket.data.userId = payload.userId;
     next();
   } catch {
@@ -174,6 +183,11 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// ── 404 handler for unmatched routes ──
+app.use((_req, res) => {
+  res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Endpoint not found' } });
+});
+
 // ── Error Handler ──
 app.use(errorHandler);
 
@@ -208,5 +222,21 @@ async function start() {
 }
 
 start().catch(console.error);
+
+function gracefulShutdown(signal: string) {
+  console.log(`${signal} received — shutting down gracefully`);
+  httpServer.close(async () => {
+    console.log('HTTP server closed');
+    try { await redis.quit(); } catch {}
+    try { const { pool: dbPool } = await import('./lib/db'); await dbPool.end(); } catch {}
+    process.exit(0);
+  });
+  setTimeout(() => {
+    console.error('Forced shutdown after timeout');
+    process.exit(1);
+  }, 10_000);
+}
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 export { app, io };

@@ -17,6 +17,7 @@ router.use(authenticate);
 router.use(requireActiveSubscription);
 
 const INSTANCE_DIR = '/opt/openclaw/instances';
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
@@ -133,7 +134,8 @@ router.post('/:id/install', async (req: AuthRequest, res: Response, next: NextFu
 
         // Write SOUL.md to container
         try {
-          const { serverIp } = await getUserContainer(req.userId!);
+          if (!req.userId || !UUID_RE.test(req.userId)) throw new Error('Invalid userId');
+          const { serverIp } = await getUserContainer(req.userId);
           const soulParts: string[] = [];
           if (config.personality.name) soulParts.push(`# ${config.personality.name}`);
           if (config.personality.purpose) soulParts.push(`\n## Purpose\n${config.personality.purpose}`);

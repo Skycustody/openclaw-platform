@@ -1,5 +1,6 @@
 import { Router, Response, NextFunction } from 'express';
 import { AuthRequest, authenticate } from '../middleware/auth';
+import { rateLimitSensitive } from '../middleware/rateLimit';
 import db from '../lib/db';
 import { createCheckoutSession, createCreditCheckoutSession, getCustomerPortalUrl, getInvoices, stripe } from '../services/stripe';
 import { BadRequestError } from '../lib/errors';
@@ -47,7 +48,7 @@ router.get('/invoices', async (req: AuthRequest, res: Response, next: NextFuncti
 });
 
 // Get Stripe portal URL (manage subscription)
-router.post('/portal', async (req: AuthRequest, res: Response, next: NextFunction) => {
+router.post('/portal', rateLimitSensitive, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const user = await db.getOne<User>('SELECT stripe_customer_id FROM users WHERE id = $1', [req.userId]);
     if (!user?.stripe_customer_id) {
@@ -62,7 +63,7 @@ router.post('/portal', async (req: AuthRequest, res: Response, next: NextFunctio
 });
 
 // Start subscription checkout for current user
-router.post('/checkout', async (req: AuthRequest, res: Response, next: NextFunction) => {
+router.post('/checkout', rateLimitSensitive, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { plan, referralCode } = req.body as { plan?: Plan; referralCode?: string };
 
@@ -80,7 +81,7 @@ router.post('/checkout', async (req: AuthRequest, res: Response, next: NextFunct
 });
 
 // Buy a one-time credit top-up pack
-router.post('/buy-credits', async (req: AuthRequest, res: Response, next: NextFunction) => {
+router.post('/buy-credits', rateLimitSensitive, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { pack } = req.body as { pack?: string };
     if (!pack || !CREDIT_PACKS[pack]) {

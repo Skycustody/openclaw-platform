@@ -62,4 +62,5 @@ export async function transaction<T>(
   }
 }
 
+export { pool };
 export default { query, getOne, getMany, transaction };
