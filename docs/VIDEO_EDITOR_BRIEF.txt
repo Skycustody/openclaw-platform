@@ -1,0 +1,130 @@
+================================================================================
+VALNAA + OPENCLAW — VIDEO EDITOR BRIEF
+Plain-language overview for scripting and visuals
+================================================================================
+
+--------------------------------------------------------------------------------
+1. WHAT IS OPENCLAW?
+--------------------------------------------------------------------------------
+
+OpenClaw is an open-source AI agent. Think of it like a personal assistant that
+actually DOES things — not just chats.
+
+Most AI chatbots only answer questions. OpenClaw can:
+  • Run tasks on your computer
+  • Browse the web, fill forms, research topics
+  • Connect to your messaging apps (Telegram, Discord, Slack, WhatsApp)
+  • Remember things and work on schedules
+  • Use files, code, and tools — like a real assistant with access to your stuff
+
+It connects to AI models (Claude, GPT, etc.) and your real tools and data.
+Like having a smart coworker that never sleeps.
+
+--------------------------------------------------------------------------------
+2. WHAT PROBLEMS DOES IT SOLVE?
+--------------------------------------------------------------------------------
+
+PROBLEM 1: AI that only talks, doesn't act
+  • Regular chatbots just respond. OpenClaw executes. You say "book that flight"
+    and it can actually go do it.
+
+PROBLEM 2: Setting it up is hard
+  • OpenClaw is powerful but technical. You need to install it, configure it,
+    run servers. Most people don't have time for that.
+
+PROBLEM 3: AI costs add up fast
+  • Using the best AI for every little task is expensive. You want the right
+    tool for the job — affordable for simple stuff, best when it matters.
+
+PROBLEM 4: Your AI is stuck in one app
+  • You want your agent on Telegram, in your browser, on Discord — everywhere.
+    OpenClaw connects to all of them.
+
+PROBLEM 5: Security and privacy
+  • You want your own agent, your own data. Not shared with thousands of others.
+
+--------------------------------------------------------------------------------
+3. HOW VALNAA SOLVES THESE PROBLEMS
+--------------------------------------------------------------------------------
+
+Valnaa is our hosted platform. We take OpenClaw and make it simple.
+
+THE CORE IDEA:
+  You sign up, pick a plan, pay. In under 2 minutes you have your own personal
+  AI agent running — no technical setup, no terminal, no server management.
+
+WHAT WE DO:
+
+  • INSTANT SETUP
+    Sign up, pick a plan, pay. Your agent is ready in under 2 minutes. No
+    installation, no technical setup.
+
+  • SMART AI ROUTING
+    We automatically pick the right AI for each task. Simple questions use
+    affordable AI. Complex work gets the best. You save 50–80% on costs
+    without thinking about it.
+
+  • WEB DASHBOARD
+    Everything from one place: chat with your agent, connect Telegram/Discord/
+    Slack/WhatsApp, turn skills on or off, see usage, manage billing.
+
+  • ALL CHANNELS IN ONE PLACE
+    Your agent works everywhere: web chat, Telegram, Discord, Slack, WhatsApp.
+    Same agent, same memory, same personality.
+
+  • YOUR DATA, YOUR AGENT
+    Everyone gets their own private agent. Your data stays yours. No one else
+    can access it.
+
+  • BRING YOUR OWN KEY (optional)
+    Want unlimited usage? Add your own key. No platform limits.
+
+--------------------------------------------------------------------------------
+4. HOW IT WORKS
+--------------------------------------------------------------------------------
+
+  You sign up, pick a plan, and pay. Your agent is live in under 2 minutes.
+
+  From the dashboard you can:
+  • Chat with your agent in the browser
+  • Connect Telegram, Discord, Slack, WhatsApp — your agent replies everywhere
+  • Turn skills on or off (web search, file access, etc.)
+  • See how much you've used and top up if needed
+
+  Your agent runs 24/7. Same agent, same memory, whether you're on the web,
+  Telegram, or Discord. You just use it — we handle the rest.
+
+--------------------------------------------------------------------------------
+5. KEY MESSAGES FOR THE VIDEO
+--------------------------------------------------------------------------------
+
+  • "Your personal AI agent — ready in 60 seconds"
+  • "Stop chatting. Start doing."
+  • "OpenClaw, hosted for you. Zero setup."
+  • "One agent. Every app. Your data."
+  • "Smart routing saves you 50–80% on AI costs — automatically."
+  • "Chat on the web. Or Telegram. Or Discord. Same agent everywhere."
+
+--------------------------------------------------------------------------------
+6. VISUAL SUGGESTIONS
+--------------------------------------------------------------------------------
+
+  • Show: signup → plan selection → payment → dashboard opens → agent chatting
+  • Show: Telegram/Discord icons with messages flowing to one central agent
+  • Show: "Simple task → cheap model" vs "Complex task → best model" (cost savings)
+  • Show: dashboard with skills, channels, chat — clean, modern UI
+  • Show: "Your agent" vs "Shared" — private, yours alone
+  • Logo: Valnaa logo (circle with lightning bolt) — use consistently
+
+--------------------------------------------------------------------------------
+7. TONE
+--------------------------------------------------------------------------------
+
+  • Confident but not hypey
+  • Clear, no jargon
+  • "We make it simple" — empowerment, not overwhelm
+  • Professional, trustworthy (payments, data, security)
+
+================================================================================
+End of brief. Questions? Ask the team.
+================================================================================

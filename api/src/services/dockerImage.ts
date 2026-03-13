@@ -1,9 +1,8 @@
 import { sshExec } from './ssh';
 
 /**
- * Ensure the OpenClaw Docker image exists on a worker.
- * Builds from scratch if missing (node:22-slim + openclaw + chromium).
- * Idempotent — safe to call multiple times.
+ * Ensure the OpenClaw Docker image exists on a worker and is up to date.
+ * Always pulls/rebuilds with `--no-cache` so users get the latest openclaw version.
  */
 export async function ensureDockerImage(serverIp: string): Promise<void> {
   const image = `${process.env.DOCKER_REGISTRY || 'openclaw/openclaw'}:latest`;
@@ -14,10 +13,7 @@ export async function ensureDockerImage(serverIp: string): Promise<void> {
     console.warn(`[ensureDockerImage] pull failed, will try local build`);
   }
 
-  const imageCheck = await sshExec(serverIp, `docker image inspect ${image} > /dev/null 2>&1 && echo OK || echo MISSING`);
-  if (!imageCheck.stdout.includes('MISSING')) return;
-
-  console.log(`[ensureDockerImage] Building ${image} on ${serverIp}...`);
+  console.log(`[ensureDockerImage] Building ${image} on ${serverIp} (--no-cache for latest openclaw)...`);
   const dockerfile = [
     'FROM node:22-slim',
     'RUN apt-get update && apt-get install -y ca-certificates curl git python3 make g++ chromium libopus-dev --no-install-recommends && rm -rf /var/lib/apt/lists/*',
@@ -30,7 +26,7 @@ export async function ensureDockerImage(serverIp: string): Promise<void> {
   const buildCmd = [
     `mkdir -p /tmp/oc-build`,
     `echo '${dockerfileB64}' | base64 -d > /tmp/oc-build/Dockerfile`,
-    `docker build -t ${image} /tmp/oc-build`,
+    `docker build --no-cache -t ${image} /tmp/oc-build`,
     `rm -rf /tmp/oc-build`,
   ].join(' && ');
   const buildResult = await sshExec(serverIp, buildCmd);
