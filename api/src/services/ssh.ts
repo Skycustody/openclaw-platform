@@ -105,11 +105,11 @@ function releaseConnection(ip: string): void {
   }, POOL_IDLE_MS);
 }
 
-function execOnPooled(conn: Client, command: string): Promise<SSHExecResult> {
+function execOnPooled(conn: Client, command: string, timeoutMs: number): Promise<SSHExecResult> {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
       reject(new Error(`SSH command timeout`));
-    }, SSH_TIMEOUT);
+    }, timeoutMs);
 
     conn.exec(command, (err, stream) => {
       if (err) {
@@ -136,16 +136,16 @@ function execOnPooled(conn: Client, command: string): Promise<SSHExecResult> {
 export async function sshExec(
   ip: string,
   command: string,
-  retries = MAX_RETRIES
+  retries = MAX_RETRIES,
+  timeoutMs = SSH_TIMEOUT
 ): Promise<SSHExecResult> {
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
       const conn = await getPooledConnection(ip);
-      const result = await execOnPooled(conn, command);
+      const result = await execOnPooled(conn, command, timeoutMs);
       releaseConnection(ip);
       return result;
     } catch (err) {
-      // Connection might be stale — remove from pool and retry with fresh connection
       const host = resolveHost(ip);
       const entry = pool.get(host);
       if (entry) {

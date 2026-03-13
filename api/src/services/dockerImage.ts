@@ -1,6 +1,8 @@
 import { sshExec } from './ssh';
 import db from '../lib/db';
 
+const IMAGE_BUILD_TIMEOUT = 10 * 60 * 1000; // 10 minutes for docker build
+
 const OPENCLAW_IMAGE = `${process.env.DOCKER_REGISTRY || 'openclaw/openclaw'}:latest`;
 
 function getDockerfile(): string {
@@ -85,7 +87,7 @@ async function buildImage(serverIp: string, noCache: boolean): Promise<void> {
     `docker build${cacheFlag} -t ${OPENCLAW_IMAGE} /tmp/oc-build`,
     `rm -rf /tmp/oc-build`,
   ].join(' && ');
-  const buildResult = await sshExec(serverIp, buildCmd);
+  const buildResult = await sshExec(serverIp, buildCmd, 3, IMAGE_BUILD_TIMEOUT);
   if (buildResult.code !== 0) {
     throw new Error(`Docker image build failed on ${serverIp}: ${buildResult.stderr}`);
   }
