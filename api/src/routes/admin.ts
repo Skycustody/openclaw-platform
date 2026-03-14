@@ -81,8 +81,8 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
       `).catch(() => ({ total_used: '0', total_balance: '0', total_purchased: '0' })),
       db.getOne<any>(`
         SELECT
-          COALESCE(SUM(CASE WHEN created_at >= DATE_TRUNC('month', NOW()) THEN credits_usd ELSE 0 END), 0)::text as month_credit_purchases,
-          COALESCE(SUM(credits_usd), 0)::text as total_credit_purchases
+          COALESCE(SUM(CASE WHEN created_at >= DATE_TRUNC('month', NOW()) THEN amount_eur_cents ELSE 0 END), 0)::text as month_credit_purchases,
+          COALESCE(SUM(amount_eur_cents), 0)::text as total_credit_purchases
         FROM credit_purchases
       `).catch(() => ({ month_credit_purchases: '0', total_credit_purchases: '0' })),
       // Churn: users who paid but are now cancelled/paused (exclude admin)
@@ -191,8 +191,8 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
     };
 
     const revenue = {
-      month_credit_purchases: revenueRow?.month_credit_purchases ?? '0',
-      total_credit_purchases: revenueRow?.total_credit_purchases ?? '0',
+      month_credit_purchases: String(parseInt(revenueRow?.month_credit_purchases ?? '0') / 100),
+      total_credit_purchases: String(parseInt(revenueRow?.total_credit_purchases ?? '0') / 100),
     };
     const credits = {
       total_used: creditsRow?.total_used ?? '0',
