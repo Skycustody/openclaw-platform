@@ -44,7 +44,7 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
           COUNT(*) FILTER (WHERE status = 'pending') as pending,
           COUNT(*) FILTER (WHERE stripe_customer_id IS NOT NULL) as paid,
           COUNT(*) FILTER (WHERE stripe_customer_id IS NULL AND status != 'cancelled') as unpaid,
-          COUNT(*) FILTER (WHERE stripe_customer_id IS NOT NULL AND status IN ('active', 'sleeping', 'grace_period')) as paying_active,
+          COUNT(*) FILTER (WHERE stripe_customer_id IS NOT NULL AND status NOT IN ('cancelled', 'pending')) as paying_active,
           COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '24 hours') as new_24h,
           COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days') as new_7d,
           COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '30 days') as new_30d
@@ -66,8 +66,8 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
           COUNT(*) FILTER (WHERE plan = 'starter') as starter,
           COUNT(*) FILTER (WHERE plan = 'pro') as pro,
           COUNT(*) FILTER (WHERE plan = 'business') as business
-        FROM users WHERE status IN ('active', 'sleeping', 'grace_period')
-          AND stripe_customer_id IS NOT NULL
+        FROM users WHERE stripe_customer_id IS NOT NULL
+          AND status NOT IN ('cancelled', 'pending')
       `),
       db.getOne<any>(`
         SELECT
@@ -208,8 +208,8 @@ router.get('/revenue', async (_req: AuthRequest, res: Response, next: NextFuncti
     const [subscriptions, topUsers, signupsByMonth] = await Promise.all([
       db.getMany<any>(`
         SELECT plan, COUNT(*) as count
-        FROM users WHERE status IN ('active', 'sleeping', 'grace_period')
-          AND stripe_customer_id IS NOT NULL
+        FROM users WHERE stripe_customer_id IS NOT NULL
+          AND status NOT IN ('cancelled', 'pending')
         GROUP BY plan
       `),
       db.getMany<any>(`
@@ -224,7 +224,7 @@ router.get('/revenue', async (_req: AuthRequest, res: Response, next: NextFuncti
           DATE_TRUNC('month', created_at) as month,
           COUNT(*) as signups,
           COUNT(*) FILTER (WHERE stripe_customer_id IS NOT NULL) as paid,
-          COUNT(*) FILTER (WHERE status IN ('active', 'sleeping', 'grace_period') AND stripe_customer_id IS NOT NULL) as paying_active
+          COUNT(*) FILTER (WHERE stripe_customer_id IS NOT NULL AND status NOT IN ('cancelled', 'pending')) as paying_active
         FROM users
         GROUP BY month
         ORDER BY month DESC
