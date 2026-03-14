@@ -4,6 +4,7 @@ import { runDueCronJobs } from '../services/cronScheduler';
 import { checkCapacity } from '../services/serverRegistry';
 import { processGracePeriods } from '../services/gracePeriod';
 import { migrateKeyToNoReset } from '../services/nexos';
+import { sendFeedbackRequest } from '../services/email';
 import db from '../lib/db';
 
 async function migrateExistingKeysOnce() {
@@ -73,8 +74,33 @@ export function startScheduler() {
     }
   });
 
+  // Feedback email — every hour, send to users who paid 24h+ ago and haven't received one
+  cron.schedule('0 * * * *', async () => {
+    const adminEmail = (process.env.ADMIN_EMAIL || '').toLowerCase();
+    try {
+      const users = await db.getMany<{ id: string; email: string }>(
+        `SELECT id, email FROM users
+         WHERE stripe_customer_id IS NOT NULL
+           AND feedback_email_sent_at IS NULL
+           AND created_at < NOW() - INTERVAL '24 hours'
+           AND LOWER(email) != $1
+         LIMIT 5`,
+        [adminEmail]
+      );
+      for (const u of users) {
+        const sent = await sendFeedbackRequest(u.email);
+        if (sent) {
+          await db.query('UPDATE users SET feedback_email_sent_at = NOW() WHERE id = $1', [u.id]);
+          console.log(`[scheduler] Feedback email sent to ${u.email}`);
+        }
+      }
+    } catch (err: any) {
+      console.error('[scheduler] Feedback email error:', err.message);
+    }
+  });
+
   // One-time migration: convert existing keys from monthly auto-reset to no-reset
   setTimeout(() => migrateExistingKeysOnce(), 10_000);
 
-  console.log('[scheduler] Started: sleep=*/5min, cron=*/1min, capacity=*/10min, grace=*/6h');
+  console.log('[scheduler] Started: sleep=*/5min, cron=*/1min, capacity=*/10min, grace=*/6h, feedback=*/1h');
 }

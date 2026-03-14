@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { Zap, HelpCircle, FileText, Shield, ExternalLink, Mail } from 'lucide-react';
 
-const SUPPORT_EMAIL = process.env.NEXT_PUBLIC_SUPPORT_EMAIL;
+const SUPPORT_EMAIL = process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'hello@valnaa.com';
 
 export default function HelpPage() {
   return (

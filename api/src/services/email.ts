@@ -65,6 +65,41 @@ export async function sendTokenAlert(
   });
 }
 
+export async function sendFeedbackRequest(email: string): Promise<boolean> {
+  try {
+    const platformUrl = process.env.PLATFORM_URL || 'https://valnaa.com';
+    await resend.emails.send({
+      from,
+      to: email,
+      subject: "Quick question — how's Valnaa working for you?",
+      html: `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
+          <p style="font-size: 16px;">Hey,</p>
+          <p>Thanks for being one of our first users — it genuinely means a lot.</p>
+          <p>I'd love to hear how things are going. What's working well? What's frustrating? What would make Valnaa more useful for you?</p>
+          <p>I put together a quick form (takes about 2 minutes):</p>
+          <a href="${platformUrl}/feedback"
+             style="display: inline-block; background: #000; color: #fff; padding: 14px 32px; border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 15px; margin: 16px 0;">
+            Share Your Feedback
+          </a>
+          <p>Your feedback will directly shape what we build next.</p>
+          <p style="margin-top: 32px;">
+            Thanks again,<br/>
+            <strong>The Valnaa Team</strong>
+          </p>
+          <p style="color: #999; font-size: 12px; margin-top: 40px; border-top: 1px solid #eee; padding-top: 16px;">
+            You're receiving this because you signed up for Valnaa. If you have any questions, reply to this email.
+          </p>
+        </div>
+      `,
+    });
+    return true;
+  } catch (err: any) {
+    console.error(`[email] Failed to send feedback request to ${email}:`, err.message);
+    return false;
+  }
+}
+
 export async function sendSecurityAlert(
   email: string,
   event: string,
