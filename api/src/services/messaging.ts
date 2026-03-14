@@ -465,19 +465,18 @@ export async function initiateWhatsAppPairing(userId: string): Promise<{
   ).catch(() => {});
   lap('cleared old QR log');
 
-  if (configChanged) {
-    await sshExec(serverIp, `docker restart ${containerName}`);
-    lap('docker restart issued');
-    const ready = await waitForContainer(serverIp, containerName);
-    lap(`waitForContainer → ${ready}`);
-    if (!ready) {
-      throw new Error('Agent failed to restart. Please try again in a moment.');
-    }
-    await new Promise(r => setTimeout(r, 3000));
-    lap('post-restart 3s pause done');
-  } else {
-    lap('skipped restart (config unchanged)');
+  // Always restart when no credentials exist — the container needs a clean
+  // WhatsApp adapter init for QR generation. Without this, reconnecting
+  // after a disconnect silently fails because the adapter has stale state.
+  await sshExec(serverIp, `docker restart ${containerName}`);
+  lap('docker restart issued');
+  const ready = await waitForContainer(serverIp, containerName);
+  lap(`waitForContainer → ${ready}`);
+  if (!ready) {
+    throw new Error('Agent failed to restart. Please try again in a moment.');
   }
+  await new Promise(r => setTimeout(r, 3000));
+  lap('post-restart 3s pause done');
 
   const execResult = await sshExec(
     serverIp,
@@ -568,20 +567,34 @@ export async function getWhatsAppQr(userId: string): Promise<{
     console.log(`[whatsapp:qr] docker logs fallback → ${fallbackLogs.length} chars +${Date.now() - t0}ms`);
   }
 
-  const combined = [qrFile?.stdout, fallbackLogs].filter(Boolean).join('\n');
+  // Try QR file first (most reliable), then docker logs as fallback.
+  // Check each source independently so config errors in docker logs
+  // don't mask QR data in the dedicated log file.
+  const qrFileContent = qrFile?.stdout?.trim() || '';
+  if (qrFileContent) {
+    const qrFromFile = extractQrFromLogs(qrFileContent);
+    if (qrFromFile) {
+      console.log(`[whatsapp:qr] → QR found from file (${qrFromFile.length} chars) +${Date.now() - t0}ms`);
+      return { status: 'qr', qrText: qrFromFile };
+    }
+  }
+
+  if (fallbackLogs) {
+    const qrFromLogs = extractQrFromLogs(fallbackLogs);
+    if (qrFromLogs) {
+      console.log(`[whatsapp:qr] → QR found from docker logs (${qrFromLogs.length} chars) +${Date.now() - t0}ms`);
+      return { status: 'qr', qrText: qrFromLogs };
+    }
+  }
+
+  const combined = [qrFileContent, fallbackLogs].filter(Boolean).join('\n');
   if (!combined || combined.trim().length === 0) {
     console.log(`[whatsapp:qr] → waiting (empty) +${Date.now() - t0}ms`);
     return { status: 'waiting', message: 'Generating QR code...' };
   }
 
-  const qrText = extractQrFromLogs(combined);
-  if (qrText) {
-    console.log(`[whatsapp:qr] → QR found (${qrText.length} chars) +${Date.now() - t0}ms`);
-    return { status: 'qr', qrText };
-  }
-
   const lowerCombined = combined.toLowerCase();
-  if (lowerCombined.includes('failed to persist plugin') || lowerCombined.includes('unrecognized key')) {
+  if (lowerCombined.includes('failed to persist plugin')) {
     console.log(`[whatsapp:qr] → waiting (non-fatal persist error) +${Date.now() - t0}ms`);
     return { status: 'waiting', message: 'Waiting for QR code from WhatsApp...' };
   }

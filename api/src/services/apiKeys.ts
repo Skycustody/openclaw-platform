@@ -418,11 +418,10 @@ export async function injectApiKeys(
         }
       }
 
+      // Clean up any previously-written subagents keys — OpenClaw's schema
+      // does not recognize agents.list[].subagents and rejects the config.
       for (const entry of config.agents.list) {
-        const allowed = allowMap[entry.id];
-        if (allowed) {
-          entry.subagents = { allow: allowed, maxConcurrent: 3 };
-        }
+        delete entry.subagents;
       }
     }
   } catch (err) {

@@ -384,21 +384,11 @@ async function syncBindingsToContainer(
     if (!allowMap[srcId].includes(tgtId)) allowMap[srcId].push(tgtId);
   }
 
-  // Apply to agents.list entries
+  // Clean up any previously-written subagents keys — OpenClaw's schema
+  // does not recognize agents.list[].subagents and rejects the config.
   if (config.agents?.list) {
     for (const agentEntry of config.agents.list) {
-      const allowed = allowMap[agentEntry.id];
-      if (allowed && allowed.length > 0) {
-        agentEntry.subagents = {
-          allow: allowed,
-          maxConcurrent: 3,
-        };
-      } else {
-        agentEntry.subagents = {
-          allow: [],
-          maxConcurrent: 0,
-        };
-      }
+      delete agentEntry.subagents;
     }
   }
 
