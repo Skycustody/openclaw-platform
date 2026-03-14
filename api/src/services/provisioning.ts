@@ -465,29 +465,15 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
   // Re-apply gateway auth config (doctor --fix on startup may strip it) — needs running container
   await reapplyGatewayConfig(server.ip, userId, containerName);
 
-  // Step 8: Wait for gateway to actually be reachable — don't lie about status
-  let gatewayReady = false;
-  try {
-    await waitForReady(server.ip, containerName, 90000);
-    gatewayReady = true;
-    console.log(`[provision] Gateway confirmed reachable for ${containerName}`);
-  } catch (err) {
-    console.warn(`[provision] Gateway health check timed out for ${containerName}: ${(err as Error).message}`);
-  }
-
-  // Step 9: Set status based on actual gateway state
-  if (gatewayReady) {
-    await db.query(
-      `UPDATE users SET status = 'active', last_active = NOW(), provision_retries = 0 WHERE id = $1`,
-      [userId]
-    );
-  } else {
-    await db.query(
-      `UPDATE users SET status = 'starting', last_active = NOW() WHERE id = $1`,
-      [userId]
-    );
-    console.warn(`[provision] ${containerName} marked 'starting' — gateway not yet reachable`);
-  }
+  // Step 8: Container is running — mark active immediately.
+  // The gateway takes a few extra seconds to initialize but will be ready
+  // by the time the user clicks "Open Agent". The /agent/open endpoint
+  // has self-healing checks if anything is actually wrong.
+  await db.query(
+    `UPDATE users SET status = 'active', last_active = NOW(), provision_retries = 0 WHERE id = $1`,
+    [userId]
+  );
+  console.log(`[provision] ${containerName} marked 'active'`);
 
   await updateServerRam(server.id);
 
