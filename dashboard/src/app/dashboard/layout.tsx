@@ -14,8 +14,10 @@ import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import api from '@/lib/api';
 import { DASHBOARD_ALLOWED_STATUSES } from '@/lib/constants';
-import { Loader2, Menu } from 'lucide-react';
+import { Loader2, Menu, Mail } from 'lucide-react';
 import Image from 'next/image';
+
+const SUPPORT_EMAIL = process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'hello@valnaa.com';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -104,6 +106,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         )}
       >
         <div className={cn('flex-1 flex flex-col min-h-0', isHome ? 'overflow-hidden' : 'mx-auto max-w-6xl w-full')}>{children}</div>
+        {!isHome && (
+          <div className="mx-auto max-w-6xl w-full py-4 flex items-center justify-center">
+            <a
+              href={`mailto:${SUPPORT_EMAIL}`}
+              className="inline-flex items-center gap-1.5 text-[12px] text-white/25 hover:text-white/50 transition-colors"
+            >
+              <Mail className="h-3 w-3" />
+              Need help? {SUPPORT_EMAIL}
+            </a>
+          </div>
+        )}
       </main>
     </div>
   );

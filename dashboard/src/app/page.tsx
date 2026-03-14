@@ -441,9 +441,7 @@ function Footer() {
         <div className="flex items-center gap-6">
           <a href="#features" className="text-sm text-muted-foreground transition-colors hover:text-foreground">Features</a>
           <a href="#pricing" className="text-sm text-muted-foreground transition-colors hover:text-foreground">Pricing</a>
-          {process.env.NEXT_PUBLIC_SUPPORT_EMAIL && (
-            <a href={`mailto:${process.env.NEXT_PUBLIC_SUPPORT_EMAIL}`} className="text-sm text-muted-foreground transition-colors hover:text-foreground">Contact</a>
-          )}
+          <a href={`mailto:${process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'hello@valnaa.com'}`} className="text-sm text-muted-foreground transition-colors hover:text-foreground">Contact</a>
           <Link href="/auth/login" className="text-sm text-muted-foreground transition-colors hover:text-foreground">Sign In</Link>
         </div>
       </div>
