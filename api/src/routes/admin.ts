@@ -19,6 +19,8 @@ router.use(requireAdmin);
 const UUID_RE = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const CONTAINER_NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9_.-]+$/;
 
+const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || '').toLowerCase();
+
 function validateUuid(id: string | string[]): id is string {
   return typeof id === 'string' && UUID_RE.test(id);
 }
@@ -42,14 +44,14 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
           COUNT(*) FILTER (WHERE status = 'provisioning') as provisioning,
           COUNT(*) FILTER (WHERE status = 'cancelled') as cancelled,
           COUNT(*) FILTER (WHERE status = 'pending') as pending,
-          COUNT(*) FILTER (WHERE stripe_customer_id IS NOT NULL) as paid,
+          COUNT(*) FILTER (WHERE stripe_customer_id IS NOT NULL AND LOWER(email) != $1) as paid,
           COUNT(*) FILTER (WHERE stripe_customer_id IS NULL AND status != 'cancelled') as unpaid,
-          COUNT(*) FILTER (WHERE stripe_customer_id IS NOT NULL AND status NOT IN ('cancelled', 'pending')) as paying_active,
+          COUNT(*) FILTER (WHERE stripe_customer_id IS NOT NULL AND status NOT IN ('cancelled', 'pending') AND LOWER(email) != $1) as paying_active,
           COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '24 hours') as new_24h,
           COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days') as new_7d,
           COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '30 days') as new_30d
         FROM users
-      `),
+      `, [ADMIN_EMAIL]),
       db.getOne<any>(`
         SELECT
           COUNT(*) as total,
@@ -68,7 +70,8 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
           COUNT(*) FILTER (WHERE plan = 'business') as business
         FROM users WHERE stripe_customer_id IS NOT NULL
           AND status NOT IN ('cancelled', 'pending')
-      `),
+          AND LOWER(email) != $1
+      `, [ADMIN_EMAIL]),
       db.getOne<any>(`
         SELECT
           COALESCE(SUM(total_used), 0)::text as total_used,
@@ -82,20 +85,20 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
           COALESCE(SUM(credits_usd), 0)::text as total_credit_purchases
         FROM credit_purchases
       `).catch(() => ({ month_credit_purchases: '0', total_credit_purchases: '0' })),
-      // Churn: users who paid but are now cancelled/paused
+      // Churn: users who paid but are now cancelled/paused (exclude admin)
       db.getOne<any>(`
         SELECT
-          COUNT(*) FILTER (WHERE stripe_customer_id IS NOT NULL AND status IN ('cancelled', 'paused')) as churned,
-          COUNT(*) FILTER (WHERE stripe_customer_id IS NOT NULL) as total_ever_paid
+          COUNT(*) FILTER (WHERE stripe_customer_id IS NOT NULL AND status IN ('cancelled', 'paused') AND LOWER(email) != $1) as churned,
+          COUNT(*) FILTER (WHERE stripe_customer_id IS NOT NULL AND LOWER(email) != $1) as total_ever_paid
         FROM users
-      `).catch(() => ({ churned: '0', total_ever_paid: '0' })),
-      // Conversion: signups → paid
+      `, [ADMIN_EMAIL]).catch(() => ({ churned: '0', total_ever_paid: '0' })),
+      // Conversion: signups → paid (exclude admin from both sides)
       db.getOne<any>(`
         SELECT
-          COUNT(*) as total_signups,
-          COUNT(*) FILTER (WHERE stripe_customer_id IS NOT NULL) as converted
+          COUNT(*) FILTER (WHERE LOWER(email) != $1) as total_signups,
+          COUNT(*) FILTER (WHERE stripe_customer_id IS NOT NULL AND LOWER(email) != $1) as converted
         FROM users
-      `).catch(() => ({ total_signups: '0', converted: '0' })),
+      `, [ADMIN_EMAIL]).catch(() => ({ total_signups: '0', converted: '0' })),
     ]);
 
     const starterCount = parseInt(plans?.starter || '0');
@@ -210,8 +213,9 @@ router.get('/revenue', async (_req: AuthRequest, res: Response, next: NextFuncti
         SELECT plan, COUNT(*) as count
         FROM users WHERE stripe_customer_id IS NOT NULL
           AND status NOT IN ('cancelled', 'pending')
+          AND LOWER(email) != $1
         GROUP BY plan
-      `),
+      `, [ADMIN_EMAIL]),
       db.getMany<any>(`
         SELECT u.email, u.plan, u.status, u.created_at, u.last_active
         FROM users u
@@ -222,14 +226,14 @@ router.get('/revenue', async (_req: AuthRequest, res: Response, next: NextFuncti
       db.getMany<any>(`
         SELECT
           DATE_TRUNC('month', created_at) as month,
-          COUNT(*) as signups,
-          COUNT(*) FILTER (WHERE stripe_customer_id IS NOT NULL) as paid,
-          COUNT(*) FILTER (WHERE stripe_customer_id IS NOT NULL AND status NOT IN ('cancelled', 'pending')) as paying_active
+          COUNT(*) FILTER (WHERE LOWER(email) != $1) as signups,
+          COUNT(*) FILTER (WHERE stripe_customer_id IS NOT NULL AND LOWER(email) != $1) as paid,
+          COUNT(*) FILTER (WHERE stripe_customer_id IS NOT NULL AND status NOT IN ('cancelled', 'pending') AND LOWER(email) != $1) as paying_active
         FROM users
         GROUP BY month
         ORDER BY month DESC
         LIMIT 12
-      `),
+      `, [ADMIN_EMAIL]),
     ]);
 
     const subscriptionRevenue: Record<string, { count: number; revenueUsdCents: number; nexosCostUsdCents: number; profitUsdCents: number }> = {};
