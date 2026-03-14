@@ -6,7 +6,7 @@ import {
   Users, Server, Coins, TrendingUp, Activity, Search,
   Shield, Loader2, RefreshCw, AlertTriangle, Edit3,
   BarChart3, Zap, HardDrive, LogOut, ChevronLeft, ChevronRight,
-  DollarSign,
+  DollarSign, MessageSquare, Star,
 } from 'lucide-react';
 
 interface PlanDetail {
@@ -104,7 +104,20 @@ interface ServerInfo {
   ram_used: number; status: string; user_count: number;
 }
 
-type Tab = 'overview' | 'users' | 'revenue' | 'servers';
+type Tab = 'overview' | 'users' | 'revenue' | 'servers' | 'feedback';
+
+interface FeedbackEntry {
+  id: string;
+  email: string;
+  rating: number;
+  ease_of_setup: string | null;
+  most_useful: string | null;
+  biggest_pain: string | null;
+  recommend: string | null;
+  improvements: string | null;
+  comments: string | null;
+  created_at: string;
+}
 
 const STATUS_COLORS: Record<string, string> = {
   active: 'text-green-400 bg-green-500/10',
@@ -160,6 +173,7 @@ export default function AdminPanel() {
   const [editForm, setEditForm] = useState({ plan: '', status: '', is_admin: false, credit_balance: '' });
   const [saving, setSaving] = useState(false);
   const [actionMsg, setActionMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [feedbackList, setFeedbackList] = useState<FeedbackEntry[]>([]);
 
   const showMsg = (type: 'success' | 'error', text: string) => {
     setActionMsg({ type, text });
@@ -222,16 +236,25 @@ export default function AdminPanel() {
     }
   }, []);
 
+  const fetchFeedback = useCallback(async () => {
+    try {
+      const data = await api.get<{ feedback: FeedbackEntry[] }>('/feedback/list');
+      setFeedbackList(data.feedback);
+    } catch (err: any) {
+      console.error('[admin] fetchFeedback failed:', err.message);
+    }
+  }, []);
+
   useEffect(() => {
     if (authState !== 'authed') return;
     setLoading(true);
-    Promise.all([fetchOverview(), fetchUsers(), fetchRevenue(), fetchServers()])
+    Promise.all([fetchOverview(), fetchUsers(), fetchRevenue(), fetchServers(), fetchFeedback()])
       .finally(() => setLoading(false));
-  }, [authState, fetchOverview, fetchUsers, fetchRevenue, fetchServers]);
+  }, [authState, fetchOverview, fetchUsers, fetchRevenue, fetchServers, fetchFeedback]);
 
   const refresh = async () => {
     setRefreshing(true);
-    await Promise.all([fetchOverview(), fetchUsers(userPage, userSearch, userFilter), fetchRevenue(), fetchServers()]);
+    await Promise.all([fetchOverview(), fetchUsers(userPage, userSearch, userFilter), fetchRevenue(), fetchServers(), fetchFeedback()]);
     setRefreshing(false);
   };
 
@@ -377,6 +400,7 @@ export default function AdminPanel() {
             { id: 'users' as Tab, label: 'Users', icon: Users },
             { id: 'revenue' as Tab, label: 'Revenue & Costs', icon: DollarSign },
             { id: 'servers' as Tab, label: 'Servers', icon: Server },
+            { id: 'feedback' as Tab, label: 'Feedback', icon: MessageSquare },
           ]).map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
               className={`flex items-center gap-1.5 px-4 py-2.5 text-[13px] font-medium border-b-2 -mb-[1px] transition-all ${
@@ -954,6 +978,74 @@ export default function AdminPanel() {
                   );
                 })}
               </div>
+            )}
+          </div>
+        )}
+
+        {tab === 'feedback' && (
+          <div className="space-y-4">
+            {feedbackList.length === 0 ? (
+              <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-12 text-center">
+                <MessageSquare className="h-10 w-10 text-white/10 mx-auto mb-3" />
+                <p className="text-[14px] text-white/30">No feedback yet</p>
+                <p className="text-[12px] text-white/15 mt-1">Share <span className="text-white/30">valnaa.com/feedback</span> with users</p>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center gap-3 mb-2">
+                  <span className="text-[13px] text-white/40">{feedbackList.length} responses</span>
+                  <span className="text-[13px] text-white/40">·</span>
+                  <span className="text-[13px] text-white/40">
+                    Avg rating: {(feedbackList.reduce((s, f) => s + f.rating, 0) / feedbackList.length).toFixed(1)} / 5
+                  </span>
+                </div>
+                {feedbackList.map((f) => (
+                  <div key={f.id} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <span className="text-[14px] text-white font-medium">{f.email}</span>
+                        <div className="flex gap-0.5">
+                          {[1, 2, 3, 4, 5].map((n) => (
+                            <Star key={n} className={`h-3.5 w-3.5 ${n <= f.rating ? 'fill-amber-400 text-amber-400' : 'text-white/15'}`} />
+                          ))}
+                        </div>
+                      </div>
+                      <span className="text-[11px] text-white/25">{timeAgo(f.created_at)}</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 text-[12px]">
+                      {f.ease_of_setup && (
+                        <div><span className="text-white/30">Setup:</span> <span className="text-white/60">{f.ease_of_setup}</span></div>
+                      )}
+                      {f.most_useful && (
+                        <div><span className="text-white/30">Most useful:</span> <span className="text-white/60">{f.most_useful}</span></div>
+                      )}
+                      {f.recommend && (
+                        <div><span className="text-white/30">Recommend:</span> <span className="text-white/60">{f.recommend}</span></div>
+                      )}
+                    </div>
+
+                    {f.biggest_pain && (
+                      <div className="text-[12px]">
+                        <span className="text-white/30">Biggest pain:</span>
+                        <p className="text-white/60 mt-1">{f.biggest_pain}</p>
+                      </div>
+                    )}
+                    {f.improvements && (
+                      <div className="text-[12px]">
+                        <span className="text-white/30">Improvements:</span>
+                        <p className="text-white/60 mt-1">{f.improvements}</p>
+                      </div>
+                    )}
+                    {f.comments && (
+                      <div className="text-[12px]">
+                        <span className="text-white/30">Comments:</span>
+                        <p className="text-white/60 mt-1">{f.comments}</p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </>
             )}
           </div>
         )}
