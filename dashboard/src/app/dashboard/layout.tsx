@@ -14,10 +14,34 @@ import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import api from '@/lib/api';
 import { DASHBOARD_ALLOWED_STATUSES } from '@/lib/constants';
-import { Loader2, Menu, Mail } from 'lucide-react';
+import { Loader2, Menu, Mail, RefreshCw } from 'lucide-react';
 import Image from 'next/image';
 
 const SUPPORT_EMAIL = process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'hello@valnaa.com';
+
+function ConfigChangeToast() {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const handler = () => {
+      setVisible(true);
+      setTimeout(() => setVisible(false), 6000);
+    };
+    window.addEventListener('valnaa:config-change', handler);
+    return () => window.removeEventListener('valnaa:config-change', handler);
+  }, []);
+
+  if (!visible) return null;
+
+  return (
+    <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] animate-in fade-in slide-in-from-top-2 duration-300">
+      <div className="flex items-center gap-2.5 rounded-xl border border-white/10 bg-[#111] px-4 py-2.5 shadow-2xl">
+        <RefreshCw className="h-3.5 w-3.5 text-amber-400 animate-spin" />
+        <span className="text-[13px] text-white/70">Applying changes... your agent will be back in a few seconds</span>
+      </div>
+    </div>
+  );
+}
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -80,6 +104,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="h-screen overflow-hidden bg-black text-white" style={{ backgroundImage: 'none' }}>
+      <ConfigChangeToast />
       <Sidebar />
 
       {/* Mobile top bar — visible only below md */}

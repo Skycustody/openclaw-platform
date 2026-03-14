@@ -1,5 +1,17 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
+const CONFIG_CHANGE_PATHS = [
+  '/settings/', '/channels/', '/skills/', '/agents/', '/cron/',
+  '/settings/brain', '/settings/protection', '/settings/own-openrouter-key',
+  '/settings/routing-preferences', '/settings/onboarding',
+];
+
+function isConfigChange(method: string, path: string): boolean {
+  if (method !== 'PUT' && method !== 'POST') return false;
+  if (path.startsWith('/auth/') || path.startsWith('/admin/') || path.startsWith('/billing/')) return false;
+  return CONFIG_CHANGE_PATHS.some(p => path.startsWith(p) || path === p);
+}
+
 class ApiClient {
   private token: string | null = null;
   private extraHeaders: Record<string, string> = {};
@@ -78,6 +90,10 @@ class ApiClient {
 
     if (!res.ok) {
       throw new Error(data.error?.message || data.message || (typeof data.error === 'string' ? data.error : 'Something went wrong'));
+    }
+
+    if (typeof window !== 'undefined' && isConfigChange(method, path)) {
+      window.dispatchEvent(new CustomEvent('valnaa:config-change'));
     }
 
     return data as T;
