@@ -336,7 +336,8 @@ router.get('/financials', async (_req: AuthRequest, res: Response, next: NextFun
     ]);
 
     const planCounts: Record<string, number> = {};
-    for (const s of subscriptions || []) {
+    const subList = Array.isArray(subscriptions) ? subscriptions : [];
+    for (const s of subList) {
       planCounts[s.plan] = parseInt(s.count || '0');
     }
 
