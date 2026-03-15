@@ -181,14 +181,21 @@ export default function AdminPanel() {
   };
 
   useEffect(() => {
-    api.get<Overview>('/admin/overview')
-      .then((data) => {
-        setOverview(data);
-        setAuthState('authed');
-      })
-      .catch(() => {
-        setAuthState('denied');
-      });
+    const tryAuth = (attempt = 0) => {
+      api.get<Overview>('/admin/overview')
+        .then((data) => {
+          setOverview(data);
+          setAuthState('authed');
+        })
+        .catch((err) => {
+          if (err.message?.includes('Too many') && attempt < 2) {
+            setTimeout(() => tryAuth(attempt + 1), 5000);
+          } else {
+            setAuthState('denied');
+          }
+        });
+    };
+    tryAuth();
   }, []);
 
   const fetchOverview = useCallback(async () => {

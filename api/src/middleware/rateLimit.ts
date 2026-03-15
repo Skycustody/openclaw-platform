@@ -110,9 +110,9 @@ export function rateLimitSensitive(req: Request, res: Response, next: NextFuncti
 const adminLimiter = new RateLimiterRedis({
   storeClient: redis,
   keyPrefix: 'rl:admin',
-  points: 5,
+  points: 30,
   duration: 60,
-  blockDuration: 300,
+  blockDuration: 60,
 });
 
 export function rateLimitAdmin(req: Request, res: Response, next: NextFunction) {
