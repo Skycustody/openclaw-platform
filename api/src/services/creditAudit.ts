@@ -14,9 +14,9 @@ const MAX_USD_CENTS = 1_000_000; // $10,000 max per purchase
 const MAX_CREDITS_USD = 100_000;
 const MAX_ADDON_USD = 50_000;
 
-/** Math verification: 6% + 25% + 69% = 100% */
+/** Math verification: 6% + 44% + 50% = 100% */
 const OPENROUTER_FEE = 0.06;
-const PLATFORM_FEE = 0.25;
+const PLATFORM_FEE = 0.44;
 const TO_API_FRACTION = 1 - OPENROUTER_FEE - PLATFORM_FEE;
 
 function assertMathCorrect(): void {

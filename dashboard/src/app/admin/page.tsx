@@ -113,6 +113,7 @@ interface FinancialsData {
     profitUsdCents: number;
     monthProfitUsdCents: number;
     fromStripe: boolean;
+    costBreakdown?: { creditsBaseUsdCents: number; openRouterFeeUsdCents: number; vatUsdCents: number };
   };
   vps: { costUsdCents: number; serverCount: number; costPerServerUsdCents: number };
   openRouterUsageUsdCents: number;
@@ -846,11 +847,24 @@ export default function AdminPanel() {
                   <StatCard icon={DollarSign} label="Credit Revenue" value={formatUsd(financialsData.credits.revenueUsdCents)}
                     sub={`${formatUsd(financialsData.credits.monthRevenueUsdCents)} this month`} color="green" />
                   <StatCard icon={Coins} label="Credit Cost" value={formatUsd(financialsData.credits.costUsdCents)}
-                    sub="Credits + 6% OpenRouter fee + VAT (~20%)" color="amber" />
+                    sub="Credits (50%) + 6% OR fee + VAT (we absorb)" color="amber" />
                   <StatCard icon={TrendingUp} label="Credit Profit"
                     value={formatUsd(financialsData.credits.profitUsdCents)}
                     sub={`${formatUsd(financialsData.credits.monthProfitUsdCents)} this month`}
                     color={financialsData.credits.profitUsdCents >= 0 ? 'green' : 'red'} />
+                </div>
+                <div className="mt-4 rounded-lg border border-white/[0.04] bg-white/[0.01] p-3">
+                  <p className="text-[12px] font-medium text-white/70 mb-2">Credit model</p>
+                  <p className="text-[11px] text-white/40 mb-2">
+                    Split: 50% user credits (API limit) · 6% OpenRouter fee · 44% platform margin. Users see what they paid; actual API limit is 50% of that. Consumption scales proportionally.
+                  </p>
+                  {financialsData.credits.costBreakdown && (
+                    <div className="flex flex-wrap gap-4 text-[11px] text-white/30">
+                      <span>Credits base: {formatUsd(financialsData.credits.costBreakdown.creditsBaseUsdCents)}</span>
+                      <span>OR fee: {formatUsd(financialsData.credits.costBreakdown.openRouterFeeUsdCents)}</span>
+                      <span>VAT: {formatUsd(financialsData.credits.costBreakdown.vatUsdCents)}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

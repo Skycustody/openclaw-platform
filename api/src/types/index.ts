@@ -176,8 +176,8 @@ export interface PlanLimits {
  * │ Smart routing (cheap default models) further reduces API costs       │
  * │ by 40-60%, improving actual margins above targets.                    │
  * │                                                                       │
- * │ Credit purchases: 6% OpenRouter fee + 25% platform margin.           │
- * │ User pays $5 → $3.45 API budget. User sees $5 in dashboard.         │
+ * │ Credit purchases: 6% OpenRouter fee + 44% platform margin.           │
+ * │ User pays $5 → $2.50 API budget. User sees $5 in dashboard.         │
  * └────────────────────────────────────────────────────────────────────────┘
  */
 export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
@@ -189,7 +189,7 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     storageGb: 10,
     includedBudgetUsd: 2,
     priceUsdCents: 1500,
-    nexosCreditBudgetUsdCents: 138,   // $2 × 0.69 (after 6% OR + 25% platform)
+    nexosCreditBudgetUsdCents: 100,   // $2 × 0.50 (after 6% OR + 44% platform)
     serverCostShareUsdCents: 400,
     hasBrowser: false,
     allChannels: false,
@@ -203,7 +203,7 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     storageGb: 50,
     includedBudgetUsd: 5,
     priceUsdCents: 2500,
-    nexosCreditBudgetUsdCents: 345,   // $5 × 0.69 (after 6% OR + 25% platform)
+    nexosCreditBudgetUsdCents: 250,   // $5 × 0.50 (after 6% OR + 44% platform)
     serverCostShareUsdCents: 800,
     hasBrowser: true,
     allChannels: true,
@@ -217,7 +217,7 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     storageGb: 100,
     includedBudgetUsd: 10,
     priceUsdCents: 5000,
-    nexosCreditBudgetUsdCents: 690,   // $10 × 0.69 (after 6% OR + 25% platform)
+    nexosCreditBudgetUsdCents: 500,   // $10 × 0.50 (after 6% OR + 44% platform)
     serverCostShareUsdCents: 1100,
     hasBrowser: true,
     allChannels: true,
@@ -242,13 +242,13 @@ export interface CreditPurchase {
 }
 
 /**
- * Credit top-up packs. Backend split: 6% OpenRouter, 25% platform, rest → API limit.
- * orBudgetUsd = (1 - 0.06 - 0.25) * usd = 0.69 * usd
+ * Credit top-up packs. Backend split: 6% OpenRouter, 44% platform, 50% → API limit.
+ * orBudgetUsd = (1 - 0.06 - 0.44) * usd = 0.50 * usd
  * Frontend shows amount paid ($5 → "$5 bought") and consumption reduces proportionally.
  */
 const OPENROUTER_FEE = 0.06;
-const PLATFORM_FEE = 0.25;
-const TO_API_FRACTION = 1 - OPENROUTER_FEE - PLATFORM_FEE; // 0.69
+const PLATFORM_FEE = 0.44;
+const TO_API_FRACTION = 1 - OPENROUTER_FEE - PLATFORM_FEE; // 0.50
 
 function orBudgetFromUsd(usd: number): number {
   return Math.round(usd * TO_API_FRACTION * 100) / 100;

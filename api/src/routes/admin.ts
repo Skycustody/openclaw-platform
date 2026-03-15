@@ -359,8 +359,7 @@ router.get('/financials', async (_req: AuthRequest, res: Response, next: NextFun
     const creditRevenueTotal = stripeCredits.totalUsdCents || parseInt(creditDb?.total_revenue ?? '0');
     const creditCostBaseMonth = Math.round(parseFloat(creditDb?.month_credits_usd ?? '0') * 100);
     const creditCostBaseTotal = Math.round(parseFloat(creditDb?.total_credits_usd ?? '0') * 100);
-    // Revenue = what user pays (e.g. $13.62 for $10 credits); cost = credits_usd + OpenRouter fee (6%) + VAT
-    // VAT default 20.3% matches $2.77 on $13.62 total. Override with CREDIT_VAT_RATE.
+    // Cost = credits_usd (50%) + OpenRouter fee (6%) + VAT. Users pay flat price; we absorb VAT from our profit.
     const OPENROUTER_FEE_RATE = 0.06;
     const VAT_RATE = parseFloat(process.env.CREDIT_VAT_RATE || '0.203');
     const openRouterFeeMonth = Math.round(creditRevenueMonth * OPENROUTER_FEE_RATE);
