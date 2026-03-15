@@ -357,8 +357,11 @@ router.get('/financials', async (_req: AuthRequest, res: Response, next: NextFun
 
     const creditRevenueMonth = stripeCredits.monthUsdCents || parseInt(creditDb?.month_revenue ?? '0');
     const creditRevenueTotal = stripeCredits.totalUsdCents || parseInt(creditDb?.total_revenue ?? '0');
-    const creditCostMonth = Math.round(parseFloat(creditDb?.month_credits_usd ?? '0') * 100);
-    const creditCostTotal = Math.round(parseFloat(creditDb?.total_credits_usd ?? '0') * 100);
+    // Cost = API budget given to users (credits_usd) + 25% VAT
+    const creditCostBaseMonth = parseFloat(creditDb?.month_credits_usd ?? '0') * 100;
+    const creditCostBaseTotal = parseFloat(creditDb?.total_credits_usd ?? '0') * 100;
+    const creditCostMonth = Math.round(creditCostBaseMonth * 1.25);
+    const creditCostTotal = Math.round(creditCostBaseTotal * 1.25);
 
     const credits = {
       revenueUsdCents: creditRevenueTotal,
