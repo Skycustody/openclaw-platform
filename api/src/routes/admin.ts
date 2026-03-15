@@ -316,7 +316,7 @@ router.get('/financials', async (_req: AuthRequest, res: Response, next: NextFun
       serverRow,
     ] = await Promise.all([
       fetchCreditRevenueFromStripe().catch(() => ({ monthUsdCents: 0, totalUsdCents: 0 })),
-      fetchOpenRouterTotalUsage().then((usd) => Math.round(usd * 100)),
+      fetchOpenRouterTotalUsage().then((usd) => Math.round(usd * 100)).catch(() => 0),
       db.getOne<any>(`
         SELECT
           COALESCE(SUM(CASE WHEN created_at >= DATE_TRUNC('month', NOW()) THEN amount_eur_cents ELSE 0 END), 0)::text as month_revenue,
@@ -331,8 +331,8 @@ router.get('/financials', async (_req: AuthRequest, res: Response, next: NextFun
           AND status NOT IN ('cancelled', 'pending')
           AND LOWER(email) != $1
         GROUP BY plan
-      `, [ADMIN_EMAIL]),
-      db.getOne<any>(`SELECT COUNT(*) as total FROM servers WHERE status = 'active'`),
+      `, [ADMIN_EMAIL]).catch(() => []),
+      db.getOne<any>(`SELECT COUNT(*) as total FROM servers WHERE status = 'active'`).catch(() => ({ total: '0' })),
     ]);
 
     const planCounts: Record<string, number> = {};
@@ -397,7 +397,8 @@ router.get('/financials', async (_req: AuthRequest, res: Response, next: NextFun
       },
       openRouterUsageUsdCents: openRouterUsage,
     });
-  } catch (err) {
+  } catch (err: any) {
+    console.error('[admin/financials]', err?.message || err);
     next(err);
   }
 });
