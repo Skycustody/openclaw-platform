@@ -125,10 +125,12 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
       (sum, [plan, count]) => sum + count * (PLAN_LIMITS[plan as keyof typeof PLAN_LIMITS]?.nexosCreditBudgetUsdCents || 0), 0
     );
 
+    const monthlyCreditRevenue = parseInt(revenueRow?.month_credit_purchases ?? '0');
+    const totalMonthlyRevenue = monthlySubscriptionRevenue + monthlyCreditRevenue;
     const totalCosts = monthlyServerCosts + monthlyNexosCosts;
-    const monthlyProfit = monthlySubscriptionRevenue - totalCosts;
-    const profitMarginPercent = monthlySubscriptionRevenue > 0
-      ? Math.round((monthlyProfit / monthlySubscriptionRevenue) * 100) : 0;
+    const monthlyProfit = totalMonthlyRevenue - totalCosts;
+    const profitMarginPercent = totalMonthlyRevenue > 0
+      ? Math.round((monthlyProfit / totalMonthlyRevenue) * 100) : 0;
 
     // Key SaaS metrics
     const arpu = payingActiveCount > 0 ? Math.round(monthlySubscriptionRevenue / payingActiveCount) : 0;
@@ -143,6 +145,8 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
     const financials = {
       currency: 'USD',
       monthlySubscriptionRevenue,
+      monthlyCreditRevenue,
+      totalMonthlyRevenue,
       monthlyServerCosts,
       monthlyServerCostsNet,
       monthlyServerCostsVat,
@@ -178,7 +182,7 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
     };
 
     const metrics = {
-      mrr: monthlySubscriptionRevenue,
+      mrr: totalMonthlyRevenue,
       arpu,
       payingActive: payingActiveCount,
       churnRate,

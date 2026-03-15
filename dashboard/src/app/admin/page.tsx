@@ -23,6 +23,8 @@ interface PlanDetail {
 interface Financials {
   currency: string;
   monthlySubscriptionRevenue: number;
+  monthlyCreditRevenue: number;
+  totalMonthlyRevenue: number;
   monthlyServerCosts: number;
   monthlyServerCostsNet: number;
   monthlyServerCostsVat: number;
@@ -422,8 +424,8 @@ export default function AdminPanel() {
         {tab === 'overview' && o && f && (
           <div className="space-y-6">
             <div className="grid grid-cols-4 gap-4">
-              <StatCard icon={DollarSign} label="Monthly Revenue" value={formatUsd(f.monthlySubscriptionRevenue)}
-                sub="Subscriptions" color="green" />
+              <StatCard icon={DollarSign} label="Monthly Revenue" value={formatUsd(f.totalMonthlyRevenue)}
+                sub={`Subs ${formatUsd(f.monthlySubscriptionRevenue)}${f.monthlyCreditRevenue > 0 ? ` + Credits ${formatUsd(f.monthlyCreditRevenue)}` : ''}`} color="green" />
               <StatCard icon={HardDrive} label="Server Costs" value={formatUsd(f.monthlyServerCosts)}
                 sub={`${o.servers.total} server × ${formatUsd(f.serverCostGrossPerMonth)} (incl. ${Math.round(f.vatRate * 100)}% VAT)`} color="red" />
               <StatCard icon={Coins} label="AI Costs" value={formatUsd(f.monthlyCreditCosts)}
