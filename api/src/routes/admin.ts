@@ -7,7 +7,8 @@ import { provisionUser } from '../services/provisioning';
 import { User, PLAN_LIMITS, PROFIT_MARGIN_TARGET } from '../types';
 import { sshExec } from '../services/ssh';
 import { injectApiKeys } from '../services/apiKeys';
-import { ensureNexosKey, RETAIL_MARKUP, AVG_COST_PER_1M_USD } from '../services/nexos';
+import { ensureNexosKey, RETAIL_MARKUP, AVG_COST_PER_1M_USD, fetchOpenRouterTotalUsage } from '../services/nexos';
+import { fetchCreditRevenueFromStripe } from '../services/stripe';
 import { updateImageOnAllWorkers } from '../services/dockerImage';
 
 const router = Router();
@@ -296,6 +297,104 @@ router.get('/revenue', async (_req: AuthRequest, res: Response, next: NextFuncti
       subscriptionRevenue,
       topUsers,
       signupsByMonth,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── Financials (credits from Stripe, API usage from OpenRouter) ──
+router.get('/financials', async (_req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || '').toLowerCase();
+
+    const [
+      stripeCredits,
+      openRouterUsage,
+      creditDb,
+      subscriptions,
+      serverRow,
+    ] = await Promise.all([
+      fetchCreditRevenueFromStripe().catch(() => ({ monthUsdCents: 0, totalUsdCents: 0 })),
+      fetchOpenRouterTotalUsage().then((usd) => Math.round(usd * 100)),
+      db.getOne<any>(`
+        SELECT
+          COALESCE(SUM(CASE WHEN created_at >= DATE_TRUNC('month', NOW()) THEN amount_eur_cents ELSE 0 END), 0)::text as month_revenue,
+          COALESCE(SUM(amount_eur_cents), 0)::text as total_revenue,
+          COALESCE(SUM(CASE WHEN created_at >= DATE_TRUNC('month', NOW()) THEN credits_usd ELSE 0 END), 0)::text as month_credits_usd,
+          COALESCE(SUM(credits_usd), 0)::text as total_credits_usd
+        FROM credit_purchases
+      `).catch(() => ({ month_revenue: '0', total_revenue: '0', month_credits_usd: '0', total_credits_usd: '0' })),
+      db.getOne<any>(`
+        SELECT plan, COUNT(*) as count
+        FROM users WHERE stripe_customer_id IS NOT NULL
+          AND status NOT IN ('cancelled', 'pending')
+          AND LOWER(email) != $1
+        GROUP BY plan
+      `, [ADMIN_EMAIL]),
+      db.getOne<any>(`SELECT COUNT(*) as total FROM servers WHERE status = 'active'`),
+    ]);
+
+    const planCounts: Record<string, number> = {};
+    for (const s of subscriptions || []) {
+      planCounts[s.plan] = parseInt(s.count || '0');
+    }
+
+    const subscriptionRevenue = Object.entries(planCounts).reduce(
+      (sum, [plan, count]) => sum + count * (PLAN_LIMITS[plan as keyof typeof PLAN_LIMITS]?.priceUsdCents || 0), 0
+    );
+    const subscriptionAiCost = Object.entries(planCounts).reduce(
+      (sum, [plan, count]) => sum + count * (PLAN_LIMITS[plan as keyof typeof PLAN_LIMITS]?.nexosCreditBudgetUsdCents || 0), 0
+    );
+
+    const sCount = parseInt(serverRow?.total || '0');
+    const sNetPerMonth = parseInt(process.env.SERVER_COST_USD_CENTS || process.env.SERVER_COST_EUR_CENTS || '4300');
+    const sVatRate = parseFloat(process.env.SERVER_VAT_RATE || '0.21');
+    const sVatPerMonth = Math.round(sNetPerMonth * sVatRate);
+    const sGrossPerMonth = sNetPerMonth + sVatPerMonth;
+    const vpsCostUsdCents = sCount * sGrossPerMonth;
+
+    const creditRevenueMonth = stripeCredits.monthUsdCents || parseInt(creditDb?.month_revenue ?? '0');
+    const creditRevenueTotal = stripeCredits.totalUsdCents || parseInt(creditDb?.total_revenue ?? '0');
+    const creditCostMonth = Math.round(parseFloat(creditDb?.month_credits_usd ?? '0') * 100);
+    const creditCostTotal = Math.round(parseFloat(creditDb?.total_credits_usd ?? '0') * 100);
+
+    const credits = {
+      revenueUsdCents: creditRevenueTotal,
+      monthRevenueUsdCents: creditRevenueMonth,
+      costUsdCents: creditCostTotal,
+      monthCostUsdCents: creditCostMonth,
+      profitUsdCents: creditRevenueTotal - creditCostTotal,
+      monthProfitUsdCents: creditRevenueMonth - creditCostMonth,
+      fromStripe: stripeCredits.totalUsdCents > 0,
+    };
+
+    const subs = {
+      revenueUsdCents: subscriptionRevenue,
+      aiCostUsdCents: subscriptionAiCost,
+      vpsCostUsdCents,
+    };
+
+    const totalRevenue = subscriptionRevenue + creditRevenueTotal;
+    const totalAiCost = openRouterUsage;
+    const totalCosts = totalAiCost + vpsCostUsdCents;
+    const totalProfit = totalRevenue - totalCosts;
+
+    res.json({
+      currency: 'USD',
+      main: {
+        totalRevenueUsdCents: totalRevenue,
+        totalProfitUsdCents: totalProfit,
+        totalAiCostUsdCents: totalAiCost,
+      },
+      subscriptions: subs,
+      credits,
+      vps: {
+        costUsdCents: vpsCostUsdCents,
+        serverCount: sCount,
+        costPerServerUsdCents: sGrossPerMonth,
+      },
+      openRouterUsageUsdCents: openRouterUsage,
     });
   } catch (err) {
     next(err);

@@ -346,4 +346,49 @@ export async function getInvoices(stripeCustomerId: string): Promise<any[]> {
   }));
 }
 
+/**
+ * Fetch credit top-up revenue from Stripe (Checkout Sessions with metadata.type=credit_topup).
+ * Returns amounts in USD cents. Paginates through all sessions.
+ */
+export async function fetchCreditRevenueFromStripe(): Promise<{ monthUsdCents: number; totalUsdCents: number }> {
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  let monthUsdCents = 0;
+  let totalUsdCents = 0;
+  let hasMore = true;
+  let startingAfter: string | undefined;
+
+  while (hasMore) {
+    const sessions = await stripe.checkout.sessions.list({
+      status: 'complete',
+      limit: 100,
+      ...(startingAfter ? { starting_after: startingAfter } : {}),
+    });
+
+    for (const s of sessions.data) {
+      const meta = (s.metadata || {}) as Record<string, string>;
+      if (meta.type !== 'credit_topup') continue;
+
+      const amountCents = s.amount_total ?? 0;
+      const currency = (s.currency || 'usd').toLowerCase();
+      // Stripe amounts are in smallest unit (cents for USD)
+      const usdCents = currency === 'usd' ? amountCents : Math.round(amountCents * 0.01); // rough fallback for non-USD
+      totalUsdCents += usdCents;
+
+      const created = s.created ? new Date(s.created * 1000) : null;
+      if (created && created >= monthStart) {
+        monthUsdCents += usdCents;
+      }
+    }
+
+    hasMore = sessions.has_more && sessions.data.length > 0;
+    if (sessions.data.length > 0) {
+      startingAfter = sessions.data[sessions.data.length - 1].id;
+    }
+  }
+
+  return { monthUsdCents, totalUsdCents };
+}
+
 export { stripe };

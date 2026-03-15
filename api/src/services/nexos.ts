@@ -493,6 +493,28 @@ async function findUserKey(userId: string) {
 }
 
 /**
+ * Fetch total API usage across all OpenRouter keys (USD).
+ * Used for admin financials to show real AI cost from OpenRouter.
+ */
+export async function fetchOpenRouterTotalUsage(): Promise<number> {
+  if (!OPENROUTER_MGMT_KEY) return 0;
+  try {
+    const listRes = await fetch(`${OPENROUTER_BASE}/keys`, {
+      headers: { 'Authorization': `Bearer ${OPENROUTER_MGMT_KEY}` },
+    });
+    if (!listRes.ok) return 0;
+
+    const listData = (await listRes.json()) as ListKeysResponse;
+    const keys = listData.data || [];
+    const total = keys.reduce((sum, k) => sum + (k.usage_monthly ?? k.usage ?? 0), 0);
+    return Math.round(total * 100) / 100; // USD, 2 decimals
+  } catch (err) {
+    console.error('[openrouter] fetchOpenRouterTotalUsage failed:', err);
+    return 0;
+  }
+}
+
+/**
  * Grant one billing cycle's worth of credits by bumping the OpenRouter key limit.
  * Called on each successful Stripe subscription invoice payment.
  *

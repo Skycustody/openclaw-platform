@@ -101,6 +101,23 @@ interface RevenueData {
   signupsByMonth: Array<{ month: string; signups: string; paid: string; paying_active: string }>;
 }
 
+interface FinancialsData {
+  currency: string;
+  main: { totalRevenueUsdCents: number; totalProfitUsdCents: number; totalAiCostUsdCents: number };
+  subscriptions: { revenueUsdCents: number; aiCostUsdCents: number; vpsCostUsdCents: number };
+  credits: {
+    revenueUsdCents: number;
+    monthRevenueUsdCents: number;
+    costUsdCents: number;
+    monthCostUsdCents: number;
+    profitUsdCents: number;
+    monthProfitUsdCents: number;
+    fromStripe: boolean;
+  };
+  vps: { costUsdCents: number; serverCount: number; costPerServerUsdCents: number };
+  openRouterUsageUsdCents: number;
+}
+
 interface ServerInfo {
   id: string; ip: string; hostname: string; ram_total: number;
   ram_used: number; status: string; user_count: number;
@@ -163,6 +180,7 @@ export default function AdminPanel() {
   const [tab, setTab] = useState<Tab>('overview');
   const [overview, setOverview] = useState<Overview | null>(null);
   const [revenueData, setRevenueData] = useState<RevenueData | null>(null);
+  const [financialsData, setFinancialsData] = useState<FinancialsData | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [userTotal, setUserTotal] = useState(0);
   const [userPage, setUserPage] = useState(0);
@@ -235,6 +253,16 @@ export default function AdminPanel() {
     }
   }, []);
 
+  const fetchFinancials = useCallback(async () => {
+    try {
+      const data = await api.get<FinancialsData>('/admin/financials');
+      setFinancialsData(data);
+    } catch (err: any) {
+      console.error('[admin] fetchFinancials failed:', err.message);
+      showMsg('error', `Failed to load financials: ${err.message}`);
+    }
+  }, []);
+
   const fetchServers = useCallback(async () => {
     try {
       const data = await api.get<{ servers: ServerInfo[] }>('/admin/servers');
@@ -257,13 +285,13 @@ export default function AdminPanel() {
   useEffect(() => {
     if (authState !== 'authed') return;
     setLoading(true);
-    Promise.all([fetchOverview(), fetchUsers(), fetchRevenue(), fetchServers(), fetchFeedback()])
+    Promise.all([fetchOverview(), fetchUsers(), fetchRevenue(), fetchFinancials(), fetchServers(), fetchFeedback()])
       .finally(() => setLoading(false));
-  }, [authState, fetchOverview, fetchUsers, fetchRevenue, fetchServers, fetchFeedback]);
+  }, [authState, fetchOverview, fetchUsers, fetchRevenue, fetchFinancials, fetchServers, fetchFeedback]);
 
   const refresh = async () => {
     setRefreshing(true);
-    await Promise.all([fetchOverview(), fetchUsers(userPage, userSearch, userFilter), fetchRevenue(), fetchServers(), fetchFeedback()]);
+    await Promise.all([fetchOverview(), fetchUsers(userPage, userSearch, userFilter), fetchRevenue(), fetchFinancials(), fetchServers(), fetchFeedback()]);
     setRefreshing(false);
   };
 
@@ -795,18 +823,52 @@ export default function AdminPanel() {
 
         {tab === 'revenue' && revenueData && (
           <div className="space-y-6">
-            <div className="grid grid-cols-4 gap-4">
-              <StatCard icon={DollarSign} label="Total Revenue" value={formatUsd(revenueData.totalRevenueUsdCents)}
-                sub="Subscriptions/month" color="green" />
-              <StatCard icon={HardDrive} label="Server Costs" value={formatUsd(revenueData.totalServerCostUsdCents)}
-                sub={`${revenueData.serverCount} server × ${formatUsd(revenueData.serverCostGrossPerMonth)} (incl. ${Math.round(revenueData.vatRate * 100)}% VAT)`} color="red" />
-              <StatCard icon={Coins} label="AI Costs" value={formatUsd(revenueData.totalNexosCostUsdCents)}
-                sub="OpenRouter budget" color="amber" />
-              <StatCard icon={TrendingUp} label="Net Profit"
-                value={formatUsd(revenueData.totalProfitUsdCents)}
-                sub={`${revenueData.profitMarginPercent}% margin (target: ${revenueData.profitMarginTarget}%)`}
-                color={revenueData.totalProfitUsdCents >= 0 ? 'green' : 'red'} />
-            </div>
+            {/* Main: General Revenue & Profit */}
+            {financialsData && (
+              <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
+                <h3 className="text-[14px] font-semibold text-white mb-4">Overview</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <StatCard icon={DollarSign} label="Total Revenue" value={formatUsd(financialsData.main.totalRevenueUsdCents)}
+                    sub="Subscriptions + Credits" color="green" />
+                  <StatCard icon={TrendingUp} label="Total Profit"
+                    value={formatUsd(financialsData.main.totalProfitUsdCents)}
+                    sub={`AI cost: ${formatUsd(financialsData.main.totalAiCostUsdCents)} (OpenRouter)`}
+                    color={financialsData.main.totalProfitUsdCents >= 0 ? 'green' : 'red'} />
+                </div>
+              </div>
+            )}
+
+            {/* Credits: Revenue & Profit from Stripe */}
+            {financialsData && (
+              <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
+                <h3 className="text-[14px] font-semibold text-white mb-4">Credits {financialsData.credits.fromStripe && <span className="text-[11px] text-green-400/70 font-normal">(from Stripe)</span>}</h3>
+                <div className="grid grid-cols-3 gap-4">
+                  <StatCard icon={DollarSign} label="Credit Revenue" value={formatUsd(financialsData.credits.revenueUsdCents)}
+                    sub={`${formatUsd(financialsData.credits.monthRevenueUsdCents)} this month`} color="green" />
+                  <StatCard icon={Coins} label="Credit Cost" value={formatUsd(financialsData.credits.costUsdCents)}
+                    sub="API budget given to users" color="amber" />
+                  <StatCard icon={TrendingUp} label="Credit Profit"
+                    value={formatUsd(financialsData.credits.profitUsdCents)}
+                    sub={`${formatUsd(financialsData.credits.monthProfitUsdCents)} this month`}
+                    color={financialsData.credits.profitUsdCents >= 0 ? 'green' : 'red'} />
+                </div>
+              </div>
+            )}
+
+            {/* Subscriptions: Revenue, AI Cost, VPS Cost */}
+            {financialsData && (
+              <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
+                <h3 className="text-[14px] font-semibold text-white mb-4">Subscriptions</h3>
+                <div className="grid grid-cols-3 gap-4">
+                  <StatCard icon={DollarSign} label="Subscription Revenue" value={formatUsd(financialsData.subscriptions.revenueUsdCents)}
+                    sub="Monthly recurring" color="green" />
+                  <StatCard icon={Coins} label="AI Cost (Subscriptions)" value={formatUsd(financialsData.subscriptions.aiCostUsdCents)}
+                    sub="Plan allocation (OpenRouter)" color="amber" />
+                  <StatCard icon={HardDrive} label="VPS Cost" value={formatUsd(financialsData.subscriptions.vpsCostUsdCents)}
+                    sub={`${financialsData.vps.serverCount} server${financialsData.vps.serverCount !== 1 ? 's' : ''}`} color="red" />
+                </div>
+              </div>
+            )}
 
             <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
               <h3 className="text-[14px] font-semibold text-white mb-4">Revenue by Plan (USD/month)</h3>
