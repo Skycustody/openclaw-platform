@@ -12,7 +12,8 @@
     "migrate:credits-50": "tsx scripts/migrate_credits_69_to_50.ts",
     "debug:credits": "tsx scripts/debug_user_credits.ts",
     "fix:remove-manual": "tsx scripts/remove_manual_credit_and_fix.ts",
-    "sync:plan-limits": "tsx scripts/sync_all_plan_limits.ts"
+    "sync:plan-limits": "tsx scripts/sync_all_plan_limits.ts",
+    "fix:key-by-name": "tsx scripts/fix_key_by_name.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
