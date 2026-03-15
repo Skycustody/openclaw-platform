@@ -9,15 +9,10 @@
  *   npx tsx scripts/migrate_credits_69_to_50.ts [--dry-run]
  *
  * Prerequisites:
- *   - OPENROUTER_MGMT_KEY must be set in .env
+ *   - DATABASE_URL, OPENROUTER_MGMT_KEY in .env
  *   - Run from api/ directory
  */
-import path from 'path';
-import { config } from 'dotenv';
-
-config({ path: path.join(process.cwd(), '.env') });
-config({ path: path.join(process.cwd(), '..', '.env') });
-
+import '../src/loadEnv';
 import db from '../src/lib/db';
 
 const DRY_RUN = process.argv.includes('--dry-run');
