@@ -7,7 +7,7 @@ import { provisionUser } from '../services/provisioning';
 import { User, PLAN_LIMITS, PROFIT_MARGIN_TARGET } from '../types';
 import { sshExec } from '../services/ssh';
 import { injectApiKeys } from '../services/apiKeys';
-import { ensureNexosKey, RETAIL_MARKUP, AVG_COST_PER_1M_USD, fetchOpenRouterTotalUsage } from '../services/nexos';
+import { ensureNexosKey, RETAIL_MARKUP, AVG_COST_PER_1M_USD, fetchOpenRouterTotalUsage, getNexosUsage } from '../services/nexos';
 import { fetchCreditRevenueFromStripe } from '../services/stripe';
 import { updateImageOnAllWorkers } from '../services/dockerImage';
 
@@ -485,11 +485,11 @@ router.get('/users/:userId', async (req: AuthRequest, res: Response, next: NextF
   try {
     const { userId } = req.params;
     if (!validateUuid(userId)) return res.status(400).json({ error: 'Invalid user ID format' });
-    const [user, tokens, activity, transactions] = await Promise.all([
+    const [user, tokens, activity, transactions, creditPurchases, nexosUsage] = await Promise.all([
       db.getOne<any>(
         `SELECT u.id, u.email, u.display_name, u.plan, u.status, u.subdomain,
                 u.container_name, u.server_id, u.stripe_customer_id, u.referral_code,
-                u.is_admin, u.created_at, u.last_active,
+                u.is_admin, u.created_at, u.last_active, u.api_budget_addon_usd,
                 s.ip as server_ip, s.hostname as server_hostname
          FROM users u
          LEFT JOIN servers s ON s.id = u.server_id
@@ -508,10 +508,27 @@ router.get('/users/:userId', async (req: AuthRequest, res: Response, next: NextF
         'SELECT * FROM token_transactions WHERE user_id = $1 ORDER BY created_at DESC LIMIT 20',
         [userId]
       ),
+      db.getMany<any>(
+        'SELECT id, amount_eur_cents, credits_usd, stripe_session_id, created_at FROM credit_purchases WHERE user_id = $1 ORDER BY created_at DESC',
+        [userId]
+      ),
+      getNexosUsage(userId),
     ]);
 
     if (!user) return res.status(404).json({ error: 'User not found' });
-    res.json({ user, tokens, activity, transactions });
+    res.json({
+      user,
+      tokens,
+      activity,
+      transactions,
+      creditPurchases: creditPurchases || [],
+      nexosUsage: nexosUsage ? {
+        usedUsd: nexosUsage.usedUsd,
+        remainingUsd: nexosUsage.remainingUsd,
+        limitUsd: nexosUsage.limitUsd,
+        displayAmountBought: nexosUsage.displayAmountBought,
+      } : null,
+    });
   } catch (err) {
     next(err);
   }

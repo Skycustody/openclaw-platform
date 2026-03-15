@@ -6,7 +6,7 @@ import {
   Users, Server, Coins, TrendingUp, Activity, Search,
   Shield, Loader2, RefreshCw, AlertTriangle, Edit3,
   BarChart3, Zap, HardDrive, LogOut, ChevronLeft, ChevronRight,
-  DollarSign, MessageSquare, Star,
+  DollarSign, MessageSquare, Star, X,
 } from 'lucide-react';
 
 interface PlanDetail {
@@ -139,6 +139,32 @@ interface FeedbackEntry {
   created_at: string;
 }
 
+interface UserDetail {
+  user: {
+    id: string;
+    email: string;
+    display_name: string | null;
+    plan: string;
+    status: string;
+    subdomain: string | null;
+    container_name: string | null;
+    server_id: string | null;
+    stripe_customer_id: string | null;
+    referral_code: string | null;
+    is_admin: boolean;
+    created_at: string;
+    last_active: string | null;
+    api_budget_addon_usd?: number;
+    server_ip: string | null;
+    server_hostname: string | null;
+  };
+  tokens: { balance: number; total_used: number; total_purchased: number } | null;
+  activity: Array<Record<string, unknown>>;
+  transactions: Array<Record<string, unknown>>;
+  creditPurchases: Array<{ id: string; amount_eur_cents: number; credits_usd: number; stripe_session_id: string | null; created_at: string }>;
+  nexosUsage: { usedUsd: number; remainingUsd: number; limitUsd: number; displayAmountBought: number } | null;
+}
+
 const STATUS_COLORS: Record<string, string> = {
   active: 'text-green-400 bg-green-500/10',
   sleeping: 'text-blue-400 bg-blue-500/10',
@@ -195,6 +221,9 @@ export default function AdminPanel() {
   const [saving, setSaving] = useState(false);
   const [actionMsg, setActionMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [feedbackList, setFeedbackList] = useState<FeedbackEntry[]>([]);
+  const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
+  const [userDetail, setUserDetail] = useState<UserDetail | null>(null);
+  const [userDetailLoading, setUserDetailLoading] = useState(false);
 
   const showMsg = (type: 'success' | 'error', text: string) => {
     setActionMsg({ type, text });
@@ -301,7 +330,8 @@ export default function AdminPanel() {
     fetchUsers(0, userSearch, userFilter);
   };
 
-  const openEdit = (u: AdminUser) => {
+  const openEdit = (e: React.MouseEvent, u: AdminUser) => {
+    e.stopPropagation();
     setEditUser(u);
     setEditForm({
       plan: u.plan,
@@ -309,6 +339,21 @@ export default function AdminPanel() {
       is_admin: u.is_admin,
       credit_balance: String(u.credit_balance ?? 0),
     });
+  };
+
+  const openUserDetail = async (u: AdminUser) => {
+    setSelectedUser(u);
+    setUserDetail(null);
+    setUserDetailLoading(true);
+    try {
+      const data = await api.get<UserDetail>(`/admin/users/${u.id}`);
+      setUserDetail(data);
+    } catch (err: unknown) {
+      showMsg('error', err instanceof Error ? err.message : 'Failed to load user');
+      setSelectedUser(null);
+    } finally {
+      setUserDetailLoading(false);
+    }
   };
 
   const saveEdit = async () => {
@@ -739,7 +784,9 @@ export default function AdminPanel() {
                 <tbody>
                   {users.map(u => {
                     return (
-                      <tr key={u.id} className="border-b border-white/[0.04] hover:bg-white/[0.02] transition-colors">
+                      <tr key={u.id}
+                        onClick={() => openUserDetail(u)}
+                        className="border-b border-white/[0.04] hover:bg-white/[0.06] transition-colors cursor-pointer">
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
                             <div className="h-7 w-7 rounded-full bg-white/5 flex items-center justify-center text-[11px] text-white/30 font-medium shrink-0">
@@ -782,13 +829,13 @@ export default function AdminPanel() {
                         <td className="px-4 py-3 text-right">
                           <div className="flex items-center justify-end gap-1">
                             {(u.status === 'provisioning' || u.status === 'paused') && (
-                              <button onClick={() => handleReprovision(u.id)}
+                              <button onClick={e => { e.stopPropagation(); handleReprovision(u.id); }}
                                 title="Re-provision"
                                 className="p-1.5 rounded-lg text-amber-400/40 hover:text-amber-400 hover:bg-amber-400/10 transition-all">
                                 <Zap className="h-3.5 w-3.5" />
                               </button>
                             )}
-                            <button onClick={() => openEdit(u)}
+                            <button onClick={e => openEdit(e, u)}
                               title="Edit user"
                               className="p-1.5 rounded-lg text-white/20 hover:text-white/50 hover:bg-white/[0.06] transition-all">
                               <Edit3 className="h-3.5 w-3.5" />
@@ -1135,6 +1182,107 @@ export default function AdminPanel() {
           </div>
         )}
       </div>
+
+      {selectedUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setSelectedUser(null)}>
+          <div className="rounded-2xl border border-white/[0.08] bg-[#111] w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.06]">
+              <h3 className="text-[16px] font-semibold text-white">
+                {selectedUser.email}
+                {selectedUser.is_admin && <Shield className="inline h-3.5 w-3.5 text-red-400/60 ml-1.5" />}
+              </h3>
+              <button onClick={() => setSelectedUser(null)}
+                className="p-2 rounded-lg text-white/30 hover:text-white/60 hover:bg-white/[0.06] transition-all">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {userDetailLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-white/30" />
+                </div>
+              ) : userDetail ? (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-[11px] text-white/30 uppercase tracking-wider mb-1">Plan</p>
+                      <p className="text-[13px] text-white capitalize">{userDetail.user.plan}</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] text-white/30 uppercase tracking-wider mb-1">Status</p>
+                      <span className={`text-[12px] px-2 py-0.5 rounded-full ${STATUS_COLORS[userDetail.user.status] || 'text-white/30 bg-white/5'}`}>
+                        {userDetail.user.status}
+                      </span>
+                    </div>
+                    <div>
+                      <p className="text-[11px] text-white/30 uppercase tracking-wider mb-1">Subdomain</p>
+                      <p className="text-[13px] text-white/70">{userDetail.user.subdomain || '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] text-white/30 uppercase tracking-wider mb-1">Server</p>
+                      <p className="text-[13px] text-white/70">{userDetail.user.server_hostname || userDetail.user.server_ip || '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] text-white/30 uppercase tracking-wider mb-1">Joined</p>
+                      <p className="text-[13px] text-white/70">{new Date(userDetail.user.created_at).toLocaleDateString()}</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] text-white/30 uppercase tracking-wider mb-1">Last active</p>
+                      <p className="text-[13px] text-white/70">{userDetail.user.last_active ? timeAgo(userDetail.user.last_active) : '—'}</p>
+                    </div>
+                  </div>
+
+                  {userDetail.nexosUsage && (
+                    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                      <h4 className="text-[13px] font-medium text-white mb-3">API Spend (OpenRouter)</h4>
+                      <div className="grid grid-cols-3 gap-4">
+                        <div>
+                          <p className="text-[11px] text-white/30">Used</p>
+                          <p className="text-[15px] font-semibold text-amber-400 tabular-nums">${userDetail.nexosUsage.usedUsd.toFixed(2)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] text-white/30">Remaining</p>
+                          <p className="text-[15px] font-semibold text-green-400 tabular-nums">${userDetail.nexosUsage.remainingUsd.toFixed(2)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] text-white/30">Limit</p>
+                          <p className="text-[15px] font-semibold text-white tabular-nums">${userDetail.nexosUsage.limitUsd.toFixed(2)}</p>
+                        </div>
+                      </div>
+                      {userDetail.nexosUsage.displayAmountBought > 0 && (
+                        <p className="text-[11px] text-white/30 mt-2">Credit top-ups: ${userDetail.nexosUsage.displayAmountBought.toFixed(2)}</p>
+                      )}
+                    </div>
+                  )}
+
+                  {userDetail.creditPurchases && userDetail.creditPurchases.length > 0 && (
+                    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                      <h4 className="text-[13px] font-medium text-white mb-3">Credit purchases</h4>
+                      <div className="space-y-2 max-h-40 overflow-y-auto">
+                        {userDetail.creditPurchases.map(cp => (
+                          <div key={cp.id} className="flex justify-between items-center text-[12px] py-1.5 border-b border-white/[0.04] last:border-0">
+                            <span className="text-white/50">{new Date(cp.created_at).toLocaleDateString()}</span>
+                            <span className="text-green-400 tabular-nums">+${cp.credits_usd.toFixed(2)} API</span>
+                            <span className="text-white/30">${(cp.amount_eur_cents / 100).toFixed(2)} paid</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex justify-end">
+                    <button onClick={e => openEdit(e, selectedUser)}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/10 text-[13px] text-white hover:bg-white/15 transition-all">
+                      <Edit3 className="h-3.5 w-3.5" />
+                      Edit user
+                    </button>
+                  </div>
+                </>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      )}
 
       {editUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setEditUser(null)}>

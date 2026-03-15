@@ -307,21 +307,15 @@ export async function getNexosUsage(userId: string): Promise<OpenRouterUsage | n
         const realLimit = userKey.limit ?? 0;
         const realRemaining = Math.max(0, realLimit - realUsage);
 
-        // The cycle budget is the actual API spend limit for the current billing cycle
-        const addonOrBudget = await db.getOne<{ total: string }>(
-          'SELECT COALESCE(api_budget_addon_usd, 0)::text as total FROM users WHERE id = $1',
-          [userId]
-        );
-        const addonBudget = parseFloat(addonOrBudget?.total || '0');
-        const cycleBudget = planSpendLimit + addonBudget;
-
         let usedUsd: number;
         let remainingUsd: number;
         let limitUsd: number;
 
-        if (cycleBudget > 0) {
-          // Scale real API remaining to display amount
-          const ratio = Math.min(1, realRemaining / cycleBudget);
+        // Use realLimit for ratio — OpenRouter is source of truth. cycleBudget (plan+addon) may be stale.
+        const ratioDenom = realLimit > 0 ? realLimit : planSpendLimit + parseFloat((await db.getOne<{ total: string }>('SELECT COALESCE(api_budget_addon_usd, 0)::text as total FROM users WHERE id = $1', [userId]))?.total || '0');
+
+        if (ratioDenom > 0) {
+          const ratio = Math.min(1, realRemaining / ratioDenom);
           remainingUsd = Math.round(totalDisplay * ratio * 100) / 100;
           usedUsd = Math.round((totalDisplay - remainingUsd) * 100) / 100;
           limitUsd = Math.round(totalDisplay * 100) / 100;

@@ -173,10 +173,20 @@ async function handleCheckoutComplete(session: Stripe.Checkout.Session): Promise
   }
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 async function handleCreditPurchase(session: Stripe.Checkout.Session): Promise<void> {
   const { userId, pack } = session.metadata || {};
   if (!userId || !pack) {
     console.warn('[stripe] Credit webhook missing userId or pack in metadata');
+    return;
+  }
+  if (!UUID_RE.test(userId)) {
+    console.error('[stripe] Credit webhook invalid userId format — rejecting');
+    return;
+  }
+  if (session.payment_status !== 'paid') {
+    console.warn('[stripe] Credit webhook session not paid — skipping');
     return;
   }
 
