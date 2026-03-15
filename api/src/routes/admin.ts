@@ -325,7 +325,7 @@ router.get('/financials', async (_req: AuthRequest, res: Response, next: NextFun
           COALESCE(SUM(credits_usd), 0)::text as total_credits_usd
         FROM credit_purchases
       `).catch(() => ({ month_revenue: '0', total_revenue: '0', month_credits_usd: '0', total_credits_usd: '0' })),
-      db.getOne<any>(`
+      db.getMany<any>(`
         SELECT plan, COUNT(*) as count
         FROM users WHERE stripe_customer_id IS NOT NULL
           AND status NOT IN ('cancelled', 'pending')
