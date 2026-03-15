@@ -10,7 +10,8 @@
     "set-admin": "tsx scripts/set-admin-user.ts",
     "stripe:copy-to-live": "tsx scripts/stripe-copy-to-live.ts",
     "migrate:credits-50": "tsx scripts/migrate_credits_69_to_50.ts",
-    "debug:credits": "tsx scripts/debug_user_credits.ts"
+    "debug:credits": "tsx scripts/debug_user_credits.ts",
+    "fix:remove-manual": "tsx scripts/remove_manual_credit_and_fix.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
