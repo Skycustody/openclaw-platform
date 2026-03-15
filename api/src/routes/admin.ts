@@ -357,17 +357,28 @@ router.get('/financials', async (_req: AuthRequest, res: Response, next: NextFun
 
     const creditRevenueMonth = stripeCredits.monthUsdCents || parseInt(creditDb?.month_revenue ?? '0');
     const creditRevenueTotal = stripeCredits.totalUsdCents || parseInt(creditDb?.total_revenue ?? '0');
-    // Cost = API budget given to users (credits_usd) + 25% VAT
-    const creditCostBaseMonth = parseFloat(creditDb?.month_credits_usd ?? '0') * 100;
-    const creditCostBaseTotal = parseFloat(creditDb?.total_credits_usd ?? '0') * 100;
-    const creditCostMonth = Math.round(creditCostBaseMonth * 1.25);
-    const creditCostTotal = Math.round(creditCostBaseTotal * 1.25);
+    const creditCostBaseMonth = Math.round(parseFloat(creditDb?.month_credits_usd ?? '0') * 100);
+    const creditCostBaseTotal = Math.round(parseFloat(creditDb?.total_credits_usd ?? '0') * 100);
+    // OpenRouter service fee = 6% of revenue; VAT on cost = 25% of credits_usd
+    const OPENROUTER_FEE_RATE = 0.06;
+    const VAT_RATE = 0.25;
+    const openRouterFeeMonth = Math.round(creditRevenueMonth * OPENROUTER_FEE_RATE);
+    const openRouterFeeTotal = Math.round(creditRevenueTotal * OPENROUTER_FEE_RATE);
+    const vatCostMonth = Math.round(creditCostBaseMonth * VAT_RATE);
+    const vatCostTotal = Math.round(creditCostBaseTotal * VAT_RATE);
+    const creditCostMonth = creditCostBaseMonth + vatCostMonth + openRouterFeeMonth;
+    const creditCostTotal = creditCostBaseTotal + vatCostTotal + openRouterFeeTotal;
 
     const credits = {
       revenueUsdCents: creditRevenueTotal,
       monthRevenueUsdCents: creditRevenueMonth,
       costUsdCents: creditCostTotal,
       monthCostUsdCents: creditCostMonth,
+      costBreakdown: {
+        creditsBaseUsdCents: creditCostBaseTotal,
+        vatUsdCents: vatCostTotal,
+        openRouterFeeUsdCents: openRouterFeeTotal,
+      },
       profitUsdCents: creditRevenueTotal - creditCostTotal,
       monthProfitUsdCents: creditRevenueMonth - creditCostMonth,
       fromStripe: stripeCredits.totalUsdCents > 0,
