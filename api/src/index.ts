@@ -20,14 +20,7 @@ process.on('unhandledRejection', (reason) => {
   process.exit(1);
 });
 
-import path from 'path';
-import { config } from 'dotenv';
-
-// Load .env: try project root (openclaw-platform/.env) then api/.env
-const rootEnv = path.join(__dirname, '..', '..', '.env');
-const apiEnv = path.join(__dirname, '..', '.env');
-config({ path: rootEnv });
-config({ path: apiEnv }); // api/.env can override (e.g. when only api is deployed)
+import './loadEnv'; // Must run before any import that pulls in auth (JWT_SECRET check)
 
 const sshKey = process.env.SSH_PRIVATE_KEY;
 const sshKeyPath = process.env.SSH_PRIVATE_KEY_PATH?.trim();
