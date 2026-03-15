@@ -846,7 +846,7 @@ export default function AdminPanel() {
                   <StatCard icon={DollarSign} label="Credit Revenue" value={formatUsd(financialsData.credits.revenueUsdCents)}
                     sub={`${formatUsd(financialsData.credits.monthRevenueUsdCents)} this month`} color="green" />
                   <StatCard icon={Coins} label="Credit Cost" value={formatUsd(financialsData.credits.costUsdCents)}
-                    sub="Credits cost + 6% OpenRouter service fee" color="amber" />
+                    sub="Credits + 6% OpenRouter fee + 25% VAT" color="amber" />
                   <StatCard icon={TrendingUp} label="Credit Profit"
                     value={formatUsd(financialsData.credits.profitUsdCents)}
                     sub={`${formatUsd(financialsData.credits.monthProfitUsdCents)} this month`}
