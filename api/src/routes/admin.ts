@@ -359,15 +359,12 @@ router.get('/financials', async (_req: AuthRequest, res: Response, next: NextFun
     const creditRevenueTotal = stripeCredits.totalUsdCents || parseInt(creditDb?.total_revenue ?? '0');
     const creditCostBaseMonth = Math.round(parseFloat(creditDb?.month_credits_usd ?? '0') * 100);
     const creditCostBaseTotal = Math.round(parseFloat(creditDb?.total_credits_usd ?? '0') * 100);
-    // OpenRouter service fee = 6% of revenue; VAT on cost = 25% of credits_usd
+    // Revenue = what user pays; cost = credits_usd + OpenRouter service fee (6%)
     const OPENROUTER_FEE_RATE = 0.06;
-    const VAT_RATE = 0.25;
     const openRouterFeeMonth = Math.round(creditRevenueMonth * OPENROUTER_FEE_RATE);
     const openRouterFeeTotal = Math.round(creditRevenueTotal * OPENROUTER_FEE_RATE);
-    const vatCostMonth = Math.round(creditCostBaseMonth * VAT_RATE);
-    const vatCostTotal = Math.round(creditCostBaseTotal * VAT_RATE);
-    const creditCostMonth = creditCostBaseMonth + vatCostMonth + openRouterFeeMonth;
-    const creditCostTotal = creditCostBaseTotal + vatCostTotal + openRouterFeeTotal;
+    const creditCostMonth = creditCostBaseMonth + openRouterFeeMonth;
+    const creditCostTotal = creditCostBaseTotal + openRouterFeeTotal;
 
     const credits = {
       revenueUsdCents: creditRevenueTotal,
@@ -376,7 +373,6 @@ router.get('/financials', async (_req: AuthRequest, res: Response, next: NextFun
       monthCostUsdCents: creditCostMonth,
       costBreakdown: {
         creditsBaseUsdCents: creditCostBaseTotal,
-        vatUsdCents: vatCostTotal,
         openRouterFeeUsdCents: openRouterFeeTotal,
       },
       profitUsdCents: creditRevenueTotal - creditCostTotal,
