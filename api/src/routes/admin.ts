@@ -357,11 +357,12 @@ router.get('/financials', async (_req: AuthRequest, res: Response, next: NextFun
 
     const creditRevenueMonth = stripeCredits.monthUsdCents || parseInt(creditDb?.month_revenue ?? '0');
     const creditRevenueTotal = stripeCredits.totalUsdCents || parseInt(creditDb?.total_revenue ?? '0');
-    const creditCostBaseMonth = Math.round(parseFloat(creditDb?.month_credits_usd ?? '0') * 100);
-    const creditCostBaseTotal = Math.round(parseFloat(creditDb?.total_credits_usd ?? '0') * 100);
-    // Cost = credits_usd (50%) + OpenRouter fee (6%) + VAT. Users pay flat price; we absorb VAT from our profit.
+    // Cost derived from revenue (50% credits + 6% OR + VAT). DB credits_usd can be stale (old 69%).
+    const USER_CREDIT_RATE = 0.50;
     const OPENROUTER_FEE_RATE = 0.06;
     const VAT_RATE = parseFloat(process.env.CREDIT_VAT_RATE || '0.203');
+    const creditCostBaseMonth = Math.round(creditRevenueMonth * USER_CREDIT_RATE);
+    const creditCostBaseTotal = Math.round(creditRevenueTotal * USER_CREDIT_RATE);
     const openRouterFeeMonth = Math.round(creditRevenueMonth * OPENROUTER_FEE_RATE);
     const openRouterFeeTotal = Math.round(creditRevenueTotal * OPENROUTER_FEE_RATE);
     const vatCostMonth = Math.round(creditRevenueMonth * VAT_RATE);
