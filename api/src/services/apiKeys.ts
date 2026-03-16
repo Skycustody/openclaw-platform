@@ -147,6 +147,8 @@ export async function injectApiKeys(
             { id: 'openai/gpt-4.1-mini', name: 'GPT-4.1 Mini', contextWindow: 1000000, maxTokens: 32768 },
             { id: 'openai/gpt-4.1-nano', name: 'GPT-4.1 Nano', contextWindow: 1000000, maxTokens: 32768 },
             { id: 'openai/o3-mini', name: 'o3-mini', contextWindow: 200000, maxTokens: 65536 },
+            { id: 'openai/gpt-5-image', name: 'GPT-5 Image (image generation)', contextWindow: 400000, maxTokens: 4096 },
+            { id: 'openai/gpt-5-image-mini', name: 'GPT-5 Image Mini (faster, cheaper)', contextWindow: 128000, maxTokens: 4096 },
 
             { id: 'google/gemini-2.5-pro', name: 'Gemini 2.5 Pro', contextWindow: 1000000, maxTokens: 65536 },
             { id: 'google/gemini-2.5-flash', name: 'Gemini 2.5 Flash', contextWindow: 1000000, maxTokens: 65536 },
@@ -207,6 +209,8 @@ export async function injectApiKeys(
             { id: 'openai/gpt-4.1-mini', name: 'GPT-4.1 Mini (latest mini, 1M context)', contextWindow: 1000000, maxTokens: 32768 },
             { id: 'openai/gpt-4.1-nano', name: 'GPT-4.1 Nano (ultra cheap)', contextWindow: 1000000, maxTokens: 32768 },
             { id: 'openai/o3-mini', name: 'o3-mini (reasoning)', contextWindow: 200000, maxTokens: 65536 },
+            { id: 'openai/gpt-5-image', name: 'GPT-5 Image (generate images)', contextWindow: 400000, maxTokens: 4096 },
+            { id: 'openai/gpt-5-image-mini', name: 'GPT-5 Image Mini (faster, cheaper)', contextWindow: 128000, maxTokens: 4096 },
 
             { id: 'google/gemini-2.5-pro', name: 'Gemini 2.5 Pro (strong, 1M context)', contextWindow: 1000000, maxTokens: 65536 },
             { id: 'google/gemini-2.5-flash', name: 'Gemini 2.5 Flash (fast & smart)', contextWindow: 1000000, maxTokens: 65536 },

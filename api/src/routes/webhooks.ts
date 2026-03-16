@@ -189,6 +189,10 @@ const MODEL_ALIASES: Record<string, string> = {
   mistral: 'mistralai/mistral-large-2',
   llama: 'meta-llama/llama-4-maverick',
   qwen: 'qwen/qwen-2.5-coder-32b-instruct',
+  'gpt-5-image': 'openai/gpt-5-image',
+  'gpt5-image': 'openai/gpt-5-image',
+  'gpt-5-image-mini': 'openai/gpt-5-image-mini',
+  'gpt5-image-mini': 'openai/gpt-5-image-mini',
 };
 
 router.post('/container/switch-model', async (req: Request, res: Response, next: NextFunction) => {

@@ -759,6 +759,11 @@ router.post('/v1/chat/completions', async (req: Request, res: Response) => {
 
     body.model = selectedModel;
 
+    // Image generation — OpenRouter requires modalities for image output
+    if (selectedModel?.includes('gpt-5-image')) {
+      body.modalities = ['image', 'text'];
+    }
+
     // ── Inject guardrails ──
     // Short, high-priority rules injected as the last system message so the
     // model sees them right before responding. USER.md rules get lost in long

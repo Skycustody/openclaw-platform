@@ -166,6 +166,22 @@ export const MODEL_MAP: Record<string, ModelCapability> = {
     costPer1MTokens: OPENROUTER_MODEL_COSTS['anthropic/claude-opus-4']?.inputPer1M ?? 15.00,
     maxContext: 200000, speed: 'slower',
   },
+
+  // ── Image generation ──
+  'openai/gpt-5-image': {
+    name: 'openai/gpt-5-image',
+    displayName: 'GPT-5 Image',
+    internet: false, vision: true, deepAnalysis: false,
+    costPer1MTokens: OPENROUTER_MODEL_COSTS['openai/gpt-5-image']?.inputPer1M ?? 10.00,
+    maxContext: 400000, speed: 'fast',
+  },
+  'openai/gpt-5-image-mini': {
+    name: 'openai/gpt-5-image-mini',
+    displayName: 'GPT-5 Image Mini',
+    internet: false, vision: true, deepAnalysis: false,
+    costPer1MTokens: OPENROUTER_MODEL_COSTS['openai/gpt-5-image-mini']?.inputPer1M ?? 5.00,
+    maxContext: 128000, speed: 'very_fast',
+  },
 };
 
 const DEFAULT_COST_PER_1M = 1.00;
@@ -232,6 +248,7 @@ ROUTING RULES (use the right model for the job — smart AND cheap):
 11. Send messages, manage files, schedule tasks → openai/gpt-4o-mini ($0.15)
 12. Extremely complex multi-step tasks needing top-tier quality → anthropic/claude-sonnet-4 ($3.00)
 13. NEVER use anthropic/claude-opus-4 ($15.00) — almost never justified
+14. Generate image, draw, create picture, make illustration, "draw me" → openai/gpt-5-image ($10.00) — image generation
 
 FRUSTRATED / REPEATED USER:
 If the user repeats a previous request, says "I already said", "that's not what I asked", "wrong", "doesn't work", "try again", "still not working", etc. — they are frustrated with the previous model's result. ALWAYS escalate to anthropic/claude-sonnet-4 ($3.00) regardless of task type. Caching makes repeated context cheap. Better to spend more and satisfy the user than fail again on a cheap model.
@@ -309,6 +326,11 @@ function quickClassify(
 
   if (hasImage) {
     return { model: 'google/gemini-2.5-flash', reason: 'Image attached — fast vision model' };
+  }
+
+  // Image generation requests — use GPT-5 Image
+  if (/generate\s+(an?\s+)?image|draw\s+(an?\s+)?(me\s+)?|create\s+(an?\s+)?image|make\s+(an?\s+)?(image|picture|photo)|image\s+of\s|generate\s+a\s+picture|create\s+a\s+drawing|illustrate\s/i.test(lower)) {
+    return { model: 'openai/gpt-5-image', reason: 'Image generation request' };
   }
 
   // OpenClaw heartbeat check-ins — always cheapest model
