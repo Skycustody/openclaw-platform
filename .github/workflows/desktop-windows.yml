@@ -38,15 +38,23 @@ jobs:
       - name: Build Windows installer
         run: npx electron-builder --win --publish never
 
+      - name: List build output
+        run: Get-ChildItem -Path release -Recurse | Format-Table Name, Length
+
       - name: Upload to release
         env:
           GH_TOKEN: ${{ secrets.GH_RELEASE_TOKEN }}
         run: |
-          $exe = Get-ChildItem -Path release -Filter "Valnaa-Setup.*" -Exclude "*.blockmap","*.yaml" | Select-Object -First 1
+          $exe = Get-ChildItem -Path release -Filter "*.exe" | Select-Object -First 1
           if ($exe) {
-            Write-Host "Uploading $($exe.Name) ($([math]::Round($exe.Length / 1MB, 1)) MB)"
-            gh release upload ${{ github.event.inputs.version }} $exe.FullName --repo Skycustody/valnaa-desktop --clobber
+            $targetName = "Valnaa-Setup.exe"
+            $targetPath = Join-Path release $targetName
+            if ($exe.Name -ne $targetName) {
+              Copy-Item $exe.FullName $targetPath
+            }
+            Write-Host "Uploading $targetName ($([math]::Round((Get-Item $targetPath).Length / 1MB, 1)) MB)"
+            gh release upload ${{ github.event.inputs.version }} $targetPath --repo Skycustody/valnaa-desktop --clobber
           } else {
-            Write-Error "No Valnaa-Setup installer found in release/"
+            Write-Error "No .exe installer found in release/"
             exit 1
           }
