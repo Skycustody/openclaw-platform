@@ -22,6 +22,13 @@ jobs:
         with:
           node-version: 22
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python setuptools (needed by node-gyp)
+        run: pip install setuptools
+
       - name: Install dependencies
         run: npm ci || npm install
 
@@ -29,20 +36,15 @@ jobs:
         run: npm run build
 
       - name: Build Windows installer
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npx electron-builder --win --publish never
-
-      - name: List build output
-        run: dir release
-        shell: cmd
 
       - name: Upload to release
         env:
           GH_TOKEN: ${{ secrets.GH_RELEASE_TOKEN }}
         run: |
-          $exe = Get-ChildItem -Path release -Filter "Valnaa-Setup.*" | Select-Object -First 1
+          $exe = Get-ChildItem -Path release -Filter "Valnaa-Setup.*" -Exclude "*.blockmap","*.yaml" | Select-Object -First 1
           if ($exe) {
+            Write-Host "Uploading $($exe.Name) ($([math]::Round($exe.Length / 1MB, 1)) MB)"
             gh release upload ${{ github.event.inputs.version }} $exe.FullName --repo Skycustody/valnaa-desktop --clobber
           } else {
             Write-Error "No Valnaa-Setup installer found in release/"
