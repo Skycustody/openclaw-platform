@@ -24,7 +24,7 @@ import jwt from 'jsonwebtoken';
 import { OAuth2Client } from 'google-auth-library';
 import db from '../lib/db';
 import { generateToken, refreshToken as issueRefreshToken } from '../middleware/auth';
-import { rateLimitAuth } from '../middleware/rateLimit';
+import { rateLimitAuth, rateLimitSignup } from '../middleware/rateLimit';
 import { BadRequestError, UnauthorizedError } from '../lib/errors';
 import { v4 as uuid } from 'uuid';
 import { PLAN_LIMITS, Plan } from '../types';
@@ -58,7 +58,7 @@ export async function grantInitialTokens(userId: string, plan: Plan): Promise<vo
 }
 
 // ── Email + Password Signup ──
-router.post('/signup', rateLimitAuth, async (req: Request, res: Response, next: NextFunction) => {
+router.post('/signup', rateLimitAuth, rateLimitSignup, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { email, password } = req.body;
 
@@ -83,7 +83,8 @@ router.post('/signup', rateLimitAuth, async (req: Request, res: Response, next: 
     const userId = uuid();
 
     await db.query(
-      `INSERT INTO users (id, email, plan, status, password_hash) VALUES ($1, $2, 'starter', 'pending', $3)`,
+      `INSERT INTO users (id, email, plan, status, password_hash, trial_ends_at)
+       VALUES ($1, $2, 'starter', 'pending', $3, NOW() + INTERVAL '3 days')`,
       [userId, email, passwordHash]
     );
 
@@ -194,8 +195,8 @@ router.post('/google', rateLimitAuth, async (req: Request, res: Response, next: 
 
     const userId = uuid();
     await db.query(
-      `INSERT INTO users (id, email, plan, status, google_id, avatar_url, display_name)
-       VALUES ($1, $2, 'starter', 'pending', $3, $4, $5)`,
+      `INSERT INTO users (id, email, plan, status, google_id, avatar_url, display_name, trial_ends_at)
+       VALUES ($1, $2, 'starter', 'pending', $3, $4, $5, NOW() + INTERVAL '3 days')`,
       [userId, email, googleId, picture, name]
     );
 

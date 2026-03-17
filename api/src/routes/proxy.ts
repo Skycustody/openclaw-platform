@@ -654,7 +654,7 @@ router.post('/v1/chat/completions', async (req: Request, res: Response) => {
 
     if (user) touchIfNeeded(user.id);
 
-    const BLOCKED_STATUSES = ['cancelled', 'paused', 'pending'];
+    const BLOCKED_STATUSES = ['cancelled', 'paused', 'trial_expired'];
     if (user && BLOCKED_STATUSES.includes(user.status)) {
       return res.status(402).json({
         error: {
@@ -664,12 +664,13 @@ router.post('/v1/chat/completions', async (req: Request, res: Response) => {
         },
       });
     }
-    // Trial users have 0 credits — block AI calls with upgrade prompt
+    // Trial users on platform key have 0 credits — block with upgrade prompt.
+    // BYOK trial users bypass the proxy entirely (container talks to OpenRouter directly).
     const isInTrial = user?.trial_ends_at && new Date(user.trial_ends_at) > new Date();
     if (user && isInTrial) {
       return res.status(402).json({
         error: {
-          message: 'Your free trial has no AI credits. Upgrade to start chatting.',
+          message: 'Your free trial includes no AI credits. Add your own OpenRouter API key in Settings, or upgrade to a paid plan to start chatting.',
           type: 'billing_error',
           code: 'trial_no_credits',
         },

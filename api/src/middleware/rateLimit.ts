@@ -107,6 +107,14 @@ export function rateLimitSensitive(req: Request, res: Response, next: NextFuncti
     });
 }
 
+const signupLimiter = new RateLimiterRedis({
+  storeClient: redis,
+  keyPrefix: 'rl:signup',
+  points: 1,
+  duration: 86400, // 1 signup per IP per day
+  blockDuration: 3600,
+});
+
 const adminLimiter = new RateLimiterRedis({
   storeClient: redis,
   keyPrefix: 'rl:admin',
@@ -114,6 +122,18 @@ const adminLimiter = new RateLimiterRedis({
   duration: 60,
   blockDuration: 60,
 });
+
+export function rateLimitSignup(req: Request, res: Response, next: NextFunction) {
+  const key = req.ip || 'unknown';
+  signupLimiter
+    .consume(key)
+    .then(() => next())
+    .catch((err) => {
+      if (isRateLimitRejection(err)) {
+        res.status(429).json({ error: { code: 'RATE_LIMIT', message: 'Too many signups from this IP. Please try again later.' } });
+      } else next();
+    });
+}
 
 export function rateLimitAdmin(req: Request, res: Response, next: NextFunction) {
   const key = req.ip || 'unknown';

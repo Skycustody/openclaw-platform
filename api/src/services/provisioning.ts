@@ -41,7 +41,7 @@ import { cloudflareDNS } from './cloudflare';
 import { v4 as uuid } from 'uuid';
 import { buildOpenclawConfig, injectApiKeys } from './apiKeys';
 import { reapplyGatewayConfig, writeContainerConfig } from './containerConfig';
-import { ensureNexosKey } from './nexos';
+import { ensureNexosKey, deleteNexosKey } from './nexos';
 import { preInstallSkills } from './defaultSkills';
 import { ensureDockerImage } from './dockerImage';
 import { UserSettings } from '../types';
@@ -535,6 +535,19 @@ export async function removeTrialContainer(userId: string): Promise<void> {
   } catch (err) {
     console.error('[provision] Trial container removal failed:', err);
   }
+
+  // Clean up DNS records
+  if (user.subdomain) {
+    await Promise.all([
+      cloudflareDNS.deleteRecord(user.subdomain).catch(() => {}),
+      cloudflareDNS.deleteRecord(`preview-${user.subdomain}`).catch(() => {}),
+    ]);
+  }
+
+  // Revoke OpenRouter key (prevents leaked key usage)
+  await deleteNexosKey(userId).catch((err) =>
+    console.warn(`[provision] OpenRouter key cleanup failed for ${userId}:`, err.message)
+  );
 
   const retentionUntil = user.trial_ends_at
     ? new Date(new Date(user.trial_ends_at).getTime() + 30 * 24 * 60 * 60 * 1000)

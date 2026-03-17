@@ -192,10 +192,12 @@ export async function ensureNexosKey(userId: string): Promise<string> {
 async function createOpenRouterKey(userId: string): Promise<string | null> {
   if (!OPENROUTER_MGMT_KEY) return null;
 
-  // Look up user's plan to set the right spending limit
-  const user = await db.getOne<{ plan: string }>('SELECT plan FROM users WHERE id = $1', [userId]);
+  const user = await db.getOne<{ plan: string; stripe_customer_id: string | null; trial_ends_at: Date | null }>(
+    'SELECT plan, stripe_customer_id, trial_ends_at FROM users WHERE id = $1', [userId]
+  );
   const plan = (user?.plan || 'starter') as Plan;
-  const spendLimit = PLAN_SPEND_LIMITS_USD[plan] || PLAN_SPEND_LIMITS_USD.starter;
+  const isTrialUser = !user?.stripe_customer_id && user?.trial_ends_at && new Date(user.trial_ends_at) > new Date();
+  const spendLimit = isTrialUser ? 0 : (PLAN_SPEND_LIMITS_USD[plan] || PLAN_SPEND_LIMITS_USD.starter);
 
   try {
     const res = await fetch(`${OPENROUTER_BASE}/keys`, {

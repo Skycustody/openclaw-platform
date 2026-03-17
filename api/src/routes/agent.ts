@@ -207,6 +207,9 @@ router.get('/status', async (req: AuthRequest, res: Response, next: NextFunction
     const domain = process.env.DOMAIN || 'yourdomain.com';
     const previewUrl = user.subdomain ? `https://preview-${user.subdomain}.${domain}` : null;
 
+    const trialEndsAt = user.trial_ends_at ? new Date(user.trial_ends_at).toISOString() : null;
+    const statusIsInTrial = trialEndsAt && new Date(trialEndsAt) > new Date() && !user.stripe_customer_id;
+
     res.json({
       userId: user.id,
       email: user.email,
@@ -218,6 +221,8 @@ router.get('/status', async (req: AuthRequest, res: Response, next: NextFunction
       createdAt: user.created_at,
       isAdmin: user.is_admin || false,
       hasPaid: !!user.stripe_customer_id,
+      isInTrial: !!statusIsInTrial,
+      trialEndsAt,
       previewUrl,
       stats: {
         messagesToday,
@@ -248,6 +253,9 @@ router.get('/embed-url', requireActiveSubscription, async (req: AuthRequest, res
     }
     if (user.status === 'paused') {
       return res.json({ available: false, reason: 'paused', subscriptionStatus: user.status });
+    }
+    if (user.status === 'trial_expired') {
+      return res.json({ available: false, reason: 'trial_expired', subscriptionStatus: user.status });
     }
 
     const server = user.server_id
@@ -280,7 +288,13 @@ router.post('/open', rateLimitSensitive, async (req: AuthRequest, res: Response,
   try {
     const user = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [req.userId]);
     if (!user) return res.status(404).json({ error: 'User not found' });
-    if (user.status === 'pending') {
+
+    const isInTrial = user.trial_ends_at && new Date(user.trial_ends_at) > new Date();
+
+    if (user.status === 'trial_expired') {
+      return res.status(403).json({ error: 'Your free trial has ended. Upgrade to continue using your agent.' });
+    }
+    if (user.status === 'pending' && !isInTrial) {
       return res.status(403).json({ error: 'Please choose a plan and complete payment first.' });
     }
     if (user.status === 'cancelled') {
@@ -289,8 +303,8 @@ router.post('/open', rateLimitSensitive, async (req: AuthRequest, res: Response,
     if (user.status === 'paused') {
       return res.status(403).json({ error: 'Agent paused — update your subscription or payment to resume.' });
     }
-    if (!user.stripe_customer_id && user.status === 'provisioning') {
-      console.warn(`[agent/open] User ${user.id} in provisioning but no stripe_customer_id — rejecting (no payment)`);
+    if (!user.stripe_customer_id && !isInTrial && user.status === 'provisioning') {
+      console.warn(`[agent/open] User ${user.id} in provisioning but no stripe_customer_id and no trial — rejecting`);
       return res.status(403).json({ error: 'Payment not confirmed. Please complete checkout.' });
     }
 

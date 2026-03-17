@@ -100,6 +100,63 @@ export async function sendFeedbackRequest(email: string): Promise<boolean> {
   }
 }
 
+export async function sendTrialReminder(
+  email: string,
+  daysLeft: number
+): Promise<boolean> {
+  const platformUrl = process.env.PLATFORM_URL || 'https://valnaa.com';
+
+  const subjects: Record<number, string> = {
+    1: 'Your free trial ends tomorrow',
+    0: 'Last day of your free trial',
+    [-1]: 'Your trial ended — your data is saved for 30 days',
+  };
+
+  const bodies: Record<number, string> = {
+    1: `
+      <p>Your Valnaa free trial ends <strong>tomorrow</strong>.</p>
+      <p>Upgrade now to keep your agent running and unlock AI credits:</p>
+    `,
+    0: `
+      <p>Today is the <strong>last day</strong> of your free trial.</p>
+      <p>After today, your agent will be paused — but your data will be saved for 30 days.</p>
+      <p>Upgrade now to keep everything running:</p>
+    `,
+    [-1]: `
+      <p>Your free trial has ended and your agent has been paused.</p>
+      <p>Good news: <strong>your data is saved for 30 days</strong>. Upgrade anytime to pick up right where you left off.</p>
+    `,
+  };
+
+  const subject = subjects[daysLeft] || `Your Valnaa trial update`;
+  const body = bodies[daysLeft] || bodies[0];
+
+  try {
+    await resend.emails.send({
+      from,
+      to: email,
+      subject,
+      html: `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
+          <h1 style="color: #1a1a2e;">${subject}</h1>
+          ${body}
+          <a href="${platformUrl}/pricing"
+             style="display: inline-block; background: #000; color: #fff; padding: 14px 32px; border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 15px; margin: 16px 0;">
+            Upgrade Now
+          </a>
+          <p style="color: #999; font-size: 12px; margin-top: 40px; border-top: 1px solid #eee; padding-top: 16px;">
+            You're receiving this because you signed up for a free trial on Valnaa.
+          </p>
+        </div>
+      `,
+    });
+    return true;
+  } catch (err: any) {
+    console.error(`[email] Failed to send trial reminder to ${email}:`, err.message);
+    return false;
+  }
+}
+
 export async function sendSecurityAlert(
   email: string,
   event: string,
