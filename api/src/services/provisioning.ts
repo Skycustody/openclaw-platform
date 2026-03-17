@@ -514,6 +514,41 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
   }
 }
 
+/**
+ * Remove trial user's container to free VPS RAM. Keeps instance dir for 30 days
+ * so they can restore data if they pay. Called when trial_ends_at passes.
+ */
+export async function removeTrialContainer(userId: string): Promise<void> {
+  validateUserId(userId);
+  const user = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [userId]);
+  if (!user || !user.server_id || !user.container_name) return;
+
+  const server = await db.getOne<any>('SELECT * FROM servers WHERE id = $1', [user.server_id]);
+  if (!server) return;
+
+  const containerName = user.container_name;
+  validateContainerName(containerName);
+
+  try {
+    await sshExec(server.ip, `docker stop ${containerName} 2>/dev/null; docker rm ${containerName} 2>/dev/null || true`);
+    // Do NOT delete /opt/openclaw/instances/${userId} — keep data for 30 days
+  } catch (err) {
+    console.error('[provision] Trial container removal failed:', err);
+  }
+
+  const retentionUntil = user.trial_ends_at
+    ? new Date(new Date(user.trial_ends_at).getTime() + 30 * 24 * 60 * 60 * 1000)
+    : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+  await db.query(
+    `UPDATE users SET status = 'trial_expired', container_name = NULL, trial_data_retention_until = $1 WHERE id = $2`,
+    [retentionUntil, userId]
+  );
+
+  await updateServerRam(server.id);
+  console.log(`[provision] Trial container removed for ${userId}, data retained until ${retentionUntil.toISOString()}`);
+}
+
 export async function deprovisionUser(userId: string): Promise<void> {
   validateUserId(userId);
   const user = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [userId]);
@@ -526,7 +561,7 @@ export async function deprovisionUser(userId: string): Promise<void> {
   validateContainerName(containerName);
 
   try {
-    await sshExec(server.ip, `docker stop ${containerName} && docker rm ${containerName}`);
+    await sshExec(server.ip, `docker stop ${containerName} 2>/dev/null; docker rm ${containerName} 2>/dev/null || true`);
     await sshExec(server.ip, `rm -rf /opt/openclaw/instances/${userId}`);
   } catch (err) {
     console.error('Container cleanup failed:', err);
@@ -540,7 +575,7 @@ export async function deprovisionUser(userId: string): Promise<void> {
   }
 
   await db.query(
-    `UPDATE users SET status = 'cancelled', server_id = NULL, container_name = NULL WHERE id = $1`,
+    `UPDATE users SET status = 'cancelled', server_id = NULL, container_name = NULL, trial_data_retention_until = NULL WHERE id = $1`,
     [userId]
   );
 

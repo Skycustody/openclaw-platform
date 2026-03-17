@@ -145,7 +145,7 @@ async function handleCheckoutComplete(session: Stripe.Checkout.Session): Promise
 
   const stripeCustomerId = session.customer as string;
   await db.query(
-    `UPDATE users SET stripe_customer_id = $1, plan = $2, status = 'provisioning' WHERE id = $3`,
+    `UPDATE users SET stripe_customer_id = $1, plan = $2, status = 'provisioning', trial_data_retention_until = NULL WHERE id = $3`,
     [stripeCustomerId, plan, userId]
   );
 

@@ -79,7 +79,7 @@ export async function requireActiveSubscription(req: AuthRequest, _res: Response
       throw new UnauthorizedError('User not found');
     }
 
-    const allowed = ['active', 'grace_period', 'provisioning', 'starting', 'sleeping', 'paused', 'pending'];
+    const allowed = ['active', 'grace_period', 'provisioning', 'starting', 'sleeping', 'paused', 'pending', 'trial_expired'];
     if (!allowed.includes(user.status)) {
       console.warn(`[auth] Blocked ${req.userId} — status '${user.status}' not in allowed list (${allowed.join(', ')})`);
       const err: any = new Error('Active subscription required');

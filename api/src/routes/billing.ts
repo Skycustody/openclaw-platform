@@ -23,11 +23,18 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
       [req.userId]
     );
 
+    const trialEndsAt = user.trial_ends_at ?? null;
+    const trialDataRetentionUntil = user.trial_data_retention_until ?? null;
+    const isInTrial = trialEndsAt && new Date(trialEndsAt) > new Date();
+
     res.json({
       plan: user.plan,
       status: user.status,
       stripeCustomerId: user.stripe_customer_id,
       creditSpendThisMonth: parseInt(creditSpend?.total || '0'),
+      trialEndsAt: trialEndsAt ? new Date(trialEndsAt).toISOString() : null,
+      trialDataRetentionUntil: trialDataRetentionUntil ? new Date(trialDataRetentionUntil).toISOString() : null,
+      isInTrial,
     });
   } catch (err) {
     next(err);

@@ -292,6 +292,7 @@ interface ProxyUser {
   id: string;
   plan: Plan;
   status: string;
+  trial_ends_at?: Date | null;
   brain_mode?: string;
   manual_model?: string | null;
   routing_preferences?: Record<string, string>;
@@ -314,8 +315,8 @@ async function lookupUser(apiKey: string): Promise<ProxyUser | null> {
   const cached = userCache.get(apiKey);
   if (cached && cached.expires > Date.now()) return cached.user;
 
-  const row = await db.getOne<{ id: string; plan: string; status: string }>(
-    `SELECT u.id, u.plan, u.status FROM users u
+  const row = await db.getOne<{ id: string; plan: string; status: string; trial_ends_at: Date | null }>(
+    `SELECT u.id, u.plan, u.status, u.trial_ends_at FROM users u
      WHERE u.nexos_api_key = $1
      LIMIT 1`,
     [apiKey]
@@ -340,6 +341,7 @@ async function lookupUser(apiKey: string): Promise<ProxyUser | null> {
     id: row.id,
     plan: row.plan as Plan,
     status: row.status,
+    trial_ends_at: row.trial_ends_at,
     brain_mode: settings?.brain_mode || 'auto',
     manual_model: settings?.manual_model || null,
     routing_preferences: prefs,
@@ -659,6 +661,17 @@ router.post('/v1/chat/completions', async (req: Request, res: Response) => {
           message: 'Subscription inactive. Please renew your subscription to continue.',
           type: 'billing_error',
           code: 'subscription_required',
+        },
+      });
+    }
+    // Trial users have 0 credits — block AI calls with upgrade prompt
+    const isInTrial = user?.trial_ends_at && new Date(user.trial_ends_at) > new Date();
+    if (user && isInTrial) {
+      return res.status(402).json({
+        error: {
+          message: 'Your free trial has no AI credits. Upgrade to start chatting.',
+          type: 'billing_error',
+          code: 'trial_no_credits',
         },
       });
     }

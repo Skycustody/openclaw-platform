@@ -3,6 +3,7 @@ import { runSleepCycle } from '../services/sleepWake';
 import { runDueCronJobs } from '../services/cronScheduler';
 import { checkCapacity } from '../services/serverRegistry';
 import { processGracePeriods } from '../services/gracePeriod';
+import { processTrialExpiry } from '../services/trialExpiry';
 import { migrateKeyToNoReset } from '../services/nexos';
 import { sendFeedbackRequest } from '../services/email';
 import db from '../lib/db';
@@ -74,6 +75,17 @@ export function startScheduler() {
     }
   });
 
+  // Trial expiry — daily: remove container on day 4, delete data on day 34
+  cron.schedule('0 4 * * *', async () => {
+    const start = Date.now();
+    try {
+      await processTrialExpiry();
+      console.log(`[scheduler] Trial expiry check completed (${Date.now() - start}ms)`);
+    } catch (err: any) {
+      console.error(`[scheduler] Trial expiry error (${Date.now() - start}ms):`, err.message);
+    }
+  });
+
   // Feedback email — every hour, send to users who paid 24h+ ago and haven't received one
   cron.schedule('0 * * * *', async () => {
     const adminEmail = (process.env.ADMIN_EMAIL || '').toLowerCase();
@@ -102,5 +114,5 @@ export function startScheduler() {
   // One-time migration: convert existing keys from monthly auto-reset to no-reset
   setTimeout(() => migrateExistingKeysOnce(), 10_000);
 
-  console.log('[scheduler] Started: sleep=*/5min, cron=*/1min, capacity=*/10min, grace=*/6h, feedback=*/1h');
+  console.log('[scheduler] Started: sleep=*/5min, cron=*/1min, capacity=*/10min, grace=*/6h, trial=4am daily, feedback=*/1h');
 }

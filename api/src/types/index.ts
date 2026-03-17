@@ -1,5 +1,5 @@
 export type Plan = 'starter' | 'pro' | 'business';
-export type UserStatus = 'pending' | 'provisioning' | 'starting' | 'active' | 'sleeping' | 'paused' | 'cancelled' | 'grace_period';
+export type UserStatus = 'pending' | 'provisioning' | 'starting' | 'active' | 'sleeping' | 'paused' | 'cancelled' | 'grace_period' | 'trial_expired';
 export type ServerStatus = 'active' | 'provisioning' | 'draining' | 'offline';
 /** @deprecated Legacy token type — billing now uses credits */
 export type TokenTransactionType = 'purchase' | 'usage' | 'bonus' | 'refund' | 'subscription_grant' | 'auto_topup';
@@ -24,6 +24,8 @@ export interface User {
   api_proxy_key: string | null;
   nexos_api_key: string | null;
   grace_period_end: Date | null;
+  trial_ends_at: Date | null;
+  trial_data_retention_until: Date | null;
   api_budget_addon_usd: number;
   is_admin: boolean;
   created_at: Date;

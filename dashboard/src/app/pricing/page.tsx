@@ -95,9 +95,9 @@ function PricingContent() {
     (async () => {
       try {
         const overview = await api.get<{ status: string; stripeCustomerId?: string }>('/billing');
-        const statusOk = (DASHBOARD_ALLOWED_STATUSES as readonly string[]).includes(overview?.status);
         const hasPaid = !!overview?.stripeCustomerId;
-        if (statusOk || hasPaid) {
+        // Only redirect if they have a paid subscription — trial users should see pricing to upgrade
+        if (hasPaid) {
           window.location.href = '/dashboard';
         }
       } catch {

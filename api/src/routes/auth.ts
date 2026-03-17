@@ -66,7 +66,7 @@ router.post('/signup', rateLimitAuth, async (req: Request, res: Response, next: 
       throw new BadRequestError('Email and password are required');
     }
 
-    if (typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (typeof email !== 'string' || email.length > 254 || !/^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/.test(email)) {
       throw new BadRequestError('Invalid email format');
     }
     if (typeof password !== 'string' || password.length < 8) {
