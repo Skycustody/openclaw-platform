@@ -1,0 +1,50 @@
+name: Build Desktop (Windows)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version tag (e.g. v0.1.0)'
+        required: true
+        default: 'v0.1.0'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: desktop
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm ci || npm install
+
+      - name: Build TypeScript
+        run: npm run build
+
+      - name: Build Windows installer
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --win --publish never
+
+      - name: List build output
+        run: dir release
+        shell: cmd
+
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ secrets.GH_RELEASE_TOKEN }}
+        run: |
+          $exe = Get-ChildItem -Path release -Filter "Valnaa-Setup.*" | Select-Object -First 1
+          if ($exe) {
+            gh release upload ${{ github.event.inputs.version }} $exe.FullName --repo Skycustody/valnaa-desktop --clobber
+          } else {
+            Write-Error "No Valnaa-Setup installer found in release/"
+            exit 1
+          }
