@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('openclaw', {
   getLogPath: () => ipcRenderer.invoke('agent:log-path'),
   openLogFile: () => ipcRenderer.invoke('agent:open-log-file'),
   getVersion: () => ipcRenderer.invoke('app:version'),
+  signalReady: () => ipcRenderer.send('app:renderer-ready'),
 
   needsSetup: () => ipcRenderer.invoke('setup:needs-setup'),
   openExternal: (url: string) => ipcRenderer.invoke('app:open-external', url),
@@ -57,6 +58,8 @@ contextBridge.exposeInMainWorld('openclaw', {
 
   // PTY
   startOnboard: () => ipcRenderer.invoke('pty:start-onboard'),
+  startDockerInstall: () => ipcRenderer.invoke('pty:start-docker-install'),
+  launchDocker: () => ipcRenderer.invoke('app:launch-docker'),
   sendPtyInput: (data: string) => ipcRenderer.send('pty:input', data),
   resizePty: (cols: number, rows: number) => ipcRenderer.send('pty:resize', cols, rows),
 

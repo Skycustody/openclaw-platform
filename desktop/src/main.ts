@@ -7,7 +7,7 @@ import { manager, AgentStatus } from './openclaw/manager';
 import { installOpenClaw, findOpenClawBinary, isNodeInstalled, getInstallScriptCommand, findNemoClawBinary, getNemoClawInstallScriptCommand, getNemoClawSetupScriptCommand } from './openclaw/installer';
 import { readRecentLogs, getLogFilePath, logApp, closeStreams } from './openclaw/logger';
 import { loadSession, saveSession, clearSession, checkSubscription, parseDeepLinkToken, parseDeepLinkEmail } from './lib/session';
-import { loadRuntime, saveRuntime, clearRuntime, isNemoClawSupported, isDockerInstalled, isDockerRunning, nemoClawNeedsSetup, getNemoClawSandboxStatus, RuntimeType } from './lib/runtime';
+import { loadRuntime, saveRuntime, clearRuntime, isNemoClawSupported, isDockerInstalled, isDockerRunning, canInstallDocker, getDockerInstallCommand, launchDockerDesktop, nemoClawNeedsSetup, getNemoClawSandboxStatus, RuntimeType } from './lib/runtime';
 
 const PROTOCOL = 'valnaa';
 const gotLock = app.requestSingleInstanceLock();
@@ -132,7 +132,7 @@ function updateTrayMenu(): void {
   tray.setContextMenu(menu);
 }
 
-type PtyTask = 'install' | 'onboard' | 'install-nemoclaw' | 'setup-nemoclaw';
+type PtyTask = 'install' | 'onboard' | 'install-nemoclaw' | 'setup-nemoclaw' | 'install-docker';
 
 function spawnPtyTask(task: PtyTask): void {
   if (onboardPty) return;
@@ -156,6 +156,9 @@ function spawnPtyTask(task: PtyTask): void {
   } else if (task === 'setup-nemoclaw') {
     logApp('info', 'Running NemoClaw setup (sandbox creation + inference config)');
     command = getNemoClawSetupScriptCommand();
+  } else if (task === 'install-docker') {
+    logApp('info', 'Installing Docker via platform package manager');
+    command = getDockerInstallCommand();
   } else {
     const bin = findOpenClawBinary();
     if (!bin) {
@@ -187,7 +190,12 @@ function spawnPtyTask(task: PtyTask): void {
     mainWindow?.webContents.send('pty:exit', exitCode);
 
     if (exitCode === 0) {
-      setTimeout(() => autoStart(), 500);
+      if (task === 'install-docker') {
+        launchDockerDesktop();
+        setTimeout(() => autoStart(), 4000);
+      } else {
+        setTimeout(() => autoStart(), 500);
+      }
     }
   });
 }
@@ -264,8 +272,16 @@ function setupIPC(): void {
       nemoClawSupported: isNemoClawSupported(),
       dockerInstalled: isDockerInstalled(),
       dockerRunning: isDockerRunning(),
+      canInstallDocker: canInstallDocker(),
     };
   });
+
+  ipcMain.handle('pty:start-docker-install', () => {
+    if (onboardPty) return;
+    spawnPtyTask('install-docker');
+  });
+
+  ipcMain.handle('app:launch-docker', () => launchDockerDesktop());
 
   ipcMain.handle('runtime:set', (_e, runtime: RuntimeType) => {
     if (runtime !== 'openclaw' && runtime !== 'nemoclaw') return;
@@ -324,9 +340,14 @@ async function autoStart(): Promise<void> {
     return;
   }
 
-  // 2. Check subscription
+  // 2. Check subscription (with timeout so we never hang)
   try {
-    const sub = await checkSubscription(session.token);
+    const sub = await Promise.race([
+      checkSubscription(session.token),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('subscription_timeout')), 15000)
+      ),
+    ]);
     if (!sub.ok) {
       logApp('info', `Subscription not active (status: ${sub.status}) — showing subscribe screen`);
       mainWindow?.webContents.send('app:show-subscribe', { email: session.email, status: sub.status, plan: sub.plan });
@@ -340,7 +361,11 @@ async function autoStart(): Promise<void> {
       mainWindow?.webContents.send('app:show-auth');
       return;
     }
-    logApp('warn', 'Could not check subscription (offline?) — allowing local use');
+    if (err.message === 'subscription_timeout') {
+      logApp('warn', 'Subscription check timed out — allowing local use');
+    } else {
+      logApp('warn', 'Could not check subscription (offline?) — allowing local use');
+    }
   }
 
   // 3. Check runtime selection
@@ -357,9 +382,13 @@ async function autoStart(): Promise<void> {
     // NemoClaw flow: check prereqs → check binary → check sandbox → start
     if (!isDockerInstalled()) {
       logApp('warn', 'Docker not installed — cannot run NemoClaw');
+      const canInstall = canInstallDocker();
       mainWindow?.webContents.send('app:show-nemoclaw-prereq', {
         error: 'Docker is required for NemoClaw but was not found.',
-        hint: 'Install Docker Desktop from docker.com, then restart Valnaa.',
+        hint: canInstall ? 'Click Install Docker to install it automatically.' : 'Install Docker Desktop from docker.com, then restart Valnaa.',
+        dockerNotInstalled: true,
+        dockerNotRunning: false,
+        canInstallDocker: canInstall,
       });
       return;
     }
@@ -368,7 +397,10 @@ async function autoStart(): Promise<void> {
       logApp('warn', 'Docker not running — cannot start NemoClaw sandbox');
       mainWindow?.webContents.send('app:show-nemoclaw-prereq', {
         error: 'Docker is installed but not running.',
-        hint: 'Start Docker Desktop, then click Try Again.',
+        hint: 'Click Start Docker to launch it, then Try Again.',
+        dockerNotInstalled: false,
+        dockerNotRunning: true,
+        canInstallDocker: false,
       });
       return;
     }
@@ -466,12 +498,17 @@ app.whenReady().then(() => {
   setupIPC();
   setupAutoUpdater();
 
-  if (pendingDeepLink) {
-    handleDeepLink(pendingDeepLink);
-    pendingDeepLink = null;
-  } else {
-    autoStart();
-  }
+  const runAutoStart = () => {
+    if (pendingDeepLink) {
+      handleDeepLink(pendingDeepLink);
+      pendingDeepLink = null;
+    } else {
+      autoStart();
+    }
+  };
+
+  // Wait for renderer to signal ready (module scripts can load after did-finish-load)
+  ipcMain.once('app:renderer-ready', runAutoStart);
 
   app.on('activate', () => {
     mainWindow?.show();

@@ -56,6 +56,62 @@ export function isDockerRunning(): boolean {
   }
 }
 
+/** Check if we can auto-install Docker (brew on macOS, winget on Windows, curl script on Linux). */
+export function canInstallDocker(): boolean {
+  const { execSync } = require('child_process');
+  try {
+    if (IS_WIN) {
+      execSync('winget --version', { encoding: 'utf-8', timeout: 5000, stdio: 'pipe' });
+      return true;
+    }
+    if (process.platform === 'darwin') {
+      execSync('brew --version', { encoding: 'utf-8', timeout: 5000, stdio: 'pipe' });
+      return true;
+    }
+    return true; // Linux: curl script works without extra deps
+  } catch {
+    return false;
+  }
+}
+
+/** Get the command to install Docker. Runs in PTY so user sees progress. */
+export function getDockerInstallCommand(): string {
+  if (IS_WIN) {
+    return 'winget install Docker.DockerDesktop --accept-package-agreements --accept-source-agreements';
+  }
+  if (process.platform === 'darwin') {
+    return 'brew install --cask docker';
+  }
+  return 'curl -fsSL https://get.docker.com | sh';
+}
+
+/** Try to launch Docker Desktop (macOS/Windows). No-op on Linux (uses systemd). */
+export function launchDockerDesktop(): boolean {
+  try {
+    const { execSync } = require('child_process');
+    if (process.platform === 'darwin') {
+      execSync('open -a Docker', { encoding: 'utf-8', timeout: 5000 });
+      return true;
+    }
+    if (IS_WIN) {
+      const paths = [
+        process.env['ProgramFiles'] + '\\Docker\\Docker\\Docker Desktop.exe',
+        process.env['ProgramFiles(x86)'] + '\\Docker\\Docker\\Docker Desktop.exe',
+      ].filter(Boolean);
+      for (const p of paths) {
+        try {
+          const fs = require('fs');
+          if (fs.existsSync(p)) {
+            execSync(`start "" "${p}"`, { shell: true, timeout: 5000 });
+            return true;
+          }
+        } catch { /* try next */ }
+      }
+    }
+  } catch { /* ok */ }
+  return false;
+}
+
 export function findNemoClawBinary(): string | null {
   if (IS_WIN) {
     try {

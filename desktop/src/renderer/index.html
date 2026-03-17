@@ -470,9 +470,11 @@
     <h1>&#128737; NemoClaw</h1>
     <p id="nemoclaw-prereq-error" style="color: #ef4444;"></p>
     <p id="nemoclaw-prereq-hint"></p>
-    <div style="display: flex; gap: 12px; flex-wrap: wrap; justify-content: center;">
+    <div id="nemoclaw-prereq-actions" style="display: flex; gap: 12px; flex-wrap: wrap; justify-content: center;">
       <button class="subscribe-btn" id="nemoclaw-prereq-retry" style="background: #6366f1;">Try Again</button>
-      <button class="btn" id="nemoclaw-prereq-docker">Get Docker Desktop</button>
+      <button class="subscribe-btn" id="nemoclaw-prereq-install-docker" style="background: #0db7ed; display:none;">Install Docker</button>
+      <button class="btn" id="nemoclaw-prereq-start-docker" style="display:none;">Start Docker</button>
+      <button class="btn" id="nemoclaw-prereq-docker-link" style="display:none;">Get Docker Desktop</button>
       <button class="btn" id="nemoclaw-prereq-switch">Switch to OpenClaw</button>
     </div>
     <button class="overlay-link" id="nemoclaw-prereq-docs" style="margin-top: 4px;">NemoClaw documentation</button>
@@ -655,6 +657,13 @@
       onboardOverlay.classList.remove('active');
       document.getElementById('nemoclaw-prereq-error').textContent = info.error || 'A prerequisite is missing.';
       document.getElementById('nemoclaw-prereq-hint').textContent = info.hint || '';
+
+      const installBtn = document.getElementById('nemoclaw-prereq-install-docker');
+      const startBtn = document.getElementById('nemoclaw-prereq-start-docker');
+      const linkBtn = document.getElementById('nemoclaw-prereq-docker-link');
+      installBtn.style.display = info.canInstallDocker && info.dockerNotInstalled ? 'inline-flex' : 'none';
+      startBtn.style.display = info.dockerNotRunning ? 'inline-flex' : 'none';
+      linkBtn.style.display = info.dockerNotInstalled && !info.canInstallDocker ? 'inline-flex' : 'none';
     }
 
     document.getElementById('nemoclaw-prereq-retry').addEventListener('click', () => {
@@ -662,7 +671,17 @@
       oc.retryAutoStart();
     });
 
-    document.getElementById('nemoclaw-prereq-docker').addEventListener('click', () => {
+    document.getElementById('nemoclaw-prereq-install-docker').addEventListener('click', () => {
+      nemoPrereqOverlay.classList.remove('active');
+      showOnboardTerminal('docker-install');
+    });
+
+    document.getElementById('nemoclaw-prereq-start-docker').addEventListener('click', () => {
+      oc.launchDocker();
+      setTimeout(() => oc.retryAutoStart(), 3000);
+    });
+
+    document.getElementById('nemoclaw-prereq-docker-link').addEventListener('click', () => {
       oc.openExternal('https://www.docker.com/products/docker-desktop/');
     });
 
@@ -894,7 +913,7 @@
       }
     }
 
-    function showOnboardTerminal() {
+    function showOnboardTerminal(task) {
       onboardOverlay.classList.add('active');
       authOverlay.classList.remove('active');
       subscribeOverlay.classList.remove('active');
@@ -969,7 +988,11 @@
       fitAddon.fit();
       oc.resizePty(term.cols, term.rows);
 
-      oc.startOnboard();
+      if (task === 'docker-install') {
+        oc.startDockerInstall();
+      } else {
+        oc.startOnboard();
+      }
     }
 
     document.getElementById('onboard-retry-btn').addEventListener('click', () => {
@@ -994,6 +1017,9 @@
     oc.onShowOnboard(() => {
       showOnboardTerminal();
     });
+
+    // Signal main process that renderer is ready to receive messages
+    oc.signalReady();
   </script>
 </body>
 </html>
