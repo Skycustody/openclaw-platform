@@ -19,6 +19,9 @@ import {
   HardDrive,
   Terminal,
   Brain,
+  Download,
+  Monitor,
+  Apple,
 } from 'lucide-react';
 import { GlowingEffect } from '@/components/ui/glowing-effect';
 import Image from 'next/image';
@@ -128,6 +131,10 @@ const plans = [
   },
 ];
 
+const DOWNLOAD_BASE = 'https://github.com/Skycustody/valnaa-desktop/releases/latest';
+const DOWNLOAD_MAC = `${DOWNLOAD_BASE}/download/Valnaa.dmg`;
+const DOWNLOAD_WIN = `${DOWNLOAD_BASE}/download/Valnaa-Setup.exe`;
+
 const logos = [
   { src: 'https://storage.efferd.com/logo/openai-wordmark.svg', alt: 'OpenAI' },
   { src: 'https://storage.efferd.com/logo/claude-wordmark.svg', alt: 'Claude AI' },
@@ -151,6 +158,7 @@ export default function LandingPage() {
           <WhatIsItSection />
           <FeaturesSection />
           <HowItWorksSection />
+          <DesktopAppSection />
           <PricingSection />
           <CTASection />
         </main>
@@ -190,15 +198,16 @@ function HeroSection() {
         </p>
 
         <div className="fade-in slide-in-from-bottom-10 flex animate-in flex-row flex-wrap items-center justify-center gap-3 fill-mode-backwards pt-2 delay-300 duration-500 ease-out">
-          <Link href="#pricing">
-            <Button className="rounded-full" size="lg" variant="secondary">
-              See Plans
-            </Button>
-          </Link>
           <Link href="/auth/signup">
             <Button className="rounded-full" size="lg">
-              Deploy OpenClaw
+              Deploy in the Cloud
               <ArrowRight className="size-4" />
+            </Button>
+          </Link>
+          <Link href="#download">
+            <Button className="rounded-full" size="lg" variant="secondary">
+              <Download className="size-4" />
+              Desktop App
             </Button>
           </Link>
         </div>
@@ -326,6 +335,73 @@ function HowItWorksSection() {
   );
 }
 
+function DesktopAppSection() {
+  return (
+    <section id="download" className="relative mx-auto max-w-5xl border-t border-border px-6 py-24">
+      <div className="mx-auto max-w-3xl">
+        <div className="relative rounded-[1.25rem] border-[0.75px] border-border p-2 md:rounded-[1.5rem] md:p-3">
+          <GlowingEffect spread={40} glow={true} disabled={false} proximity={64} inactiveZone={0.01} borderWidth={3} />
+          <div className="relative overflow-hidden rounded-xl border-[0.75px] border-border bg-background px-6 py-14 text-center md:px-14">
+            <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(250,250,250,0.04),transparent_60%)]" />
+            <div className="relative">
+              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs text-muted-foreground">
+                <Monitor className="size-3" />
+                Desktop App
+              </div>
+              <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
+                Run OpenClaw on your machine
+              </h2>
+              <p className="mx-auto mt-4 max-w-lg text-base leading-relaxed text-muted-foreground">
+                Download Valnaa for your computer. One-click install, no terminal needed.
+                Sign in with your Valnaa account and your agent runs locally — private, fast, and always available.
+              </p>
+
+              <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
+                <a href={DOWNLOAD_MAC} className="group w-full sm:w-auto">
+                  <Button size="lg" className="w-full gap-3 rounded-full sm:w-auto">
+                    <Apple className="size-5" />
+                    Download for macOS
+                    <Download className="size-4 opacity-50 transition-opacity group-hover:opacity-100" />
+                  </Button>
+                </a>
+                <a href={DOWNLOAD_WIN} className="group w-full sm:w-auto">
+                  <Button size="lg" variant="outline" className="w-full gap-3 rounded-full sm:w-auto">
+                    <svg className="size-5" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801" />
+                    </svg>
+                    Download for Windows
+                    <Download className="size-4 opacity-50 transition-opacity group-hover:opacity-100" />
+                  </Button>
+                </a>
+              </div>
+
+              <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
+                {[
+                  { title: 'No terminal', desc: 'Installs Node.js and OpenClaw automatically' },
+                  { title: 'Cloud auth', desc: 'Sign in with your Valnaa account, subscription synced' },
+                  { title: 'Runs locally', desc: 'Your agent on your machine — private and fast' },
+                ].map(item => (
+                  <div key={item.title} className="rounded-lg border border-border bg-card/50 p-4 text-left">
+                    <p className="text-sm font-semibold text-foreground">{item.title}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{item.desc}</p>
+                  </div>
+                ))}
+              </div>
+
+              <p className="mt-6 text-xs text-muted-foreground">
+                Requires a Valnaa subscription.{' '}
+                <a href={DOWNLOAD_BASE} className="underline underline-offset-2 hover:text-foreground" target="_blank" rel="noopener noreferrer">
+                  All releases
+                </a>
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function PricingSection() {
   return (
     <section id="pricing" className="relative mx-auto max-w-5xl border-t border-border px-6 py-24">
@@ -440,6 +516,7 @@ function Footer() {
         </div>
         <div className="flex items-center gap-6">
           <a href="#features" className="text-sm text-muted-foreground transition-colors hover:text-foreground">Features</a>
+          <a href="#download" className="text-sm text-muted-foreground transition-colors hover:text-foreground">Download</a>
           <a href="#pricing" className="text-sm text-muted-foreground transition-colors hover:text-foreground">Pricing</a>
           <a href={`mailto:${process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'hello@valnaa.com'}`} className="text-sm text-muted-foreground transition-colors hover:text-foreground">Contact</a>
           <Link href="/auth/login" className="text-sm text-muted-foreground transition-colors hover:text-foreground">Sign In</Link>

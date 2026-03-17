@@ -61,8 +61,16 @@ function AuthForm() {
     router.push(path);
   };
 
+  const isDesktop = searchParams.get('desktop') === '1';
+
   const handlePostAuth = useCallback(
-    async (token: string, isNewUser: boolean) => {
+    async (token: string, isNewUser: boolean, userEmail?: string) => {
+      if (isDesktop) {
+        const params = new URLSearchParams({ token });
+        if (userEmail) params.set('email', userEmail);
+        window.location.href = `valnaa://auth-callback?${params.toString()}`;
+        return;
+      }
       api.setToken(token);
       if (isNewUser) {
         window.location.href = `/pricing${referralCode ? `?ref=${encodeURIComponent(referralCode)}` : ''}`;
@@ -77,7 +85,7 @@ function AuthForm() {
         window.location.href = '/pricing';
       }
     },
-    [referralCode]
+    [referralCode, isDesktop]
   );
 
   const initGsi = useCallback(() => {
@@ -91,14 +99,14 @@ function AuthForm() {
         setGoogleLoading(true);
         setError('');
         try {
-          const data = await api.post<{ token: string; isNewUser: boolean }>(
+          const data = await api.post<{ token: string; isNewUser: boolean; email?: string }>(
             '/auth/google',
             {
               credential: response.credential,
               referralCode: referralCode || undefined,
             }
           );
-          await handlePostAuth(data.token, data.isNewUser);
+          await handlePostAuth(data.token, data.isNewUser, data.email);
         } catch (err: any) {
           setError(err.message || 'Google sign-in failed. Please try again.');
         } finally {
@@ -131,6 +139,12 @@ function AuthForm() {
     try {
       if (isLogin) {
         const data = await api.post<{ token: string; user: any }>('/auth/login', { email, password });
+        if (isDesktop) {
+          const params = new URLSearchParams({ token: data.token });
+          params.set('email', email);
+          window.location.href = `valnaa://auth-callback?${params.toString()}`;
+          return;
+        }
         api.setToken(data.token);
         const statusOk = (DASHBOARD_ALLOWED_STATUSES as readonly string[]).includes(data.user?.status);
         const hasPaid = data.user?.hasPaid === true;
@@ -141,6 +155,12 @@ function AuthForm() {
           password,
           referralCode: referralCode || undefined,
         });
+        if (isDesktop) {
+          const params = new URLSearchParams({ token: data.token });
+          params.set('email', email);
+          window.location.href = `valnaa://auth-callback?${params.toString()}`;
+          return;
+        }
         api.setToken(data.token);
         window.location.href = `/pricing${referralCode ? `?ref=${encodeURIComponent(referralCode)}` : ''}`;
       }
