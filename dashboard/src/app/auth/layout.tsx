@@ -73,8 +73,7 @@ function AuthForm() {
       }
       api.setToken(token);
       if (isNewUser) {
-        // Trial users go straight to dashboard — they get a free 3-day trial
-        window.location.href = '/dashboard';
+        window.location.href = `/pricing${referralCode ? `?ref=${encodeURIComponent(referralCode)}` : ''}`;
         return;
       }
       try {
@@ -163,7 +162,7 @@ function AuthForm() {
           return;
         }
         api.setToken(data.token);
-        window.location.href = '/dashboard';
+        window.location.href = `/pricing${referralCode ? `?ref=${encodeURIComponent(referralCode)}` : ''}`;
       }
     } catch (err: any) {
       setError(err.message || 'Something went wrong. Please try again.');
@@ -185,7 +184,7 @@ function AuthForm() {
           {isLogin ? 'Welcome back' : 'Create your account'}
         </h1>
         <p className="mt-1.5 text-sm text-muted-foreground">
-          {isLogin ? 'Sign in to your dashboard' : 'Start your free 3-day trial'}
+          {isLogin ? 'Sign in to your dashboard' : 'Get your AI agent in 60 seconds'}
         </p>
         {!isLogin && referralCode && (
           <p className="mt-2 text-[13px] text-green-400">
@@ -274,7 +273,7 @@ function AuthForm() {
 
           {!isLogin && (
             <p className="text-center text-xs text-muted-foreground">
-              3-day free trial — no credit card required
+              Free trial available — no credit card required
             </p>
           )}
         </div>

@@ -9,12 +9,19 @@ import { Router, Response, NextFunction } from 'express';
 import { AuthRequest, authenticate, requireActiveSubscription } from '../middleware/auth';
 import db from '../lib/db';
 import { UserSettings } from '../types';
-import { getUserContainer, readContainerConfig, writeContainerConfig, restartContainer } from '../services/containerConfig';
+import { getUserContainer, requireRunningContainer, readContainerConfig, writeContainerConfig, restartContainer } from '../services/containerConfig';
 import { sshExec } from '../services/ssh';
 import { getNexosUsage } from '../services/nexos';
 import { VALID_CATEGORY_KEYS, MODEL_MAP } from '../services/smartRouter';
 import { invalidateProxyCache } from './proxy';
 import redis from '../lib/redis';
+import {
+  saveAnthropicSetupToken,
+  startOpenAIOAuth,
+  completeOpenAIOAuth,
+  getProviderAuthStatus,
+  disconnectProviderAuth,
+} from '../services/providerAuth';
 
 const INSTANCE_DIR = '/opt/openclaw/instances';
 const UUID_RE = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
@@ -105,13 +112,24 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
     if (!settings) return res.json({ settings: {} });
 
     const safeSettings: any = { ...settings };
+
+    const maskKey = (key: string | null): string | null =>
+      key ? key.slice(0, 8) + '...' + key.slice(-4) : null;
+
+    safeSettings.has_own_openai_key = !!settings.own_openai_key;
+    safeSettings.own_openai_key_masked = maskKey(settings.own_openai_key);
     delete safeSettings.own_openai_key;
+
+    safeSettings.has_own_anthropic_key = !!settings.own_anthropic_key;
+    safeSettings.own_anthropic_key_masked = maskKey(settings.own_anthropic_key);
     delete safeSettings.own_anthropic_key;
 
+    safeSettings.has_own_gemini_key = !!(settings as any).own_gemini_key;
+    safeSettings.own_gemini_key_masked = maskKey((settings as any).own_gemini_key);
+    delete safeSettings.own_gemini_key;
+
     safeSettings.has_own_openrouter_key = !!settings.own_openrouter_key;
-    safeSettings.own_openrouter_key_masked = settings.own_openrouter_key
-      ? settings.own_openrouter_key.slice(0, 8) + '...' + settings.own_openrouter_key.slice(-4)
-      : null;
+    safeSettings.own_openrouter_key_masked = maskKey(settings.own_openrouter_key);
     delete safeSettings.own_openrouter_key;
 
     if (typeof safeSettings.routing_preferences === 'string') {
@@ -370,6 +388,85 @@ router.put('/routing-preferences', async (req: AuthRequest, res: Response, next:
   }
 });
 
+// ── BYOK: Direct provider keys (OpenAI, Anthropic, Gemini) ──
+
+async function reinjectAndRestart(userId: string): Promise<void> {
+  const { injectApiKeys } = await import('../services/apiKeys');
+  const { serverIp, containerName } = await getUserContainer(userId);
+  const user = await db.getOne<{ plan: string }>('SELECT plan FROM users WHERE id = $1', [userId]);
+  await injectApiKeys(serverIp, userId, containerName, (user?.plan || 'starter') as any);
+  restartContainer(serverIp, containerName).catch(() => {});
+}
+
+router.put('/own-openai-key', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { key } = req.body;
+    if (!key || typeof key !== 'string' || !key.startsWith('sk-')) {
+      return res.status(400).json({ error: 'Invalid OpenAI API key (must start with sk-)' });
+    }
+    await db.query(
+      'UPDATE user_settings SET own_openai_key = $1 WHERE user_id = $2',
+      [key.trim(), req.userId]
+    );
+    try { await reinjectAndRestart(req.userId!); } catch { /* container not provisioned */ }
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+router.delete('/own-openai-key', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    await db.query('UPDATE user_settings SET own_openai_key = NULL WHERE user_id = $1', [req.userId]);
+    try { await reinjectAndRestart(req.userId!); } catch { /* container not provisioned */ }
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+router.put('/own-anthropic-key', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { key } = req.body;
+    if (!key || typeof key !== 'string' || !key.startsWith('sk-ant-')) {
+      return res.status(400).json({ error: 'Invalid Anthropic API key (must start with sk-ant-)' });
+    }
+    await db.query(
+      'UPDATE user_settings SET own_anthropic_key = $1 WHERE user_id = $2',
+      [key.trim(), req.userId]
+    );
+    try { await reinjectAndRestart(req.userId!); } catch { /* container not provisioned */ }
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+router.delete('/own-anthropic-key', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    await db.query('UPDATE user_settings SET own_anthropic_key = NULL WHERE user_id = $1', [req.userId]);
+    try { await reinjectAndRestart(req.userId!); } catch { /* container not provisioned */ }
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+router.put('/own-gemini-key', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { key } = req.body;
+    if (!key || typeof key !== 'string' || key.length < 10) {
+      return res.status(400).json({ error: 'Invalid Gemini API key' });
+    }
+    await db.query(
+      'UPDATE user_settings SET own_gemini_key = $1 WHERE user_id = $2',
+      [key.trim(), req.userId]
+    );
+    try { await reinjectAndRestart(req.userId!); } catch { /* container not provisioned */ }
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+router.delete('/own-gemini-key', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    await db.query('UPDATE user_settings SET own_gemini_key = NULL WHERE user_id = $1', [req.userId]);
+    try { await reinjectAndRestart(req.userId!); } catch { /* container not provisioned */ }
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
 // Save own OpenRouter key (BYOK — unlimited AI, user pays OpenRouter directly)
 router.put('/own-openrouter-key', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
@@ -377,27 +474,13 @@ router.put('/own-openrouter-key', async (req: AuthRequest, res: Response, next: 
     if (!key || typeof key !== 'string' || key.length < 10) {
       return res.status(400).json({ error: 'Invalid OpenRouter API key' });
     }
-
     await db.query(
       'UPDATE user_settings SET own_openrouter_key = $1 WHERE user_id = $2',
       [key.trim(), req.userId]
     );
-
-    // Re-inject API keys with the user's own key
-    try {
-      const { injectApiKeys } = await import('../services/apiKeys');
-      const { serverIp, containerName } = await getUserContainer(req.userId!);
-      const user = await db.getOne<{ plan: string }>('SELECT plan FROM users WHERE id = $1', [req.userId]);
-      await injectApiKeys(serverIp, req.userId!, containerName, (user?.plan || 'starter') as any);
-      restartContainer(serverIp, containerName).catch(() => {});
-    } catch {
-      // Container not provisioned — key saved to DB for next provision
-    }
-
+    try { await reinjectAndRestart(req.userId!); } catch { /* container not provisioned */ }
     res.json({ ok: true });
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) { next(err); }
 });
 
 // Remove own OpenRouter key (revert to platform-managed key)
@@ -407,20 +490,75 @@ router.delete('/own-openrouter-key', async (req: AuthRequest, res: Response, nex
       'UPDATE user_settings SET own_openrouter_key = NULL WHERE user_id = $1',
       [req.userId]
     );
-
-    // Re-inject platform key
-    try {
-      const { injectApiKeys } = await import('../services/apiKeys');
-      const { serverIp, containerName } = await getUserContainer(req.userId!);
-      const user = await db.getOne<{ plan: string }>('SELECT plan FROM users WHERE id = $1', [req.userId]);
-      await injectApiKeys(serverIp, req.userId!, containerName, (user?.plan || 'starter') as any);
-      restartContainer(serverIp, containerName).catch(() => {});
-    } catch {
-      // Container not provisioned
-    }
-
+    try { await reinjectAndRestart(req.userId!); } catch { /* container not provisioned */ }
     res.json({ ok: true });
-  } catch (err) {
+  } catch (err) { next(err); }
+});
+
+// ── Subscription Auth: connect ChatGPT / Claude subscriptions ──
+
+router.get('/provider-auth/status', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const status = await getProviderAuthStatus(req.userId!);
+    res.json({ providers: status });
+  } catch (err) { next(err); }
+});
+
+router.post('/provider-auth/anthropic/setup-token', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { token } = req.body;
+    if (!token || typeof token !== 'string' || token.length < 10) {
+      return res.status(400).json({ error: 'Invalid setup token' });
+    }
+    const result = await saveAnthropicSetupToken(req.userId!, token);
+    if (!result.success) {
+      return res.status(400).json({ error: result.error });
+    }
+    res.json({ ok: true });
+  } catch (err: any) {
+    if (err.statusCode === 409) return res.status(409).json({ error: err.message });
+    next(err);
+  }
+});
+
+router.post('/provider-auth/openai/start', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { serverIp, containerName } = await requireRunningContainer(req.userId!);
+    const result = await startOpenAIOAuth(req.userId!, serverIp, containerName);
+    if (result.error) {
+      return res.status(400).json({ error: result.error });
+    }
+    res.json({ url: result.url });
+  } catch (err: any) {
+    if (err.statusCode === 409) return res.status(409).json({ error: err.message });
+    next(err);
+  }
+});
+
+router.post('/provider-auth/openai/complete', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { redirectUrl } = req.body;
+    if (!redirectUrl || typeof redirectUrl !== 'string') {
+      return res.status(400).json({ error: 'Missing redirect URL' });
+    }
+    const result = await completeOpenAIOAuth(req.userId!, redirectUrl);
+    if (!result.success) {
+      return res.status(400).json({ error: result.error });
+    }
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+router.delete('/provider-auth/:provider', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const provider = req.params.provider as string;
+    if (!['openai-codex', 'anthropic'].includes(provider)) {
+      return res.status(400).json({ error: 'Invalid provider' });
+    }
+    await disconnectProviderAuth(req.userId!, provider);
+    res.json({ ok: true });
+  } catch (err: any) {
+    if (err.statusCode === 409) return res.status(409).json({ error: err.message });
     next(err);
   }
 });

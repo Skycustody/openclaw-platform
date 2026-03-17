@@ -4,9 +4,10 @@ import os from 'os';
 import { autoUpdater } from 'electron-updater';
 import * as pty from 'node-pty';
 import { manager, AgentStatus } from './openclaw/manager';
-import { installOpenClaw, findOpenClawBinary, isNodeInstalled, getInstallScriptCommand } from './openclaw/installer';
+import { installOpenClaw, findOpenClawBinary, isNodeInstalled, getInstallScriptCommand, findNemoClawBinary, getNemoClawInstallScriptCommand, getNemoClawSetupScriptCommand } from './openclaw/installer';
 import { readRecentLogs, getLogFilePath, logApp, closeStreams } from './openclaw/logger';
 import { loadSession, saveSession, clearSession, checkSubscription, parseDeepLinkToken, parseDeepLinkEmail } from './lib/session';
+import { loadRuntime, saveRuntime, clearRuntime, isNemoClawSupported, isDockerInstalled, isDockerRunning, nemoClawNeedsSetup, getNemoClawSandboxStatus, RuntimeType } from './lib/runtime';
 
 const PROTOCOL = 'valnaa';
 const gotLock = app.requestSingleInstanceLock();
@@ -131,7 +132,7 @@ function updateTrayMenu(): void {
   tray.setContextMenu(menu);
 }
 
-type PtyTask = 'install' | 'onboard';
+type PtyTask = 'install' | 'onboard' | 'install-nemoclaw' | 'setup-nemoclaw';
 
 function spawnPtyTask(task: PtyTask): void {
   if (onboardPty) return;
@@ -149,6 +150,12 @@ function spawnPtyTask(task: PtyTask): void {
       logApp('info', 'Node.js found but OpenClaw missing — installing via npm');
       command = `npm install -g openclaw@latest --prefix ${prefix}`;
     }
+  } else if (task === 'install-nemoclaw') {
+    logApp('info', 'Installing NemoClaw via official script (includes install + setup wizard)');
+    command = getNemoClawInstallScriptCommand();
+  } else if (task === 'setup-nemoclaw') {
+    logApp('info', 'Running NemoClaw setup (sandbox creation + inference config)');
+    command = getNemoClawSetupScriptCommand();
   } else {
     const bin = findOpenClawBinary();
     if (!bin) {
@@ -198,7 +205,16 @@ function setupIPC(): void {
   ipcMain.handle('setup:needs-setup', () => needsSetup());
 
   ipcMain.handle('app:open-external', (_e, url: string) => {
-    if (url.startsWith('https://valnaa.com')) {
+    const allowed = [
+      'https://valnaa.com',
+      'https://www.docker.com',
+      'https://docker.com',
+      'https://desktop.docker.com',
+      'https://docs.nvidia.com',
+      'https://nvidia.com',
+      'https://github.com/NVIDIA',
+    ];
+    if (allowed.some(prefix => url.startsWith(prefix))) {
       shell.openExternal(url);
     }
   });
@@ -240,14 +256,48 @@ function setupIPC(): void {
     shell.openExternal('https://valnaa.com/pricing');
   });
 
+  // Runtime selection IPC
+  ipcMain.handle('runtime:get', () => {
+    const pref = loadRuntime();
+    return {
+      runtime: pref?.runtime || null,
+      nemoClawSupported: isNemoClawSupported(),
+      dockerInstalled: isDockerInstalled(),
+      dockerRunning: isDockerRunning(),
+    };
+  });
+
+  ipcMain.handle('runtime:set', (_e, runtime: RuntimeType) => {
+    if (runtime !== 'openclaw' && runtime !== 'nemoclaw') return;
+    saveRuntime(runtime);
+    logApp('info', `Runtime selected: ${runtime}`);
+    autoStart();
+  });
+
+  ipcMain.handle('app:retry-autostart', () => {
+    autoStart();
+  });
+
   // PTY IPC
   ipcMain.handle('pty:start-onboard', () => {
     if (onboardPty) return;
-    const bin = findOpenClawBinary();
-    if (!bin) {
-      spawnPtyTask('install');
+    const pref = loadRuntime();
+    const runtime = pref?.runtime || 'openclaw';
+
+    if (runtime === 'nemoclaw') {
+      const nemoBin = findNemoClawBinary();
+      if (!nemoBin) {
+        spawnPtyTask('install-nemoclaw');
+      } else {
+        spawnPtyTask('setup-nemoclaw');
+      }
     } else {
-      spawnPtyTask('onboard');
+      const bin = findOpenClawBinary();
+      if (!bin) {
+        spawnPtyTask('install');
+      } else {
+        spawnPtyTask('onboard');
+      }
     }
   });
 
@@ -293,24 +343,69 @@ async function autoStart(): Promise<void> {
     logApp('warn', 'Could not check subscription (offline?) — allowing local use');
   }
 
-  // 3. Check OpenClaw binary
-  const bin = findOpenClawBinary();
-  if (!bin) {
-    logApp('info', 'OpenClaw not found — showing install terminal');
-    mainWindow?.webContents.send('app:show-onboard');
+  // 3. Check runtime selection
+  const runtimePref = loadRuntime();
+  if (!runtimePref) {
+    logApp('info', 'No runtime selected — showing runtime picker');
+    mainWindow?.webContents.send('app:show-runtime-picker');
     return;
   }
 
-  // 4. Check setup
-  if (needsSetup()) {
-    logApp('info', 'Setup not complete — showing onboard terminal');
-    mainWindow?.webContents.send('app:show-onboard');
-    return;
-  }
+  const runtime = runtimePref.runtime;
 
-  // 5. Start gateway
-  logApp('info', 'Auto-starting OpenClaw...');
-  await manager.start();
+  if (runtime === 'nemoclaw') {
+    // NemoClaw flow: check prereqs → check binary → check sandbox → start
+    if (!isDockerInstalled()) {
+      logApp('warn', 'Docker not installed — cannot run NemoClaw');
+      mainWindow?.webContents.send('app:show-nemoclaw-prereq', {
+        error: 'Docker is required for NemoClaw but was not found.',
+        hint: 'Install Docker Desktop from docker.com, then restart Valnaa.',
+      });
+      return;
+    }
+
+    if (!isDockerRunning()) {
+      logApp('warn', 'Docker not running — cannot start NemoClaw sandbox');
+      mainWindow?.webContents.send('app:show-nemoclaw-prereq', {
+        error: 'Docker is installed but not running.',
+        hint: 'Start Docker Desktop, then click Try Again.',
+      });
+      return;
+    }
+
+    const nemoBin = findNemoClawBinary();
+    if (!nemoBin) {
+      logApp('info', 'NemoClaw not found — showing install terminal');
+      mainWindow?.webContents.send('app:show-onboard');
+      return;
+    }
+
+    if (nemoClawNeedsSetup()) {
+      logApp('info', 'NemoClaw sandbox not configured — showing setup terminal');
+      mainWindow?.webContents.send('app:show-onboard');
+      return;
+    }
+
+    logApp('info', 'Auto-starting NemoClaw...');
+    await manager.start();
+  } else {
+    // OpenClaw flow
+    const bin = findOpenClawBinary();
+    if (!bin) {
+      logApp('info', 'OpenClaw not found — showing install terminal');
+      mainWindow?.webContents.send('app:show-onboard');
+      return;
+    }
+
+    if (needsSetup()) {
+      logApp('info', 'Setup not complete — showing onboard terminal');
+      mainWindow?.webContents.send('app:show-onboard');
+      return;
+    }
+
+    logApp('info', 'Auto-starting OpenClaw...');
+    await manager.start();
+  }
 }
 
 function setupAutoUpdater(): void {

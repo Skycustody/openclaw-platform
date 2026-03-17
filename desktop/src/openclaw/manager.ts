@@ -6,9 +6,10 @@ import path from 'path';
 import { IS_WIN, getOpenClawDir } from '../lib/platform';
 import { classifyProcessError } from '../lib/errors';
 import { logApp, logOpenclaw } from './logger';
-import { findOpenClawBinary } from './installer';
+import { findOpenClawBinary, findNemoClawBinary } from './installer';
 import { startHealthPolling, stopHealthPolling, HealthStatus } from './health';
 import { findAvailablePort, PortResult } from '../lib/ports';
+import { loadRuntime, RuntimeType, getNemoClawSandboxStatus } from '../lib/runtime';
 
 function checkPortReady(port: number): Promise<boolean> {
   return new Promise((resolve) => {
@@ -31,6 +32,7 @@ export interface AgentStatus {
   errorDetails: string | null;
   reused: boolean;
   gatewayToken: string | null;
+  runtime: RuntimeType;
 }
 
 function readGatewayToken(): string | null {
@@ -62,6 +64,7 @@ class OpenClawManager extends EventEmitter {
   private lastErrorDetails: string | null = null;
 
   getStatus(): AgentStatus {
+    const pref = loadRuntime();
     return {
       state: this.state,
       port: this.port,
@@ -71,6 +74,7 @@ class OpenClawManager extends EventEmitter {
       errorDetails: this.lastErrorDetails,
       reused: this.reused,
       gatewayToken: readGatewayToken(),
+      runtime: pref?.runtime || 'openclaw',
     };
   }
 
@@ -81,6 +85,23 @@ class OpenClawManager extends EventEmitter {
     this.lastErrorDetails = null;
     this.reused = false;
 
+    const pref = loadRuntime();
+    const runtime = pref?.runtime || 'openclaw';
+
+    if (runtime === 'nemoclaw') {
+      const nemoBin = findNemoClawBinary();
+      if (!nemoBin) {
+        this.setState('installing');
+        this.lastError = 'NemoClaw is not installed. Installing...';
+        this.emitStatus();
+        return;
+      }
+      this.restartCount = 0;
+      this.connectToNemoClawSandbox();
+      return;
+    }
+
+    // OpenClaw flow: allocate port and spawn gateway
     let portResult: PortResult;
     try {
       portResult = await findAvailablePort();
@@ -93,7 +114,7 @@ class OpenClawManager extends EventEmitter {
     this.port = portResult.port;
 
     if (portResult.reused) {
-      logApp('info', `Reusing existing OpenClaw on port ${this.port}`);
+      logApp('info', `Reusing existing gateway on port ${this.port}`);
       this.reused = true;
       this.setState('running');
       this.startHealthCheck();
@@ -107,7 +128,6 @@ class OpenClawManager extends EventEmitter {
       this.emitStatus();
       return;
     }
-
     this.restartCount = 0;
     this.spawnProcess(bin);
   }
@@ -198,6 +218,102 @@ class OpenClawManager extends EventEmitter {
     }, STARTUP_TIMEOUT_MS);
   }
 
+  /**
+   * NemoClaw runs OpenClaw inside a Docker sandbox managed by OpenShell.
+   * We don't spawn a process — we detect the running sandbox and connect to its gateway port.
+   */
+  private connectToNemoClawSandbox(): void {
+    this.setState('starting');
+
+    logApp('info', 'Connecting to NemoClaw sandbox...');
+
+    const status = getNemoClawSandboxStatus();
+
+    if (status.running && status.port) {
+      this.port = status.port;
+      logApp('info', `NemoClaw sandbox running, gateway on port ${this.port}`);
+
+      this.readinessPoll = setInterval(async () => {
+        if (this.state !== 'starting' || !this.port) return;
+        if (await checkPortReady(this.port)) {
+          this.clearReadinessPoll();
+          this.onGatewayReady();
+        }
+      }, 500);
+
+      this.startupTimer = setTimeout(() => {
+        if (this.state === 'starting') {
+          this.clearReadinessPoll();
+          logApp('warn', 'NemoClaw sandbox port not responding — gateway may not be ready');
+          this.lastError = 'NemoClaw sandbox is running but the gateway is not responding. Try running "nemoclaw setup" again.';
+          this.setState('crashed');
+        }
+      }, STARTUP_TIMEOUT_MS);
+
+      return;
+    }
+
+    logApp('warn', 'NemoClaw sandbox not running — attempting to start via nemoclaw start');
+
+    const prefix = IS_WIN ? 'wsl' : '';
+    const cmd = prefix ? 'wsl' : 'nemoclaw';
+    const args = prefix ? ['nemoclaw', 'start'] : ['start'];
+
+    const startProc = spawn(cmd, args, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env },
+      shell: IS_WIN,
+      windowsHide: true,
+    });
+
+    let output = '';
+    startProc.stdout?.on('data', (d: Buffer) => { output += d.toString(); logOpenclaw(d.toString()); });
+    startProc.stderr?.on('data', (d: Buffer) => { output += d.toString(); logOpenclaw(d.toString()); });
+
+    startProc.on('close', (code) => {
+      if (code !== 0) {
+        logApp('error', 'nemoclaw start failed', output);
+        this.lastError = 'Failed to start NemoClaw sandbox. Run "nemoclaw setup" to reconfigure.';
+        this.lastErrorDetails = output.slice(-500);
+        this.setState('crashed');
+        return;
+      }
+
+      const retryStatus = getNemoClawSandboxStatus();
+      if (retryStatus.running && retryStatus.port) {
+        this.port = retryStatus.port;
+        logApp('info', `NemoClaw sandbox started, gateway on port ${this.port}`);
+
+        this.readinessPoll = setInterval(async () => {
+          if (this.state !== 'starting' || !this.port) return;
+          if (await checkPortReady(this.port)) {
+            this.clearReadinessPoll();
+            this.onGatewayReady();
+          }
+        }, 500);
+
+        this.startupTimer = setTimeout(() => {
+          if (this.state === 'starting') {
+            this.clearReadinessPoll();
+            this.lastError = 'NemoClaw started but gateway not responding.';
+            this.setState('crashed');
+          }
+        }, STARTUP_TIMEOUT_MS);
+      } else {
+        this.lastError = 'NemoClaw started but sandbox status is unclear. Check logs.';
+        this.lastErrorDetails = output.slice(-500);
+        this.setState('crashed');
+      }
+    });
+
+    startProc.on('error', (err) => {
+      logApp('error', 'Failed to run nemoclaw start', err.message);
+      this.lastError = 'Could not start NemoClaw. Is it installed?';
+      this.lastErrorDetails = err.message;
+      this.setState('crashed');
+    });
+  }
+
   private onGatewayReady(): void {
     this.clearStartupTimer();
     this.clearReadinessPoll();
@@ -224,6 +340,7 @@ class OpenClawManager extends EventEmitter {
 
   async stop(): Promise<void> {
     this.clearStartupTimer();
+    this.clearReadinessPoll();
     stopHealthPolling();
 
     if (!this.proc || this.proc.killed) {

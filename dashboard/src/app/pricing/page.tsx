@@ -230,6 +230,24 @@ function PricingContent() {
             </div>
           ))}
         </div>
+
+        {/* Free trial CTA */}
+        <div className="mx-auto mt-16 max-w-xl text-center">
+          <div className="rounded-xl border border-border bg-card/50 p-8">
+            <h2 className="text-xl font-semibold">Not ready to commit?</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Try Valnaa free for 3 days. Bring your own API key and explore everything — no credit card required.
+            </p>
+            <Button
+              onClick={() => { window.location.href = '/trial-setup'; }}
+              variant="outline"
+              className="mt-5"
+              size="lg"
+            >
+              Start 3-day free trial <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </div>
+        </div>
       </section>
     </div>
   );

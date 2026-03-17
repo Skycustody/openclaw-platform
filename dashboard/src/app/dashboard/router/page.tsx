@@ -105,6 +105,13 @@ export default function RouterPage() {
   const [prefsSaved, setPrefsSaved] = useState(false);
   const [showPrefs, setShowPrefs] = useState(false);
 
+  const [subAuthStatus, setSubAuthStatus] = useState<Record<string, { connected: boolean; email?: string }>>({});
+  const [subAuthLoading, setSubAuthLoading] = useState<string | null>(null);
+  const [anthropicToken, setAnthropicToken] = useState('');
+  const [openaiOAuthUrl, setOpenaiOAuthUrl] = useState<string | null>(null);
+  const [openaiRedirectUrl, setOpenaiRedirectUrl] = useState('');
+  const [showSubAuth, setShowSubAuth] = useState(false);
+
   const fetchData = useCallback(async () => {
     try {
       const [modelsRes, settingsRes, historyRes, savingsRes, catRes] = await Promise.all([
@@ -131,6 +138,10 @@ export default function RouterPage() {
         });
         setPrefsDraft(prefs);
       }
+      try {
+        const authRes = await api.get<{ providers: Record<string, { connected: boolean; email?: string }> }>('/settings/provider-auth/status');
+        setSubAuthStatus(authRes.providers || {});
+      } catch { /* agent may not be provisioned */ }
     } catch {}
     setLoading(false);
   }, []);
@@ -169,6 +180,53 @@ export default function RouterPage() {
     try {
       await api.delete('/settings/own-openrouter-key');
       fetchData();
+    } catch {}
+  };
+
+  const startOpenAIOAuth = async () => {
+    setSubAuthLoading('openai-start');
+    try {
+      const data = await api.post<{ url: string }>('/settings/provider-auth/openai/start', {});
+      setOpenaiOAuthUrl(data.url);
+      window.open(data.url, '_blank', 'noopener');
+    } catch (err: any) {
+      alert(err.message || 'Failed to start OpenAI login. Make sure your agent is running.');
+    }
+    setSubAuthLoading(null);
+  };
+
+  const completeOpenAIOAuth = async () => {
+    if (!openaiRedirectUrl.trim()) return;
+    setSubAuthLoading('openai-complete');
+    try {
+      await api.post('/settings/provider-auth/openai/complete', { redirectUrl: openaiRedirectUrl.trim() });
+      setSubAuthStatus(prev => ({ ...prev, 'openai-codex': { connected: true } }));
+      setOpenaiOAuthUrl(null);
+      setOpenaiRedirectUrl('');
+    } catch (err: any) {
+      alert(err.message || 'Failed to complete OpenAI login.');
+    }
+    setSubAuthLoading(null);
+  };
+
+  const saveAnthropicToken = async () => {
+    if (!anthropicToken.trim()) return;
+    setSubAuthLoading('anthropic');
+    try {
+      await api.post('/settings/provider-auth/anthropic/setup-token', { token: anthropicToken.trim() });
+      setSubAuthStatus(prev => ({ ...prev, anthropic: { connected: true } }));
+      setAnthropicToken('');
+    } catch (err: any) {
+      alert(err.message || 'Failed to save Claude token. Make sure your agent is running.');
+    }
+    setSubAuthLoading(null);
+  };
+
+  const disconnectSubAuth = async (provider: string) => {
+    if (!confirm(`Disconnect ${provider === 'openai-codex' ? 'ChatGPT' : 'Claude'} subscription?`)) return;
+    try {
+      await api.delete(`/settings/provider-auth/${provider}`);
+      setSubAuthStatus(prev => ({ ...prev, [provider]: { connected: false } }));
     } catch {}
   };
 

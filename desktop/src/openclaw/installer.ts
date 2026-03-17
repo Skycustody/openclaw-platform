@@ -3,6 +3,7 @@ import path from 'path';
 import { IS_WIN, getNpmGlobalPrefix, getNpmGlobalBin } from '../lib/platform';
 import { classifyInstallError } from '../lib/errors';
 import { logApp, logOpenclaw } from './logger';
+import { findNemoClawBinary, getNemoClawInstallCommand, getNemoClawSetupCommand } from '../lib/runtime';
 
 /** Check if Node.js is available on the system. */
 export function isNodeInstalled(): boolean {
@@ -24,6 +25,23 @@ export function getInstallScriptCommand(): string {
   return 'curl -fsSL https://openclaw.ai/install.sh | bash -s -- --no-onboard';
 }
 
+/**
+ * NemoClaw install script: installs nemoclaw CLI, OpenClaw, Node.js if needed,
+ * then runs the guided setup wizard (sandbox + inference + security).
+ * After exit 0 the sandbox is running.
+ */
+export function getNemoClawInstallScriptCommand(): string {
+  return getNemoClawInstallCommand();
+}
+
+/**
+ * For existing nemoclaw installations that need to re-run setup
+ * (e.g. sandbox deleted, fresh Docker).
+ */
+export function getNemoClawSetupScriptCommand(): string {
+  return getNemoClawSetupCommand();
+}
+
 /** Locate the openclaw binary on disk. Returns full path or null. */
 export function findOpenClawBinary(): string | null {
   const cmd = IS_WIN ? 'where' : 'which';
@@ -42,6 +60,8 @@ export function findOpenClawBinary(): string | null {
 
   return null;
 }
+
+export { findNemoClawBinary };
 
 /** Get installed openclaw version, or null. */
 export function getInstalledVersion(): string | null {

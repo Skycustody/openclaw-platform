@@ -20,6 +20,23 @@ contextBridge.exposeInMainWorld('openclaw', {
   logout: () => ipcRenderer.invoke('auth:logout'),
   openPricing: () => ipcRenderer.invoke('auth:open-pricing'),
 
+  // Runtime
+  getRuntime: () => ipcRenderer.invoke('runtime:get'),
+  setRuntime: (runtime: string) => ipcRenderer.invoke('runtime:set', runtime),
+  retryAutoStart: () => ipcRenderer.invoke('app:retry-autostart'),
+
+  onShowRuntimePicker: (cb: () => void) => {
+    const handler = () => cb();
+    ipcRenderer.on('app:show-runtime-picker', handler);
+    return () => ipcRenderer.removeListener('app:show-runtime-picker', handler);
+  },
+
+  onShowNemoClawPrereq: (cb: (info: any) => void) => {
+    const handler = (_: any, info: any) => cb(info);
+    ipcRenderer.on('app:show-nemoclaw-prereq', handler);
+    return () => ipcRenderer.removeListener('app:show-nemoclaw-prereq', handler);
+  },
+
   onAuthResult: (cb: (result: any) => void) => {
     const handler = (_: any, result: any) => cb(result);
     ipcRenderer.on('app:auth-result', handler);

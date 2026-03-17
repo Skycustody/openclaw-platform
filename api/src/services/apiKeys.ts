@@ -66,11 +66,17 @@ export async function injectApiKeys(
   plan: Plan = 'starter'
 ): Promise<void> {
   validateUserId(userId);
-  const settings = await db.getOne<{ own_openrouter_key: string | null }>(
-    'SELECT own_openrouter_key FROM user_settings WHERE user_id = $1',
+  const settings = await db.getOne<{
+    own_openrouter_key: string | null;
+    own_openai_key: string | null;
+    own_anthropic_key: string | null;
+    own_gemini_key: string | null;
+  }>(
+    'SELECT own_openrouter_key, own_openai_key, own_anthropic_key, own_gemini_key FROM user_settings WHERE user_id = $1',
     [userId]
   );
   const usingOwnKey = !!settings?.own_openrouter_key;
+  const hasDirectKeys = !!(settings?.own_openai_key || settings?.own_anthropic_key || settings?.own_gemini_key);
   const apiKey = usingOwnKey ? settings!.own_openrouter_key! : await ensureNexosKey(userId);
 
   const configResult = await sshExec(
@@ -107,10 +113,21 @@ export async function injectApiKeys(
     config.env.ANTHROPIC_BASE_URL = 'https://openrouter.ai/api/v1';
   } else {
     config.env.OPENAI_BASE_URL = PROXY_BASE_URL;
-    // No ANTHROPIC_* env vars — forces all anthropic/ model requests
-    // through the "platform" provider where they're listed.
     delete config.env.ANTHROPIC_API_KEY;
     delete config.env.ANTHROPIC_BASE_URL;
+  }
+
+  // Direct provider keys override env vars when set
+  if (settings?.own_openai_key) {
+    config.env.OPENAI_API_KEY = settings.own_openai_key;
+    config.env.OPENAI_BASE_URL = 'https://api.openai.com/v1';
+  }
+  if (settings?.own_anthropic_key) {
+    config.env.ANTHROPIC_API_KEY = settings.own_anthropic_key;
+    config.env.ANTHROPIC_BASE_URL = 'https://api.anthropic.com';
+  }
+  if (settings?.own_gemini_key) {
+    config.env.GOOGLE_API_KEY = settings.own_gemini_key;
   }
   if (process.env.BROWSERLESS_TOKEN) {
     config.env.BROWSERLESS_TOKEN = process.env.BROWSERLESS_TOKEN;
@@ -251,6 +268,51 @@ export async function injectApiKeys(
     };
     if (!config.agents.defaults.memorySearch) config.agents.defaults.memorySearch = {};
     config.agents.defaults.memorySearch.enabled = true;
+  }
+
+  // ── Direct provider configs (BYOK: OpenAI, Anthropic, Gemini) ──
+  // When users have their own API keys, add native provider entries so the
+  // container can talk to those APIs directly (not via OpenRouter).
+  if (hasDirectKeys && config.models?.providers) {
+    if (settings?.own_openai_key) {
+      config.models.providers.openai = {
+        apiKey: settings.own_openai_key,
+        baseUrl: 'https://api.openai.com/v1',
+        api: 'openai-completions',
+        models: [
+          { id: 'gpt-4o', name: 'GPT-4o', contextWindow: 128000, maxTokens: 4096 },
+          { id: 'gpt-4o-mini', name: 'GPT-4o Mini', contextWindow: 128000, maxTokens: 4096 },
+          { id: 'gpt-4.1', name: 'GPT-4.1', contextWindow: 1000000, maxTokens: 32768 },
+          { id: 'gpt-4.1-mini', name: 'GPT-4.1 Mini', contextWindow: 1000000, maxTokens: 32768 },
+          { id: 'gpt-4.1-nano', name: 'GPT-4.1 Nano', contextWindow: 1000000, maxTokens: 32768 },
+          { id: 'o3-mini', name: 'o3-mini', contextWindow: 200000, maxTokens: 65536 },
+        ],
+      };
+    }
+    if (settings?.own_anthropic_key) {
+      config.models.providers.anthropic = {
+        apiKey: settings.own_anthropic_key,
+        baseUrl: 'https://api.anthropic.com',
+        api: 'anthropic',
+        models: [
+          { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4', contextWindow: 200000, maxTokens: 8192 },
+          { id: 'claude-3-5-haiku-20241022', name: 'Claude 3.5 Haiku', contextWindow: 200000, maxTokens: 8192 },
+          { id: 'claude-opus-4-20250514', name: 'Claude Opus 4', contextWindow: 200000, maxTokens: 8192 },
+        ],
+      };
+    }
+    if (settings?.own_gemini_key) {
+      config.models.providers.gemini = {
+        apiKey: settings.own_gemini_key,
+        baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+        api: 'openai-completions',
+        models: [
+          { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', contextWindow: 1000000, maxTokens: 65536 },
+          { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', contextWindow: 1000000, maxTokens: 65536 },
+          { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', contextWindow: 1000000, maxTokens: 8192 },
+        ],
+      };
+    }
   }
 
   // Ensure the main agent always exists in agents.list — the OpenClaw gateway
@@ -478,10 +540,7 @@ export async function injectApiKeys(
 
   await sshExec(
     serverIp,
-    [
-      `mkdir -p ${INSTANCE_DIR}/${userId}/agents/main/agent`,
-      `rm -f ${INSTANCE_DIR}/${userId}/agents/main/agent/auth-profiles.json`,
-    ].join(' && ')
+    `mkdir -p ${INSTANCE_DIR}/${userId}/agents/main/agent`
   );
 
   console.log(`[apiKeys] Smart routing proxy configured for user ${userId} (plan=${plan}, model=platform/auto, byok=${usingOwnKey})`);

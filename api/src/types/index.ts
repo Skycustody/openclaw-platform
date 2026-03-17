@@ -68,10 +68,9 @@ export interface UserSettings {
   approval_file_delete: boolean;
   approval_commands: boolean;
   approval_social: boolean;
-  /** @deprecated Use OpenRouter instead */
   own_openai_key: string | null;
-  /** @deprecated Use OpenRouter instead */
   own_anthropic_key: string | null;
+  own_gemini_key: string | null;
   own_openrouter_key: string | null;
 }
 

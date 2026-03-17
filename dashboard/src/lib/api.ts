@@ -2,8 +2,11 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 const CONFIG_CHANGE_PATHS = [
   '/settings/', '/channels/', '/skills/', '/agents/', '/cron/',
-  '/settings/brain', '/settings/protection', '/settings/own-openrouter-key',
+  '/settings/brain', '/settings/protection',
+  '/settings/own-openrouter-key', '/settings/own-openai-key',
+  '/settings/own-anthropic-key', '/settings/own-gemini-key',
   '/settings/routing-preferences', '/settings/onboarding',
+  '/settings/provider-auth/',
 ];
 
 function isConfigChange(method: string, path: string): boolean {
