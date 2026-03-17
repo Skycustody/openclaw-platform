@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' http://127.0.0.1:* ws://127.0.0.1:* https://valnaa.com https://api.valnaa.com; img-src 'self' data: http://127.0.0.1:*; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'">
+  <title>Valnaa</title>
+  <link rel="stylesheet" href="../../node_modules/@xterm/xterm/css/xterm.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: #0a0a0a;
+      color: #e0e0e0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      -webkit-app-region: no-drag;
+      user-select: none;
+    }
+
+    .titlebar {
+      height: 38px;
+      background: #111;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      display: flex;
+      align-items: center;
+      padding: 0 80px 0 16px;
+      -webkit-app-region: drag;
+      flex-shrink: 0;
+    }
+    .titlebar-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: rgba(255,255,255,0.7);
+    }
+
+    .tabs {
+      display: flex;
+      background: #0f0f0f;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      padding: 0 12px;
+      flex-shrink: 0;
+    }
+    .tab {
+      padding: 10px 18px;
+      font-size: 13px;
+      font-weight: 500;
+      color: rgba(255,255,255,0.3);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.15s;
+      -webkit-app-region: no-drag;
+    }
+    .tab:hover { color: rgba(255,255,255,0.5); }
+    .tab.active { color: #fff; border-bottom-color: #fff; }
+
+    .content {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+    .panel {
+      position: absolute;
+      inset: 0;
+      display: none;
+    }
+    .panel.active { display: flex; flex-direction: column; }
+
+    #agent-panel webview { flex: 1; border: none; }
+
+    .setup-screen {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      padding: 40px;
+    }
+    .setup-screen h2 { font-size: 20px; font-weight: 700; color: #fff; }
+    .setup-screen p {
+      font-size: 14px;
+      color: rgba(255,255,255,0.4);
+      text-align: center;
+      max-width: 400px;
+      line-height: 1.5;
+    }
+    .spinner {
+      width: 32px; height: 32px;
+      border: 3px solid rgba(255,255,255,0.1);
+      border-top-color: rgba(255,255,255,0.6);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .error-box {
+      background: rgba(239,68,68,0.1);
+      border: 1px solid rgba(239,68,68,0.2);
+      border-radius: 10px;
+      padding: 16px 20px;
+      max-width: 500px;
+      text-align: left;
+    }
+    .error-box h3 { color: #ef4444; font-size: 14px; margin-bottom: 8px; }
+    .error-box p { color: rgba(255,255,255,0.5); font-size: 12px; line-height: 1.5; }
+    .error-details {
+      margin-top: 8px;
+      padding: 8px 10px;
+      background: rgba(0,0,0,0.3);
+      border-radius: 6px;
+      font-family: monospace;
+      font-size: 11px;
+      color: rgba(255,255,255,0.3);
+      max-height: 120px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .btn {
+      padding: 8px 20px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.08);
+      color: #fff;
+      transition: all 0.15s;
+    }
+    .btn:hover { background: rgba(255,255,255,0.14); }
+    .btn:disabled { opacity: 0.3; cursor: default; }
+
+    #logs-panel { padding: 12px; }
+    .logs-viewer {
+      flex: 1;
+      background: #0a0a0a;
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 8px;
+      padding: 12px;
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+      font-size: 11px;
+      line-height: 1.5;
+      color: rgba(255,255,255,0.5);
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .logs-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    #about-panel {
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 40px;
+    }
+    #about-panel h2 { font-size: 20px; font-weight: 700; color: #fff; }
+    #about-panel p { font-size: 13px; color: rgba(255,255,255,0.3); }
+
+    .statusbar {
+      height: 36px;
+      background: #111;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      flex-shrink: 0;
+    }
+    .status-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+    }
+    .status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .status-dot.running { background: #22c55e; box-shadow: 0 0 6px rgba(34,197,94,0.4); }
+    .status-dot.starting { background: #eab308; box-shadow: 0 0 6px rgba(234,179,8,0.4); }
+    .status-dot.stopped { background: #666; }
+    .status-dot.crashed { background: #ef4444; box-shadow: 0 0 6px rgba(239,68,68,0.4); }
+    .status-dot.installing { background: #3b82f6; box-shadow: 0 0 6px rgba(59,130,246,0.4); }
+    .status-text { color: rgba(255,255,255,0.4); }
+    .status-right {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .status-btn {
+      padding: 3px 12px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.04);
+      color: rgba(255,255,255,0.5);
+      transition: all 0.15s;
+    }
+    .status-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+    .status-btn:disabled { opacity: 0.2; cursor: default; }
+    .version-label { font-size: 11px; color: rgba(255,255,255,0.15); margin-left: 8px; }
+
+    /* ── Full-screen overlays ── */
+    .full-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 200;
+      background: #0a0a0a;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      padding: 40px;
+    }
+    .full-overlay.active { display: flex; }
+    .full-overlay h1 { font-size: 24px; font-weight: 700; color: #fff; }
+    .full-overlay p { font-size: 14px; color: rgba(255,255,255,0.4); text-align: center; max-width: 400px; line-height: 1.5; }
+
+    .google-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 28px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.06);
+      color: #fff;
+      font-size: 15px;
+      font-weight: 500;
+      text-decoration: none;
+      transition: all 0.15s;
+      cursor: pointer;
+    }
+    .google-btn:hover { background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.2); }
+    .google-btn svg { width: 20px; height: 20px; }
+
+    .overlay-link {
+      color: rgba(255,255,255,0.3);
+      text-decoration: underline;
+      text-underline-offset: 3px;
+      font-size: 12px;
+      cursor: pointer;
+      background: none;
+      border: none;
+      font-family: inherit;
+    }
+    .overlay-link:hover { color: rgba(255,255,255,0.5); }
+
+    .subscribe-btn {
+      padding: 12px 32px;
+      border-radius: 10px;
+      border: none;
+      background: #6366f1;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .subscribe-btn:hover { background: #818cf8; }
+
+    .waiting-text {
+      font-size: 12px;
+      color: rgba(255,255,255,0.2);
+    }
+
+    /* ── Onboard terminal overlay ── */
+    #onboard-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      background: #0a0a0a;
+      display: none;
+      flex-direction: column;
+      -webkit-app-region: no-drag;
+    }
+    #onboard-overlay.active { display: flex; }
+    #onboard-overlay .titlebar { -webkit-app-region: drag; }
+    #onboard-terminal {
+      flex: 1;
+      padding: 8px;
+      -webkit-app-region: no-drag;
+      user-select: auto;
+      cursor: text;
+      min-height: 0;
+    }
+    #onboard-terminal .xterm { height: 100%; }
+    .onboard-hint {
+      flex-shrink: 0;
+      padding: 6px 12px;
+      font-size: 11px;
+      color: rgba(255,255,255,0.25);
+      background: rgba(0,0,0,0.2);
+      border-top: 1px solid rgba(255,255,255,0.06);
+    }
+    #onboard-terminal .xterm-helper-textarea {
+      position: absolute !important;
+      opacity: 0 !important;
+      pointer-events: auto !important;
+    }
+  </style>
+</head>
+<body>
+  <div class="titlebar">
+    <span class="titlebar-title">Valnaa</span>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="agent">Agent</div>
+    <div class="tab" data-tab="logs">Logs</div>
+    <div class="tab" data-tab="about">About</div>
+  </div>
+
+  <div class="content">
+    <div id="agent-panel" class="panel active">
+      <div id="agent-setup" class="setup-screen">
+        <div class="spinner"></div>
+        <h2 id="setup-title">Starting Valnaa...</h2>
+        <p id="setup-message">This may take a moment on first launch.</p>
+      </div>
+      <webview id="agent-webview" style="display:none; flex:1;"></webview>
+    </div>
+
+    <div id="logs-panel" class="panel">
+      <div class="logs-toolbar">
+        <button class="btn" id="refresh-logs-btn">Refresh</button>
+        <button class="btn" id="open-log-file-btn">Open Log File</button>
+      </div>
+      <div class="logs-viewer" id="logs-content">(Loading...)</div>
+    </div>
+
+    <div id="about-panel" class="panel">
+      <h2>Valnaa</h2>
+      <p id="about-version">v0.1.0</p>
+      <p>Your personal AI agent, powered by OpenClaw.</p>
+      <div id="about-user" style="margin-top: 20px; display: flex; flex-direction: column; gap: 8px; align-items: center;"></div>
+    </div>
+  </div>
+
+  <!-- Auth overlay -->
+  <div id="auth-overlay" class="full-overlay">
+    <h1>Valnaa</h1>
+    <p>Sign in to start using your personal AI agent.</p>
+    <button class="google-btn" id="auth-google-btn">
+      <svg viewBox="0 0 24 24">
+        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
+        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+      </svg>
+      Sign in with Google
+    </button>
+    <p class="waiting-text" id="auth-waiting" style="display:none;">Waiting for sign-in from your browser...</p>
+    <button class="overlay-link" id="auth-valnaa-link">Open valnaa.com</button>
+  </div>
+
+  <!-- Subscribe overlay -->
+  <div id="subscribe-overlay" class="full-overlay">
+    <h1>Subscription Required</h1>
+    <p>You need an active Valnaa subscription to use this app.</p>
+    <p id="subscribe-email" style="font-size: 12px; color: rgba(255,255,255,0.25);"></p>
+    <button class="subscribe-btn" id="subscribe-btn">Subscribe Now</button>
+    <div style="display: flex; gap: 16px; align-items: center;">
+      <button class="overlay-link" id="subscribe-refresh">I already subscribed — refresh</button>
+      <button class="overlay-link" id="subscribe-logout">Sign out</button>
+    </div>
+  </div>
+
+  <!-- Onboard terminal overlay -->
+  <div id="onboard-overlay">
+    <div class="titlebar">
+      <span class="titlebar-title">Valnaa — Setup</span>
+    </div>
+    <div id="onboard-terminal"></div>
+    <div class="onboard-hint">Scroll with mouse wheel or Page Up/Down to see more</div>
+  </div>
+
+  <div class="statusbar">
+    <div class="status-left">
+      <div class="status-dot stopped" id="status-dot"></div>
+      <span class="status-text" id="status-text">Stopped</span>
+    </div>
+    <div class="status-right">
+      <button class="status-btn" id="btn-start">Start</button>
+      <button class="status-btn" id="btn-stop" disabled>Stop</button>
+      <button class="status-btn" id="btn-restart" disabled>Restart</button>
+      <span class="version-label" id="version-label">v0.1.0</span>
+    </div>
+  </div>
+
+  <script type="module">
+    import { Terminal } from '../../node_modules/@xterm/xterm/lib/xterm.mjs';
+    import { FitAddon } from '../../node_modules/@xterm/addon-fit/lib/addon-fit.mjs';
+
+    const oc = window.openclaw;
+
+    // ── Tab switching ──
+    const tabs = document.querySelectorAll('.tab');
+    const panels = document.querySelectorAll('.panel');
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        tabs.forEach(t => t.classList.remove('active'));
+        panels.forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById(tab.dataset.tab + '-panel').classList.add('active');
+        if (tab.dataset.tab === 'logs') refreshLogs();
+      });
+    });
+
+    // ── Elements ──
+    const statusDot = document.getElementById('status-dot');
+    const statusText = document.getElementById('status-text');
+    const btnStart = document.getElementById('btn-start');
+    const btnStop = document.getElementById('btn-stop');
+    const btnRestart = document.getElementById('btn-restart');
+    const setupScreen = document.getElementById('agent-setup');
+    const webview = document.getElementById('agent-webview');
+    const logsContent = document.getElementById('logs-content');
+    const onboardOverlay = document.getElementById('onboard-overlay');
+    const onboardTermEl = document.getElementById('onboard-terminal');
+    const authOverlay = document.getElementById('auth-overlay');
+    const subscribeOverlay = document.getElementById('subscribe-overlay');
+
+    // ══════════════════════════════════
+    //  AUTH + SUBSCRIBE SCREENS
+    // ══════════════════════════════════
+    function showAuthScreen() {
+      authOverlay.classList.add('active');
+      subscribeOverlay.classList.remove('active');
+      onboardOverlay.classList.remove('active');
+      document.getElementById('auth-waiting').style.display = 'none';
+      updateAboutUser(null);
+    }
+
+    function hideAuthScreen() {
+      authOverlay.classList.remove('active');
+    }
+
+    function showSubscribeScreen(info) {
+      subscribeOverlay.classList.add('active');
+      authOverlay.classList.remove('active');
+      onboardOverlay.classList.remove('active');
+      document.getElementById('subscribe-email').textContent = info?.email || '';
+    }
+
+    function hideSubscribeScreen() {
+      subscribeOverlay.classList.remove('active');
+    }
+
+    function updateAboutUser(session) {
+      const el = document.getElementById('about-user');
+      if (session) {
+        el.innerHTML = `
+          <p style="font-size: 13px; color: rgba(255,255,255,0.5);">Signed in as <strong style="color:#fff;">${escapeHtml(session.email)}</strong></p>
+          <button class="overlay-link" id="about-logout">Sign out</button>
+        `;
+        document.getElementById('about-logout')?.addEventListener('click', () => oc.logout());
+      } else {
+        el.innerHTML = `
+          <button class="google-btn" id="about-signin" style="font-size:13px; padding:8px 20px;">
+            <svg viewBox="0 0 24 24" style="width:16px;height:16px;">
+              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
+              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+            </svg>
+            Sign in
+          </button>
+        `;
+        document.getElementById('about-signin')?.addEventListener('click', () => oc.startAuth());
+      }
+    }
+
+    // Auth overlay buttons
+    document.getElementById('auth-google-btn').addEventListener('click', () => {
+      oc.startAuth();
+      document.getElementById('auth-waiting').style.display = 'block';
+    });
+    document.getElementById('auth-valnaa-link').addEventListener('click', () => {
+      oc.openExternal('https://valnaa.com');
+    });
+
+    // Subscribe overlay buttons
+    document.getElementById('subscribe-btn').addEventListener('click', () => oc.openPricing());
+    document.getElementById('subscribe-refresh').addEventListener('click', async () => {
+      const result = await oc.checkSubscription();
+      if (result.ok) {
+        hideSubscribeScreen();
+        window.location.reload();
+      }
+    });
+    document.getElementById('subscribe-logout').addEventListener('click', () => oc.logout());
+
+    // Listen for auth events from main process
+    oc.onShowAuth(() => showAuthScreen());
+    oc.onShowSubscribe((info) => showSubscribeScreen(info));
+    oc.onAuthResult((result) => {
+      if (result.success) {
+        hideAuthScreen();
+        hideSubscribeScreen();
+        updateAboutUser({ email: result.email });
+      }
+    });
+
+    // ── Status updates ──
+    function updateUI(status) {
+      const s = status.state;
+      statusDot.className = 'status-dot ' + s;
+
+      const labels = {
+        stopped: 'Stopped',
+        starting: status.port ? `Starting on :${status.port}...` : 'Starting...',
+        running: status.port ? `Running on :${status.port}` : 'Running',
+        stopping: 'Stopping...',
+        crashed: 'Crashed',
+        installing: 'Installing...',
+      };
+      statusText.textContent = labels[s] || s;
+
+      btnStart.disabled = s === 'running' || s === 'starting' || s === 'installing';
+      btnStop.disabled = s !== 'running';
+      btnRestart.disabled = s !== 'running';
+
+      if (s === 'running' && status.port) {
+        showWebview(status.port, status.gatewayToken);
+      } else if (s === 'crashed') {
+        showSetup('Agent stopped unexpectedly', status.error || 'Check the logs for details.', status.errorDetails, true);
+      } else if (s === 'installing') {
+        showSetup('Installing...', 'This may take a minute on first launch.', null, false);
+      } else if (s === 'starting') {
+        showSetup('Starting agent...', 'Waiting for the gateway to be ready.', null, false);
+      } else if (s === 'stopped') {
+        showSetup('Agent stopped', 'Click Start to run your agent.', null, false);
+      }
+    }
+
+    function showWebview(port, token) {
+      onboardOverlay.classList.remove('active');
+      authOverlay.classList.remove('active');
+      subscribeOverlay.classList.remove('active');
+      setupScreen.style.display = 'none';
+      webview.style.display = 'flex';
+      const base = `http://127.0.0.1:${port}`;
+      const url = token ? `${base}/#token=${encodeURIComponent(token)}` : base;
+      if (!webview.src || !webview.src.includes(':' + port)) {
+        webview.src = url;
+      }
+    }
+
+    function showSetup(title, message, details, isError) {
+      webview.style.display = 'none';
+      setupScreen.style.display = 'flex';
+
+      if (isError) {
+        setupScreen.innerHTML = `
+          <div class="error-box">
+            <h3>${escapeHtml(title)}</h3>
+            <p>${escapeHtml(message)}</p>
+            ${details ? `<div class="error-details">${escapeHtml(details)}</div>` : ''}
+          </div>
+          <button class="btn" onclick="window.openclaw.start()">Try Again</button>
+          <button class="btn" onclick="window.openclaw.openLogFile()">View Logs</button>
+        `;
+      } else {
+        setupScreen.innerHTML = `
+          <div class="spinner"></div>
+          <h2>${escapeHtml(title)}</h2>
+          <p>${escapeHtml(message)}</p>
+        `;
+      }
+    }
+
+    function escapeHtml(s) {
+      if (!s) return '';
+      return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    // ── Install progress ──
+    oc.onInstallProgress((progress) => {
+      if (progress.stage === 'error') {
+        showSetup('Installation failed', progress.message, progress.details, true);
+      } else if (progress.stage === 'done') {
+        showSetup('Starting agent...', 'Installation complete. Starting the gateway...', null, false);
+      } else {
+        showSetup('Installing...', progress.message, null, false);
+      }
+    });
+
+    // ── Webview error handling ──
+    webview.addEventListener('did-fail-load', (e) => {
+      if (e.errorCode === -3) return;
+      setTimeout(() => {
+        if (webview.style.display !== 'none') webview.reload();
+      }, 2000);
+    });
+    webview.addEventListener('crashed', () => {
+      setTimeout(() => webview.reload(), 1000);
+    });
+
+    // ── Controls ──
+    btnStart.addEventListener('click', () => oc.start());
+    btnStop.addEventListener('click', () => oc.stop());
+    btnRestart.addEventListener('click', () => oc.restart());
+
+    // ── Logs ──
+    async function refreshLogs() {
+      const logs = await oc.getLogs();
+      logsContent.textContent = logs;
+      logsContent.scrollTop = logsContent.scrollHeight;
+    }
+    document.getElementById('refresh-logs-btn').addEventListener('click', refreshLogs);
+    document.getElementById('open-log-file-btn').addEventListener('click', () => oc.openLogFile());
+
+    // ── Version ──
+    oc.getVersion().then(v => {
+      document.getElementById('version-label').textContent = 'v' + v;
+      document.getElementById('about-version').textContent = 'v' + v;
+    });
+
+    // ── Subscribe to status changes ──
+    oc.onStatus(updateUI);
+    oc.getStatus().then(updateUI);
+
+    // ── Load session for About panel ──
+    oc.getSession().then(session => updateAboutUser(session));
+
+    // ══════════════════════════════════
+    //  ONBOARD TERMINAL (xterm.js)
+    // ══════════════════════════════════
+    let term = null;
+    let fitAddon = null;
+    let onboardKeyHandler = null;
+
+    function keyToPty(e) {
+      if (e.key === 'PageUp' || e.key === 'PageDown') {
+        if (term && onboardOverlay.classList.contains('active')) {
+          e.preventDefault();
+          e.stopPropagation();
+          term.scrollLines(e.key === 'PageUp' ? -term.rows : term.rows);
+        }
+        return;
+      }
+      const map = {
+        Enter: '\r',
+        Tab: '\t',
+        Backspace: '\x7f',
+        ArrowUp: '\x1b[A',
+        ArrowDown: '\x1b[B',
+        ArrowRight: '\x1b[C',
+        ArrowLeft: '\x1b[D',
+      };
+      if (map[e.key]) {
+        e.preventDefault();
+        e.stopPropagation();
+        oc.sendPtyInput(map[e.key]);
+        return;
+      }
+      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        oc.sendPtyInput(e.key);
+      } else if (e.ctrlKey && e.key === 'c') {
+        e.preventDefault();
+        e.stopPropagation();
+        oc.sendPtyInput('\x03');
+      }
+    }
+
+    function showOnboardTerminal() {
+      onboardOverlay.classList.add('active');
+      authOverlay.classList.remove('active');
+      subscribeOverlay.classList.remove('active');
+
+      if (!term) {
+        term = new Terminal({
+          fontSize: 14,
+          fontFamily: "'SF Mono', 'Fira Code', 'Consolas', 'Menlo', monospace",
+          scrollback: 5000,
+          theme: {
+            background: '#0a0a0a',
+            foreground: '#e0e0e0',
+            cursor: '#e0e0e0',
+            selectionBackground: 'rgba(255,255,255,0.15)',
+          },
+          cursorBlink: true,
+          allowProposedApi: true,
+          disableStdin: true,
+        });
+
+        fitAddon = new FitAddon();
+        term.loadAddon(fitAddon);
+        term.open(onboardTermEl);
+
+        oc.onPtyData((data) => {
+          term.write(data);
+        });
+
+        oc.onPtyExit((code) => {
+          if (onboardKeyHandler) {
+            document.removeEventListener('keydown', onboardKeyHandler);
+            onboardKeyHandler = null;
+          }
+          if (code === 0) {
+            term.writeln('\r\n\x1b[32mSetup complete! Starting your agent...\x1b[0m');
+            setTimeout(() => {
+              onboardOverlay.classList.remove('active');
+            }, 1500);
+          } else {
+            term.writeln(`\r\n\x1b[31mSetup exited with code ${code}. You can close this and try again.\x1b[0m`);
+          }
+        });
+
+        onboardTermEl.addEventListener('wheel', (e) => {
+          if (!onboardOverlay.classList.contains('active')) return;
+          e.preventDefault();
+          const amount = Math.abs(e.deltaY) > 1 ? Math.round(e.deltaY / 3) : Math.sign(e.deltaY);
+          term.scrollLines(amount);
+        }, { passive: false });
+
+        const resizeObserver = new ResizeObserver(() => {
+          if (fitAddon && onboardOverlay.classList.contains('active')) {
+            try { fitAddon.fit(); } catch {}
+            try { oc.resizePty(term.cols, term.rows); } catch {}
+          }
+        });
+        resizeObserver.observe(onboardTermEl);
+      }
+
+      onboardKeyHandler = (e) => {
+        if (!onboardOverlay.classList.contains('active')) return;
+        keyToPty(e);
+      };
+      document.addEventListener('keydown', onboardKeyHandler, true);
+
+      fitAddon.fit();
+      oc.resizePty(term.cols, term.rows);
+
+      oc.startOnboard();
+    }
+
+    // Listen for show-onboard event from main process
+    oc.onShowOnboard(() => {
+      showOnboardTerminal();
+    });
+  </script>
+</body>
+</html>

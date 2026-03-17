@@ -1,0 +1,58 @@
+appId: com.valnaa.app
+productName: Valnaa
+copyright: Copyright © 2026 Valnaa
+
+directories:
+  buildResources: assets
+  output: release
+
+files:
+  - dist/**/*
+  - assets/**/*
+  - "!src/**/*"
+  - "!node_modules/.cache/**/*"
+
+protocols:
+  - name: Valnaa
+    schemes:
+      - valnaa
+
+mac:
+  artifactName: Valnaa.${ext}
+  category: public.app-category.developer-tools
+  target:
+    - target: dmg
+      arch:
+        - universal
+  icon: assets/icon.png
+  darkModeSupport: true
+
+dmg:
+  title: Valnaa
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+
+win:
+  artifactName: Valnaa-Setup.${ext}
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: assets/icon.png
+
+nsis:
+  oneClick: true
+  perMachine: false
+  allowToChangeInstallationDirectory: false
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+
+publish:
+  provider: github
+  owner: Skycustody
+  repo: valnaa-desktop
