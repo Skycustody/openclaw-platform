@@ -159,9 +159,12 @@ export async function reapplyGatewayConfig(
     `openclaw devices approve --latest --token "${token}"`,
   ].join(' 2>/dev/null; ') + ' 2>/dev/null';
 
+  // openclaw devices approve can be slow; use 90s timeout
   await sshExec(
     serverIp,
-    `docker exec ${containerName} sh -c '${commands}'`
+    `docker exec ${containerName} sh -c '${commands}'`,
+    3,
+    90_000
   ).catch((err) => {
     console.warn(`[reapplyGatewayConfig] config/pairing failed for ${containerName}:`, err.message);
   });
