@@ -10,6 +10,7 @@ import {
   Key, Eye, EyeOff, Trash2, Lock, Sparkles, Info, X, ExternalLink,
   Zap, TrendingDown, Settings2, RotateCcw, Check, Code, Globe, Calculator,
   Search, Pen, ImageIcon, FileText, Terminal, MessageSquare, Cpu, Layers,
+  User,
 } from 'lucide-react';
 
 interface Model {
@@ -43,8 +44,16 @@ interface Settings {
   manual_model: string | null;
   has_own_openrouter_key: boolean;
   own_openrouter_key_masked: string | null;
+  has_own_openai_key?: boolean;
+  own_openai_key_masked?: string | null;
+  has_own_anthropic_key?: boolean;
+  own_anthropic_key_masked?: string | null;
+  has_own_gemini_key?: boolean;
+  own_gemini_key_masked?: string | null;
   routing_preferences: Record<string, string>;
 }
+
+type ProviderId = 'openrouter' | 'openai' | 'anthropic' | 'gemini';
 
 interface RoutingEntry {
   id: string;
@@ -88,6 +97,9 @@ export default function RouterPage() {
   const [settings, setSettings] = useState<Settings>({
     brain_mode: 'auto', manual_model: null,
     has_own_openrouter_key: false, own_openrouter_key_masked: null,
+    has_own_openai_key: false, own_openai_key_masked: null,
+    has_own_anthropic_key: false, own_anthropic_key_masked: null,
+    has_own_gemini_key: false, own_gemini_key_masked: null,
     routing_preferences: {},
   });
   const [loading, setLoading] = useState(true);
@@ -97,6 +109,8 @@ export default function RouterPage() {
   const [keyInput, setKeyInput] = useState('');
   const [showKey, setShowKey] = useState(false);
   const [keySaving, setKeySaving] = useState(false);
+  const [otherKeys, setOtherKeys] = useState<Record<ProviderId, string>>({ openrouter: '', openai: '', anthropic: '', gemini: '' });
+  const [otherKeysSaving, setOtherKeysSaving] = useState<ProviderId | null>(null);
   const [routingHistory, setRoutingHistory] = useState<RoutingEntry[]>([]);
   const [tokensSaved, setTokensSaved] = useState(0);
 
@@ -134,6 +148,12 @@ export default function RouterPage() {
           manual_model: s.manual_model || null,
           has_own_openrouter_key: !!s.has_own_openrouter_key,
           own_openrouter_key_masked: s.own_openrouter_key_masked || null,
+          has_own_openai_key: !!s.has_own_openai_key,
+          own_openai_key_masked: s.own_openai_key_masked || null,
+          has_own_anthropic_key: !!s.has_own_anthropic_key,
+          own_anthropic_key_masked: s.own_anthropic_key_masked || null,
+          has_own_gemini_key: !!s.has_own_gemini_key,
+          own_gemini_key_masked: s.own_gemini_key_masked || null,
           routing_preferences: prefs,
         });
         setPrefsDraft(prefs);
@@ -230,6 +250,32 @@ export default function RouterPage() {
     } catch {}
   };
 
+  const saveOtherKey = async (provider: ProviderId) => {
+    const key = otherKeys[provider].trim();
+    if (!key) return;
+    setOtherKeysSaving(provider);
+    try {
+      const endpoint = provider === 'openrouter'
+        ? '/settings/own-openrouter-key'
+        : `/settings/own-${provider}-key`;
+      await api.put(endpoint, { key });
+      setOtherKeys(prev => ({ ...prev, [provider]: '' }));
+      fetchData();
+    } catch (err: any) {
+      alert(err.message || 'Failed to save key');
+    } finally {
+      setOtherKeysSaving(null);
+    }
+  };
+
+  const deleteOtherKey = async (provider: ProviderId) => {
+    if (!confirm(`Remove your ${provider === 'openrouter' ? 'OpenRouter' : provider} key?`)) return;
+    try {
+      await api.delete(provider === 'openrouter' ? '/settings/own-openrouter-key' : `/settings/own-${provider}-key`);
+      fetchData();
+    } catch {}
+  };
+
   const savePrefs = async () => {
     setPrefsSaving(true);
     try {
@@ -257,12 +303,211 @@ export default function RouterPage() {
     );
   }
 
+  const PROVIDERS: Array<{ id: ProviderId; name: string; placeholder: string; helpUrl: string }> = [
+    { id: 'openrouter', name: 'OpenRouter', placeholder: 'sk-or-v1-...', helpUrl: 'https://openrouter.ai/keys' },
+    { id: 'openai', name: 'OpenAI', placeholder: 'sk-...', helpUrl: 'https://platform.openai.com/api-keys' },
+    { id: 'anthropic', name: 'Anthropic', placeholder: 'sk-ant-...', helpUrl: 'https://console.anthropic.com/settings/keys' },
+    { id: 'gemini', name: 'Google Gemini', placeholder: 'AIza...', helpUrl: 'https://aistudio.google.com/apikey' },
+  ];
+
   return (
     <div className="space-y-6">
       <div className="animate-fade-up">
-        <h1 className="text-[26px] font-bold text-white tracking-tight">Model Settings</h1>
+        <h1 className="text-[26px] font-bold text-white tracking-tight">API Keys</h1>
         <p className="mt-1 text-[15px] text-white/40">
-          Configure which AI model your OpenClaw agent uses — changes sync to your container
+          Connect your API keys or subscription accounts — your agent uses these for AI calls
+        </p>
+      </div>
+
+      {/* Connect your subscription */}
+      <Card>
+        <div className="flex items-center gap-2 mb-3">
+          <User className="h-4 w-4 text-white/40" />
+          <CardTitle>Connect your subscription</CardTitle>
+        </div>
+        <CardDescription className="mb-4">
+          Already pay for ChatGPT Plus or Claude Pro? Use those credits here — no API key needed.
+        </CardDescription>
+
+        <div className="space-y-4">
+          <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  <p className="text-[13px] font-medium text-white/80">ChatGPT Plus / Team</p>
+                  {subAuthStatus['openai-codex']?.connected && (
+                    <span className="flex items-center gap-1 text-[11px] text-green-400">
+                      <Check className="h-3 w-3" /> Connected
+                      {subAuthStatus['openai-codex']?.email && (
+                        <span className="text-white/40 ml-1">({subAuthStatus['openai-codex'].email})</span>
+                      )}
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-white/20 mt-0.5">Use your ChatGPT subscription credits</p>
+              </div>
+              {subAuthStatus['openai-codex']?.connected ? (
+                <Button variant="glass" size="sm" onClick={() => disconnectSubAuth('openai-codex')}>Disconnect</Button>
+              ) : !openaiOAuthUrl ? (
+                <Button variant="outline" size="sm" onClick={startOpenAIOAuth} disabled={subAuthLoading === 'openai-start'}>
+                  {subAuthLoading === 'openai-start' ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Sign in with OpenAI'}
+                </Button>
+              ) : (
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={openaiRedirectUrl}
+                    onChange={(e) => setOpenaiRedirectUrl(e.target.value)}
+                    placeholder="Paste callback URL..."
+                    className="w-64 rounded-lg border border-white/[0.08] bg-transparent px-3 py-2 text-[12px] text-white placeholder:text-white/20"
+                  />
+                  <Button size="sm" onClick={completeOpenAIOAuth} disabled={!openaiRedirectUrl.trim() || subAuthLoading === 'openai-complete'}>
+                    {subAuthLoading === 'openai-complete' ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Connect'}
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  <p className="text-[13px] font-medium text-white/80">Claude Pro / Team</p>
+                  {subAuthStatus.anthropic?.connected && (
+                    <span className="flex items-center gap-1 text-[11px] text-green-400"><Check className="h-3 w-3" /> Connected</span>
+                  )}
+                </div>
+                <p className="text-[11px] text-white/20 mt-0.5">Use your Claude subscription credits</p>
+              </div>
+              {subAuthStatus.anthropic?.connected ? (
+                <Button variant="glass" size="sm" onClick={() => disconnectSubAuth('anthropic')}>Disconnect</Button>
+              ) : (
+                <div className="flex gap-2">
+                  <input
+                    type="password"
+                    value={anthropicToken}
+                    onChange={(e) => setAnthropicToken(e.target.value)}
+                    placeholder="Paste Claude setup token..."
+                    className="w-64 rounded-lg border border-white/[0.08] bg-transparent px-3 py-2 text-[12px] text-white placeholder:text-white/20"
+                  />
+                  <Button size="sm" onClick={saveAnthropicToken} disabled={!anthropicToken.trim() || subAuthLoading === 'anthropic'}>
+                    {subAuthLoading === 'anthropic' ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Connect'}
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {/* API Keys */}
+      <Card>
+        <div className="flex items-center gap-2 mb-3">
+          <Key className="h-4 w-4 text-white/40" />
+          <CardTitle>API Keys</CardTitle>
+          <Badge variant="default">Optional</Badge>
+        </div>
+        <CardDescription className="mb-4">
+          Add your own API keys for unlimited usage. You pay the provider directly.
+        </CardDescription>
+
+        <div className="space-y-3">
+          {PROVIDERS.map((p) => {
+            const hasKey = p.id === 'openrouter' ? settings.has_own_openrouter_key : (settings as any)[`has_own_${p.id}_key`];
+            const masked = p.id === 'openrouter' ? settings.own_openrouter_key_masked : (settings as any)[`own_${p.id}_key_masked`];
+            return (
+              <div key={p.id} className="flex items-center justify-between rounded-lg border border-white/[0.06] bg-white/[0.02] px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-500/10 border border-indigo-500/20">
+                    <Key className="h-3.5 w-3.5 text-indigo-400" />
+                  </div>
+                  <div>
+                    <p className="text-[13px] font-medium text-white/70">{p.name}</p>
+                    {hasKey ? (
+                      <p className="text-[11px] text-indigo-400 font-mono">{masked}</p>
+                    ) : (
+                      <p className="text-[11px] text-white/30">No key set</p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {hasKey && p.id !== 'openrouter' && (
+                    <button onClick={() => deleteOtherKey(p.id)} className="p-1.5 rounded-md text-white/20 hover:text-red-400 hover:bg-red-400/10">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  {hasKey && p.id === 'openrouter' && (
+                    <button onClick={deleteOwnKey} className="p-1.5 rounded-md text-white/20 hover:text-red-400 hover:bg-red-400/10">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  {p.id === 'openrouter' ? (
+                    <Button variant="glass" size="sm" onClick={() => { setShowKeyInput(!showKeyInput); setKeyInput(''); setShowKey(false); }}>
+                      {hasKey ? 'Change' : 'Add Key'}
+                    </Button>
+                  ) : (
+                    <>
+                      {!hasKey && (
+                        <input
+                          type="password"
+                          value={otherKeys[p.id]}
+                          onChange={(e) => setOtherKeys(prev => ({ ...prev, [p.id]: e.target.value }))}
+                          placeholder={p.placeholder}
+                          className="w-48 rounded-lg border border-white/[0.08] bg-transparent px-3 py-2 text-[12px] text-white font-mono placeholder:text-white/20"
+                        />
+                      )}
+                      <Button
+                        variant="glass"
+                        size="sm"
+                        onClick={() => hasKey ? deleteOtherKey(p.id) : saveOtherKey(p.id)}
+                        disabled={!hasKey && !otherKeys[p.id].trim()}
+                        loading={otherKeysSaving === p.id}
+                      >
+                        {hasKey ? 'Remove' : 'Save'}
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {showKeyInput && (
+          <div className="mt-3 flex gap-2 pl-11">
+            <div className="relative flex-1">
+              <input
+                type={showKey ? 'text' : 'password'}
+                value={keyInput}
+                onChange={(e) => setKeyInput(e.target.value)}
+                placeholder="sk-or-..."
+                className="w-full rounded-lg border border-white/[0.08] bg-transparent px-3 py-2 pr-8 text-[13px] text-white font-mono placeholder:text-white/20 focus:border-white/25 focus:outline-none"
+              />
+              <button onClick={() => setShowKey(!showKey)} className="absolute right-2 top-1/2 -translate-y-1/2 text-white/20 hover:text-white/50">
+                {showKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+              </button>
+            </div>
+            <Button variant="primary" size="sm" onClick={saveOwnKey} loading={keySaving} disabled={keyInput.length < 10}>Save</Button>
+            <Button variant="glass" size="sm" onClick={() => { setShowKeyInput(false); setKeyInput(''); }}>
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        )}
+
+        <div className="mt-3 flex items-start gap-2 rounded-lg bg-white/[0.02] p-2.5">
+          <Lock className="h-3.5 w-3.5 text-white/20 shrink-0 mt-0.5" />
+          <p className="text-[11px] text-white/30">
+            Keys are stored securely. With your own key: unlimited usage, direct provider billing. Without: platform budget applies.
+          </p>
+        </div>
+      </Card>
+
+      {/* Model Settings */}
+      <div className="animate-fade-up">
+        <h2 className="text-[20px] font-bold text-white tracking-tight">Model Settings</h2>
+        <p className="mt-1 text-[14px] text-white/40">
+          Configure which AI model your agent uses — Auto picks the best model per task
         </p>
       </div>
 
@@ -568,89 +813,6 @@ export default function RouterPage() {
           )}
         </Card>
       )}
-
-      {/* Own OpenRouter Key (BYOK) */}
-      <Card>
-        <div className="flex items-center gap-2 mb-3">
-          <Key className="h-4 w-4 text-white/40" />
-          <CardTitle>Your Own OpenRouter Key</CardTitle>
-          <Badge variant="default">Optional</Badge>
-        </div>
-        <CardDescription className="mb-4">
-          Bring your own OpenRouter key for unlimited AI usage. You pay OpenRouter directly — no platform budget limits apply.
-          {' '}
-          <a href="https://openrouter.ai/keys" target="_blank" rel="noreferrer"
-            className="inline-flex items-center gap-1 text-indigo-400 hover:text-indigo-300 transition-colors">
-            Get a key <ExternalLink className="h-3 w-3" />
-          </a>
-        </CardDescription>
-
-        {settings.has_own_openrouter_key && (
-          <div className="mb-4 rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-3">
-            <p className="text-[12px] text-amber-400/90 font-medium mb-1">Direct OpenRouter Mode</p>
-            <p className="text-[11px] text-amber-400/60">
-              Your agent connects directly to OpenRouter with your key. Smart routing, cost optimization, and token compression are disabled.
-              You choose the model, you pay OpenRouter directly. Remove your key to re-enable the platform&apos;s cost-saving features.
-            </p>
-          </div>
-        )}
-
-        <div className="space-y-3">
-          <div className="flex items-center justify-between rounded-lg border border-white/[0.06] bg-white/[0.02] px-4 py-3">
-            <div className="flex items-center gap-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-500/10 border border-indigo-500/20">
-                <Key className="h-3.5 w-3.5 text-indigo-400" />
-              </div>
-              <div>
-                <p className="text-[13px] font-medium text-white/70">OpenRouter</p>
-                {settings.has_own_openrouter_key ? (
-                  <p className="text-[11px] text-indigo-400 font-mono">{settings.own_openrouter_key_masked}</p>
-                ) : (
-                  <p className="text-[11px] text-white/30">No key set — using included AI budget</p>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              {settings.has_own_openrouter_key && (
-                <button onClick={deleteOwnKey} className="p-1.5 rounded-md text-white/20 hover:text-red-400 hover:bg-red-400/10 transition-colors">
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              )}
-              <Button variant="glass" size="sm" onClick={() => { setShowKeyInput(!showKeyInput); setKeyInput(''); setShowKey(false); }}>
-                {settings.has_own_openrouter_key ? 'Change' : 'Add Key'}
-              </Button>
-            </div>
-          </div>
-
-          {showKeyInput && (
-            <div className="flex gap-2 pl-11">
-              <div className="relative flex-1">
-                <input
-                  type={showKey ? 'text' : 'password'}
-                  value={keyInput}
-                  onChange={(e) => setKeyInput(e.target.value)}
-                  placeholder="sk-or-..."
-                  className="w-full rounded-lg border border-white/[0.08] bg-transparent px-3 py-2 pr-8 text-[13px] text-white font-mono placeholder:text-white/20 focus:border-white/25 focus:outline-none"
-                />
-                <button onClick={() => setShowKey(!showKey)} className="absolute right-2 top-1/2 -translate-y-1/2 text-white/20 hover:text-white/50">
-                  {showKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                </button>
-              </div>
-              <Button variant="primary" size="sm" onClick={saveOwnKey} loading={keySaving} disabled={keyInput.length < 10}>Save</Button>
-              <Button variant="glass" size="sm" onClick={() => { setShowKeyInput(false); setKeyInput(''); }}>
-                <X className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          )}
-        </div>
-
-        <div className="mt-3 flex items-start gap-2 rounded-lg bg-white/[0.02] p-2.5">
-          <Lock className="h-3.5 w-3.5 text-white/20 shrink-0 mt-0.5" />
-          <p className="text-[11px] text-white/30">
-            Your key is stored securely and never displayed in full. With your own key: unlimited usage, direct OpenRouter billing, but no smart routing or cost optimization. Without your key: platform budget applies, but the AI router picks the best model per task and compresses tokens to save you money.
-          </p>
-        </div>
-      </Card>
 
       {/* Info card */}
       <Card className="!bg-white/[0.015]">

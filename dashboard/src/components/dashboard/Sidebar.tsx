@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, Activity, Smartphone, Puzzle, Brain, Clock,
   Globe, Coins, Cpu, User, Shield, MessageSquare, FileText,
-  CreditCard, Store, LogOut, ChevronLeft, Zap, HelpCircle,
+  CreditCard, Store, LogOut, ChevronLeft, Zap, HelpCircle, Key,
 } from 'lucide-react';
 import Image from 'next/image';
 import { useStore } from '@/lib/store';
@@ -23,7 +23,7 @@ const navItems = [
   { href: '/dashboard/cron', label: 'Schedule', icon: Clock },
   { href: '/dashboard/browser', label: 'Browser', icon: Globe },
   { href: '/dashboard/tokens', label: 'Credits', icon: Coins },
-  { href: '/dashboard/router', label: 'Auto', icon: LayoutDashboard },
+  { href: '/dashboard/router', label: 'API Keys', icon: Key },
   { href: '/dashboard/personality', label: 'Persona', icon: User },
   { href: '/dashboard/protection', label: 'Shield', icon: Shield },
   { href: '/dashboard/conversations', label: 'History', icon: MessageSquare },
