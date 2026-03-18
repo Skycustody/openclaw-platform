@@ -115,7 +115,10 @@ function WelcomeContent() {
     }));
   };
 
-  const handleSkip = () => {
+  const handleSkip = async () => {
+    try {
+      await api.post('/settings/onboarding/skip');
+    } catch {}
     router.push('/dashboard');
   };
 

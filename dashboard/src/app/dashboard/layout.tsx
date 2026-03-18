@@ -85,6 +85,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           window.location.href = '/pricing';
           return;
         }
+        // Trial users (pending, no paid) must complete onboarding before dashboard
+        const isTrialUser = !hasPaid && subStatus === 'pending';
+        const onboardingCompleted = data.onboardingCompleted === true;
+        if (!isAdmin && isTrialUser && !onboardingCompleted && typeof window !== 'undefined') {
+          window.location.href = '/welcome';
+          return;
+        }
       })
       .catch(() => {
         if (typeof window !== 'undefined') {

@@ -163,7 +163,8 @@ export default function TrialSetupPage() {
 
   const handleContinue = () => {
     setContinuing(true);
-    window.location.href = '/dashboard';
+    // Trial users go through onboarding before dashboard
+    window.location.href = '/welcome';
   };
 
   const primaryProvider = PROVIDERS[0];

@@ -73,6 +73,7 @@ function AuthForm() {
       }
       api.setToken(token);
       if (isNewUser) {
+        // New users choose: pay (pricing) or free trial (trial-setup)
         window.location.href = `/pricing${referralCode ? `?ref=${encodeURIComponent(referralCode)}` : ''}`;
         return;
       }

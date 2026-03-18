@@ -23,6 +23,7 @@ interface ApiStatus {
   subscriptionStatus: string;
   subdomain: string;
   plan: string;
+  isInTrial?: boolean;
   lastActive: string;
   createdAt: string;
   stats: { messagesToday: number; tokensToday?: number; aiRequestsToday?: number; activeSkills: number };
@@ -255,6 +256,16 @@ export default function MissionControlPage() {
             <p className="text-[17px] font-semibold text-white truncate">{subdomain}.valnaa.com</p>
             <div className="flex items-center gap-2 mt-1 flex-wrap">
               <StatusBadge status={displayStatus} />
+              {apiData?.isInTrial && (
+                <>
+                  <Badge variant="default" className="bg-amber-500/20 text-amber-400 border-amber-500/30">
+                    FREE TRIAL
+                  </Badge>
+                  <a href="/pricing" className="text-[11px] text-amber-400 hover:text-amber-300 underline">
+                    Upgrade
+                  </a>
+                </>
+              )}
               <Badge variant={apiData?.plan === 'business' ? 'amber' : apiData?.plan === 'pro' ? 'blue' : 'default'}>
                 {apiData?.plan?.toUpperCase() || 'STARTER'}
               </Badge>

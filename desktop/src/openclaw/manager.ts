@@ -191,7 +191,15 @@ class OpenClawManager extends EventEmitter {
         this.restartCount++;
         logApp('warn', `Auto-restart attempt ${this.restartCount}/${MAX_RESTART_ATTEMPTS} in ${delay}ms`);
         this.setState('starting');
-        setTimeout(() => {
+        setTimeout(async () => {
+          // If port is already responding (e.g. gateway from prior run), reuse it instead of spawning
+          if (this.port && (await checkPortReady(this.port))) {
+            logApp('info', `Reusing existing gateway on port ${this.port}`);
+            this.reused = true;
+            this.restartCount = 0;
+            this.onGatewayReady();
+            return;
+          }
           const b = findOpenClawBinary();
           if (b) this.spawnProcess(b);
           else this.setState('crashed');

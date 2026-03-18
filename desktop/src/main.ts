@@ -21,6 +21,21 @@ let tray: Tray | null = null;
 let isQuitting = false;
 let onboardPty: pty.IPty | null = null;
 let pendingDeepLink: string | null = null;
+let dockerPollInterval: ReturnType<typeof setInterval> | null = null;
+
+function pollForDockerAndRetry(): void {
+  if (dockerPollInterval) return;
+  dockerPollInterval = setInterval(() => {
+    if (isDockerInstalled()) {
+      if (dockerPollInterval) {
+        clearInterval(dockerPollInterval);
+        dockerPollInterval = null;
+      }
+      logApp('info', 'Docker detected — continuing');
+      autoStart();
+    }
+  }, 5000);
+}
 
 function needsSetup(): boolean {
   const fs = require('fs');
@@ -179,6 +194,20 @@ function spawnPtyTask(task: PtyTask): void {
   });
 
   logApp('info', `PTY spawned (PID ${onboardPty.pid}) for task "${task}"`);
+
+  // Send initial status so user sees something immediately (brew/docker can be slow to output)
+  if (task === 'install-docker') {
+    mainWindow?.webContents.send('pty:data', '\x1b[36mInstalling Docker... This may take a few minutes.\x1b[0m\r\n\r\n');
+    mainWindow?.webContents.send('pty:status', 'Installing Docker...');
+  } else if (task === 'install-nemoclaw' || task === 'setup-nemoclaw') {
+    mainWindow?.webContents.send('pty:data', '\x1b[36mSetting up NemoClaw...\x1b[0m\r\n\r\n');
+    mainWindow?.webContents.send('pty:status', 'Setting up NemoClaw...');
+  } else if (task === 'install') {
+    mainWindow?.webContents.send('pty:data', '\x1b[36mInstalling OpenClaw...\x1b[0m\r\n\r\n');
+    mainWindow?.webContents.send('pty:status', 'Installing OpenClaw...');
+  } else if (task === 'onboard') {
+    mainWindow?.webContents.send('pty:status', 'Configuring agent...');
+  }
 
   onboardPty.onData((data: string) => {
     mainWindow?.webContents.send('pty:data', data);
@@ -379,29 +408,32 @@ async function autoStart(): Promise<void> {
   const runtime = runtimePref.runtime;
 
   if (runtime === 'nemoclaw') {
-    // NemoClaw flow: check prereqs → check binary → check sandbox → start
+    // NemoClaw flow: auto-handle prereqs, no buttons
     if (!isDockerInstalled()) {
-      logApp('warn', 'Docker not installed — cannot run NemoClaw');
       const canInstall = canInstallDocker();
-      mainWindow?.webContents.send('app:show-nemoclaw-prereq', {
-        error: 'Docker is required for NemoClaw but was not found.',
-        hint: canInstall ? 'Click Install Docker to install it automatically.' : 'Install Docker Desktop from docker.com, then restart Valnaa.',
-        dockerNotInstalled: true,
-        dockerNotRunning: false,
-        canInstallDocker: canInstall,
+      if (canInstall) {
+        logApp('info', 'Docker not installed — auto-installing');
+        mainWindow?.webContents.send('app:show-onboard', 'docker-install');
+        return;
+      }
+      logApp('info', 'Docker not installed — opening download, will continue when installed');
+      shell.openExternal('https://www.docker.com/products/docker-desktop/');
+      mainWindow?.webContents.send('app:show-waiting', {
+        title: 'Installing Docker',
+        message: 'Docker download opened. We\'ll continue automatically when Docker is installed.',
       });
+      pollForDockerAndRetry();
       return;
     }
 
     if (!isDockerRunning()) {
-      logApp('warn', 'Docker not running — cannot start NemoClaw sandbox');
-      mainWindow?.webContents.send('app:show-nemoclaw-prereq', {
-        error: 'Docker is installed but not running.',
-        hint: 'Click Start Docker to launch it, then Try Again.',
-        dockerNotInstalled: false,
-        dockerNotRunning: true,
-        canInstallDocker: false,
+      logApp('info', 'Docker not running — auto-starting');
+      mainWindow?.webContents.send('app:show-waiting', {
+        title: 'Starting Docker',
+        message: 'Launching Docker Desktop...',
       });
+      launchDockerDesktop();
+      setTimeout(() => autoStart(), 5000);
       return;
     }
 

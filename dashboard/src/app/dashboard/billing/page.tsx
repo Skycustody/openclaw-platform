@@ -13,6 +13,8 @@ type BillingOverview = {
   status: string;
   stripeCustomerId?: string | null;
   creditSpendThisMonth: number;
+  isInTrial?: boolean;
+  trialEndsAt?: string | null;
 };
 
 type Invoice = {
@@ -123,12 +125,21 @@ export default function BillingPage() {
             </div>
           </div>
 
-          <div className="mt-5 flex items-center gap-3">
+          <div className="mt-5 flex items-center gap-3 flex-wrap">
+            {overview?.isInTrial && (
+              <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30">Free trial</Badge>
+            )}
             <Badge>{overview?.plan || 'unknown'}</Badge>
             <Badge variant={overview?.status === 'active' ? 'green' : overview?.status === 'grace_period' ? 'amber' : 'red'}>
               {overview?.status || 'unknown'}
             </Badge>
           </div>
+
+          {overview?.isInTrial && overview?.trialEndsAt && (
+            <p className="mt-3 text-[13px] text-white/50">
+              Trial ends {new Date(overview.trialEndsAt).toLocaleDateString()}
+            </p>
+          )}
 
           <div className="mt-5">
             <GlassPanel>
@@ -140,10 +151,17 @@ export default function BillingPage() {
           </div>
 
           <div className="mt-5 flex flex-wrap gap-2">
-            <Button variant="primary" onClick={openPortal} loading={portalLoading}>
-              <ExternalLink className="h-4 w-4" />
-              Manage in Stripe
-            </Button>
+            {overview?.stripeCustomerId ? (
+              <Button variant="primary" onClick={openPortal} loading={portalLoading}>
+                <ExternalLink className="h-4 w-4" />
+                Manage in Stripe
+              </Button>
+            ) : (
+              <Button variant="primary" onClick={() => { window.location.href = '/pricing'; }}>
+                <CreditCard className="h-4 w-4" />
+                Upgrade to paid plan
+              </Button>
+            )}
             <Button variant="glass" onClick={load}>
               Refresh
             </Button>

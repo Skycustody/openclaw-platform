@@ -633,11 +633,13 @@
         const nemoReq = document.getElementById('nemoclaw-req');
 
         if (!info.dockerInstalled) {
-          nemoCard.classList.add('disabled');
-          nemoReq.textContent = 'Docker not installed — get Docker Desktop from docker.com';
+          nemoReq.textContent = info.canInstallDocker
+            ? 'Docker not installed — click to install'
+            : 'Docker not installed — click for options';
+          nemoCard.classList.toggle('disabled', !info.canInstallDocker);
         } else if (!info.dockerRunning) {
           nemoCard.classList.add('disabled');
-          nemoReq.textContent = 'Docker is installed but not running — start Docker Desktop';
+          nemoReq.textContent = 'Docker installed but not running — click to start';
         } else {
           nemoCard.classList.remove('disabled');
           nemoReq.textContent = 'Requires: Docker Desktop (detected and running)';
@@ -699,9 +701,7 @@
       oc.setRuntime('openclaw');
     });
 
-    document.getElementById('pick-nemoclaw').addEventListener('click', async () => {
-      const info = await oc.getRuntime();
-      if (!info.dockerInstalled || !info.dockerRunning) return;
+    document.getElementById('pick-nemoclaw').addEventListener('click', () => {
       hideRuntimePicker();
       oc.setRuntime('nemoclaw');
     });
@@ -913,7 +913,14 @@
       }
     }
 
+    let currentOnboardTask = null;
     function showOnboardTerminal(task) {
+      currentOnboardTask = task || null;
+      const hintEl = document.getElementById('onboard-hint-text');
+      if (task === 'docker-install') hintEl.textContent = 'Installing Docker...';
+      else if (task === 'install-nemoclaw' || task === 'setup-nemoclaw') hintEl.textContent = 'Setting up NemoClaw...';
+      else if (task === 'install') hintEl.textContent = 'Installing OpenClaw...';
+      else hintEl.textContent = 'Scroll with mouse wheel or Page Up/Down to see more';
       onboardOverlay.classList.add('active');
       authOverlay.classList.remove('active');
       subscribeOverlay.classList.remove('active');
@@ -942,6 +949,9 @@
 
         oc.onPtyData((data) => {
           term.write(data);
+        });
+        oc.onPtyStatus((status) => {
+          document.getElementById('onboard-hint-text').textContent = status;
         });
 
         oc.onPtyExit((code) => {
@@ -999,7 +1009,8 @@
       document.getElementById('onboard-fail-actions').style.display = 'none';
       document.getElementById('onboard-hint-text').textContent = 'Retrying...';
       if (term) term.clear();
-      oc.startOnboard();
+      if (currentOnboardTask === 'docker-install') oc.startDockerInstall();
+      else oc.startOnboard();
     });
     document.getElementById('onboard-close-btn').addEventListener('click', () => {
       onboardOverlay.classList.remove('active');
@@ -1014,8 +1025,17 @@
     });
 
     // Listen for show-onboard event from main process
-    oc.onShowOnboard(() => {
-      showOnboardTerminal();
+    oc.onShowOnboard((task) => {
+      showOnboardTerminal(task || undefined);
+    });
+
+    oc.onShowWaiting((info) => {
+      authOverlay.classList.remove('active');
+      subscribeOverlay.classList.remove('active');
+      runtimeOverlay.classList.remove('active');
+      nemoPrereqOverlay.classList.remove('active');
+      onboardOverlay.classList.remove('active');
+      showSetup(info.title, info.message, null, false);
     });
 
     // Signal main process that renderer is ready to receive messages

@@ -300,6 +300,16 @@ router.put('/protection', async (req: AuthRequest, res: Response, next: NextFunc
   }
 });
 
+// Mark onboarding as completed (skip flow)
+router.post('/onboarding/skip', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    await db.query('UPDATE users SET onboarding_completed = true WHERE id = $1', [req.userId]);
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Save onboarding answers and push to agent
 router.post('/onboarding', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
@@ -334,6 +344,8 @@ router.post('/onboarding', async (req: AuthRequest, res: Response, next: NextFun
        WHERE user_id = $5`,
       [answers.name || null, agentTone, responseLength, customInstructions, req.userId]
     );
+
+    await db.query('UPDATE users SET onboarding_completed = true WHERE id = $1', [req.userId]);
 
     syncSettingsToContainer(req.userId!).catch(() => {});
     res.json({ ok: true });

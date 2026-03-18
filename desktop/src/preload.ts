@@ -69,16 +69,28 @@ contextBridge.exposeInMainWorld('openclaw', {
     return () => ipcRenderer.removeListener('pty:data', handler);
   },
 
+  onPtyStatus: (cb: (status: string) => void) => {
+    const handler = (_: any, status: string) => cb(status);
+    ipcRenderer.on('pty:status', handler);
+    return () => ipcRenderer.removeListener('pty:status', handler);
+  },
+
   onPtyExit: (cb: (code: number) => void) => {
     const handler = (_: any, code: number) => cb(code);
     ipcRenderer.on('pty:exit', handler);
     return () => ipcRenderer.removeListener('pty:exit', handler);
   },
 
-  onShowOnboard: (cb: () => void) => {
-    const handler = () => cb();
+  onShowOnboard: (cb: (task?: string) => void) => {
+    const handler = (_e: Electron.IpcRendererEvent, task?: string) => cb(task);
     ipcRenderer.on('app:show-onboard', handler);
     return () => ipcRenderer.removeListener('app:show-onboard', handler);
+  },
+
+  onShowWaiting: (cb: (info: { title: string; message: string }) => void) => {
+    const handler = (_e: Electron.IpcRendererEvent, info: { title: string; message: string }) => cb(info);
+    ipcRenderer.on('app:show-waiting', handler);
+    return () => ipcRenderer.removeListener('app:show-waiting', handler);
   },
 
   onStatus: (cb: (status: any) => void) => {

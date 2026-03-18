@@ -28,6 +28,7 @@ export interface User {
   trial_data_retention_until: Date | null;
   api_budget_addon_usd: number;
   is_admin: boolean;
+  onboarding_completed: boolean;
   created_at: Date;
   last_active: Date;
 }

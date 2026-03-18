@@ -210,6 +210,8 @@ router.get('/status', async (req: AuthRequest, res: Response, next: NextFunction
     const trialEndsAt = user.trial_ends_at ? new Date(user.trial_ends_at).toISOString() : null;
     const statusIsInTrial = trialEndsAt && new Date(trialEndsAt) > new Date() && !user.stripe_customer_id;
 
+    const onboardingCompleted = !!user.onboarding_completed;
+
     res.json({
       userId: user.id,
       email: user.email,
@@ -223,6 +225,7 @@ router.get('/status', async (req: AuthRequest, res: Response, next: NextFunction
       hasPaid: !!user.stripe_customer_id,
       isInTrial: !!statusIsInTrial,
       trialEndsAt,
+      onboardingCompleted,
       previewUrl,
       stats: {
         messagesToday,
