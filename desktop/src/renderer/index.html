@@ -26,7 +26,8 @@
       border-bottom: 1px solid rgba(255,255,255,0.06);
       display: flex;
       align-items: center;
-      padding: 0 80px 0 16px;
+      justify-content: center;
+      padding: 0 80px;
       -webkit-app-region: drag;
       flex-shrink: 0;
     }
@@ -34,6 +35,11 @@
       font-size: 13px;
       font-weight: 600;
       color: rgba(255,255,255,0.7);
+    }
+    .titlebar-runtime {
+      font-weight: 400;
+      color: rgba(255,255,255,0.35);
+      margin-left: 6px;
     }
 
     .tabs {
@@ -556,7 +562,7 @@
 </head>
 <body>
   <div class="titlebar">
-    <span class="titlebar-title">Valnaa</span>
+    <span class="titlebar-title">Valnaa<span class="titlebar-runtime" id="titlebar-runtime"></span></span>
   </div>
 
   <div class="tabs">
@@ -911,14 +917,17 @@
     function updateAboutRuntime(runtime) {
       const label = document.getElementById('about-runtime-label');
       const badge = document.getElementById('about-runtime-badge');
+      const titleRuntime = document.getElementById('titlebar-runtime');
       if (runtime === 'nemoclaw') {
         label.textContent = 'Your personal AI agent, powered by NemoClaw.';
         badge.textContent = 'NemoClaw (NVIDIA)';
         badge.className = 'runtime-card-badge badge-purple';
+        titleRuntime.textContent = '\u2014 NemoClaw';
       } else {
         label.textContent = 'Your personal AI agent, powered by OpenClaw.';
         badge.textContent = 'OpenClaw';
         badge.className = 'runtime-card-badge badge-green';
+        titleRuntime.textContent = '\u2014 OpenClaw';
       }
     }
 

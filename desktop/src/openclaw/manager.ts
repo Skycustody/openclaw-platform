@@ -10,7 +10,7 @@ import { logApp, logOpenclaw } from './logger';
 import { findOpenClawBinary, findNemoClawBinary } from './installer';
 import { startHealthPolling, stopHealthPolling, HealthStatus } from './health';
 import { findAvailablePort, PortResult } from '../lib/ports';
-import { loadRuntime, RuntimeType, isSandboxReady, ensurePortForward, OPENCLAW_PORT } from '../lib/runtime';
+import { loadRuntime, RuntimeType, isSandboxReady, ensurePortForward, OPENCLAW_PORT, readSandboxGatewayToken, clearSandboxTokenCache } from '../lib/runtime';
 
 function checkPortReady(port: number): Promise<boolean> {
   return new Promise((resolve) => {
@@ -37,6 +37,10 @@ export interface AgentStatus {
 }
 
 function readGatewayToken(): string | null {
+  const pref = loadRuntime();
+  if (pref?.runtime === 'nemoclaw') {
+    return readSandboxGatewayToken();
+  }
   try {
     const cfgPath = path.join(getOpenClawDir(), 'openclaw.json');
     const raw = fs.readFileSync(cfgPath, 'utf-8');
@@ -234,6 +238,7 @@ class OpenClawManager extends EventEmitter {
    */
   private connectToNemoClawSandbox(): void {
     this.setState('starting');
+    clearSandboxTokenCache();
     logApp('info', 'Connecting to NemoClaw sandbox...');
 
     const { execSync } = require('child_process');

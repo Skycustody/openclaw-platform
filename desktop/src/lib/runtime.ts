@@ -349,6 +349,50 @@ export function isOnboardComplete(): boolean {
   }
 }
 
+let cachedSandboxToken: string | null = null;
+
+/**
+ * Read the gateway auth token from the NemoClaw sandbox's openclaw.json.
+ * The sandbox user is "sandbox" and its home is /sandbox, so the config
+ * lives at /sandbox/.openclaw/openclaw.json (not /root/).
+ * Result is cached in memory to avoid repeated SSH round-trips.
+ */
+export function readSandboxGatewayToken(): string | null {
+  if (cachedSandboxToken) return cachedSandboxToken;
+
+  try {
+    if (isIntelMac() && isOpenShellSidecarRunning()) {
+      const raw = execSyncSafe(
+        `docker exec ${OPENSHELL_SIDECAR} ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR ` +
+        `openshell-${SANDBOX_NAME} "cat /sandbox/.openclaw/openclaw.json"`,
+        10000,
+      );
+      const cfg = JSON.parse(raw);
+      cachedSandboxToken = cfg?.gateway?.auth?.token || null;
+    } else {
+      const raw = execSyncSafe(
+        `openshell ssh ${SANDBOX_NAME} --gateway ${GATEWAY_NAME} -- cat /sandbox/.openclaw/openclaw.json`,
+        10000,
+      );
+      const cfg = JSON.parse(raw);
+      cachedSandboxToken = cfg?.gateway?.auth?.token || null;
+    }
+  } catch (err: any) {
+    logApp('warn', `Failed to read sandbox gateway token: ${err.message}`);
+    return null;
+  }
+
+  if (cachedSandboxToken) {
+    logApp('info', 'Read sandbox gateway token successfully');
+  }
+  return cachedSandboxToken;
+}
+
+/** Clear the cached sandbox token (call on reconnect/restart). */
+export function clearSandboxTokenCache(): void {
+  cachedSandboxToken = null;
+}
+
 /**
  * Check if the SSH tunnel for port 18789 is alive inside the sidecar.
  * Returns true when an ssh process is listening on the port.
