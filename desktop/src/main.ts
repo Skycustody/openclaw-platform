@@ -7,7 +7,7 @@ import { manager, AgentStatus } from './openclaw/manager';
 import { installOpenClaw, findOpenClawBinary, isNodeInstalled, getInstallScriptCommand, findNemoClawBinary, getNemoClawInstallScriptCommand, getNemoClawSetupScriptCommand } from './openclaw/installer';
 import { readRecentLogs, getLogFilePath, logApp, closeStreams } from './openclaw/logger';
 import { loadSession, saveSession, clearSession, checkSubscription, parseDeepLinkToken, parseDeepLinkEmail } from './lib/session';
-import { loadRuntime, saveRuntime, clearRuntime, isNemoClawSupported, isDockerInstalled, isDockerRunning, canInstallDocker, getDockerInstallCommand, launchDockerDesktop, RuntimeType, isIntelMac, isOpenShellInstalled, isSidecarReady, setupOpenShellSidecar, ensureSidecarNetworking, isOnboardComplete, getNemoClawOnboardCommand, applySandboxSettings, readSandboxConfig } from './lib/runtime';
+import { loadRuntime, saveRuntime, clearRuntime, isNemoClawSupported, isDockerInstalled, isDockerRunning, canInstallDocker, getDockerInstallCommand, launchDockerDesktop, RuntimeType, isIntelMac, isOpenShellInstalled, isSidecarReady, setupOpenShellSidecar, ensureSidecarNetworking, isOnboardComplete, getNemoClawOnboardCommand } from './lib/runtime';
 import { getAppDataDir } from './lib/platform';
 
 const PROTOCOL = 'valnaa';
@@ -44,12 +44,10 @@ function buildSetupSteps(runtime: RuntimeType): SetupStep[] {
       steps.push({ id: 'openshell-sidecar', label: 'Install OpenShell (Intel Mac)', status: isSidecarReady() ? 'done' : 'pending' });
     }
     const onboardDone = isOnboardComplete();
-    const settingsDone = isNemoClawSettingsDone();
     steps.push(
       { id: 'nemoclaw-install', label: 'Install NemoClaw', status: findNemoClawBinary() ? 'done' : 'pending' },
       { id: 'collect-api-key', label: 'Configure API key', status: (onboardDone || loadPersistedApiKey() !== null) ? 'done' : 'pending' },
       { id: 'nemoclaw-onboard', label: 'Set up NemoClaw', status: onboardDone ? 'done' : 'pending' },
-      { id: 'nemoclaw-settings', label: 'Configure your agent', status: settingsDone ? 'done' : 'pending' },
       { id: 'start', label: 'Start agent', status: 'pending' },
     );
     return steps;
@@ -135,9 +133,10 @@ function spawnPtyTaskAsync(task: PtyTask): Promise<void> {
 }
 
 /**
- * Run `nemoclaw onboard` in a PTY with automatic prompt responses.
- * Handles: gateway deploy, sandbox creation, inference config, port forward, registry.
- * The NVIDIA_API_KEY is passed via environment so onboard can configure inference.
+ * Run `nemoclaw onboard` interactively in a PTY.
+ * The user sees NemoClaw's own setup wizard and can answer prompts
+ * (sandbox name, inference provider, presets, etc.) themselves.
+ * The NVIDIA_API_KEY is passed via environment if previously collected.
  */
 function spawnNemoClawOnboardAsync(): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -149,7 +148,7 @@ function spawnNemoClawOnboardAsync(): Promise<void> {
     const savedKey = loadPersistedApiKey();
     const command = getNemoClawOnboardCommand();
     const shellName = process.platform === 'win32' ? 'powershell.exe' : '/bin/zsh';
-    logApp('info', `PTY nemoclaw-onboard: ${command}`);
+    logApp('info', `PTY nemoclaw-onboard (interactive): ${command}`);
 
     const localBin = path.join(os.homedir(), '.local', 'bin');
     const envPath = process.env.PATH || '';
@@ -173,33 +172,11 @@ function spawnNemoClawOnboardAsync(): Promise<void> {
 
     logApp('info', `PTY spawned (PID ${onboardPty.pid}) for nemoclaw-onboard`);
 
-    const autoResponses = [
-      { pattern: /sandbox name/i, response: 'nemoclaw\n', sent: false },
-      { pattern: /choose \[/i, response: '\n', sent: false },
-      { pattern: /apply suggested presets/i, response: 'Y\n', sent: false },
-      { pattern: /recreate\?/i, response: 'y\n', sent: false },
-    ];
-    let lineBuffer = '';
-
     onboardPty.onData((data: string) => {
       mainWindow?.webContents.send('pty:data', data);
 
-      // Strip ANSI escape sequences for log readability
       const clean = data.replace(/\x1B\[[0-9;]*[A-Za-z]/g, '').trim();
       if (clean) logApp('info', `[onboard-pty] ${clean.substring(0, 200)}`);
-
-      lineBuffer += data;
-      if (lineBuffer.length > 500) lineBuffer = lineBuffer.slice(-500);
-
-      for (const ar of autoResponses) {
-        if (!ar.sent && ar.pattern.test(lineBuffer)) {
-          ar.sent = true;
-          logApp('info', `Auto-responding to onboard prompt: ${ar.pattern}`);
-          setTimeout(() => onboardPty?.write(ar.response), 300);
-          lineBuffer = '';
-          break;
-        }
-      }
     });
 
     onboardPty.onExit(({ exitCode }) => {
@@ -290,31 +267,6 @@ function loadPersistedApiKey(): { provider: string; key: string } | null {
 }
 
 // ════════════════════════════════════
-//  NemoClaw Settings (post-onboard)
-// ════════════════════════════════════
-const NEMOCLAW_SETTINGS_FLAG = path.join(getAppDataDir(), 'nemoclaw-settings-done');
-
-function isNemoClawSettingsDone(): boolean {
-  const fs = require('fs');
-  try { fs.accessSync(NEMOCLAW_SETTINGS_FLAG); return true; } catch { return false; }
-}
-
-function markNemoClawSettingsDone(): void {
-  const fs = require('fs');
-  const dir = path.dirname(NEMOCLAW_SETTINGS_FLAG);
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(NEMOCLAW_SETTINGS_FLAG, new Date().toISOString());
-}
-
-let nemoSettingsResolver: ((settings: any) => void) | null = null;
-
-function waitForNemoClawSettings(): Promise<any> {
-  return new Promise((resolve) => {
-    nemoSettingsResolver = resolve;
-  });
-}
-
-// ════════════════════════════════════
 //  Setup Flow Orchestrator
 // ════════════════════════════════════
 async function runSetupFlow(runtime: RuntimeType): Promise<void> {
@@ -402,35 +354,6 @@ async function runSetupFlow(runtime: RuntimeType): Promise<void> {
             step.detail = 'Running NemoClaw setup (this may take several minutes)...';
             sendSteps(steps);
             await spawnNemoClawOnboardAsync();
-            break;
-          }
-          case 'nemoclaw-settings': {
-            if (isNemoClawSettingsDone()) break;
-            step.detail = 'Configure your agent...';
-            sendSteps(steps);
-            // Start the gateway first so user can test while configuring
-            await manager.start();
-            await new Promise(r => setTimeout(r, 500));
-
-            const existingConfig = readSandboxConfig();
-            mainWindow?.webContents.send('app:show-nemoclaw-settings', {
-              hasNvidia: !!existingConfig?.models?.providers?.nvidia,
-              hasOpenAI: !!existingConfig?.models?.providers?.openai,
-              hasAnthropic: !!existingConfig?.models?.providers?.anthropic,
-              agentName: existingConfig?.agents?.defaults?.name || '',
-              channels: existingConfig?.channels || {},
-            });
-            const userSettings = await waitForNemoClawSettings();
-            try {
-              applySandboxSettings(userSettings);
-              step.detail = 'Applying settings...';
-              sendSteps(steps);
-              // Wait for gateway to reload config
-              await new Promise(r => setTimeout(r, 3000));
-            } catch (err: any) {
-              logApp('warn', `Failed to apply sandbox settings: ${err.message}`);
-            }
-            markNemoClawSettingsDone();
             break;
           }
           case 'openclaw-install': {
@@ -732,12 +655,6 @@ function setupIPC(): void {
     }
   });
 
-  ipcMain.handle('setup:submit-nemoclaw-settings', (_e, settings: any) => {
-    if (nemoSettingsResolver) {
-      nemoSettingsResolver(settings);
-      nemoSettingsResolver = null;
-    }
-  });
 
   // PTY IPC (legacy fallback)
   ipcMain.handle('pty:start-onboard', () => {
