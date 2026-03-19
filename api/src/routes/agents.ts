@@ -332,7 +332,6 @@ async function syncBindingsToContainer(
 
       if (type === 'telegram') {
         config.channels[channelKey] = {
-          enabled: true,
           botToken: ch.token,
           dmPolicy: 'open',
           allowFrom: ['*'],
@@ -340,7 +339,6 @@ async function syncBindingsToContainer(
         };
       } else if (type === 'discord') {
         config.channels[channelKey] = {
-          enabled: true,
           token: ch.token,
           dmPolicy: 'open',
           allowFrom: ['*'],
@@ -348,7 +346,6 @@ async function syncBindingsToContainer(
         };
       } else if (type === 'slack') {
         config.channels[channelKey] = {
-          enabled: true,
           token: ch.token,
           ...(ch.config?.teamId ? { teamId: ch.config.teamId } : {}),
         };
@@ -359,7 +356,7 @@ async function syncBindingsToContainer(
         };
       }
 
-      config.bindings.push({ channel: channelKey, agentId });
+      config.bindings.push({ agentId, match: { channel: channelKey } });
     });
   }
 
@@ -382,6 +379,17 @@ async function syncBindingsToContainer(
     const tgtId = comm.target_ocid || 'main';
     if (!allowMap[srcId]) allowMap[srcId] = [];
     if (!allowMap[srcId].includes(tgtId)) allowMap[srcId].push(tgtId);
+  }
+
+  // Strip "enabled" from all channel entries — OpenClaw schema doesn't recognize it
+  if (config.channels && typeof config.channels === 'object') {
+    for (const key of Object.keys(config.channels)) {
+      const ch = config.channels[key];
+      if (ch && typeof ch === 'object') {
+        delete ch.enabled;
+        if (Object.keys(ch).length === 0) delete config.channels[key];
+      }
+    }
   }
 
   // Clean up any previously-written subagents keys — OpenClaw's schema
@@ -746,12 +754,11 @@ router.post('/:agentId/channels', async (req: AuthRequest, res: Response, next: 
     // Also update legacy user_channels for backward compatibility
     await updateLegacyChannels(req.userId!, channelType, true);
 
-    // Sync to container
+    // Sync to container — injectApiKeys already handles channels + bindings from agent_channels
     try {
       const container = await getUserContainer(req.userId!);
       const chanUser = await db.getOne<User>('SELECT plan FROM users WHERE id = $1', [req.userId]);
       await injectApiKeys(container.serverIp, req.userId!, container.containerName, (chanUser?.plan || 'starter') as any);
-      await syncBindingsToContainer(container.serverIp, req.userId!);
       await restartContainerHelper(container.serverIp, container.containerName, 15000);
       await reapplyGatewayConfig(container.serverIp, req.userId!, container.containerName);
     } catch (err) {

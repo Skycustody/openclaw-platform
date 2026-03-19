@@ -325,7 +325,7 @@ export async function injectApiKeys(
   ).catch(() => []);
 
   for (const ag of dbAgents) {
-    const ocId = ag.is_primary ? 'main' : (ag.openclaw_agent_id || ag.name.toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 20));
+    const ocId = ag.is_primary ? 'main' : (ag.openclaw_agent_id || ag.name.trim().toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').slice(0, 20));
     const existIdx = config.agents.list.findIndex((a: any) => a.id === ocId);
     const entry = {
       id: ocId,
@@ -387,7 +387,7 @@ export async function injectApiKeys(
   delete config.personality;
 
   // ── Per-agent channel bindings ──
-  // Merge channel connections from agent_channels table into config
+  // Clear and repopulate from agent_channels (avoids stale bindings when re-syncing)
   try {
     const agentChannels = await db.getMany<{
       channel_type: string; token: string | null; config: any;
@@ -403,10 +403,22 @@ export async function injectApiKeys(
       [userId]
     );
 
-    if (agentChannels.length > 0) {
-      if (!config.channels) config.channels = {};
-      if (!config.bindings) config.bindings = [];
+    if (!config.channels) config.channels = {};
+    if (!config.bindings) config.bindings = [];
 
+    // Clear managed channel types and bindings to avoid duplicates from previous syncs
+    for (const type of ['telegram', 'discord', 'slack', 'whatsapp', 'signal']) {
+      delete config.channels[type];
+      for (let i = 2; i <= 10; i++) delete config.channels[`${type}-${i}`];
+    }
+    config.bindings = (config.bindings || []).filter(
+      (b: { match?: { channel?: string } }) => {
+        const ch = b.match?.channel;
+        return !ch || !['telegram', 'discord', 'slack', 'whatsapp', 'signal'].some(t => ch === t || ch.startsWith(`${t}-`));
+      }
+    );
+
+    if (agentChannels.length > 0) {
       const countByType: Record<string, number> = {};
 
       for (const ch of agentChannels) {
@@ -414,7 +426,7 @@ export async function injectApiKeys(
         const idx = countByType[ch.channel_type];
         const channelKey = idx === 1 ? ch.channel_type : `${ch.channel_type}-${idx}`;
         const agentId = ch.agent_is_primary ? 'main'
-          : (ch.agent_ocid || ch.agent_name.toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 20));
+          : (ch.agent_ocid || ch.agent_name.trim().toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').slice(0, 20));
 
         if (ch.channel_type === 'telegram' && ch.token) {
           config.channels[channelKey] = {
@@ -434,7 +446,7 @@ export async function injectApiKeys(
           config.channels[channelKey] = { dmPolicy: 'open', allowFrom: ['*'] };
         }
 
-        config.bindings.push({ channel: channelKey, agentId });
+        config.bindings.push({ agentId, match: { channel: channelKey } });
       }
     }
   } catch (err) {
