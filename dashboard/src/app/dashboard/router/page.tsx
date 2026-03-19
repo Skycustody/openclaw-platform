@@ -44,16 +44,8 @@ interface Settings {
   manual_model: string | null;
   has_own_openrouter_key: boolean;
   own_openrouter_key_masked: string | null;
-  has_own_openai_key?: boolean;
-  own_openai_key_masked?: string | null;
-  has_own_anthropic_key?: boolean;
-  own_anthropic_key_masked?: string | null;
-  has_own_gemini_key?: boolean;
-  own_gemini_key_masked?: string | null;
   routing_preferences: Record<string, string>;
 }
-
-type ProviderId = 'openrouter' | 'openai' | 'anthropic' | 'gemini';
 
 interface RoutingEntry {
   id: string;
@@ -97,9 +89,6 @@ export default function RouterPage() {
   const [settings, setSettings] = useState<Settings>({
     brain_mode: 'auto', manual_model: null,
     has_own_openrouter_key: false, own_openrouter_key_masked: null,
-    has_own_openai_key: false, own_openai_key_masked: null,
-    has_own_anthropic_key: false, own_anthropic_key_masked: null,
-    has_own_gemini_key: false, own_gemini_key_masked: null,
     routing_preferences: {},
   });
   const [loading, setLoading] = useState(true);
@@ -109,8 +98,6 @@ export default function RouterPage() {
   const [keyInput, setKeyInput] = useState('');
   const [showKey, setShowKey] = useState(false);
   const [keySaving, setKeySaving] = useState(false);
-  const [otherKeys, setOtherKeys] = useState<Record<ProviderId, string>>({ openrouter: '', openai: '', anthropic: '', gemini: '' });
-  const [otherKeysSaving, setOtherKeysSaving] = useState<ProviderId | null>(null);
   const [routingHistory, setRoutingHistory] = useState<RoutingEntry[]>([]);
   const [tokensSaved, setTokensSaved] = useState(0);
 
@@ -148,12 +135,6 @@ export default function RouterPage() {
           manual_model: s.manual_model || null,
           has_own_openrouter_key: !!s.has_own_openrouter_key,
           own_openrouter_key_masked: s.own_openrouter_key_masked || null,
-          has_own_openai_key: !!s.has_own_openai_key,
-          own_openai_key_masked: s.own_openai_key_masked || null,
-          has_own_anthropic_key: !!s.has_own_anthropic_key,
-          own_anthropic_key_masked: s.own_anthropic_key_masked || null,
-          has_own_gemini_key: !!s.has_own_gemini_key,
-          own_gemini_key_masked: s.own_gemini_key_masked || null,
           routing_preferences: prefs,
         });
         setPrefsDraft(prefs);
@@ -250,32 +231,6 @@ export default function RouterPage() {
     } catch {}
   };
 
-  const saveOtherKey = async (provider: ProviderId) => {
-    const key = otherKeys[provider].trim();
-    if (!key) return;
-    setOtherKeysSaving(provider);
-    try {
-      const endpoint = provider === 'openrouter'
-        ? '/settings/own-openrouter-key'
-        : `/settings/own-${provider}-key`;
-      await api.put(endpoint, { key });
-      setOtherKeys(prev => ({ ...prev, [provider]: '' }));
-      fetchData();
-    } catch (err: any) {
-      alert(err.message || 'Failed to save key');
-    } finally {
-      setOtherKeysSaving(null);
-    }
-  };
-
-  const deleteOtherKey = async (provider: ProviderId) => {
-    if (!confirm(`Remove your ${provider === 'openrouter' ? 'OpenRouter' : provider} key?`)) return;
-    try {
-      await api.delete(provider === 'openrouter' ? '/settings/own-openrouter-key' : `/settings/own-${provider}-key`);
-      fetchData();
-    } catch {}
-  };
-
   const savePrefs = async () => {
     setPrefsSaving(true);
     try {
@@ -303,12 +258,7 @@ export default function RouterPage() {
     );
   }
 
-  const PROVIDERS: Array<{ id: ProviderId; name: string; placeholder: string; helpUrl: string }> = [
-    { id: 'openrouter', name: 'OpenRouter', placeholder: 'sk-or-v1-...', helpUrl: 'https://openrouter.ai/keys' },
-    { id: 'openai', name: 'OpenAI', placeholder: 'sk-...', helpUrl: 'https://platform.openai.com/api-keys' },
-    { id: 'anthropic', name: 'Anthropic', placeholder: 'sk-ant-...', helpUrl: 'https://console.anthropic.com/settings/keys' },
-    { id: 'gemini', name: 'Google Gemini', placeholder: 'AIza...', helpUrl: 'https://aistudio.google.com/apikey' },
-  ];
+  const PROVIDERS = [{ id: 'openrouter', name: 'OpenRouter', placeholder: 'sk-or-v1-...', helpUrl: 'https://openrouter.ai/keys' }];
 
   return (
     <div className="space-y-6">
@@ -414,8 +364,8 @@ export default function RouterPage() {
 
         <div className="space-y-3">
           {PROVIDERS.map((p) => {
-            const hasKey = p.id === 'openrouter' ? settings.has_own_openrouter_key : (settings as any)[`has_own_${p.id}_key`];
-            const masked = p.id === 'openrouter' ? settings.own_openrouter_key_masked : (settings as any)[`own_${p.id}_key_masked`];
+            const hasKey = settings.has_own_openrouter_key;
+            const masked = settings.own_openrouter_key_masked;
             return (
               <div key={p.id} className="flex items-center justify-between rounded-lg border border-white/[0.06] bg-white/[0.02] px-4 py-3">
                 <div className="flex items-center gap-3">
@@ -432,42 +382,14 @@ export default function RouterPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  {hasKey && p.id !== 'openrouter' && (
-                    <button onClick={() => deleteOtherKey(p.id)} className="p-1.5 rounded-md text-white/20 hover:text-red-400 hover:bg-red-400/10">
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  )}
-                  {hasKey && p.id === 'openrouter' && (
+                  {hasKey && (
                     <button onClick={deleteOwnKey} className="p-1.5 rounded-md text-white/20 hover:text-red-400 hover:bg-red-400/10">
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   )}
-                  {p.id === 'openrouter' ? (
-                    <Button variant="glass" size="sm" onClick={() => { setShowKeyInput(!showKeyInput); setKeyInput(''); setShowKey(false); }}>
-                      {hasKey ? 'Change' : 'Add Key'}
-                    </Button>
-                  ) : (
-                    <>
-                      {!hasKey && (
-                        <input
-                          type="password"
-                          value={otherKeys[p.id]}
-                          onChange={(e) => setOtherKeys(prev => ({ ...prev, [p.id]: e.target.value }))}
-                          placeholder={p.placeholder}
-                          className="w-48 rounded-lg border border-white/[0.08] bg-transparent px-3 py-2 text-[12px] text-white font-mono placeholder:text-white/20"
-                        />
-                      )}
-                      <Button
-                        variant="glass"
-                        size="sm"
-                        onClick={() => hasKey ? deleteOtherKey(p.id) : saveOtherKey(p.id)}
-                        disabled={!hasKey && !otherKeys[p.id].trim()}
-                        loading={otherKeysSaving === p.id}
-                      >
-                        {hasKey ? 'Remove' : 'Save'}
-                      </Button>
-                    </>
-                  )}
+                  <Button variant="glass" size="sm" onClick={() => { setShowKeyInput(!showKeyInput); setKeyInput(''); setShowKey(false); }}>
+                    {hasKey ? 'Change' : 'Add Key'}
+                  </Button>
                 </div>
               </div>
             );

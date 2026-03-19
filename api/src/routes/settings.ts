@@ -116,18 +116,6 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
     const maskKey = (key: string | null): string | null =>
       key ? key.slice(0, 8) + '...' + key.slice(-4) : null;
 
-    safeSettings.has_own_openai_key = !!settings.own_openai_key;
-    safeSettings.own_openai_key_masked = maskKey(settings.own_openai_key);
-    delete safeSettings.own_openai_key;
-
-    safeSettings.has_own_anthropic_key = !!settings.own_anthropic_key;
-    safeSettings.own_anthropic_key_masked = maskKey(settings.own_anthropic_key);
-    delete safeSettings.own_anthropic_key;
-
-    safeSettings.has_own_gemini_key = !!(settings as any).own_gemini_key;
-    safeSettings.own_gemini_key_masked = maskKey((settings as any).own_gemini_key);
-    delete safeSettings.own_gemini_key;
-
     safeSettings.has_own_openrouter_key = !!settings.own_openrouter_key;
     safeSettings.own_openrouter_key_masked = maskKey(settings.own_openrouter_key);
     delete safeSettings.own_openrouter_key;
@@ -400,8 +388,6 @@ router.put('/routing-preferences', async (req: AuthRequest, res: Response, next:
   }
 });
 
-// ── BYOK: Direct provider keys (OpenAI, Anthropic, Gemini) ──
-
 async function reinjectAndRestart(userId: string): Promise<void> {
   const { injectApiKeys } = await import('../services/apiKeys');
   const { serverIp, containerName } = await getUserContainer(userId);
@@ -409,75 +395,6 @@ async function reinjectAndRestart(userId: string): Promise<void> {
   await injectApiKeys(serverIp, userId, containerName, (user?.plan || 'starter') as any);
   restartContainer(serverIp, containerName).catch(() => {});
 }
-
-router.put('/own-openai-key', async (req: AuthRequest, res: Response, next: NextFunction) => {
-  try {
-    const { key } = req.body;
-    if (!key || typeof key !== 'string' || !key.startsWith('sk-')) {
-      return res.status(400).json({ error: 'Invalid OpenAI API key (must start with sk-)' });
-    }
-    await db.query(
-      'UPDATE user_settings SET own_openai_key = $1 WHERE user_id = $2',
-      [key.trim(), req.userId]
-    );
-    try { await reinjectAndRestart(req.userId!); } catch { /* container not provisioned */ }
-    res.json({ ok: true });
-  } catch (err) { next(err); }
-});
-
-router.delete('/own-openai-key', async (req: AuthRequest, res: Response, next: NextFunction) => {
-  try {
-    await db.query('UPDATE user_settings SET own_openai_key = NULL WHERE user_id = $1', [req.userId]);
-    try { await reinjectAndRestart(req.userId!); } catch { /* container not provisioned */ }
-    res.json({ ok: true });
-  } catch (err) { next(err); }
-});
-
-router.put('/own-anthropic-key', async (req: AuthRequest, res: Response, next: NextFunction) => {
-  try {
-    const { key } = req.body;
-    if (!key || typeof key !== 'string' || !key.startsWith('sk-ant-')) {
-      return res.status(400).json({ error: 'Invalid Anthropic API key (must start with sk-ant-)' });
-    }
-    await db.query(
-      'UPDATE user_settings SET own_anthropic_key = $1 WHERE user_id = $2',
-      [key.trim(), req.userId]
-    );
-    try { await reinjectAndRestart(req.userId!); } catch { /* container not provisioned */ }
-    res.json({ ok: true });
-  } catch (err) { next(err); }
-});
-
-router.delete('/own-anthropic-key', async (req: AuthRequest, res: Response, next: NextFunction) => {
-  try {
-    await db.query('UPDATE user_settings SET own_anthropic_key = NULL WHERE user_id = $1', [req.userId]);
-    try { await reinjectAndRestart(req.userId!); } catch { /* container not provisioned */ }
-    res.json({ ok: true });
-  } catch (err) { next(err); }
-});
-
-router.put('/own-gemini-key', async (req: AuthRequest, res: Response, next: NextFunction) => {
-  try {
-    const { key } = req.body;
-    if (!key || typeof key !== 'string' || key.length < 10) {
-      return res.status(400).json({ error: 'Invalid Gemini API key' });
-    }
-    await db.query(
-      'UPDATE user_settings SET own_gemini_key = $1 WHERE user_id = $2',
-      [key.trim(), req.userId]
-    );
-    try { await reinjectAndRestart(req.userId!); } catch { /* container not provisioned */ }
-    res.json({ ok: true });
-  } catch (err) { next(err); }
-});
-
-router.delete('/own-gemini-key', async (req: AuthRequest, res: Response, next: NextFunction) => {
-  try {
-    await db.query('UPDATE user_settings SET own_gemini_key = NULL WHERE user_id = $1', [req.userId]);
-    try { await reinjectAndRestart(req.userId!); } catch { /* container not provisioned */ }
-    res.json({ ok: true });
-  } catch (err) { next(err); }
-});
 
 // Save own OpenRouter key (BYOK — unlimited AI, user pays OpenRouter directly)
 router.put('/own-openrouter-key', async (req: AuthRequest, res: Response, next: NextFunction) => {

@@ -69,9 +69,6 @@ export interface UserSettings {
   approval_file_delete: boolean;
   approval_commands: boolean;
   approval_social: boolean;
-  own_openai_key: string | null;
-  own_anthropic_key: string | null;
-  own_gemini_key: string | null;
   own_openrouter_key: string | null;
 }
 
