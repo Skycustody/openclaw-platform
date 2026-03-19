@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Tray, Menu, shell, nativeImage, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, Tray, Menu, shell, nativeImage, dialog, safeStorage } from 'electron';
 import path from 'path';
 import os from 'os';
 import { autoUpdater } from 'electron-updater';
@@ -7,7 +7,8 @@ import { manager, AgentStatus } from './openclaw/manager';
 import { installOpenClaw, findOpenClawBinary, isNodeInstalled, getInstallScriptCommand, findNemoClawBinary, getNemoClawInstallScriptCommand, getNemoClawSetupScriptCommand } from './openclaw/installer';
 import { readRecentLogs, getLogFilePath, logApp, closeStreams } from './openclaw/logger';
 import { loadSession, saveSession, clearSession, checkSubscription, parseDeepLinkToken, parseDeepLinkEmail } from './lib/session';
-import { loadRuntime, saveRuntime, clearRuntime, isNemoClawSupported, isDockerInstalled, isDockerRunning, canInstallDocker, getDockerInstallCommand, launchDockerDesktop, nemoClawNeedsSetup, getNemoClawSandboxStatus, RuntimeType } from './lib/runtime';
+import { loadRuntime, saveRuntime, clearRuntime, isNemoClawSupported, isDockerInstalled, isDockerRunning, canInstallDocker, getDockerInstallCommand, launchDockerDesktop, RuntimeType, isIntelMac, isOpenShellInstalled, isSidecarReady, setupOpenShellSidecar, ensureSidecarNetworking, isOnboardComplete, getNemoClawOnboardCommand } from './lib/runtime';
+import { getAppDataDir } from './lib/platform';
 
 const PROTOCOL = 'valnaa';
 const gotLock = app.requestSingleInstanceLock();
@@ -21,22 +22,395 @@ let tray: Tray | null = null;
 let isQuitting = false;
 let onboardPty: pty.IPty | null = null;
 let pendingDeepLink: string | null = null;
-let dockerPollInterval: ReturnType<typeof setInterval> | null = null;
+let setupRunning = false;
 
-function pollForDockerAndRetry(): void {
-  if (dockerPollInterval) return;
-  dockerPollInterval = setInterval(() => {
-    if (isDockerInstalled()) {
-      if (dockerPollInterval) {
-        clearInterval(dockerPollInterval);
-        dockerPollInterval = null;
-      }
-      logApp('info', 'Docker detected — continuing');
-      autoStart();
-    }
-  }, 5000);
+// ════════════════════════════════════
+//  Setup Step Types
+// ════════════════════════════════════
+interface SetupStep {
+  id: string;
+  label: string;
+  status: 'pending' | 'running' | 'done' | 'error';
+  detail?: string;
 }
 
+function buildSetupSteps(runtime: RuntimeType): SetupStep[] {
+  if (runtime === 'nemoclaw') {
+    const steps: SetupStep[] = [
+      { id: 'docker-install', label: 'Install Docker Desktop', status: isDockerInstalled() ? 'done' : 'pending' },
+      { id: 'docker-start', label: 'Start Docker', status: isDockerRunning() ? 'done' : 'pending' },
+    ];
+    if (isIntelMac()) {
+      steps.push({ id: 'openshell-sidecar', label: 'Install OpenShell (Intel Mac)', status: isSidecarReady() ? 'done' : 'pending' });
+    }
+    const onboardDone = isOnboardComplete();
+    steps.push(
+      { id: 'nemoclaw-install', label: 'Install NemoClaw', status: findNemoClawBinary() ? 'done' : 'pending' },
+      { id: 'collect-api-key', label: 'Configure API key', status: (onboardDone || loadPersistedApiKey() !== null) ? 'done' : 'pending' },
+      { id: 'nemoclaw-onboard', label: 'Set up NemoClaw', status: onboardDone ? 'done' : 'pending' },
+      { id: 'start', label: 'Start agent', status: 'pending' },
+    );
+    return steps;
+  } else {
+    return [
+      { id: 'openclaw-install', label: 'Install OpenClaw', status: findOpenClawBinary() ? 'done' : 'pending' },
+      { id: 'openclaw-setup', label: 'Configure agent', status: !needsSetup() ? 'done' : 'pending' },
+      { id: 'start', label: 'Start agent', status: 'pending' },
+    ];
+  }
+}
+
+function sendSteps(steps: SetupStep[]): void {
+  mainWindow?.webContents.send('app:setup-steps', JSON.parse(JSON.stringify(steps)));
+}
+
+// ════════════════════════════════════
+//  Promisified PTY
+// ════════════════════════════════════
+function getTaskCommand(task: PtyTask): string | null {
+  if (task === 'install') {
+    const hasNode = isNodeInstalled();
+    if (!hasNode) {
+      return getInstallScriptCommand();
+    } else {
+      const prefix = path.join(os.homedir(), '.local');
+      return `npm install -g openclaw@latest --prefix ${prefix}`;
+    }
+  } else if (task === 'install-nemoclaw') {
+    return getNemoClawInstallScriptCommand();
+  } else if (task === 'setup-nemoclaw') {
+    return getNemoClawSetupScriptCommand();
+  } else if (task === 'install-docker') {
+    return getDockerInstallCommand();
+  } else {
+    const bin = findOpenClawBinary();
+    return bin ? `${bin} onboard` : null;
+  }
+}
+
+function spawnPtyTaskAsync(task: PtyTask): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (onboardPty) {
+      reject(new Error('Another setup task is still running'));
+      return;
+    }
+
+    const command = getTaskCommand(task);
+    if (!command) {
+      reject(new Error(`Cannot determine command for task "${task}"`));
+      return;
+    }
+
+    const shellName = process.platform === 'win32' ? 'powershell.exe' : '/bin/zsh';
+    logApp('info', `PTY async "${task}": ${command} (shell: ${shellName})`);
+
+    const localBin = path.join(os.homedir(), '.local', 'bin');
+    const envPath = process.env.PATH || '';
+    const patchedPath = envPath.includes(localBin) ? envPath : `${localBin}:${envPath}`;
+
+    onboardPty = pty.spawn(shellName, ['-c', command], {
+      name: 'xterm-256color',
+      cols: 100,
+      rows: 30,
+      cwd: os.homedir(),
+      env: { ...process.env, TERM: 'xterm-256color', FORCE_COLOR: '1', PATH: patchedPath } as Record<string, string>,
+    });
+
+    logApp('info', `PTY spawned (PID ${onboardPty.pid}) for task "${task}"`);
+
+    onboardPty.onData((data: string) => {
+      mainWindow?.webContents.send('pty:data', data);
+    });
+
+    onboardPty.onExit(({ exitCode }) => {
+      logApp('info', `PTY task "${task}" exited with code ${exitCode}`);
+      onboardPty = null;
+      mainWindow?.webContents.send('pty:exit', exitCode);
+      if (exitCode === 0) resolve();
+      else reject(new Error(`${task} failed (exit code ${exitCode})`));
+    });
+  });
+}
+
+/**
+ * Run `nemoclaw onboard` in a PTY with automatic prompt responses.
+ * Handles: gateway deploy, sandbox creation, inference config, port forward, registry.
+ * The NVIDIA_API_KEY is passed via environment so onboard can configure inference.
+ */
+function spawnNemoClawOnboardAsync(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (onboardPty) {
+      reject(new Error('Another setup task is still running'));
+      return;
+    }
+
+    const savedKey = loadPersistedApiKey();
+    const command = getNemoClawOnboardCommand();
+    const shellName = process.platform === 'win32' ? 'powershell.exe' : '/bin/zsh';
+    logApp('info', `PTY nemoclaw-onboard: ${command}`);
+
+    const localBin = path.join(os.homedir(), '.local', 'bin');
+    const envPath = process.env.PATH || '';
+    const patchedPath = envPath.includes(localBin) ? envPath : `${localBin}:${envPath}`;
+
+    const env: Record<string, string> = {
+      ...process.env as Record<string, string>,
+      TERM: 'xterm-256color',
+      FORCE_COLOR: '1',
+      PATH: patchedPath,
+    };
+    if (savedKey?.key) env.NVIDIA_API_KEY = savedKey.key;
+
+    onboardPty = pty.spawn(shellName, ['-c', command], {
+      name: 'xterm-256color',
+      cols: 100,
+      rows: 30,
+      cwd: os.homedir(),
+      env,
+    });
+
+    logApp('info', `PTY spawned (PID ${onboardPty.pid}) for nemoclaw-onboard`);
+
+    const autoResponses = [
+      { pattern: /sandbox name/i, response: 'nemoclaw\n', sent: false },
+      { pattern: /choose \[/i, response: '\n', sent: false },
+      { pattern: /apply suggested presets/i, response: 'Y\n', sent: false },
+      { pattern: /recreate\?/i, response: 'y\n', sent: false },
+    ];
+    let lineBuffer = '';
+
+    onboardPty.onData((data: string) => {
+      mainWindow?.webContents.send('pty:data', data);
+
+      // Strip ANSI escape sequences for log readability
+      const clean = data.replace(/\x1B\[[0-9;]*[A-Za-z]/g, '').trim();
+      if (clean) logApp('info', `[onboard-pty] ${clean.substring(0, 200)}`);
+
+      lineBuffer += data;
+      if (lineBuffer.length > 500) lineBuffer = lineBuffer.slice(-500);
+
+      for (const ar of autoResponses) {
+        if (!ar.sent && ar.pattern.test(lineBuffer)) {
+          ar.sent = true;
+          logApp('info', `Auto-responding to onboard prompt: ${ar.pattern}`);
+          setTimeout(() => onboardPty?.write(ar.response), 300);
+          lineBuffer = '';
+          break;
+        }
+      }
+    });
+
+    onboardPty.onExit(({ exitCode }) => {
+      logApp('info', `PTY nemoclaw-onboard exited with code ${exitCode}`);
+      onboardPty = null;
+      mainWindow?.webContents.send('pty:exit', exitCode);
+      if (exitCode === 0) resolve();
+      else reject(new Error(`nemoclaw onboard failed (exit code ${exitCode})`));
+    });
+  });
+}
+
+// ════════════════════════════════════
+//  Docker Polling Helpers
+// ════════════════════════════════════
+function waitForDocker(timeoutMs = 120000): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (isDockerRunning()) { resolve(); return; }
+    const start = Date.now();
+    const poll = setInterval(() => {
+      if (isDockerRunning()) {
+        clearInterval(poll);
+        resolve();
+      } else if (Date.now() - start > timeoutMs) {
+        clearInterval(poll);
+        reject(new Error('Docker did not start within 2 minutes'));
+      }
+    }, 3000);
+  });
+}
+
+function waitForDockerInstalled(timeoutMs = 300000): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (isDockerInstalled()) { resolve(); return; }
+    const start = Date.now();
+    const poll = setInterval(() => {
+      if (isDockerInstalled()) {
+        clearInterval(poll);
+        resolve();
+      } else if (Date.now() - start > timeoutMs) {
+        clearInterval(poll);
+        reject(new Error('Docker installation timed out'));
+      }
+    }, 5000);
+  });
+}
+
+// ════════════════════════════════════
+//  Inference API-Key Helpers
+// ════════════════════════════════════
+let apiKeyResolver: ((val: { provider: string; key: string }) => void) | null = null;
+
+function waitForApiKeySubmission(): Promise<{ provider: string; key: string }> {
+  return new Promise((resolve) => {
+    apiKeyResolver = resolve;
+  });
+}
+
+const API_KEY_FILE = path.join(getAppDataDir(), 'inference-key.enc');
+
+function persistApiKey(provider: string, apiKey: string): void {
+  const fs = require('fs');
+  const dir = path.dirname(API_KEY_FILE);
+  fs.mkdirSync(dir, { recursive: true });
+  const payload = JSON.stringify({ provider, key: apiKey });
+  if (safeStorage.isEncryptionAvailable()) {
+    const encrypted = safeStorage.encryptString(payload);
+    fs.writeFileSync(API_KEY_FILE, encrypted);
+  } else {
+    fs.writeFileSync(API_KEY_FILE, payload);
+  }
+}
+
+function loadPersistedApiKey(): { provider: string; key: string } | null {
+  const fs = require('fs');
+  try {
+    const buf = fs.readFileSync(API_KEY_FILE);
+    let payload: string;
+    if (safeStorage.isEncryptionAvailable()) {
+      payload = safeStorage.decryptString(buf);
+    } else {
+      payload = buf.toString('utf-8');
+    }
+    return JSON.parse(payload);
+  } catch {
+    return null;
+  }
+}
+
+// ════════════════════════════════════
+//  Setup Flow Orchestrator
+// ════════════════════════════════════
+async function runSetupFlow(runtime: RuntimeType): Promise<void> {
+  if (setupRunning) return;
+  setupRunning = true;
+
+  try {
+    const steps = buildSetupSteps(runtime);
+    const pendingSteps = steps.filter(s => s.status !== 'done');
+    if (pendingSteps.length === 1 && pendingSteps[0].id === 'start') {
+      logApp('info', `All prerequisites met — starting ${runtime}`);
+      steps[steps.length - 1].status = 'running';
+      sendSteps(steps);
+      await manager.start();
+      steps[steps.length - 1].status = 'done';
+      sendSteps(steps);
+      return;
+    }
+
+    mainWindow?.webContents.send('app:show-setup', steps);
+
+    for (const step of steps) {
+      if (step.status === 'done') continue;
+
+      step.status = 'running';
+      sendSteps(steps);
+
+      try {
+        switch (step.id) {
+          case 'docker-install': {
+            if (isDockerInstalled()) break;
+            if (canInstallDocker()) {
+              await spawnPtyTaskAsync('install-docker');
+            } else {
+              shell.openExternal('https://www.docker.com/products/docker-desktop/');
+              step.detail = 'Install Docker from the page that opened...';
+              sendSteps(steps);
+              await waitForDockerInstalled();
+            }
+            break;
+          }
+          case 'docker-start': {
+            if (isDockerRunning()) break;
+            launchDockerDesktop();
+            step.detail = 'Waiting for Docker to be ready...';
+            sendSteps(steps);
+            await waitForDocker();
+            break;
+          }
+          case 'openshell-sidecar': {
+            if (isSidecarReady()) break;
+            step.detail = 'Setting up OpenShell via Docker...';
+            sendSteps(steps);
+            await setupOpenShellSidecar((msg) => {
+              step.detail = msg;
+              sendSteps(steps);
+            });
+            break;
+          }
+          case 'nemoclaw-install': {
+            if (findNemoClawBinary()) break;
+            if (isIntelMac()) {
+              ensureSidecarNetworking();
+            }
+            await spawnPtyTaskAsync('install-nemoclaw');
+            break;
+          }
+          case 'collect-api-key': {
+            if (loadPersistedApiKey() || isOnboardComplete()) break;
+            step.detail = 'Waiting for API key...';
+            sendSteps(steps);
+            await new Promise(r => setTimeout(r, 300));
+            mainWindow?.webContents.send('app:show-api-key-form', [
+              { id: 'openai',    name: 'OpenAI',    keyUrl: 'https://platform.openai.com/api-keys' },
+              { id: 'anthropic', name: 'Anthropic',  keyUrl: 'https://console.anthropic.com/settings/keys' },
+              { id: 'nvidia',    name: 'NVIDIA NIM', keyUrl: 'https://build.nvidia.com/nim' },
+            ]);
+            const { provider, key } = await waitForApiKeySubmission();
+            persistApiKey(provider, key);
+            break;
+          }
+          case 'nemoclaw-onboard': {
+            if (isOnboardComplete()) break;
+            if (isIntelMac()) ensureSidecarNetworking();
+            step.detail = 'Running NemoClaw setup (this may take several minutes)...';
+            sendSteps(steps);
+            await spawnNemoClawOnboardAsync();
+            break;
+          }
+          case 'openclaw-install': {
+            if (findOpenClawBinary()) break;
+            await spawnPtyTaskAsync('install');
+            break;
+          }
+          case 'openclaw-setup': {
+            if (!needsSetup()) break;
+            await spawnPtyTaskAsync('onboard');
+            break;
+          }
+          case 'start': {
+            await manager.start();
+            break;
+          }
+        }
+
+        step.status = 'done';
+        sendSteps(steps);
+      } catch (err: any) {
+        logApp('error', `Setup step "${step.id}" failed:`, err.message);
+        step.status = 'error';
+        step.detail = err.message;
+        sendSteps(steps);
+        return;
+      }
+    }
+  } finally {
+    setupRunning = false;
+  }
+}
+
+// ════════════════════════════════════
+//  Helpers
+// ════════════════════════════════════
 function needsSetup(): boolean {
   const fs = require('fs');
   const authPath = path.join(os.homedir(), '.openclaw', 'agents', 'main', 'agent', 'auth-profiles.json');
@@ -147,67 +521,34 @@ function updateTrayMenu(): void {
   tray.setContextMenu(menu);
 }
 
+// Legacy spawnPtyTask kept for IPC pty:start-onboard handler
 type PtyTask = 'install' | 'onboard' | 'install-nemoclaw' | 'setup-nemoclaw' | 'install-docker';
 
 function spawnPtyTask(task: PtyTask): void {
   if (onboardPty) return;
 
-  let command: string;
-  const shellName = process.platform === 'win32' ? 'powershell.exe' : (process.env.SHELL || '/bin/zsh');
-
-  if (task === 'install') {
-    const hasNode = isNodeInstalled();
-    if (!hasNode) {
-      logApp('info', 'Node.js not found — using official install script (handles Node + OpenClaw)');
-      command = getInstallScriptCommand();
-    } else {
-      const prefix = path.join(os.homedir(), '.local');
-      logApp('info', 'Node.js found but OpenClaw missing — installing via npm');
-      command = `npm install -g openclaw@latest --prefix ${prefix}`;
-    }
-  } else if (task === 'install-nemoclaw') {
-    logApp('info', 'Installing NemoClaw via official script (includes install + setup wizard)');
-    command = getNemoClawInstallScriptCommand();
-  } else if (task === 'setup-nemoclaw') {
-    logApp('info', 'Running NemoClaw setup (sandbox creation + inference config)');
-    command = getNemoClawSetupScriptCommand();
-  } else if (task === 'install-docker') {
-    logApp('info', 'Installing Docker via platform package manager');
-    command = getDockerInstallCommand();
-  } else {
-    const bin = findOpenClawBinary();
-    if (!bin) {
-      logApp('error', 'Cannot run onboard — OpenClaw binary not found');
-      return;
-    }
-    command = `${bin} onboard`;
+  const command = getTaskCommand(task);
+  if (!command) {
+    logApp('error', `Cannot determine command for task "${task}"`);
+    return;
   }
 
+  const shellName = process.platform === 'win32' ? 'powershell.exe' : '/bin/zsh';
   logApp('info', `PTY task "${task}": ${command}`);
+
+  const localBin = path.join(os.homedir(), '.local', 'bin');
+  const envPath = process.env.PATH || '';
+  const patchedPath = envPath.includes(localBin) ? envPath : `${localBin}:${envPath}`;
 
   onboardPty = pty.spawn(shellName, ['-c', command], {
     name: 'xterm-256color',
     cols: 100,
     rows: 30,
     cwd: os.homedir(),
-    env: { ...process.env, TERM: 'xterm-256color', FORCE_COLOR: '1' } as Record<string, string>,
+    env: { ...process.env, TERM: 'xterm-256color', FORCE_COLOR: '1', PATH: patchedPath } as Record<string, string>,
   });
 
   logApp('info', `PTY spawned (PID ${onboardPty.pid}) for task "${task}"`);
-
-  // Send initial status so user sees something immediately (brew/docker can be slow to output)
-  if (task === 'install-docker') {
-    mainWindow?.webContents.send('pty:data', '\x1b[36mInstalling Docker... This may take a few minutes.\x1b[0m\r\n\r\n');
-    mainWindow?.webContents.send('pty:status', 'Installing Docker...');
-  } else if (task === 'install-nemoclaw' || task === 'setup-nemoclaw') {
-    mainWindow?.webContents.send('pty:data', '\x1b[36mSetting up NemoClaw...\x1b[0m\r\n\r\n');
-    mainWindow?.webContents.send('pty:status', 'Setting up NemoClaw...');
-  } else if (task === 'install') {
-    mainWindow?.webContents.send('pty:data', '\x1b[36mInstalling OpenClaw...\x1b[0m\r\n\r\n');
-    mainWindow?.webContents.send('pty:status', 'Installing OpenClaw...');
-  } else if (task === 'onboard') {
-    mainWindow?.webContents.send('pty:status', 'Configuring agent...');
-  }
 
   onboardPty.onData((data: string) => {
     mainWindow?.webContents.send('pty:data', data);
@@ -323,7 +664,14 @@ function setupIPC(): void {
     autoStart();
   });
 
-  // PTY IPC
+  ipcMain.handle('setup:submit-api-key', (_e, provider: string, key: string) => {
+    if (apiKeyResolver) {
+      apiKeyResolver({ provider, key });
+      apiKeyResolver = null;
+    }
+  });
+
+  // PTY IPC (legacy fallback)
   ipcMain.handle('pty:start-onboard', () => {
     if (onboardPty) return;
     const pref = loadRuntime();
@@ -405,70 +753,12 @@ async function autoStart(): Promise<void> {
     return;
   }
 
-  const runtime = runtimePref.runtime;
-
-  if (runtime === 'nemoclaw') {
-    // NemoClaw flow: auto-handle prereqs, no buttons
-    if (!isDockerInstalled()) {
-      const canInstall = canInstallDocker();
-      if (canInstall) {
-        logApp('info', 'Docker not installed — auto-installing');
-        mainWindow?.webContents.send('app:show-onboard', 'docker-install');
-        return;
-      }
-      logApp('info', 'Docker not installed — opening download, will continue when installed');
-      shell.openExternal('https://www.docker.com/products/docker-desktop/');
-      mainWindow?.webContents.send('app:show-waiting', {
-        title: 'Installing Docker',
-        message: 'Docker download opened. We\'ll continue automatically when Docker is installed.',
-      });
-      pollForDockerAndRetry();
-      return;
-    }
-
-    if (!isDockerRunning()) {
-      logApp('info', 'Docker not running — auto-starting');
-      mainWindow?.webContents.send('app:show-waiting', {
-        title: 'Starting Docker',
-        message: 'Launching Docker Desktop...',
-      });
-      launchDockerDesktop();
-      setTimeout(() => autoStart(), 5000);
-      return;
-    }
-
-    const nemoBin = findNemoClawBinary();
-    if (!nemoBin) {
-      logApp('info', 'NemoClaw not found — showing install terminal');
-      mainWindow?.webContents.send('app:show-onboard');
-      return;
-    }
-
-    if (nemoClawNeedsSetup()) {
-      logApp('info', 'NemoClaw sandbox not configured — showing setup terminal');
-      mainWindow?.webContents.send('app:show-onboard');
-      return;
-    }
-
-    logApp('info', 'Auto-starting NemoClaw...');
-    await manager.start();
-  } else {
-    // OpenClaw flow
-    const bin = findOpenClawBinary();
-    if (!bin) {
-      logApp('info', 'OpenClaw not found — showing install terminal');
-      mainWindow?.webContents.send('app:show-onboard');
-      return;
-    }
-
-    if (needsSetup()) {
-      logApp('info', 'Setup not complete — showing onboard terminal');
-      mainWindow?.webContents.send('app:show-onboard');
-      return;
-    }
-
-    logApp('info', 'Auto-starting OpenClaw...');
-    await manager.start();
+  // 4. Run environment setup and start agent
+  logApp('info', `Runtime: ${runtimePref.runtime} — entering setup flow`);
+  try {
+    await runSetupFlow(runtimePref.runtime);
+  } catch (err: any) {
+    logApp('error', `runSetupFlow threw: ${err.message}\n${err.stack}`);
   }
 }
 
@@ -539,7 +829,6 @@ app.whenReady().then(() => {
     }
   };
 
-  // Wait for renderer to signal ready (module scripts can load after did-finish-load)
   ipcMain.once('app:renderer-ready', runAutoStart);
 
   app.on('activate', () => {

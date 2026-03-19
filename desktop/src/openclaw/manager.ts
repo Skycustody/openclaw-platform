@@ -2,6 +2,7 @@ import { ChildProcess, spawn } from 'child_process';
 import { EventEmitter } from 'events';
 import fs from 'fs';
 import http from 'http';
+import os from 'os';
 import path from 'path';
 import { IS_WIN, getOpenClawDir } from '../lib/platform';
 import { classifyProcessError } from '../lib/errors';
@@ -9,7 +10,7 @@ import { logApp, logOpenclaw } from './logger';
 import { findOpenClawBinary, findNemoClawBinary } from './installer';
 import { startHealthPolling, stopHealthPolling, HealthStatus } from './health';
 import { findAvailablePort, PortResult } from '../lib/ports';
-import { loadRuntime, RuntimeType, getNemoClawSandboxStatus } from '../lib/runtime';
+import { loadRuntime, RuntimeType, isSandboxReady, ensurePortForward, OPENCLAW_PORT } from '../lib/runtime';
 
 function checkPortReady(port: number): Promise<boolean> {
   return new Promise((resolve) => {
@@ -228,98 +229,66 @@ class OpenClawManager extends EventEmitter {
 
   /**
    * NemoClaw runs OpenClaw inside a Docker sandbox managed by OpenShell.
-   * We don't spawn a process — we detect the running sandbox and connect to its gateway port.
+   * The OpenClaw gateway runs on port 18789 inside the sandbox, forwarded
+   * to localhost via `openshell forward`.
    */
   private connectToNemoClawSandbox(): void {
     this.setState('starting');
-
     logApp('info', 'Connecting to NemoClaw sandbox...');
 
-    const status = getNemoClawSandboxStatus();
+    const { execSync } = require('child_process');
+    const GATEWAY_CONTAINER = 'openshell-cluster-nemoclaw';
 
-    if (status.running && status.port) {
-      this.port = status.port;
-      logApp('info', `NemoClaw sandbox running, gateway on port ${this.port}`);
-
-      this.readinessPoll = setInterval(async () => {
-        if (this.state !== 'starting' || !this.port) return;
-        if (await checkPortReady(this.port)) {
-          this.clearReadinessPoll();
-          this.onGatewayReady();
-        }
-      }, 500);
-
-      this.startupTimer = setTimeout(() => {
-        if (this.state === 'starting') {
-          this.clearReadinessPoll();
-          logApp('warn', 'NemoClaw sandbox port not responding — gateway may not be ready');
-          this.lastError = 'NemoClaw sandbox is running but the gateway is not responding. Try running "nemoclaw setup" again.';
-          this.setState('crashed');
-        }
-      }, STARTUP_TIMEOUT_MS);
-
+    // 1. Ensure the gateway cluster container is running
+    try {
+      const state = execSync(
+        `docker inspect ${GATEWAY_CONTAINER} --format "{{.State.Status}}"`,
+        { encoding: 'utf-8', timeout: 5000, stdio: 'pipe' }
+      ).trim();
+      if (state !== 'running') {
+        execSync(`docker start ${GATEWAY_CONTAINER}`, { timeout: 15000, stdio: 'pipe' });
+        logApp('info', 'Started gateway container');
+      }
+    } catch {
+      this.lastError = 'NemoClaw gateway container not found. Run setup again.';
+      this.setState('crashed');
       return;
     }
 
-    logApp('warn', 'NemoClaw sandbox not running — attempting to start via nemoclaw start');
-
-    const prefix = IS_WIN ? 'wsl' : '';
-    const cmd = prefix ? 'wsl' : 'nemoclaw';
-    const args = prefix ? ['nemoclaw', 'start'] : ['start'];
-
-    const startProc = spawn(cmd, args, {
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env },
-      shell: IS_WIN,
-      windowsHide: true,
-    });
-
-    let output = '';
-    startProc.stdout?.on('data', (d: Buffer) => { output += d.toString(); logOpenclaw(d.toString()); });
-    startProc.stderr?.on('data', (d: Buffer) => { output += d.toString(); logOpenclaw(d.toString()); });
-
-    startProc.on('close', (code) => {
-      if (code !== 0) {
-        logApp('error', 'nemoclaw start failed', output);
-        this.lastError = 'Failed to start NemoClaw sandbox. Run "nemoclaw setup" to reconfigure.';
-        this.lastErrorDetails = output.slice(-500);
-        this.setState('crashed');
-        return;
-      }
-
-      const retryStatus = getNemoClawSandboxStatus();
-      if (retryStatus.running && retryStatus.port) {
-        this.port = retryStatus.port;
-        logApp('info', `NemoClaw sandbox started, gateway on port ${this.port}`);
-
-        this.readinessPoll = setInterval(async () => {
-          if (this.state !== 'starting' || !this.port) return;
-          if (await checkPortReady(this.port)) {
-            this.clearReadinessPoll();
-            this.onGatewayReady();
-          }
-        }, 500);
-
-        this.startupTimer = setTimeout(() => {
-          if (this.state === 'starting') {
-            this.clearReadinessPoll();
-            this.lastError = 'NemoClaw started but gateway not responding.';
-            this.setState('crashed');
-          }
-        }, STARTUP_TIMEOUT_MS);
-      } else {
-        this.lastError = 'NemoClaw started but sandbox status is unclear. Check logs.';
-        this.lastErrorDetails = output.slice(-500);
-        this.setState('crashed');
-      }
-    });
-
-    startProc.on('error', (err) => {
-      logApp('error', 'Failed to run nemoclaw start', err.message);
-      this.lastError = 'Could not start NemoClaw. Is it installed?';
-      this.lastErrorDetails = err.message;
+    // 2. Check that the sandbox exists
+    if (!isSandboxReady()) {
+      this.lastError = 'NemoClaw sandbox not found. Run setup again.';
       this.setState('crashed');
-    });
+      return;
+    }
+
+    // 3. Ensure port forward is active
+    ensurePortForward();
+
+    // 4. Poll for the OpenClaw gateway on port 18789
+    this.port = OPENCLAW_PORT;
+    logApp('info', `Waiting for OpenClaw gateway on port ${OPENCLAW_PORT}...`);
+
+    // Use a longer timeout — the sandbox may take time to start up after reboot
+    const SANDBOX_CONNECT_TIMEOUT = 60000;
+
+    this.readinessPoll = setInterval(async () => {
+      if (this.state !== 'starting' || !this.port) return;
+      if (await checkPortReady(this.port)) {
+        this.clearReadinessPoll();
+        this.onGatewayReady();
+      }
+    }, 2000);
+
+    this.startupTimer = setTimeout(() => {
+      if (this.state === 'starting') {
+        this.clearReadinessPoll();
+        ensurePortForward();
+        logApp('warn', `OpenClaw gateway not responding on port ${OPENCLAW_PORT} after ${SANDBOX_CONNECT_TIMEOUT}ms`);
+        this.lastError = 'OpenClaw gateway inside sandbox is not responding. The sandbox may still be starting up — try again in a moment.';
+        this.setState('crashed');
+      }
+    }, SANDBOX_CONNECT_TIMEOUT);
   }
 
   private onGatewayReady(): void {

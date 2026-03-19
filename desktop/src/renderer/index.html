@@ -335,8 +335,8 @@
       line-height: 1.5;
     }
 
-    /* ── Onboard terminal overlay ── */
-    #onboard-overlay {
+    /* ── Setup overlay ── */
+    #setup-overlay {
       position: fixed;
       inset: 0;
       z-index: 100;
@@ -345,32 +345,213 @@
       flex-direction: column;
       -webkit-app-region: no-drag;
     }
-    #onboard-overlay.active { display: flex; }
-    #onboard-overlay .titlebar { -webkit-app-region: drag; }
-    #onboard-terminal {
+    #setup-overlay.active { display: flex; }
+    #setup-overlay .titlebar { -webkit-app-region: drag; }
+
+    #setup-scroll-area {
       flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #setup-steps-section {
+      padding: 30px 40px 20px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    #setup-steps-section h2 {
+      font-size: 20px;
+      font-weight: 700;
+      color: #fff;
+      margin: 0 0 4px;
+    }
+    #setup-steps-section .subtitle {
+      font-size: 13px;
+      color: rgba(255,255,255,0.3);
+      margin-bottom: 24px;
+    }
+    .setup-steps-list {
+      max-width: 340px;
+      margin: 0 auto;
+      text-align: left;
+    }
+    .setup-step {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 10px 0;
+    }
+    .step-icon {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .step-icon.pending { border: 2px solid rgba(255,255,255,0.12); color: rgba(255,255,255,0.12); }
+    .step-icon.running { border: 2px solid #6366f1; color: #6366f1; animation: step-pulse 1.5s ease-in-out infinite; }
+    .step-icon.done { background: #22c55e; color: #fff; border: none; }
+    .step-icon.error { background: #ef4444; color: #fff; border: none; }
+    .step-info { flex: 1; min-width: 0; }
+    .step-label { font-size: 14px; color: rgba(255,255,255,0.4); }
+    .setup-step.running .step-label { color: #fff; font-weight: 600; }
+    .setup-step.done .step-label { color: rgba(255,255,255,0.25); }
+    .setup-step.error .step-label { color: #ef4444; }
+    .step-detail { font-size: 11px; color: rgba(255,255,255,0.25); margin-top: 2px; }
+    @keyframes step-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+    #setup-terminal-section {
+      flex: 1;
+      min-height: 0;
+      display: none;
+      border-top: 1px solid rgba(255,255,255,0.06);
+    }
+    #setup-terminal-section.active { display: block; }
+    #setup-terminal {
+      height: 100%;
       padding: 8px;
       -webkit-app-region: no-drag;
       user-select: auto;
       cursor: text;
-      min-height: 0;
     }
-    #onboard-terminal .xterm { height: 100%; }
-    .onboard-hint {
+    #setup-terminal .xterm { height: 100%; }
+    #setup-terminal .xterm-helper-textarea {
+      position: absolute !important;
+      opacity: 0 !important;
+      pointer-events: auto !important;
+    }
+
+    .setup-bottom-bar {
       flex-shrink: 0;
-      padding: 6px 12px;
-      font-size: 11px;
+      padding: 8px 16px;
+      font-size: 12px;
       color: rgba(255,255,255,0.25);
       background: rgba(0,0,0,0.2);
       border-top: 1px solid rgba(255,255,255,0.06);
       display: flex;
       align-items: center;
+      justify-content: space-between;
     }
-    #onboard-terminal .xterm-helper-textarea {
-      position: absolute !important;
-      opacity: 0 !important;
-      pointer-events: auto !important;
+    .setup-fail-actions { display: none; }
+    .setup-fail-actions.active { display: inline-flex; gap: 6px; }
+
+    /* ── API Key Form ── */
+    #api-key-section {
+      display: none;
+      padding: 24px 40px 20px;
+      text-align: center;
+      border-top: 1px solid rgba(255,255,255,0.06);
     }
+    #api-key-section.active { display: block; }
+    #api-key-section h3 {
+      font-size: 16px;
+      font-weight: 700;
+      color: #fff;
+      margin: 0 0 4px;
+    }
+    #api-key-section .akf-subtitle {
+      font-size: 12px;
+      color: rgba(255,255,255,0.35);
+      margin-bottom: 18px;
+    }
+    .provider-cards {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      margin-bottom: 18px;
+      flex-wrap: wrap;
+    }
+    .provider-card {
+      width: 140px;
+      padding: 14px 10px;
+      background: rgba(255,255,255,0.04);
+      border: 2px solid rgba(255,255,255,0.08);
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.15s;
+      text-align: center;
+    }
+    .provider-card:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.15); }
+    .provider-card.selected { border-color: #6366f1; background: rgba(99,102,241,0.1); }
+    .provider-card-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 2px;
+    }
+    .provider-card-model {
+      font-size: 10px;
+      color: rgba(255,255,255,0.3);
+    }
+    .akf-input-row {
+      display: flex;
+      gap: 8px;
+      max-width: 480px;
+      margin: 0 auto 10px;
+    }
+    .akf-input-row input {
+      flex: 1;
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.06);
+      color: #fff;
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .akf-input-row input:focus { border-color: rgba(255,255,255,0.25); }
+    .akf-input-row input::placeholder { color: rgba(255,255,255,0.2); }
+    .akf-toggle-vis {
+      padding: 0 10px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.04);
+      color: rgba(255,255,255,0.4);
+      cursor: pointer;
+      font-size: 16px;
+      line-height: 1;
+    }
+    .akf-toggle-vis:hover { background: rgba(255,255,255,0.1); }
+    .akf-continue-btn {
+      padding: 10px 32px;
+      border-radius: 8px;
+      border: none;
+      background: #6366f1;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .akf-continue-btn:hover { background: #818cf8; }
+    .akf-continue-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    .akf-error {
+      font-size: 12px;
+      color: #ef4444;
+      margin-top: 8px;
+      min-height: 18px;
+    }
+    .akf-help {
+      font-size: 11px;
+      color: rgba(255,255,255,0.25);
+      margin-top: 4px;
+    }
+    .akf-help a {
+      color: rgba(255,255,255,0.4);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      cursor: pointer;
+    }
+    .akf-help a:hover { color: rgba(255,255,255,0.6); }
   </style>
 </head>
 <body>
@@ -480,18 +661,39 @@
     <button class="overlay-link" id="nemoclaw-prereq-docs" style="margin-top: 4px;">NemoClaw documentation</button>
   </div>
 
-  <!-- Onboard terminal overlay -->
-  <div id="onboard-overlay">
+  <!-- Setup overlay (steps + terminal) -->
+  <div id="setup-overlay">
     <div class="titlebar">
       <span class="titlebar-title">Valnaa — Setup</span>
     </div>
-    <div id="onboard-terminal"></div>
-    <div id="onboard-bottom-bar" class="onboard-hint">
-      <span id="onboard-hint-text">Scroll with mouse wheel or Page Up/Down to see more</span>
-      <span id="onboard-fail-actions" style="display:none;">
-        <button class="status-btn" id="onboard-retry-btn" style="margin-left: 12px;">Retry</button>
-        <button class="status-btn" id="onboard-close-btn" style="margin-left: 6px;">Close</button>
-        <button class="status-btn" id="onboard-switch-runtime-btn" style="margin-left: 6px;">Switch Runtime</button>
+    <div id="setup-scroll-area">
+    <div id="setup-steps-section">
+      <h2>Preparing Your Environment</h2>
+      <div class="subtitle">This only happens once.</div>
+      <div class="setup-steps-list" id="setup-steps-list"></div>
+    </div>
+    <div id="api-key-section">
+      <h3>Configure Inference Provider</h3>
+      <div class="akf-subtitle">Choose a provider and paste your API key.</div>
+      <div class="provider-cards" id="akf-providers"></div>
+      <div class="akf-input-row">
+        <input type="password" id="akf-key-input" placeholder="Paste your API key" autocomplete="off" spellcheck="false">
+        <button class="akf-toggle-vis" id="akf-toggle-vis" title="Show / hide key">&#128065;</button>
+      </div>
+      <button class="akf-continue-btn" id="akf-continue-btn" disabled>Continue</button>
+      <div class="akf-error" id="akf-error"></div>
+      <div class="akf-help" id="akf-help"></div>
+    </div>
+    </div>
+    <div id="setup-terminal-section">
+      <div id="setup-terminal"></div>
+    </div>
+    <div class="setup-bottom-bar">
+      <span id="setup-status-text">Preparing...</span>
+      <span class="setup-fail-actions" id="setup-fail-actions">
+        <button class="status-btn" id="setup-retry-btn">Retry</button>
+        <button class="status-btn" id="setup-close-btn">Close</button>
+        <button class="status-btn" id="setup-switch-btn">Switch Runtime</button>
       </span>
     </div>
   </div>
@@ -537,8 +739,8 @@
     const setupScreen = document.getElementById('agent-setup');
     const webview = document.getElementById('agent-webview');
     const logsContent = document.getElementById('logs-content');
-    const onboardOverlay = document.getElementById('onboard-overlay');
-    const onboardTermEl = document.getElementById('onboard-terminal');
+    const setupOverlay = document.getElementById('setup-overlay');
+    const setupTermEl = document.getElementById('setup-terminal');
     const authOverlay = document.getElementById('auth-overlay');
     const subscribeOverlay = document.getElementById('subscribe-overlay');
     const runtimeOverlay = document.getElementById('runtime-overlay');
@@ -550,7 +752,7 @@
     function showAuthScreen() {
       authOverlay.classList.add('active');
       subscribeOverlay.classList.remove('active');
-      onboardOverlay.classList.remove('active');
+      setupOverlay.classList.remove('active');
       runtimeOverlay.classList.remove('active');
       nemoPrereqOverlay.classList.remove('active');
       document.getElementById('auth-waiting').style.display = 'none';
@@ -564,7 +766,7 @@
     function showSubscribeScreen(info) {
       subscribeOverlay.classList.add('active');
       authOverlay.classList.remove('active');
-      onboardOverlay.classList.remove('active');
+      setupOverlay.classList.remove('active');
       runtimeOverlay.classList.remove('active');
       nemoPrereqOverlay.classList.remove('active');
       document.getElementById('subscribe-email').textContent = info?.email || '';
@@ -625,7 +827,7 @@
       runtimeOverlay.classList.add('active');
       authOverlay.classList.remove('active');
       subscribeOverlay.classList.remove('active');
-      onboardOverlay.classList.remove('active');
+      setupOverlay.classList.remove('active');
       nemoPrereqOverlay.classList.remove('active');
 
       oc.getRuntime().then(info => {
@@ -656,7 +858,7 @@
       runtimeOverlay.classList.remove('active');
       authOverlay.classList.remove('active');
       subscribeOverlay.classList.remove('active');
-      onboardOverlay.classList.remove('active');
+      setupOverlay.classList.remove('active');
       document.getElementById('nemoclaw-prereq-error').textContent = info.error || 'A prerequisite is missing.';
       document.getElementById('nemoclaw-prereq-hint').textContent = info.hint || '';
 
@@ -774,7 +976,7 @@
     }
 
     function showWebview(port, token) {
-      onboardOverlay.classList.remove('active');
+      setupOverlay.classList.remove('active');
       authOverlay.classList.remove('active');
       subscribeOverlay.classList.remove('active');
       runtimeOverlay.classList.remove('active');
@@ -872,15 +1074,16 @@
     oc.getSession().then(session => updateAboutUser(session));
 
     // ══════════════════════════════════
-    //  ONBOARD TERMINAL (xterm.js)
+    //  SETUP OVERLAY (steps + terminal)
     // ══════════════════════════════════
     let term = null;
     let fitAddon = null;
-    let onboardKeyHandler = null;
+    let setupKeyHandler = null;
+    let termInitialized = false;
 
     function keyToPty(e) {
       if (e.key === 'PageUp' || e.key === 'PageDown') {
-        if (term && onboardOverlay.classList.contains('active')) {
+        if (term && setupOverlay.classList.contains('active')) {
           e.preventDefault();
           e.stopPropagation();
           term.scrollLines(e.key === 'PageUp' ? -term.rows : term.rows);
@@ -913,129 +1116,225 @@
       }
     }
 
-    let currentOnboardTask = null;
-    function showOnboardTerminal(task) {
-      currentOnboardTask = task || null;
-      const hintEl = document.getElementById('onboard-hint-text');
-      if (task === 'docker-install') hintEl.textContent = 'Installing Docker...';
-      else if (task === 'install-nemoclaw' || task === 'setup-nemoclaw') hintEl.textContent = 'Setting up NemoClaw...';
-      else if (task === 'install') hintEl.textContent = 'Installing OpenClaw...';
-      else hintEl.textContent = 'Scroll with mouse wheel or Page Up/Down to see more';
-      onboardOverlay.classList.add('active');
-      authOverlay.classList.remove('active');
-      subscribeOverlay.classList.remove('active');
-      runtimeOverlay.classList.remove('active');
-      nemoPrereqOverlay.classList.remove('active');
+    function renderSteps(steps) {
+      const list = document.getElementById('setup-steps-list');
+      const icons = { pending: '○', running: '◉', done: '✓', error: '✕' };
+      list.innerHTML = steps.map(s => `
+        <div class="setup-step ${s.status}">
+          <div class="step-icon ${s.status}">${icons[s.status]}</div>
+          <div class="step-info">
+            <div class="step-label">${escapeHtml(s.label)}</div>
+            ${s.detail ? `<div class="step-detail">${escapeHtml(s.detail)}</div>` : ''}
+          </div>
+        </div>
+      `).join('');
 
-      if (!term) {
-        term = new Terminal({
-          fontSize: 14,
-          fontFamily: "'SF Mono', 'Fira Code', 'Consolas', 'Menlo', monospace",
-          scrollback: 5000,
-          theme: {
-            background: '#0a0a0a',
-            foreground: '#e0e0e0',
-            cursor: '#e0e0e0',
-            selectionBackground: 'rgba(255,255,255,0.15)',
-          },
-          cursorBlink: true,
-          allowProposedApi: true,
-          disableStdin: true,
-        });
+      const running = steps.find(s => s.status === 'running');
+      const error = steps.find(s => s.status === 'error');
+      const allDone = steps.every(s => s.status === 'done');
+      const statusEl = document.getElementById('setup-status-text');
+      const failEl = document.getElementById('setup-fail-actions');
 
-        fitAddon = new FitAddon();
-        term.loadAddon(fitAddon);
-        term.open(onboardTermEl);
-
-        oc.onPtyData((data) => {
-          term.write(data);
-        });
-        oc.onPtyStatus((status) => {
-          document.getElementById('onboard-hint-text').textContent = status;
-        });
-
-        oc.onPtyExit((code) => {
-          if (onboardKeyHandler) {
-            document.removeEventListener('keydown', onboardKeyHandler);
-            onboardKeyHandler = null;
-          }
-          if (code === 0) {
-            term.writeln('\r\n\x1b[32mSetup complete! Starting your agent...\x1b[0m');
-            document.getElementById('onboard-fail-actions').style.display = 'none';
-            document.getElementById('onboard-hint-text').textContent = 'Setup complete — starting...';
-            setTimeout(() => {
-              onboardOverlay.classList.remove('active');
-            }, 1500);
-          } else {
-            term.writeln(`\r\n\x1b[31mSetup exited with code ${code}.\x1b[0m`);
-            document.getElementById('onboard-hint-text').textContent = 'Setup failed.';
-            document.getElementById('onboard-fail-actions').style.display = 'inline';
-          }
-        });
-
-        onboardTermEl.addEventListener('wheel', (e) => {
-          if (!onboardOverlay.classList.contains('active')) return;
-          e.preventDefault();
-          const amount = Math.abs(e.deltaY) > 1 ? Math.round(e.deltaY / 3) : Math.sign(e.deltaY);
-          term.scrollLines(amount);
-        }, { passive: false });
-
-        const resizeObserver = new ResizeObserver(() => {
-          if (fitAddon && onboardOverlay.classList.contains('active')) {
-            try { fitAddon.fit(); } catch {}
-            try { oc.resizePty(term.cols, term.rows); } catch {}
-          }
-        });
-        resizeObserver.observe(onboardTermEl);
-      }
-
-      onboardKeyHandler = (e) => {
-        if (!onboardOverlay.classList.contains('active')) return;
-        keyToPty(e);
-      };
-      document.addEventListener('keydown', onboardKeyHandler, true);
-
-      fitAddon.fit();
-      oc.resizePty(term.cols, term.rows);
-
-      if (task === 'docker-install') {
-        oc.startDockerInstall();
+      if (error) {
+        statusEl.textContent = error.detail || `Failed: ${error.label}`;
+        failEl.classList.add('active');
+      } else if (allDone) {
+        statusEl.textContent = 'Setup complete — starting agent...';
+        failEl.classList.remove('active');
+        setTimeout(() => { setupOverlay.classList.remove('active'); }, 1500);
+      } else if (running) {
+        statusEl.textContent = running.detail || `${running.label}...`;
+        failEl.classList.remove('active');
       } else {
-        oc.startOnboard();
+        statusEl.textContent = 'Preparing...';
+        failEl.classList.remove('active');
       }
     }
 
-    document.getElementById('onboard-retry-btn').addEventListener('click', () => {
-      document.getElementById('onboard-fail-actions').style.display = 'none';
-      document.getElementById('onboard-hint-text').textContent = 'Retrying...';
-      if (term) term.clear();
-      if (currentOnboardTask === 'docker-install') oc.startDockerInstall();
-      else oc.startOnboard();
-    });
-    document.getElementById('onboard-close-btn').addEventListener('click', () => {
-      onboardOverlay.classList.remove('active');
-      document.getElementById('onboard-fail-actions').style.display = 'none';
-      document.getElementById('onboard-hint-text').textContent = 'Scroll with mouse wheel or Page Up/Down to see more';
-    });
-    document.getElementById('onboard-switch-runtime-btn').addEventListener('click', () => {
-      onboardOverlay.classList.remove('active');
-      document.getElementById('onboard-fail-actions').style.display = 'none';
-      document.getElementById('onboard-hint-text').textContent = 'Scroll with mouse wheel or Page Up/Down to see more';
-      showRuntimePicker();
-    });
+    function initTerminal() {
+      if (termInitialized) return;
+      termInitialized = true;
 
-    // Listen for show-onboard event from main process
-    oc.onShowOnboard((task) => {
-      showOnboardTerminal(task || undefined);
-    });
+      term = new Terminal({
+        fontSize: 13,
+        fontFamily: "'SF Mono', 'Fira Code', 'Consolas', 'Menlo', monospace",
+        scrollback: 5000,
+        theme: {
+          background: '#0a0a0a',
+          foreground: '#e0e0e0',
+          cursor: '#e0e0e0',
+          selectionBackground: 'rgba(255,255,255,0.15)',
+        },
+        cursorBlink: true,
+        allowProposedApi: true,
+        disableStdin: true,
+      });
 
-    oc.onShowWaiting((info) => {
+      fitAddon = new FitAddon();
+      term.loadAddon(fitAddon);
+      term.open(setupTermEl);
+
+      setupTermEl.addEventListener('wheel', (e) => {
+        if (!setupOverlay.classList.contains('active')) return;
+        e.preventDefault();
+        const amount = Math.abs(e.deltaY) > 1 ? Math.round(e.deltaY / 3) : Math.sign(e.deltaY);
+        term.scrollLines(amount);
+      }, { passive: false });
+
+      const resizeObserver = new ResizeObserver(() => {
+        if (fitAddon && setupOverlay.classList.contains('active')) {
+          try { fitAddon.fit(); } catch {}
+          try { oc.resizePty(term.cols, term.rows); } catch {}
+        }
+      });
+      resizeObserver.observe(setupTermEl);
+    }
+
+    function showTerminalSection() {
+      const termSection = document.getElementById('setup-terminal-section');
+      if (!termSection.classList.contains('active')) {
+        termSection.classList.add('active');
+        initTerminal();
+        setTimeout(() => {
+          try { fitAddon.fit(); } catch {}
+          try { oc.resizePty(term.cols, term.rows); } catch {}
+        }, 50);
+      }
+    }
+
+    function showSetupOverlay(steps) {
+      setupOverlay.classList.add('active');
       authOverlay.classList.remove('active');
       subscribeOverlay.classList.remove('active');
       runtimeOverlay.classList.remove('active');
       nemoPrereqOverlay.classList.remove('active');
-      onboardOverlay.classList.remove('active');
-      showSetup(info.title, info.message, null, false);
+      renderSteps(steps);
+
+      if (!setupKeyHandler) {
+        setupKeyHandler = (e) => {
+          if (!setupOverlay.classList.contains('active')) return;
+          keyToPty(e);
+        };
+        document.addEventListener('keydown', setupKeyHandler, true);
+      }
+    }
+
+    // PTY data: show terminal section and write data
+    oc.onPtyData((data) => {
+      if (setupOverlay.classList.contains('active')) {
+        showTerminalSection();
+      }
+      if (term) term.write(data);
+    });
+
+    oc.onPtyExit((code) => {
+      // PTY exit is handled by the main process setup flow;
+      // terminal stays visible showing the output
+    });
+
+    // Main process sends these events
+    oc.onShowSetup((steps) => showSetupOverlay(steps));
+    oc.onSetupSteps((steps) => renderSteps(steps));
+
+    // Legacy: still handle show-onboard for IPC-triggered onboard
+    oc.onShowOnboard((task) => {
+      showSetupOverlay([{ id: 'task', label: task || 'Setting up...', status: 'running' }]);
+      showTerminalSection();
+      if (task === 'docker-install') oc.startDockerInstall();
+      else oc.startOnboard();
+    });
+
+    // Fail actions
+    document.getElementById('setup-retry-btn').addEventListener('click', () => {
+      document.getElementById('setup-fail-actions').classList.remove('active');
+      if (term) term.clear();
+      oc.retryAutoStart();
+    });
+    document.getElementById('setup-close-btn').addEventListener('click', () => {
+      setupOverlay.classList.remove('active');
+    });
+    document.getElementById('setup-switch-btn').addEventListener('click', () => {
+      setupOverlay.classList.remove('active');
+      showRuntimePicker();
+    });
+
+    // ══════════════════════════════════
+    //  API KEY FORM
+    // ══════════════════════════════════
+    let akfSelectedProvider = null;
+    const akfSection = document.getElementById('api-key-section');
+    const akfProvidersEl = document.getElementById('akf-providers');
+    const akfKeyInput = document.getElementById('akf-key-input');
+    const akfContinueBtn = document.getElementById('akf-continue-btn');
+    const akfError = document.getElementById('akf-error');
+    const akfHelp = document.getElementById('akf-help');
+    const akfToggleVis = document.getElementById('akf-toggle-vis');
+
+    function akfUpdateContinue() {
+      akfContinueBtn.disabled = !akfSelectedProvider || !akfKeyInput.value.trim();
+    }
+
+    akfKeyInput.addEventListener('input', () => {
+      akfError.textContent = '';
+      akfUpdateContinue();
+    });
+
+    akfToggleVis.addEventListener('click', () => {
+      akfKeyInput.type = akfKeyInput.type === 'password' ? 'text' : 'password';
+    });
+
+    oc.onShowApiKeyForm((providers) => {
+      akfSelectedProvider = null;
+      akfKeyInput.value = '';
+      akfError.textContent = '';
+      akfContinueBtn.disabled = true;
+
+      akfProvidersEl.innerHTML = providers.map(p => `
+        <div class="provider-card" data-pid="${p.id}" data-key-url="${p.keyUrl}">
+          <div class="provider-card-name">${escapeHtml(p.name)}</div>
+        </div>
+      `).join('');
+
+      akfProvidersEl.querySelectorAll('.provider-card').forEach(card => {
+        card.addEventListener('click', () => {
+          akfProvidersEl.querySelectorAll('.provider-card').forEach(c => c.classList.remove('selected'));
+          card.classList.add('selected');
+          akfSelectedProvider = card.dataset.pid;
+          akfHelp.innerHTML = `<a id="akf-key-link">Where do I get a key?</a>`;
+          document.getElementById('akf-key-link').addEventListener('click', () => {
+            oc.openExternal(card.dataset.keyUrl);
+          });
+          akfKeyInput.focus();
+          akfUpdateContinue();
+        });
+      });
+
+      akfSection.classList.add('active');
+      // Hide terminal when showing the form so it doesn't steal layout space
+      document.getElementById('setup-terminal-section').classList.remove('active');
+      setTimeout(() => akfSection.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
+    });
+
+    akfContinueBtn.addEventListener('click', async () => {
+      if (!akfSelectedProvider || !akfKeyInput.value.trim()) return;
+      akfContinueBtn.disabled = true;
+      akfContinueBtn.textContent = 'Configuring...';
+      akfError.textContent = '';
+
+      try {
+        await oc.submitApiKey(akfSelectedProvider, akfKeyInput.value.trim());
+        akfSection.classList.remove('active');
+      } catch (err) {
+        akfError.textContent = err?.message || 'Configuration failed — check your key.';
+      } finally {
+        akfContinueBtn.textContent = 'Continue';
+        akfUpdateContinue();
+      }
+    });
+
+    akfKeyInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !akfContinueBtn.disabled) akfContinueBtn.click();
+      e.stopPropagation();
     });
 
     // Signal main process that renderer is ready to receive messages

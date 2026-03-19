@@ -87,10 +87,24 @@ contextBridge.exposeInMainWorld('openclaw', {
     return () => ipcRenderer.removeListener('app:show-onboard', handler);
   },
 
-  onShowWaiting: (cb: (info: { title: string; message: string }) => void) => {
-    const handler = (_e: Electron.IpcRendererEvent, info: { title: string; message: string }) => cb(info);
-    ipcRenderer.on('app:show-waiting', handler);
-    return () => ipcRenderer.removeListener('app:show-waiting', handler);
+  onShowSetup: (cb: (steps: any[]) => void) => {
+    const handler = (_e: Electron.IpcRendererEvent, steps: any[]) => cb(steps);
+    ipcRenderer.on('app:show-setup', handler);
+    return () => ipcRenderer.removeListener('app:show-setup', handler);
+  },
+
+  onSetupSteps: (cb: (steps: any[]) => void) => {
+    const handler = (_e: Electron.IpcRendererEvent, steps: any[]) => cb(steps);
+    ipcRenderer.on('app:setup-steps', handler);
+    return () => ipcRenderer.removeListener('app:setup-steps', handler);
+  },
+
+  // Inference API key
+  submitApiKey: (provider: string, key: string) => ipcRenderer.invoke('setup:submit-api-key', provider, key),
+  onShowApiKeyForm: (cb: (providers: any[]) => void) => {
+    const handler = (_e: Electron.IpcRendererEvent, providers: any[]) => cb(providers);
+    ipcRenderer.on('app:show-api-key-form', handler);
+    return () => ipcRenderer.removeListener('app:show-api-key-form', handler);
   },
 
   onStatus: (cb: (status: any) => void) => {
