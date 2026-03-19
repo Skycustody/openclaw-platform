@@ -7,7 +7,7 @@ import { manager, AgentStatus } from './openclaw/manager';
 import { installOpenClaw, findOpenClawBinary, isNodeInstalled, getInstallScriptCommand, findNemoClawBinary, getNemoClawInstallScriptCommand, getNemoClawSetupScriptCommand } from './openclaw/installer';
 import { readRecentLogs, getLogFilePath, logApp, closeStreams } from './openclaw/logger';
 import { loadSession, saveSession, clearSession, checkSubscription, parseDeepLinkToken, parseDeepLinkEmail } from './lib/session';
-import { loadRuntime, saveRuntime, clearRuntime, isNemoClawSupported, isDockerInstalled, isDockerRunning, canInstallDocker, getDockerInstallCommand, launchDockerDesktop, RuntimeType, isIntelMac, isOpenShellInstalled, isSidecarReady, setupOpenShellSidecar, ensureSidecarNetworking, isOnboardComplete, getNemoClawOnboardCommand } from './lib/runtime';
+import { loadRuntime, saveRuntime, clearRuntime, isNemoClawSupported, isDockerInstalled, isDockerRunning, canInstallDocker, getDockerInstallCommand, launchDockerDesktop, RuntimeType, isIntelMac, isOpenShellInstalled, isSidecarReady, setupOpenShellSidecar, ensureSidecarNetworking, isOnboardComplete, getNemoClawOnboardCommand, applySandboxSettings, readSandboxConfig } from './lib/runtime';
 import { getAppDataDir } from './lib/platform';
 
 const PROTOCOL = 'valnaa';
@@ -44,10 +44,12 @@ function buildSetupSteps(runtime: RuntimeType): SetupStep[] {
       steps.push({ id: 'openshell-sidecar', label: 'Install OpenShell (Intel Mac)', status: isSidecarReady() ? 'done' : 'pending' });
     }
     const onboardDone = isOnboardComplete();
+    const settingsDone = isNemoClawSettingsDone();
     steps.push(
       { id: 'nemoclaw-install', label: 'Install NemoClaw', status: findNemoClawBinary() ? 'done' : 'pending' },
       { id: 'collect-api-key', label: 'Configure API key', status: (onboardDone || loadPersistedApiKey() !== null) ? 'done' : 'pending' },
       { id: 'nemoclaw-onboard', label: 'Set up NemoClaw', status: onboardDone ? 'done' : 'pending' },
+      { id: 'nemoclaw-settings', label: 'Configure your agent', status: settingsDone ? 'done' : 'pending' },
       { id: 'start', label: 'Start agent', status: 'pending' },
     );
     return steps;
@@ -288,6 +290,31 @@ function loadPersistedApiKey(): { provider: string; key: string } | null {
 }
 
 // ════════════════════════════════════
+//  NemoClaw Settings (post-onboard)
+// ════════════════════════════════════
+const NEMOCLAW_SETTINGS_FLAG = path.join(getAppDataDir(), 'nemoclaw-settings-done');
+
+function isNemoClawSettingsDone(): boolean {
+  const fs = require('fs');
+  try { fs.accessSync(NEMOCLAW_SETTINGS_FLAG); return true; } catch { return false; }
+}
+
+function markNemoClawSettingsDone(): void {
+  const fs = require('fs');
+  const dir = path.dirname(NEMOCLAW_SETTINGS_FLAG);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(NEMOCLAW_SETTINGS_FLAG, new Date().toISOString());
+}
+
+let nemoSettingsResolver: ((settings: any) => void) | null = null;
+
+function waitForNemoClawSettings(): Promise<any> {
+  return new Promise((resolve) => {
+    nemoSettingsResolver = resolve;
+  });
+}
+
+// ════════════════════════════════════
 //  Setup Flow Orchestrator
 // ════════════════════════════════════
 async function runSetupFlow(runtime: RuntimeType): Promise<void> {
@@ -375,6 +402,35 @@ async function runSetupFlow(runtime: RuntimeType): Promise<void> {
             step.detail = 'Running NemoClaw setup (this may take several minutes)...';
             sendSteps(steps);
             await spawnNemoClawOnboardAsync();
+            break;
+          }
+          case 'nemoclaw-settings': {
+            if (isNemoClawSettingsDone()) break;
+            step.detail = 'Configure your agent...';
+            sendSteps(steps);
+            // Start the gateway first so user can test while configuring
+            await manager.start();
+            await new Promise(r => setTimeout(r, 500));
+
+            const existingConfig = readSandboxConfig();
+            mainWindow?.webContents.send('app:show-nemoclaw-settings', {
+              hasNvidia: !!existingConfig?.models?.providers?.nvidia,
+              hasOpenAI: !!existingConfig?.models?.providers?.openai,
+              hasAnthropic: !!existingConfig?.models?.providers?.anthropic,
+              agentName: existingConfig?.agents?.defaults?.name || '',
+              channels: existingConfig?.channels || {},
+            });
+            const userSettings = await waitForNemoClawSettings();
+            try {
+              applySandboxSettings(userSettings);
+              step.detail = 'Applying settings...';
+              sendSteps(steps);
+              // Wait for gateway to reload config
+              await new Promise(r => setTimeout(r, 3000));
+            } catch (err: any) {
+              logApp('warn', `Failed to apply sandbox settings: ${err.message}`);
+            }
+            markNemoClawSettingsDone();
             break;
           }
           case 'openclaw-install': {
@@ -591,6 +647,11 @@ function setupIPC(): void {
       'https://docs.nvidia.com',
       'https://nvidia.com',
       'https://github.com/NVIDIA',
+      'https://platform.openai.com',
+      'https://console.anthropic.com',
+      'https://build.nvidia.com',
+      'https://t.me',
+      'https://discord.com',
     ];
     if (allowed.some(prefix => url.startsWith(prefix))) {
       shell.openExternal(url);
@@ -668,6 +729,13 @@ function setupIPC(): void {
     if (apiKeyResolver) {
       apiKeyResolver({ provider, key });
       apiKeyResolver = null;
+    }
+  });
+
+  ipcMain.handle('setup:submit-nemoclaw-settings', (_e, settings: any) => {
+    if (nemoSettingsResolver) {
+      nemoSettingsResolver(settings);
+      nemoSettingsResolver = null;
     }
   });
 

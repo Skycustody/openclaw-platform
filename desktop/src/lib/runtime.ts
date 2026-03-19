@@ -393,6 +393,130 @@ export function clearSandboxTokenCache(): void {
   cachedSandboxToken = null;
 }
 
+const SANDBOX_CONFIG_PATH = '/sandbox/.openclaw/openclaw.json';
+
+function sandboxSSH(cmd: string, timeoutMs = 10000): string {
+  if (isIntelMac() && isOpenShellSidecarRunning()) {
+    return execSyncSafe(
+      `docker exec ${OPENSHELL_SIDECAR} ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR ` +
+      `openshell-${SANDBOX_NAME} "${cmd.replace(/"/g, '\\"')}"`,
+      timeoutMs,
+    );
+  }
+  return execSyncSafe(
+    `openshell ssh ${SANDBOX_NAME} --gateway ${GATEWAY_NAME} -- ${cmd}`,
+    timeoutMs,
+  );
+}
+
+export function readSandboxConfig(): Record<string, any> | null {
+  try {
+    const raw = sandboxSSH(`cat ${SANDBOX_CONFIG_PATH}`);
+    return JSON.parse(raw);
+  } catch (err: any) {
+    logApp('warn', `Failed to read sandbox config: ${err.message}`);
+    return null;
+  }
+}
+
+export function writeSandboxConfig(config: Record<string, any>): void {
+  const { execSync } = require('child_process');
+  const json = JSON.stringify(config, null, 2);
+  const b64 = Buffer.from(json).toString('base64');
+
+  if (isIntelMac() && isOpenShellSidecarRunning()) {
+    execSync(
+      `docker exec ${OPENSHELL_SIDECAR} ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR ` +
+      `openshell-${SANDBOX_NAME} "echo '${b64}' | base64 -d > ${SANDBOX_CONFIG_PATH}"`,
+      { stdio: 'pipe', timeout: 10000 },
+    );
+  } else {
+    execSync(
+      `openshell ssh ${SANDBOX_NAME} --gateway ${GATEWAY_NAME} -- sh -c "echo '${b64}' | base64 -d > ${SANDBOX_CONFIG_PATH}"`,
+      { stdio: 'pipe', timeout: 10000 },
+    );
+  }
+  logApp('info', 'Wrote sandbox openclaw.json');
+}
+
+/**
+ * Restart the OpenClaw gateway inside the sandbox.
+ * The gateway runs as PID 1 via `openclaw gateway`, so we send SIGHUP
+ * which triggers a config reload. If that fails, kill the process and
+ * let the container's init restart it.
+ */
+export function restartSandboxGateway(): void {
+  try {
+    sandboxSSH('kill -HUP 1', 5000);
+    logApp('info', 'Sent SIGHUP to sandbox gateway (config reload)');
+  } catch {
+    try {
+      sandboxSSH('kill 1', 5000);
+      logApp('info', 'Killed sandbox gateway PID 1 for restart');
+    } catch (err: any) {
+      logApp('warn', `Failed to restart sandbox gateway: ${err.message}`);
+    }
+  }
+  cachedSandboxToken = null;
+}
+
+/**
+ * Write additional API keys and channel config into the sandbox's openclaw.json.
+ * Merges with existing config so NemoClaw's NVIDIA inference stays intact.
+ */
+export function applySandboxSettings(settings: {
+  apiKeys?: Record<string, string>;
+  channels?: Record<string, any>;
+  agentName?: string;
+}): void {
+  const config = readSandboxConfig();
+  if (!config) throw new Error('Cannot read sandbox config');
+
+  if (settings.apiKeys) {
+    if (!config.env) config.env = {};
+    for (const [key, value] of Object.entries(settings.apiKeys)) {
+      if (value) config.env[key] = value;
+    }
+
+    if (!config.models) config.models = {};
+    if (!config.models.providers) config.models.providers = {};
+
+    if (settings.apiKeys.OPENAI_API_KEY) {
+      config.models.providers.openai = {
+        apiKey: settings.apiKeys.OPENAI_API_KEY,
+        models: [
+          { id: 'gpt-4o', name: 'GPT-4o', reasoning: false, input: ['text', 'image'] },
+          { id: 'o3-mini', name: 'o3-mini', reasoning: true, input: ['text'] },
+        ],
+      };
+    }
+    if (settings.apiKeys.ANTHROPIC_API_KEY) {
+      config.models.providers.anthropic = {
+        apiKey: settings.apiKeys.ANTHROPIC_API_KEY,
+        models: [
+          { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4', reasoning: false, input: ['text', 'image'] },
+        ],
+      };
+    }
+  }
+
+  if (settings.channels) {
+    if (!config.channels) config.channels = {};
+    for (const [platform, channelCfg] of Object.entries(settings.channels)) {
+      config.channels[platform] = { ...config.channels[platform], ...channelCfg };
+    }
+  }
+
+  if (settings.agentName) {
+    if (!config.agents) config.agents = {};
+    if (!config.agents.defaults) config.agents.defaults = {};
+    config.agents.defaults.name = settings.agentName;
+  }
+
+  writeSandboxConfig(config);
+  restartSandboxGateway();
+}
+
 /**
  * Check if the SSH tunnel for port 18789 is alive inside the sidecar.
  * Returns true when an ssh process is listening on the port.

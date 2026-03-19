@@ -107,6 +107,14 @@ contextBridge.exposeInMainWorld('openclaw', {
     return () => ipcRenderer.removeListener('app:show-api-key-form', handler);
   },
 
+  // NemoClaw settings
+  submitNemoClawSettings: (settings: any) => ipcRenderer.invoke('setup:submit-nemoclaw-settings', settings),
+  onShowNemoClawSettings: (cb: (info: any) => void) => {
+    const handler = (_e: Electron.IpcRendererEvent, info: any) => cb(info);
+    ipcRenderer.on('app:show-nemoclaw-settings', handler);
+    return () => ipcRenderer.removeListener('app:show-nemoclaw-settings', handler);
+  },
+
   onStatus: (cb: (status: any) => void) => {
     const handler = (_: any, status: any) => cb(status);
     ipcRenderer.on('agent:status-update', handler);
