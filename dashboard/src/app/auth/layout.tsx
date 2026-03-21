@@ -107,7 +107,7 @@ function AuthForm() {
               referralCode: referralCode || undefined,
             }
           );
-          await handlePostAuth(data.token, data.isNewUser, data.email);
+          await handlePostAuth(data.token, data.isNewUser, (data as any).user?.email ?? data.email);
         } catch (err: any) {
           setError(err.message || 'Google sign-in failed. Please try again.');
         } finally {

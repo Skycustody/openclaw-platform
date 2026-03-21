@@ -33,9 +33,11 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
     const hasDesktop = !!desktopSubId || !!desktopTrialActive;
 
     res.json({
+      email: user.email,
       plan: user.plan,
       status: user.status,
       stripeCustomerId: user.stripe_customer_id,
+      hasDesktopPaid: !!desktopSubId,
       creditSpendThisMonth: parseInt(creditSpend?.total || '0'),
       trialEndsAt: trialEndsAt ? new Date(trialEndsAt).toISOString() : null,
       trialDataRetentionUntil: trialDataRetentionUntil ? new Date(trialDataRetentionUntil).toISOString() : null,
