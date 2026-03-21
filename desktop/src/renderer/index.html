@@ -1302,25 +1302,11 @@
     });
 
     function updateAboutRuntime(runtime) {
-      const label = document.getElementById('about-runtime-label');
-      const badge = document.getElementById('about-runtime-badge');
       const titleRuntime = document.getElementById('titlebar-runtime');
-      if (runtime === 'nemoclaw') {
-        label.textContent = 'Your personal AI agent, powered by NemoClaw.';
-        badge.textContent = 'NemoClaw (NVIDIA)';
-        badge.className = 'runtime-card-badge badge-purple';
-        titleRuntime.textContent = '\u2014 NemoClaw';
-      } else {
-        label.textContent = 'Your personal AI agent, powered by OpenClaw.';
-        badge.textContent = 'OpenClaw';
-        badge.className = 'runtime-card-badge badge-green';
-        titleRuntime.textContent = '\u2014 OpenClaw';
+      if (titleRuntime) {
+        titleRuntime.textContent = runtime === 'nemoclaw' ? '\u2014 NemoClaw' : '\u2014 OpenClaw';
       }
     }
-
-    document.getElementById('about-change-runtime').addEventListener('click', () => {
-      showRuntimePicker();
-    });
 
     oc.getRuntime().then(info => {
       updateAboutRuntime(info.runtime || 'openclaw');
@@ -1671,7 +1657,8 @@
     // ── Version ──
     oc.getVersion().then(v => {
       document.getElementById('version-label').textContent = 'v' + v;
-      document.getElementById('about-version').textContent = 'v' + v;
+      const settingsVersion = document.getElementById('settings-version');
+      if (settingsVersion) settingsVersion.textContent = 'v' + v;
     });
 
     // ── Subscribe to status changes ──
