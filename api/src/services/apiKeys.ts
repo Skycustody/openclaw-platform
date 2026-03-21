@@ -34,6 +34,7 @@ import { ensureNexosKey } from './nexos';
 import { Plan } from '../types';
 import { writeContainerConfig as writeConfigAtomic } from './containerConfig';
 import db from '../lib/db';
+import { decrypt } from '../lib/encryption';
 
 const INSTANCE_DIR = '/opt/openclaw/instances';
 const UUID_RE = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
@@ -365,20 +366,22 @@ export async function injectApiKeys(
         const agentId = ch.agent_is_primary ? 'main'
           : (ch.agent_ocid || ch.agent_name.trim().toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').slice(0, 20));
 
-        if (ch.channel_type === 'telegram' && ch.token) {
+        const plainToken = ch.token ? decrypt(ch.token) : null;
+
+        if (ch.channel_type === 'telegram' && plainToken) {
           config.channels[channelKey] = {
-            botToken: ch.token,
+            botToken: plainToken,
             dmPolicy: 'open', allowFrom: ['*'],
             groups: { '*': { requireMention: true } },
           };
-        } else if (ch.channel_type === 'discord' && ch.token) {
+        } else if (ch.channel_type === 'discord' && plainToken) {
           config.channels[channelKey] = {
-            token: ch.token,
+            token: plainToken,
             dmPolicy: 'open', allowFrom: ['*'],
             ...(ch.config?.guildId ? { guildId: ch.config.guildId } : {}),
           };
-        } else if (ch.channel_type === 'slack' && ch.token) {
-          config.channels[channelKey] = { token: ch.token };
+        } else if (ch.channel_type === 'slack' && plainToken) {
+          config.channels[channelKey] = { token: plainToken };
         } else if (ch.channel_type === 'whatsapp') {
           config.channels[channelKey] = { dmPolicy: 'open', allowFrom: ['*'] };
         }

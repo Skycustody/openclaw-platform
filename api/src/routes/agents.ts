@@ -25,7 +25,7 @@ import {
   reapplyGatewayConfig,
 } from '../services/containerConfig';
 import { sshExec } from '../services/ssh';
-import { encrypt } from '../lib/encryption';
+import { encrypt, decrypt } from '../lib/encryption';
 import { injectApiKeys } from '../services/apiKeys';
 
 const router = Router();
@@ -330,23 +330,25 @@ async function syncBindingsToContainer(
       const channelKey = idx === 0 ? type : `${type}-${idx + 1}`;
       const agentId = (ch as any).resolved_ocid || deriveOpenclawId((ch as any).agent_name, ch.agent_id);
 
+      const plainToken = ch.token ? decrypt(ch.token) : null;
+
       if (type === 'telegram') {
         config.channels[channelKey] = {
-          botToken: ch.token,
+          botToken: plainToken!,
           dmPolicy: 'open',
           allowFrom: ['*'],
           groups: { '*': { requireMention: true } },
         };
       } else if (type === 'discord') {
         config.channels[channelKey] = {
-          token: ch.token,
+          token: plainToken!,
           dmPolicy: 'open',
           allowFrom: ['*'],
           ...(ch.config?.guildId ? { guildId: ch.config.guildId } : {}),
         };
       } else if (type === 'slack') {
         config.channels[channelKey] = {
-          token: ch.token,
+          token: plainToken!,
           ...(ch.config?.teamId ? { teamId: ch.config.teamId } : {}),
         };
       } else if (type === 'whatsapp') {
