@@ -5,7 +5,6 @@ import { getAppDataDir } from './platform';
 import { logApp } from '../openclaw/logger';
 
 const API_BASE = process.env.VALNAA_API_URL || 'https://api.valnaa.com';
-const ALLOWED_VPS_STATUSES = ['active', 'sleeping', 'grace_period', 'provisioning', 'starting'];
 const OFFLINE_GRACE_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 export interface Session {
@@ -94,9 +93,8 @@ export async function checkSubscription(token: string): Promise<SubscriptionResu
     }>('/billing', token);
 
     const hasDesktop = !!billing.desktopSubscription;
-    const hasVps = ALLOWED_VPS_STATUSES.includes(billing.status) || !!billing.stripeCustomerId;
-    // Desktop app requires either an active desktop subscription OR an active VPS subscription
-    const ok = hasDesktop || hasVps;
+    // Desktop app ONLY checks for desktop subscription — VPS plans do NOT grant desktop access
+    const ok = hasDesktop;
 
     if (ok) {
       stampLastVerified();
