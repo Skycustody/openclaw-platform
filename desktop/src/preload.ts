@@ -13,6 +13,28 @@ contextBridge.exposeInMainWorld('openclaw', {
 
   needsSetup: () => ipcRenderer.invoke('setup:needs-setup'),
   openExternal: (url: string) => ipcRenderer.invoke('app:open-external', url),
+  /** Path, token, ports for manual Chrome setup (in-app card). */
+  getChromeExtensionInfo: () => ipcRenderer.invoke('browser:get-chrome-extension-info'),
+  revealChromeExtensionFolder: () => ipcRenderer.invoke('browser:reveal-extension-folder'),
+  openChromeExtensionsPage: () => ipcRenderer.invoke('browser:open-chrome-extensions'),
+  copyExtensionPath: () => ipcRenderer.invoke('browser:copy-extension-path'),
+  copyGatewayToken: () => ipcRenderer.invoke('browser:copy-gateway-token'),
+  saveChromeExtensionZip: () => ipcRenderer.invoke('browser:save-chrome-extension-zip'),
+  copyChromeExtensionToDownloads: () => ipcRenderer.invoke('browser:copy-chrome-extension-to-downloads'),
+  terminalSpawn: () => ipcRenderer.invoke('terminal:spawn'),
+  terminalInput: (data: string) => ipcRenderer.send('terminal:input', data),
+  terminalResize: (cols: number, rows: number) => ipcRenderer.send('terminal:resize', cols, rows),
+  terminalKill: () => ipcRenderer.invoke('terminal:kill'),
+  onTerminalData: (cb: (data: string) => void) => {
+    const handler = (_: any, data: string) => cb(data);
+    ipcRenderer.on('terminal:data', handler);
+    return () => ipcRenderer.removeListener('terminal:data', handler);
+  },
+  onTerminalExit: (cb: (code: number) => void) => {
+    const handler = (_: any, code: number) => cb(code);
+    ipcRenderer.on('terminal:exit', handler);
+    return () => ipcRenderer.removeListener('terminal:exit', handler);
+  },
 
   // Auth
   getSession: () => ipcRenderer.invoke('auth:get-session'),
@@ -56,36 +78,8 @@ contextBridge.exposeInMainWorld('openclaw', {
     return () => ipcRenderer.removeListener('app:show-subscribe', handler);
   },
 
-  // PTY
-  startOnboard: () => ipcRenderer.invoke('pty:start-onboard'),
-  startDockerInstall: () => ipcRenderer.invoke('pty:start-docker-install'),
   launchDocker: () => ipcRenderer.invoke('app:launch-docker'),
-  sendPtyInput: (data: string) => ipcRenderer.send('pty:input', data),
-  resizePty: (cols: number, rows: number) => ipcRenderer.send('pty:resize', cols, rows),
-
-  onPtyData: (cb: (data: string) => void) => {
-    const handler = (_: any, data: string) => cb(data);
-    ipcRenderer.on('pty:data', handler);
-    return () => ipcRenderer.removeListener('pty:data', handler);
-  },
-
-  onPtyStatus: (cb: (status: string) => void) => {
-    const handler = (_: any, status: string) => cb(status);
-    ipcRenderer.on('pty:status', handler);
-    return () => ipcRenderer.removeListener('pty:status', handler);
-  },
-
-  onPtyExit: (cb: (code: number) => void) => {
-    const handler = (_: any, code: number) => cb(code);
-    ipcRenderer.on('pty:exit', handler);
-    return () => ipcRenderer.removeListener('pty:exit', handler);
-  },
-
-  onShowOnboard: (cb: (task?: string) => void) => {
-    const handler = (_e: Electron.IpcRendererEvent, task?: string) => cb(task);
-    ipcRenderer.on('app:show-onboard', handler);
-    return () => ipcRenderer.removeListener('app:show-onboard', handler);
-  },
+  openExternalSetupTask: (task: string) => ipcRenderer.invoke('setup:open-external-task', task),
 
   onShowSetup: (cb: (steps: any[]) => void) => {
     const handler = (_e: Electron.IpcRendererEvent, steps: any[]) => cb(steps);

@@ -204,7 +204,7 @@ function HeroSection() {
               <ArrowRight className="size-4" />
             </Button>
           </Link>
-          <Link href="#download">
+          <Link href="/desktop">
             <Button className="rounded-full" size="lg" variant="secondary">
               <Download className="size-4" />
               Desktop App
@@ -389,10 +389,10 @@ function DesktopAppSection() {
               </div>
 
               <p className="mt-6 text-xs text-muted-foreground">
-                Requires a Valnaa subscription.{' '}
-                <a href={DOWNLOAD_BASE} className="underline underline-offset-2 hover:text-foreground" target="_blank" rel="noopener noreferrer">
-                  All releases
-                </a>
+                &euro;5/mo + VAT &middot; 3-day free trial &middot; Separate from cloud plans.{' '}
+                <Link href="/desktop" className="underline underline-offset-2 hover:text-foreground">
+                  See desktop pricing &amp; details
+                </Link>
               </p>
             </div>
           </div>

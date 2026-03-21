@@ -10,7 +10,7 @@ import { logApp, logOpenclaw } from './logger';
 import { findOpenClawBinary, findNemoClawBinary } from './installer';
 import { startHealthPolling, stopHealthPolling, HealthStatus } from './health';
 import { findAvailablePort, PortResult } from '../lib/ports';
-import { loadRuntime, RuntimeType, isSandboxReady, ensurePortForward, OPENCLAW_PORT, readSandboxGatewayToken, clearSandboxTokenCache } from '../lib/runtime';
+import { loadRuntime, RuntimeType, isSandboxReady, ensurePortForward, OPENCLAW_PORT, readSandboxGatewayToken, clearSandboxTokenCache, clearSandboxNameCache } from '../lib/runtime';
 
 function checkPortReady(port: number): Promise<boolean> {
   return new Promise((resolve) => {
@@ -237,63 +237,108 @@ class OpenClawManager extends EventEmitter {
    * to localhost via `openshell forward`.
    */
   private connectToNemoClawSandbox(): void {
+    this.clearStartupTimer();
+    this.clearReadinessPoll();
     this.setState('starting');
+    clearSandboxNameCache();
     clearSandboxTokenCache();
     logApp('info', 'Connecting to NemoClaw sandbox...');
 
     const { execSync } = require('child_process');
     const GATEWAY_CONTAINER = 'openshell-cluster-nemoclaw';
 
-    // 1. Ensure the gateway cluster container is running
     try {
-      const state = execSync(
-        `docker inspect ${GATEWAY_CONTAINER} --format "{{.State.Status}}"`,
-        { encoding: 'utf-8', timeout: 5000, stdio: 'pipe' }
-      ).trim();
-      if (state !== 'running') {
-        execSync(`docker start ${GATEWAY_CONTAINER}`, { timeout: 15000, stdio: 'pipe' });
-        logApp('info', 'Started gateway container');
-      }
-    } catch {
-      this.lastError = 'NemoClaw gateway container not found. Run setup again.';
-      this.setState('crashed');
-      return;
-    }
-
-    // 2. Check that the sandbox exists
-    if (!isSandboxReady()) {
-      this.lastError = 'NemoClaw sandbox not found. Run setup again.';
-      this.setState('crashed');
-      return;
-    }
-
-    // 3. Ensure port forward is active
-    ensurePortForward();
-
-    // 4. Poll for the OpenClaw gateway on port 18789
-    this.port = OPENCLAW_PORT;
-    logApp('info', `Waiting for OpenClaw gateway on port ${OPENCLAW_PORT}...`);
-
-    // Use a longer timeout — the sandbox may take time to start up after reboot
-    const SANDBOX_CONNECT_TIMEOUT = 60000;
-
-    this.readinessPoll = setInterval(async () => {
-      if (this.state !== 'starting' || !this.port) return;
-      if (await checkPortReady(this.port)) {
-        this.clearReadinessPoll();
-        this.onGatewayReady();
-      }
-    }, 2000);
-
-    this.startupTimer = setTimeout(() => {
-      if (this.state === 'starting') {
-        this.clearReadinessPoll();
-        ensurePortForward();
-        logApp('warn', `OpenClaw gateway not responding on port ${OPENCLAW_PORT} after ${SANDBOX_CONNECT_TIMEOUT}ms`);
-        this.lastError = 'OpenClaw gateway inside sandbox is not responding. The sandbox may still be starting up — try again in a moment.';
+      // 1. Ensure the gateway cluster container is running
+      try {
+        const state = execSync(
+          `docker inspect ${GATEWAY_CONTAINER} --format "{{.State.Status}}"`,
+          { encoding: 'utf-8', timeout: 8000, stdio: 'pipe' }
+        ).trim();
+        if (state !== 'running') {
+          execSync(`docker start ${GATEWAY_CONTAINER}`, { timeout: 20000, stdio: 'pipe' });
+          logApp('info', 'Started gateway container');
+        }
+      } catch {
+        this.lastError = 'NemoClaw gateway container not found. Run setup again.';
         this.setState('crashed');
+        return;
       }
-    }, SANDBOX_CONNECT_TIMEOUT);
+
+      // 2. Check that the sandbox exists
+      if (!isSandboxReady()) {
+        this.lastError = 'NemoClaw sandbox not found. Run setup again.';
+        this.setState('crashed');
+        return;
+      }
+
+      // 3. Ensure port forward is active (never let a throw leave us stuck in "starting")
+      try {
+        ensurePortForward();
+      } catch (e: any) {
+        logApp('warn', `ensurePortForward: ${e?.message || e}`);
+      }
+
+      // 4. Poll for the OpenClaw gateway on port 18789
+      this.port = OPENCLAW_PORT;
+      logApp('info', `Waiting for OpenClaw gateway on port ${OPENCLAW_PORT}...`);
+
+      /** Sandbox / Docker can exceed 60s after sleep or heavy load */
+      const SANDBOX_CONNECT_TIMEOUT = 120000;
+      let pollAttempts = 0;
+
+      const pollOnce = async () => {
+        if (this.state !== 'starting' || !this.port) return;
+        pollAttempts++;
+        if (pollAttempts % 5 === 0) {
+          try {
+            ensurePortForward();
+          } catch (e: any) {
+            logApp('warn', `ensurePortForward (poll): ${e?.message || e}`);
+          }
+        }
+        if (await checkPortReady(this.port)) {
+          this.clearReadinessPoll();
+          this.onGatewayReady();
+        }
+      };
+
+      void pollOnce();
+      this.readinessPoll = setInterval(() => {
+        void pollOnce();
+      }, 1500);
+
+      this.startupTimer = setTimeout(() => {
+        if (this.state === 'starting') {
+          this.clearReadinessPoll();
+          try {
+            ensurePortForward();
+          } catch (e: any) {
+            logApp('warn', `ensurePortForward (timeout): ${e?.message || e}`);
+          }
+          logApp('warn', `OpenClaw gateway not responding on port ${OPENCLAW_PORT} after ${SANDBOX_CONNECT_TIMEOUT}ms`);
+          this.lastError = 'OpenClaw gateway inside sandbox is not responding. The sandbox may still be starting up — try again in a moment.';
+          this.setState('crashed');
+        }
+      }, SANDBOX_CONNECT_TIMEOUT);
+
+      /** Failsafe: never stay "starting" forever if timers were lost */
+      setTimeout(() => {
+        if (this.state === 'starting') {
+          logApp('error', 'NemoClaw startup watchdog — forcing crashed state');
+          this.clearReadinessPoll();
+          this.clearStartupTimer();
+          this.lastError =
+            'Still waiting for the gateway — Docker or the sandbox may be stuck. Try: restart Docker, then Stop/Start in Valnaa. Check logs in the Logs tab.';
+          this.setState('crashed');
+        }
+      }, SANDBOX_CONNECT_TIMEOUT + 15000);
+    } catch (err: any) {
+      logApp('error', `connectToNemoClawSandbox: ${err?.message || err}`);
+      this.lastError = err?.message || 'Failed to connect to NemoClaw sandbox.';
+      this.clearReadinessPoll();
+      this.clearStartupTimer();
+      this.setState('crashed');
+    }
   }
 
   private onGatewayReady(): void {

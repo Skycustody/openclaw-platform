@@ -57,3 +57,6 @@ OpenClaw container.
    `openclaw.json`. Do not hardcode fake skill lists.
 7. **Chat = OpenClaw Control UI embedded in an iframe.** Do not build a custom
    chat UI that calls the API directly.
+8. **Valnaa desktop (`desktop/`):** After editing TypeScript or `src/renderer/`,
+   run `cd desktop && npm run build` (or use `npm run dev:watch` while developing).
+   The running app loads from `desktop/dist/`.

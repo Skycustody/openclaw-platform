@@ -5,20 +5,26 @@
   "main": "dist/main.js",
   "private": true,
   "scripts": {
-    "dev": "tsc && electron dist/main.js",
     "build": "tsc && node scripts/copy-renderer.js",
+    "dev": "npm run build && electron dist/main.js",
+    "dev:watch": "concurrently --kill-others-on-fail --names tsc,renderer,electron --prefix-colors cyan,magenta,green \"tsc -w --preserveWatchOutput\" \"node scripts/watch-renderer.js\" \"wait-on dist/main.js && electron dist/main.js\"",
+    "prestart": "npm run build",
     "start": "electron dist/main.js",
-    "pack": "electron-builder --dir",
-    "dist:mac": "electron-builder --mac",
-    "dist:win": "electron-builder --win",
-    "dist": "electron-builder --mac --win"
+    "pack": "npm run build && electron-builder --dir",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:win": "npm run build && electron-builder --win",
+    "dist": "npm run build && electron-builder --mac --win",
+    "chrome-cli": "bash scripts/chrome-extension-cli.sh",
+    "chrome-cli:all": "bash scripts/chrome-extension-cli.sh all"
   },
   "devDependencies": {
     "@electron/rebuild": "^4.0.3",
     "@types/node": "^22.0.0",
+    "concurrently": "^9.1.2",
     "electron": "^33.0.0",
     "electron-builder": "^25.0.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "wait-on": "^8.0.1"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",

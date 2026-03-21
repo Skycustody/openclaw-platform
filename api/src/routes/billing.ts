@@ -2,7 +2,7 @@ import { Router, Response, NextFunction } from 'express';
 import { AuthRequest, authenticate } from '../middleware/auth';
 import { rateLimitSensitive } from '../middleware/rateLimit';
 import db from '../lib/db';
-import { createCheckoutSession, createCreditCheckoutSession, getCustomerPortalUrl, getInvoices, stripe } from '../services/stripe';
+import { createCheckoutSession, createCreditCheckoutSession, createDesktopCheckoutSession, getCustomerPortalUrl, getInvoices, stripe } from '../services/stripe';
 import { BadRequestError } from '../lib/errors';
 import { Plan, User, CREDIT_PACKS } from '../types';
 
@@ -27,6 +27,8 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
     const trialDataRetentionUntil = user.trial_data_retention_until ?? null;
     const isInTrial = trialEndsAt && new Date(trialEndsAt) > new Date();
 
+    const desktopSub = !!(user as any).desktop_subscription_id;
+
     res.json({
       plan: user.plan,
       status: user.status,
@@ -35,6 +37,7 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
       trialEndsAt: trialEndsAt ? new Date(trialEndsAt).toISOString() : null,
       trialDataRetentionUntil: trialDataRetentionUntil ? new Date(trialDataRetentionUntil).toISOString() : null,
       isInTrial,
+      desktopSubscription: desktopSub,
     });
   } catch (err) {
     next(err);
@@ -102,6 +105,26 @@ router.post('/buy-credits', rateLimitSensitive, async (req: AuthRequest, res: Re
       user.email,
       pack,
       req.userId!,
+      user.stripe_customer_id || undefined,
+    );
+    res.json({ checkoutUrl });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Start desktop app subscription checkout
+router.post('/desktop-checkout', rateLimitSensitive, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { trial } = req.body as { trial?: boolean };
+
+    const user = await db.getOne<User>('SELECT id, email, stripe_customer_id FROM users WHERE id = $1', [req.userId]);
+    if (!user) throw new BadRequestError('User not found');
+
+    const checkoutUrl = await createDesktopCheckoutSession(
+      user.email,
+      req.userId!,
+      !!trial,
       user.stripe_customer_id || undefined,
     );
     res.json({ checkoutUrl });

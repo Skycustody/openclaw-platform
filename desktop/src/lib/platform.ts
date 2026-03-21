@@ -18,7 +18,7 @@ export function getLogsDir(): string {
   return path.join(getAppDataDir(), 'logs');
 }
 
-/** The openclaw CLI stores config here */
+/** The openclaw CLI stores config here (~/.openclaw). Chrome loads extension from ~/.openclaw/browser/chrome-extension */
 export function getOpenClawDir(): string {
   return path.join(os.homedir(), '.openclaw');
 }

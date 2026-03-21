@@ -16,3 +16,16 @@ function copyDir(srcDir, destDir) {
 
 copyDir(src, dest);
 console.log('Renderer files copied to dist/renderer');
+
+// Copy xterm.js assets for the in-app terminal
+const vendorDir = path.join(dest, 'vendor');
+fs.mkdirSync(vendorDir, { recursive: true });
+
+const xtermPkg = path.join(__dirname, '..', 'node_modules', '@xterm', 'xterm');
+const fitPkg = path.join(__dirname, '..', 'node_modules', '@xterm', 'addon-fit');
+
+fs.copyFileSync(path.join(xtermPkg, 'css', 'xterm.css'), path.join(vendorDir, 'xterm.css'));
+fs.copyFileSync(path.join(xtermPkg, 'lib', 'xterm.mjs'), path.join(vendorDir, 'xterm.mjs'));
+fs.copyFileSync(path.join(fitPkg, 'lib', 'addon-fit.mjs'), path.join(vendorDir, 'addon-fit.mjs'));
+
+console.log('xterm.js vendor files copied to dist/renderer/vendor/');

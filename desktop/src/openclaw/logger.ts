@@ -86,6 +86,12 @@ export function getLogFilePath(): string {
   return path.join(logDir, 'openclaw.log');
 }
 
+/** Main-process / Valnaa diagnostics (PTY, startup, IPC errors). */
+export function getAppLogPath(): string {
+  ensureLogDir();
+  return path.join(logDir, 'app.log');
+}
+
 export function closeStreams(): void {
   openclawStream?.end();
   appStream?.end();

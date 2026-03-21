@@ -1,4 +1,6 @@
 import { execFile, spawn } from 'child_process';
+import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { IS_WIN, getNpmGlobalPrefix, getNpmGlobalBin } from '../lib/platform';
 import { classifyInstallError } from '../lib/errors';
@@ -52,11 +54,18 @@ export function findOpenClawBinary(): string | null {
   } catch { /* not found */ }
 
   const globalBin = getNpmGlobalBin();
-  const candidate = path.join(globalBin, IS_WIN ? 'openclaw.cmd' : 'openclaw');
-  try {
-    const fs = require('fs');
-    if (fs.existsSync(candidate)) return candidate;
-  } catch { /* ok */ }
+  const candidates: string[] = [
+    path.join(globalBin, IS_WIN ? 'openclaw.cmd' : 'openclaw'),
+    path.join(os.homedir(), '.local', 'bin', IS_WIN ? 'openclaw.cmd' : 'openclaw'),
+  ];
+  if (!IS_WIN) {
+    candidates.push('/opt/homebrew/bin/openclaw', '/usr/local/bin/openclaw');
+  }
+  for (const candidate of candidates) {
+    try {
+      if (fs.existsSync(candidate)) return candidate;
+    } catch { /* ok */ }
+  }
 
   return null;
 }

@@ -1,14 +1,27 @@
-import { app, BrowserWindow, ipcMain, Tray, Menu, shell, nativeImage, dialog, safeStorage } from 'electron';
+import { app, BrowserWindow, ipcMain, Tray, Menu, shell, nativeImage, dialog, safeStorage, clipboard } from 'electron';
 import path from 'path';
 import os from 'os';
-import { autoUpdater } from 'electron-updater';
+import fs from 'fs';
+import { spawn } from 'child_process';
 import * as pty from 'node-pty';
+import { autoUpdater } from 'electron-updater';
 import { manager, AgentStatus } from './openclaw/manager';
 import { installOpenClaw, findOpenClawBinary, isNodeInstalled, getInstallScriptCommand, findNemoClawBinary, getNemoClawInstallScriptCommand, getNemoClawSetupScriptCommand } from './openclaw/installer';
-import { readRecentLogs, getLogFilePath, logApp, closeStreams } from './openclaw/logger';
+import { readRecentLogs, getLogFilePath, getAppLogPath, logApp, closeStreams } from './openclaw/logger';
 import { loadSession, saveSession, clearSession, checkSubscription, parseDeepLinkToken, parseDeepLinkEmail } from './lib/session';
-import { loadRuntime, saveRuntime, clearRuntime, isNemoClawSupported, isDockerInstalled, isDockerRunning, canInstallDocker, getDockerInstallCommand, launchDockerDesktop, RuntimeType, isIntelMac, isOpenShellInstalled, isSidecarReady, setupOpenShellSidecar, ensureSidecarNetworking, isOnboardComplete, getNemoClawOnboardCommand } from './lib/runtime';
+import { loadRuntime, saveRuntime, clearRuntime, isNemoClawSupported, isDockerInstalled, isDockerRunning, canInstallDocker, getDockerInstallCommand, launchDockerDesktop, RuntimeType, isIntelMac, isOpenShellInstalled, isSidecarReady, setupOpenShellSidecar, ensureSidecarNetworking, isOnboardComplete, getNemoClawOnboardCommand, ensurePortForward, OPENCLAW_PORT, EXTENSION_RELAY_PORT, readSandboxGatewayTokenFresh, readHostOpenclawGatewayToken } from './lib/runtime';
 import { getAppDataDir } from './lib/platform';
+import {
+  getChromeExtensionDir,
+  ensureChromeExtensionFiles,
+  chromeExtensionIsReady,
+  openChromeExtensionsPage,
+  BROWSER_DOCS_URL,
+  zipChromeExtensionDirectory,
+  copyChromeExtensionTree,
+  CHROME_EXTENSION_USER_FOLDER_NAME,
+  CHROME_EXTENSION_ZIP_NAME,
+} from './lib/browserSetup';
 
 const PROTOCOL = 'valnaa';
 const gotLock = app.requestSingleInstanceLock();
@@ -20,7 +33,12 @@ if (!gotLock) {
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
-let onboardPty: pty.IPty | null = null;
+
+function redactPtyLog(s: string): string {
+  return s
+    .replace(/--token\s+[^\s']+/g, '--token <redacted>')
+    .replace(/--token\s+'[^']*'/g, "--token '<redacted>'");
+}
 let pendingDeepLink: string | null = null;
 let setupRunning = false;
 
@@ -64,10 +82,9 @@ function sendSteps(steps: SetupStep[]): void {
   mainWindow?.webContents.send('app:setup-steps', JSON.parse(JSON.stringify(steps)));
 }
 
-// ════════════════════════════════════
-//  Promisified PTY
-// ════════════════════════════════════
-function getTaskCommand(task: PtyTask): string | null {
+type SetupShellTask = 'install' | 'onboard' | 'install-nemoclaw' | 'setup-nemoclaw' | 'install-docker';
+
+function getTaskCommand(task: SetupShellTask): string | null {
   if (task === 'install') {
     const hasNode = isNodeInstalled();
     if (!hasNode) {
@@ -88,103 +105,166 @@ function getTaskCommand(task: PtyTask): string | null {
   }
 }
 
-function spawnPtyTaskAsync(task: PtyTask): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (onboardPty) {
-      reject(new Error('Another setup task is still running'));
-      return;
-    }
-
-    const command = getTaskCommand(task);
-    if (!command) {
-      reject(new Error(`Cannot determine command for task "${task}"`));
-      return;
-    }
-
-    const shellName = process.platform === 'win32' ? 'powershell.exe' : '/bin/zsh';
-    logApp('info', `PTY async "${task}": ${command} (shell: ${shellName})`);
-
-    const localBin = path.join(os.homedir(), '.local', 'bin');
-    const envPath = process.env.PATH || '';
-    const patchedPath = envPath.includes(localBin) ? envPath : `${localBin}:${envPath}`;
-
-    onboardPty = pty.spawn(shellName, ['-c', command], {
-      name: 'xterm-256color',
-      cols: 100,
-      rows: 30,
-      cwd: os.homedir(),
-      env: { ...process.env, TERM: 'xterm-256color', FORCE_COLOR: '1', PATH: patchedPath } as Record<string, string>,
-    });
-
-    logApp('info', `PTY spawned (PID ${onboardPty.pid}) for task "${task}"`);
-
-    onboardPty.onData((data: string) => {
-      mainWindow?.webContents.send('pty:data', data);
-    });
-
-    onboardPty.onExit(({ exitCode }) => {
-      logApp('info', `PTY task "${task}" exited with code ${exitCode}`);
-      onboardPty = null;
-      mainWindow?.webContents.send('pty:exit', exitCode);
-      if (exitCode === 0) resolve();
-      else reject(new Error(`${task} failed (exit code ${exitCode})`));
-    });
-  });
+/** Single-quote escaping for POSIX shell strings inside '...'. */
+function shEscapeSq(s: string): string {
+  return s.replace(/'/g, `'\\''`);
 }
 
-/**
- * Run `nemoclaw onboard` interactively in a PTY.
- * The user sees NemoClaw's own setup wizard and can answer prompts
- * (sandbox name, inference provider, presets, etc.) themselves.
- * The NVIDIA_API_KEY is passed via environment if previously collected.
- */
-function spawnNemoClawOnboardAsync(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (onboardPty) {
-      reject(new Error('Another setup task is still running'));
-      return;
-    }
+function taskRunsInExternalTerminal(task: SetupShellTask): boolean {
+  return task === 'install-docker' || task === 'install-nemoclaw' || task === 'setup-nemoclaw' || task === 'onboard';
+}
 
-    const savedKey = loadPersistedApiKey();
-    const command = getNemoClawOnboardCommand();
-    const shellName = process.platform === 'win32' ? 'powershell.exe' : '/bin/zsh';
-    logApp('info', `PTY nemoclaw-onboard (interactive): ${command}`);
+// ════════════════════════════════════
+//  In-App PTY Terminal
+// ════════════════════════════════════
+let activePty: pty.IPty | null = null;
 
-    const localBin = path.join(os.homedir(), '.local', 'bin');
-    const envPath = process.env.PATH || '';
-    const patchedPath = envPath.includes(localBin) ? envPath : `${localBin}:${envPath}`;
+function spawnPty(): pty.IPty {
+  if (activePty) {
+    try { activePty.kill(); } catch { /* ok */ }
+    activePty = null;
+  }
 
-    const env: Record<string, string> = {
-      ...process.env as Record<string, string>,
-      TERM: 'xterm-256color',
-      FORCE_COLOR: '1',
-      PATH: patchedPath,
-    };
-    if (savedKey?.key) env.NVIDIA_API_KEY = savedKey.key;
+  const pref = loadRuntime();
+  const runtime: RuntimeType = pref?.runtime || 'openclaw';
+  const shellName = process.platform === 'win32' ? 'powershell.exe' : (process.env.SHELL || '/bin/zsh');
+  const shellArgs = ['-l'];
+  const localBin = path.join(os.homedir(), '.local', 'bin');
+  const envPath = process.env.PATH || '';
+  const patchedPath = envPath.includes(localBin) ? envPath : `${localBin}:${envPath}`;
 
-    onboardPty = pty.spawn(shellName, ['-c', command], {
-      name: 'xterm-256color',
-      cols: 100,
-      rows: 30,
+  logApp('info', `Spawning PTY: ${shellName} ${shellArgs.join(' ')} (runtime: ${runtime})`);
+
+  const ptyProc = pty.spawn(shellName, shellArgs, {
+    name: 'xterm-256color',
+    cols: 80,
+    rows: 24,
+    cwd: os.homedir(),
+    env: { ...process.env, PATH: patchedPath, TERM: 'xterm-256color' } as Record<string, string>,
+  });
+
+  ptyProc.onData((data: string) => {
+    mainWindow?.webContents.send('terminal:data', data);
+  });
+
+  ptyProc.onExit(({ exitCode, signal }) => {
+    logApp('info', `PTY exited (code=${exitCode}, signal=${signal})`);
+    mainWindow?.webContents.send('terminal:exit', exitCode);
+    if (activePty === ptyProc) activePty = null;
+  });
+
+  activePty = ptyProc;
+  return ptyProc;
+}
+
+function openUserTerminalWithCommand(shellCommand: string, fileLabel: string): void {
+  const localBin = path.join(os.homedir(), '.local', 'bin');
+  const pathExport = `export PATH='${shEscapeSq(localBin)}':$PATH`;
+
+  if (process.platform === 'darwin') {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'valnaa-setup-'));
+    const scriptPath = path.join(dir, `${fileLabel.replace(/[^a-z0-9-]/gi, '-')}.command`);
+    const body = `#!/bin/bash
+set +e
+${pathExport}
+cd "$HOME" || exit 1
+${shellCommand}
+code=$?
+echo ""
+if [ $code -ne 0 ]; then echo "Exit code: $code"; fi
+read -p "Press Enter to close…"
+exit $code
+`;
+    fs.writeFileSync(scriptPath, body, 'utf8');
+    fs.chmodSync(scriptPath, 0o755);
+    spawn('open', [scriptPath], { detached: true, stdio: 'ignore' }).unref();
+    logApp('info', `Opened Terminal for setup (${fileLabel})`);
+  } else if (process.platform === 'win32') {
+    const wrapped = `set "PATH=%USERPROFILE%\\.local\\bin;%PATH%" && ${shellCommand}`;
+    spawn('cmd.exe', ['/c', 'start', 'cmd', '/k', wrapped], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+    logApp('info', `Opened cmd for setup (${fileLabel})`);
+  } else {
+    const inner = `${pathExport}; cd $HOME || exit 1; ${shellCommand}; echo; read -p 'Press Enter to close…'`;
+    spawn('x-terminal-emulator', ['-e', 'bash', '-lic', inner], { detached: true, stdio: 'ignore' }).unref();
+    logApp('info', `Opened x-terminal-emulator for setup (${fileLabel})`);
+  }
+}
+
+async function waitUntil(pred: () => boolean, timeoutMs: number, timeoutMsg: string): Promise<void> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (pred()) return;
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+  throw new Error(timeoutMsg);
+}
+
+async function waitForExternalTask(task: SetupShellTask): Promise<void> {
+  const longWait = 1_800_000;
+  if (task === 'install-docker') {
+    await waitUntil(() => isDockerInstalled(), 600_000, 'Docker install timed out. Finish in Terminal, then tap Retry in Valnaa.');
+    return;
+  }
+  if (task === 'install-nemoclaw') {
+    await waitUntil(() => !!findNemoClawBinary(), longWait, 'NemoClaw install timed out. Finish in Terminal, then tap Retry in Valnaa.');
+    return;
+  }
+  if (task === 'setup-nemoclaw') {
+    await waitUntil(() => isOnboardComplete(), longWait, 'NemoClaw setup timed out. Finish onboarding in Terminal, then tap Retry in Valnaa.');
+    return;
+  }
+  if (task === 'onboard') {
+    await waitUntil(() => !needsSetup(), longWait, 'OpenClaw setup timed out. Finish onboarding in Terminal, then tap Retry in Valnaa.');
+  }
+}
+
+function nemoclawOnboardShellBlock(): string {
+  const saved = loadPersistedApiKey();
+  const keyLine = saved?.key ? `export NVIDIA_API_KEY='${shEscapeSq(saved.key)}'\n` : '';
+  return `${keyLine}${getNemoClawOnboardCommand()}`;
+}
+
+async function runNemoClawOnboardExternal(): Promise<void> {
+  logApp('info', 'Opening Terminal for NemoClaw onboard');
+  openUserTerminalWithCommand(nemoclawOnboardShellBlock(), 'nemoclaw-onboard');
+  await waitForExternalTask('setup-nemoclaw');
+}
+
+async function runSetupShellTaskAsync(task: SetupShellTask): Promise<void> {
+  const command = getTaskCommand(task);
+  if (!command) {
+    throw new Error(`Cannot determine command for task "${task}"`);
+  }
+
+  if (taskRunsInExternalTerminal(task)) {
+    logApp('info', `External setup "${task}": ${redactPtyLog(command)}`);
+    openUserTerminalWithCommand(command, task);
+    await waitForExternalTask(task);
+    return;
+  }
+
+  const shellName = process.platform === 'win32' ? 'powershell.exe' : '/bin/zsh';
+  const localBin = path.join(os.homedir(), '.local', 'bin');
+  const envPath = process.env.PATH || '';
+  const patchedPath = envPath.includes(localBin) ? envPath : `${localBin}:${envPath}`;
+  logApp('info', `Headless setup "${task}" via ${shellName}`);
+
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(shellName, ['-c', command], {
       cwd: os.homedir(),
-      env,
+      env: { ...process.env, FORCE_COLOR: '1', PATH: patchedPath } as NodeJS.ProcessEnv,
+      stdio: ['ignore', 'pipe', 'pipe'],
     });
-
-    logApp('info', `PTY spawned (PID ${onboardPty.pid}) for nemoclaw-onboard`);
-
-    onboardPty.onData((data: string) => {
-      mainWindow?.webContents.send('pty:data', data);
-
-      const clean = data.replace(/\x1B\[[0-9;]*[A-Za-z]/g, '').trim();
-      if (clean) logApp('info', `[onboard-pty] ${clean.substring(0, 200)}`);
-    });
-
-    onboardPty.onExit(({ exitCode }) => {
-      logApp('info', `PTY nemoclaw-onboard exited with code ${exitCode}`);
-      onboardPty = null;
-      mainWindow?.webContents.send('pty:exit', exitCode);
-      if (exitCode === 0) resolve();
-      else reject(new Error(`nemoclaw onboard failed (exit code ${exitCode})`));
+    const onChunk = (d: Buffer, level: 'info' | 'warn') => {
+      const t = d.toString().trimEnd();
+      if (t) logApp(level, `[setup:${task}] ${redactPtyLog(t).slice(0, 2000)}`);
+    };
+    child.stdout?.on('data', (d) => onChunk(d, 'info'));
+    child.stderr?.on('data', (d) => onChunk(d, 'warn'));
+    child.on('error', reject);
+    child.on('close', (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`${task} failed (exit code ${code})`));
     });
   });
 }
@@ -299,7 +379,7 @@ async function runSetupFlow(runtime: RuntimeType): Promise<void> {
           case 'docker-install': {
             if (isDockerInstalled()) break;
             if (canInstallDocker()) {
-              await spawnPtyTaskAsync('install-docker');
+              await runSetupShellTaskAsync('install-docker');
             } else {
               shell.openExternal('https://www.docker.com/products/docker-desktop/');
               step.detail = 'Install Docker from the page that opened...';
@@ -331,7 +411,7 @@ async function runSetupFlow(runtime: RuntimeType): Promise<void> {
             if (isIntelMac()) {
               ensureSidecarNetworking();
             }
-            await spawnPtyTaskAsync('install-nemoclaw');
+            await runSetupShellTaskAsync('install-nemoclaw');
             break;
           }
           case 'collect-api-key': {
@@ -353,17 +433,17 @@ async function runSetupFlow(runtime: RuntimeType): Promise<void> {
             if (isIntelMac()) ensureSidecarNetworking();
             step.detail = 'Running NemoClaw setup (this may take several minutes)...';
             sendSteps(steps);
-            await spawnNemoClawOnboardAsync();
+            await runNemoClawOnboardExternal();
             break;
           }
           case 'openclaw-install': {
             if (findOpenClawBinary()) break;
-            await spawnPtyTaskAsync('install');
+            await runSetupShellTaskAsync('install');
             break;
           }
           case 'openclaw-setup': {
             if (!needsSetup()) break;
-            await spawnPtyTaskAsync('onboard');
+            await runSetupShellTaskAsync('onboard');
             break;
           }
           case 'start': {
@@ -500,53 +580,28 @@ function updateTrayMenu(): void {
   tray.setContextMenu(menu);
 }
 
-// Legacy spawnPtyTask kept for IPC pty:start-onboard handler
-type PtyTask = 'install' | 'onboard' | 'install-nemoclaw' | 'setup-nemoclaw' | 'install-docker';
-
-function spawnPtyTask(task: PtyTask): void {
-  if (onboardPty) return;
-
-  const command = getTaskCommand(task);
-  if (!command) {
-    logApp('error', `Cannot determine command for task "${task}"`);
-    return;
-  }
-
-  const shellName = process.platform === 'win32' ? 'powershell.exe' : '/bin/zsh';
-  logApp('info', `PTY task "${task}": ${command}`);
-
-  const localBin = path.join(os.homedir(), '.local', 'bin');
-  const envPath = process.env.PATH || '';
-  const patchedPath = envPath.includes(localBin) ? envPath : `${localBin}:${envPath}`;
-
-  onboardPty = pty.spawn(shellName, ['-c', command], {
-    name: 'xterm-256color',
-    cols: 100,
-    rows: 30,
-    cwd: os.homedir(),
-    env: { ...process.env, TERM: 'xterm-256color', FORCE_COLOR: '1', PATH: patchedPath } as Record<string, string>,
-  });
-
-  logApp('info', `PTY spawned (PID ${onboardPty.pid}) for task "${task}"`);
-
-  onboardPty.onData((data: string) => {
-    mainWindow?.webContents.send('pty:data', data);
-  });
-
-  onboardPty.onExit(({ exitCode }) => {
-    logApp('info', `PTY task "${task}" exited with code ${exitCode}`);
-    onboardPty = null;
-    mainWindow?.webContents.send('pty:exit', exitCode);
-
-    if (exitCode === 0) {
-      if (task === 'install-docker') {
-        launchDockerDesktop();
-        setTimeout(() => autoStart(), 4000);
-      } else {
-        setTimeout(() => autoStart(), 500);
-      }
+/** Ensure extension files exist on disk before download / copy to Downloads. */
+function prepareChromeExtensionExport(): { ok: true } | { ok: false; error: string } {
+  const status = manager.getStatus();
+  if (status.state === 'running' && status.port) {
+    try {
+      ensurePortForward();
+    } catch (err: any) {
+      logApp('warn', `ensurePortForward: ${err?.message || err}`);
     }
-  });
+    const ensured = ensureChromeExtensionFiles();
+    if (!ensured.ok) {
+      return { ok: false, error: ensured.error || 'Could not prepare extension files.' };
+    }
+  }
+  if (!chromeExtensionIsReady()) {
+    return {
+      ok: false,
+      error:
+        'Extension files are missing. Start your agent, tap “Refresh path & token”, then try again.',
+    };
+  }
+  return { ok: true };
 }
 
 function setupIPC(): void {
@@ -558,8 +613,157 @@ function setupIPC(): void {
   ipcMain.handle('agent:log-path', () => getLogFilePath());
   ipcMain.handle('agent:open-log-file', () => shell.openPath(getLogFilePath()));
   ipcMain.handle('app:version', () => app.getVersion());
+  ipcMain.handle('terminal:spawn', () => {
+    const pref = loadRuntime();
+    const runtime: RuntimeType = pref?.runtime || 'openclaw';
+    spawnPty();
+    return { ok: true, runtime };
+  });
+
+  ipcMain.on('terminal:input', (_e, data: string) => {
+    activePty?.write(data);
+  });
+
+  ipcMain.on('terminal:resize', (_e, cols: number, rows: number) => {
+    if (activePty && cols > 0 && rows > 0) {
+      try { activePty.resize(cols, rows); } catch { /* ok */ }
+    }
+  });
+
+  ipcMain.handle('terminal:kill', () => {
+    if (activePty) {
+      try { activePty.kill(); } catch { /* ok */ }
+      activePty = null;
+    }
+    return { ok: true };
+  });
 
   ipcMain.handle('setup:needs-setup', () => needsSetup());
+
+  /** Folder path, token, ports — for the in-app “Chrome extension” card (user sets up Chrome manually). */
+  ipcMain.handle('browser:get-chrome-extension-info', async () => {
+    const status = manager.getStatus();
+    const extDir = getChromeExtensionDir();
+    const pref = loadRuntime();
+
+    let ensureWarning: string | undefined;
+    if (status.state === 'running' && status.port) {
+      try {
+        ensurePortForward();
+      } catch (err: any) {
+        logApp('warn', `ensurePortForward skipped: ${err?.message || err}`);
+      }
+      const ensured = ensureChromeExtensionFiles();
+      if (!ensured.ok) {
+        ensureWarning = ensured.error;
+      }
+    }
+
+    const extensionReady = chromeExtensionIsReady();
+
+    let gatewayToken: string | null = null;
+    if (pref?.runtime === 'nemoclaw') {
+      gatewayToken = readSandboxGatewayTokenFresh();
+    } else {
+      gatewayToken = readHostOpenclawGatewayToken();
+    }
+    if (!gatewayToken && status.gatewayToken) {
+      gatewayToken = status.gatewayToken;
+    }
+    if (gatewayToken) {
+      gatewayToken = gatewayToken.trim();
+    }
+
+    return {
+      ok: true,
+      extensionPath: extDir,
+      extensionReady,
+      gatewayToken,
+      gatewayPort: OPENCLAW_PORT,
+      relayPort: EXTENSION_RELAY_PORT,
+      agentRunning: status.state === 'running' && !!status.port,
+      docsUrl: BROWSER_DOCS_URL,
+      ensureWarning,
+      downloadsFolderName: CHROME_EXTENSION_USER_FOLDER_NAME,
+      zipFileName: CHROME_EXTENSION_ZIP_NAME,
+    };
+  });
+
+  ipcMain.handle('browser:reveal-extension-folder', () => {
+    const extDir = getChromeExtensionDir();
+    shell.showItemInFolder(extDir);
+    return { ok: true };
+  });
+
+  ipcMain.handle('browser:open-chrome-extensions', () => {
+    openChromeExtensionsPage(shell);
+    return { ok: true };
+  });
+
+  ipcMain.handle('browser:copy-extension-path', () => {
+    const extDir = getChromeExtensionDir();
+    clipboard.writeText(extDir);
+    return { ok: true };
+  });
+
+  /** Copy gateway token (works best while the agent is running / sandbox is up). */
+  ipcMain.handle('browser:copy-gateway-token', async () => {
+    const status = manager.getStatus();
+    const pref = loadRuntime();
+    let token =
+      pref?.runtime === 'nemoclaw' ? readSandboxGatewayTokenFresh() : readHostOpenclawGatewayToken();
+    if (!token) token = status.gatewayToken ?? null;
+    if (!token) {
+      return {
+        ok: false,
+        error: 'No gateway token yet. Start your agent, or open ~/.openclaw/openclaw.json after a run.',
+      };
+    }
+    clipboard.writeText(token.trim());
+    return { ok: true };
+  });
+
+  ipcMain.handle('browser:save-chrome-extension-zip', async () => {
+    const prep = prepareChromeExtensionExport();
+    if (!prep.ok) {
+      return { ok: false, error: prep.error };
+    }
+    const win = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined;
+    const defaultPath = path.join(app.getPath('downloads'), CHROME_EXTENSION_ZIP_NAME);
+    const saveOpts = {
+      title: 'Save OpenClaw browser extension',
+      defaultPath,
+      filters: [{ name: 'Zip archive', extensions: ['zip'] }],
+    };
+    const { canceled, filePath } = win
+      ? await dialog.showSaveDialog(win, saveOpts)
+      : await dialog.showSaveDialog(saveOpts);
+    if (canceled || !filePath) {
+      return { ok: false, cancelled: true };
+    }
+    try {
+      zipChromeExtensionDirectory(getChromeExtensionDir(), filePath);
+      shell.showItemInFolder(filePath);
+      return { ok: true, path: filePath };
+    } catch (e: any) {
+      return { ok: false, error: e?.message || String(e) };
+    }
+  });
+
+  ipcMain.handle('browser:copy-chrome-extension-to-downloads', () => {
+    const prep = prepareChromeExtensionExport();
+    if (!prep.ok) {
+      return { ok: false, error: prep.error };
+    }
+    const dest = path.join(app.getPath('downloads'), CHROME_EXTENSION_USER_FOLDER_NAME);
+    try {
+      copyChromeExtensionTree(getChromeExtensionDir(), dest);
+      shell.showItemInFolder(dest);
+      return { ok: true, path: dest };
+    } catch (e: any) {
+      return { ok: false, error: e?.message || String(e) };
+    }
+  });
 
   ipcMain.handle('app:open-external', (_e, url: string) => {
     const allowed = [
@@ -575,6 +779,7 @@ function setupIPC(): void {
       'https://build.nvidia.com',
       'https://t.me',
       'https://discord.com',
+      'https://docs.openclaw.ai',
     ];
     if (allowed.some(prefix => url.startsWith(prefix))) {
       shell.openExternal(url);
@@ -630,12 +835,28 @@ function setupIPC(): void {
     };
   });
 
-  ipcMain.handle('pty:start-docker-install', () => {
-    if (onboardPty) return;
-    spawnPtyTask('install-docker');
-  });
-
   ipcMain.handle('app:launch-docker', () => launchDockerDesktop());
+
+  /** Open a real system terminal with a setup command (Docker, OpenClaw, NemoClaw). */
+  ipcMain.handle('setup:open-external-task', (_e, task: string) => {
+    const allowed: SetupShellTask[] = ['install-docker', 'install-nemoclaw', 'setup-nemoclaw', 'onboard', 'install'];
+    if (!allowed.includes(task as SetupShellTask)) {
+      return { ok: false, error: 'Unknown task' };
+    }
+    const t = task as SetupShellTask;
+    const cmd = getTaskCommand(t);
+    if (!cmd) {
+      return { ok: false, error: 'No command for this task' };
+    }
+    openUserTerminalWithCommand(cmd, t);
+    if (t === 'install-docker') {
+      launchDockerDesktop();
+      setTimeout(() => autoStart(), 4000);
+    } else {
+      setTimeout(() => autoStart(), 1500);
+    }
+    return { ok: true };
+  });
 
   ipcMain.handle('runtime:set', (_e, runtime: RuntimeType) => {
     if (runtime !== 'openclaw' && runtime !== 'nemoclaw') return;
@@ -653,38 +874,6 @@ function setupIPC(): void {
       apiKeyResolver({ provider, key });
       apiKeyResolver = null;
     }
-  });
-
-
-  // PTY IPC (legacy fallback)
-  ipcMain.handle('pty:start-onboard', () => {
-    if (onboardPty) return;
-    const pref = loadRuntime();
-    const runtime = pref?.runtime || 'openclaw';
-
-    if (runtime === 'nemoclaw') {
-      const nemoBin = findNemoClawBinary();
-      if (!nemoBin) {
-        spawnPtyTask('install-nemoclaw');
-      } else {
-        spawnPtyTask('setup-nemoclaw');
-      }
-    } else {
-      const bin = findOpenClawBinary();
-      if (!bin) {
-        spawnPtyTask('install');
-      } else {
-        spawnPtyTask('onboard');
-      }
-    }
-  });
-
-  ipcMain.on('pty:input', (_e, data: string) => {
-    onboardPty?.write(data);
-  });
-
-  ipcMain.on('pty:resize', (_e, cols: number, rows: number) => {
-    try { onboardPty?.resize(cols, rows); } catch {}
   });
 
   manager.on('status', (status: AgentStatus) => {
@@ -797,8 +986,9 @@ app.on('second-instance', (_event, argv) => {
   mainWindow?.focus();
 });
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   logApp('info', `Valnaa v${app.getVersion()} starting`);
+  logApp('info', `Diagnostics log: ${getAppLogPath()}`);
 
   createWindow();
   createTray();
@@ -824,7 +1014,10 @@ app.whenReady().then(() => {
 app.on('before-quit', async () => {
   isQuitting = true;
   logApp('info', 'App quitting — stopping OpenClaw');
-  if (onboardPty) { try { onboardPty.kill(); } catch {} }
+  if (activePty) {
+    try { activePty.kill(); } catch { /* ok */ }
+    activePty = null;
+  }
   await manager.stop();
   closeStreams();
 });

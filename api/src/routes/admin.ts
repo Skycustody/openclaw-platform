@@ -102,6 +102,11 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
       `, [ADMIN_EMAIL]).catch(() => ({ total_signups: '0', converted: '0' })),
     ]);
 
+    const desktopRow = await db.getOne<any>(
+      `SELECT COUNT(*) as total FROM users WHERE desktop_subscription_id IS NOT NULL AND LOWER(email) != $1`,
+      [ADMIN_EMAIL]
+    ).catch(() => ({ total: '0' }));
+
     const starterCount = parseInt(plans?.starter || '0');
     const proCount = parseInt(plans?.pro || '0');
     const businessCount = parseInt(plans?.business || '0');
@@ -204,7 +209,19 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
       total_balance: creditsRow?.total_balance ?? '0',
       total_purchased: creditsRow?.total_purchased ?? '0',
     };
-    res.json({ users, servers, recentSignups, plans, financials, metrics, revenue, credits });
+    const desktopSubscribers = parseInt(desktopRow?.total || '0');
+    const desktopPriceEurCents = 500;
+    const desktopVatRate = 0.25;
+    const desktopRevenueEurCents = desktopSubscribers * Math.round(desktopPriceEurCents * (1 + desktopVatRate));
+
+    const desktop = {
+      subscribers: desktopSubscribers,
+      priceEurCents: desktopPriceEurCents,
+      vatRate: desktopVatRate,
+      revenueEurCents: desktopRevenueEurCents,
+    };
+
+    res.json({ users, servers, recentSignups, plans, financials, metrics, revenue, credits, desktop });
   } catch (err) {
     next(err);
   }
@@ -458,6 +475,7 @@ router.get('/users', async (req: AuthRequest, res: Response, next: NextFunction)
         `SELECT u.id, u.email, u.display_name, u.plan, u.status, u.subdomain,
                 u.created_at, u.last_active, u.is_admin,
                 (u.stripe_customer_id IS NOT NULL) as has_paid,
+                (u.desktop_subscription_id IS NOT NULL) as has_desktop,
                 tb.balance as credit_balance, tb.total_used, tb.total_purchased,
                 s.ip as server_ip, s.hostname as server_hostname
          FROM users u
@@ -490,6 +508,7 @@ router.get('/users/:userId', async (req: AuthRequest, res: Response, next: NextF
         `SELECT u.id, u.email, u.display_name, u.plan, u.status, u.subdomain,
                 u.container_name, u.server_id, u.stripe_customer_id, u.referral_code,
                 u.is_admin, u.created_at, u.last_active, u.api_budget_addon_usd,
+                u.desktop_subscription_id,
                 s.ip as server_ip, s.hostname as server_hostname
          FROM users u
          LEFT JOIN servers s ON s.id = u.server_id

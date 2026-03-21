@@ -6,7 +6,7 @@ import {
   Users, Server, Coins, TrendingUp, Activity, Search,
   Shield, Loader2, RefreshCw, AlertTriangle, Edit3,
   BarChart3, Zap, HardDrive, LogOut, ChevronLeft, ChevronRight,
-  DollarSign, MessageSquare, Star, X,
+  DollarSign, MessageSquare, Star, X, Monitor,
 } from 'lucide-react';
 
 interface PlanDetail {
@@ -72,12 +72,14 @@ interface Overview {
   recentSignups: Array<{ id: string; email: string; plan: string; status: string; created_at: string }>;
   plans: { starter: string; pro: string; business: string };
   financials: Financials;
+  desktop: { subscribers: number; priceEurCents: number; vatRate: number; revenueEurCents: number };
 }
 
 interface AdminUser {
   id: string; email: string; display_name: string | null; plan: string;
   status: string; subdomain: string | null; created_at: string;
   last_active: string | null; is_admin: boolean; has_paid: boolean;
+  has_desktop: boolean;
   credit_balance: number | null; total_used: number | null; total_purchased: number | null;
   server_ip: string | null; server_hostname: string | null;
 }
@@ -155,6 +157,7 @@ interface UserDetail {
     created_at: string;
     last_active: string | null;
     api_budget_addon_usd?: number;
+    desktop_subscription_id: string | null;
     server_ip: string | null;
     server_hostname: string | null;
   };
@@ -524,11 +527,13 @@ export default function AdminPanel() {
                 sub="lifetime value est." color="amber" />
             </div>
 
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-5 gap-4">
               <StatCard icon={Users} label="Total Signups" value={formatNum(o.users.total)}
                 sub={`+${o.users.new_24h} today / +${o.users.new_7d} this week`} color="blue" />
               <StatCard icon={Zap} label="Paying Active" value={formatNum(o.users.paying_active)}
                 sub={`${o.users.active} active / ${o.users.sleeping} sleeping`} color="green" />
+              <StatCard icon={Monitor} label="Desktop Subs" value={String(o.desktop?.subscribers ?? 0)}
+                sub={`€${((o.desktop?.revenueEurCents ?? 0) / 100).toFixed(2)}/mo revenue`} color="purple" />
               <StatCard icon={Users} label="Unpaid Signups" value={formatNum(o.users.unpaid)}
                 sub={`${o.users.pending} pending / never paid`} color="amber" />
               <StatCard icon={AlertTriangle} label="Churned / Paused" value={formatNum(Number(o.users.paused) + Number(o.users.cancelled))}
@@ -643,6 +648,12 @@ export default function AdminPanel() {
                       <span className="text-white/50">Extra Credit Purchases (this month)</span>
                       <span className="text-green-400/70">{formatUsdVal(o.revenue.month_credit_purchases)}</span>
                     </div>
+                    {(o.desktop?.subscribers ?? 0) > 0 && (
+                      <div className="flex justify-between text-[13px]">
+                        <span className="text-white/50">Desktop Subscriptions ({o.desktop.subscribers}×)</span>
+                        <span className="text-green-400/70">€{((o.desktop.revenueEurCents) / 100).toFixed(2)}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -803,7 +814,7 @@ export default function AdminPanel() {
                           <span className="text-[12px] text-white/50 capitalize">{u.plan}</span>
                         </td>
                         <td className="px-4 py-3">
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             <span className={`text-[11px] px-2 py-0.5 rounded-full ${STATUS_COLORS[u.status] || 'text-white/30 bg-white/5'}`}>
                               {u.status}
                             </span>
@@ -811,6 +822,9 @@ export default function AdminPanel() {
                               ? <span className="text-[10px] px-1.5 py-0.5 rounded-full text-green-400 bg-green-500/10">paid</span>
                               : <span className="text-[10px] px-1.5 py-0.5 rounded-full text-white/20 bg-white/5">unpaid</span>
                             }
+                            {u.has_desktop && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full text-purple-400 bg-purple-500/10">desktop</span>
+                            )}
                           </div>
                         </td>
                         <td className="px-4 py-3">
@@ -1229,6 +1243,14 @@ export default function AdminPanel() {
                     <div>
                       <p className="text-[11px] text-white/30 uppercase tracking-wider mb-1">Last active</p>
                       <p className="text-[13px] text-white/70">{userDetail.user.last_active ? timeAgo(userDetail.user.last_active) : '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] text-white/30 uppercase tracking-wider mb-1">Desktop</p>
+                      {userDetail.user.desktop_subscription_id ? (
+                        <span className="text-[12px] px-2 py-0.5 rounded-full text-purple-400 bg-purple-500/10">Active</span>
+                      ) : (
+                        <p className="text-[13px] text-white/30">—</p>
+                      )}
                     </div>
                   </div>
 

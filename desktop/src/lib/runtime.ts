@@ -1,7 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { getAppDataDir, IS_WIN, IS_MAC } from './platform';
+import { spawnSync } from 'child_process';
+import { getAppDataDir, IS_WIN, IS_MAC, getOpenClawDir } from './platform';
 import { logApp } from '../openclaw/logger';
 
 export type RuntimeType = 'openclaw' | 'nemoclaw';
@@ -162,6 +163,7 @@ export async function setupOpenShellSidecar(onProgress?: (msg: string) => void):
   //      port forward. openshell uses the Docker socket, not host PIDs.
   const needsRecreate = !isOpenShellSidecarRunning()
     || !sidecarHasPort(OPENCLAW_PORT)
+    || !sidecarHasPort(EXTENSION_RELAY_PORT)
     || sidecarHasPidHost()
     || !sidecarHasInit();
   if (needsRecreate) {
@@ -181,6 +183,7 @@ export async function setupOpenShellSidecar(onProgress?: (msg: string) => void):
       `${tmpMount} ` +
       `--add-host "host.docker.internal:host-gateway" ` +
       `-p ${OPENCLAW_PORT}:${OPENCLAW_PORT} ` +
+      `-p ${EXTENSION_RELAY_PORT}:${EXTENSION_RELAY_PORT} ` +
       `alpine:latest sleep infinity`,
       { timeout: 30000, stdio: 'pipe' }
     );
@@ -271,6 +274,43 @@ function openshellExec(args: string, timeoutMs = 30000): string {
 
 const GATEWAY_NAME = 'nemoclaw';
 
+let openshellSandboxExecCached: string | null = null;
+
+/**
+ * OpenShell CLI subcommand to exec into the sandbox (`openshell <this> <sandbox> --gateway … -- cmd`).
+ * Newer builds use `ssh-proxy` instead of `ssh`. Probed once per process unless
+ * `OPENSHELL_SANDBOX_EXEC` is set (use `ssh` for legacy CLIs).
+ */
+export function getOpenshellSandboxExec(): string {
+  if (openshellSandboxExecCached !== null) {
+    return openshellSandboxExecCached;
+  }
+  const env = process.env.OPENSHELL_SANDBOX_EXEC?.trim();
+  if (env) {
+    openshellSandboxExecCached = env;
+    logApp('info', `OpenShell sandbox exec (OPENSHELL_SANDBOX_EXEC): ${env}`);
+    return env;
+  }
+  const r = spawnSync('openshell', ['ssh'], {
+    encoding: 'utf8',
+    timeout: 8000,
+    maxBuffer: 64 * 1024,
+  });
+  if ((r.error as { code?: string } | undefined)?.code === 'ENOENT') {
+    openshellSandboxExecCached = 'ssh-proxy';
+    logApp('warn', 'openshell not on PATH; assuming ssh-proxy for sandbox exec');
+    return openshellSandboxExecCached;
+  }
+  const out = `${r.stdout || ''}${r.stderr || ''}`;
+  if (/unrecognized subcommand.*ssh/i.test(out) && /ssh-proxy/i.test(out)) {
+    openshellSandboxExecCached = 'ssh-proxy';
+  } else {
+    openshellSandboxExecCached = 'ssh';
+  }
+  logApp('info', `OpenShell sandbox exec (detected): ${openshellSandboxExecCached}`);
+  return openshellSandboxExecCached;
+}
+
 export function isGatewayDeployed(): boolean {
   try {
     const out = openshellExec(`gateway info --gateway ${GATEWAY_NAME}`, 5000);
@@ -320,8 +360,46 @@ export function configureInferenceProvider(provider: InferenceProvider, apiKey: 
 // NemoClaw Sandbox Checks
 // ════════════════════════════════════
 
-const SANDBOX_NAME = 'nemoclaw';
 const OPENCLAW_PORT = 18789;
+/** Extension relay port (gateway + 3) for Chrome extension to connect. */
+const EXTENSION_RELAY_PORT = 18792;
+
+/**
+ * Resolve the sandbox name from ~/.nemoclaw/sandboxes.json (defaultSandbox or first key).
+ * Falls back to 'valnaa' if the file is missing or unreadable.
+ */
+function resolveSandboxName(): string {
+  try {
+    const registryPath = path.join(os.homedir(), '.nemoclaw', 'sandboxes.json');
+    const data = JSON.parse(fs.readFileSync(registryPath, 'utf-8'));
+    if (data.defaultSandbox && data.sandboxes?.[data.defaultSandbox]) {
+      return data.defaultSandbox;
+    }
+    const names = Object.keys(data.sandboxes || {});
+    if (names.length > 0) return names[0];
+  } catch { /* file not yet created */ }
+  return 'valnaa';
+}
+
+let _resolvedSandboxName: string | null = null;
+
+function getSandboxName(): string {
+  if (!_resolvedSandboxName) {
+    _resolvedSandboxName = resolveSandboxName();
+    logApp('info', `Resolved sandbox name: ${_resolvedSandboxName}`);
+  }
+  return _resolvedSandboxName;
+}
+
+/** Resolved NemoClaw sandbox id (e.g. valnaa) for openshell ssh-proxy / PTY spawns. */
+export function getNemoClawSandboxName(): string {
+  return getSandboxName();
+}
+
+/** Force re-read of sandbox name (e.g. after onboard completes). */
+export function clearSandboxNameCache(): void {
+  _resolvedSandboxName = null;
+}
 
 /** Check if a sandbox exists and is Ready inside the openshell gateway. */
 export function isSandboxReady(): boolean {
@@ -351,36 +429,53 @@ export function isOnboardComplete(): boolean {
 
 let cachedSandboxToken: string | null = null;
 
+const SANDBOX_CONFIG_PATH = '/sandbox/.openclaw/openclaw.json';
+
+/** Match what the OpenClaw gateway + browser relay expect (trim, strip stray quotes). */
+function normalizeGatewayToken(value: unknown): string | null {
+  if (value == null) return null;
+  let s = typeof value === 'string' ? value.trim() : String(value).trim();
+  if (!s) return null;
+  if (
+    (s.startsWith('"') && s.endsWith('"') && s.length >= 2) ||
+    (s.startsWith("'") && s.endsWith("'") && s.length >= 2)
+  ) {
+    s = s.slice(1, -1).trim();
+  }
+  return s || null;
+}
+
 /**
  * Read the gateway auth token from the NemoClaw sandbox's openclaw.json.
- * The sandbox user is "sandbox" and its home is /sandbox, so the config
- * lives at /sandbox/.openclaw/openclaw.json (not /root/).
- * Result is cached in memory to avoid repeated SSH round-trips.
+ * Uses the same SSH path as all other sandbox ops so Intel sidecar & ARM stay consistent.
+ * Falls back to `openclaw config get gateway.auth.token` (authoritative for some CLI versions).
  */
 export function readSandboxGatewayToken(): string | null {
   if (cachedSandboxToken) return cachedSandboxToken;
 
   try {
-    if (isIntelMac() && isOpenShellSidecarRunning()) {
-      const raw = execSyncSafe(
-        `docker exec ${OPENSHELL_SIDECAR} ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR ` +
-        `openshell-${SANDBOX_NAME} "cat /sandbox/.openclaw/openclaw.json"`,
-        10000,
-      );
-      const cfg = JSON.parse(raw);
-      cachedSandboxToken = cfg?.gateway?.auth?.token || null;
-    } else {
-      const raw = execSyncSafe(
-        `openshell ssh ${SANDBOX_NAME} --gateway ${GATEWAY_NAME} -- cat /sandbox/.openclaw/openclaw.json`,
-        10000,
-      );
-      const cfg = JSON.parse(raw);
-      cachedSandboxToken = cfg?.gateway?.auth?.token || null;
+    const raw = sandboxSSH(`cat ${SANDBOX_CONFIG_PATH}`);
+    const cfg = JSON.parse(raw);
+    let token = normalizeGatewayToken(cfg?.gateway?.auth?.token);
+
+    if (!token) {
+      try {
+        const cliRaw = sandboxSSH('openclaw config get gateway.auth.token', 20000);
+        const lines = cliRaw
+          .split(/\r?\n/)
+          .map((l) => l.trim())
+          .filter((l) => l.length > 0);
+        token = normalizeGatewayToken(lines[lines.length - 1] ?? cliRaw.trim());
+      } catch {
+        /* optional fallback */
+      }
     }
+
+    cachedSandboxToken = token;
   } catch (err: any) {
-    logApp('warn', `Failed to read sandbox gateway token: ${err.message}`);
-    return null;
-  }
+      logApp('warn', `Failed to read sandbox gateway token: ${err.message}`);
+      return null;
+    }
 
   if (cachedSandboxToken) {
     logApp('info', 'Read sandbox gateway token successfully');
@@ -388,23 +483,39 @@ export function readSandboxGatewayToken(): string | null {
   return cachedSandboxToken;
 }
 
+/** Clear cache and re-read from the sandbox (e.g. Connect Chrome must match live gateway). */
+export function readSandboxGatewayTokenFresh(): string | null {
+  clearSandboxTokenCache();
+  return readSandboxGatewayToken();
+}
+
 /** Clear the cached sandbox token (call on reconnect/restart). */
 export function clearSandboxTokenCache(): void {
   cachedSandboxToken = null;
 }
 
-const SANDBOX_CONFIG_PATH = '/sandbox/.openclaw/openclaw.json';
+/** Local OpenClaw (~/.openclaw) gateway token — fresh read, no cache. */
+export function readHostOpenclawGatewayToken(): string | null {
+  try {
+    const p = path.join(getOpenClawDir(), 'openclaw.json');
+    const raw = fs.readFileSync(p, 'utf-8');
+    const cfg = JSON.parse(raw);
+    return normalizeGatewayToken(cfg?.gateway?.auth?.token);
+  } catch {
+    return null;
+  }
+}
 
 function sandboxSSH(cmd: string, timeoutMs = 10000): string {
   if (isIntelMac() && isOpenShellSidecarRunning()) {
     return execSyncSafe(
       `docker exec ${OPENSHELL_SIDECAR} ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR ` +
-      `openshell-${SANDBOX_NAME} "${cmd.replace(/"/g, '\\"')}"`,
+      `openshell-${getSandboxName()} "${cmd.replace(/"/g, '\\"')}"`,
       timeoutMs,
     );
   }
   return execSyncSafe(
-    `openshell ssh ${SANDBOX_NAME} --gateway ${GATEWAY_NAME} -- ${cmd}`,
+    `openshell ${getOpenshellSandboxExec()} ${getSandboxName()} --gateway ${GATEWAY_NAME} -- ${cmd}`,
     timeoutMs,
   );
 }
@@ -427,12 +538,12 @@ export function writeSandboxConfig(config: Record<string, any>): void {
   if (isIntelMac() && isOpenShellSidecarRunning()) {
     execSync(
       `docker exec ${OPENSHELL_SIDECAR} ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR ` +
-      `openshell-${SANDBOX_NAME} "echo '${b64}' | base64 -d > ${SANDBOX_CONFIG_PATH}"`,
+      `openshell-${getSandboxName()} "echo '${b64}' | base64 -d > ${SANDBOX_CONFIG_PATH}"`,
       { stdio: 'pipe', timeout: 10000 },
     );
   } else {
     execSync(
-      `openshell ssh ${SANDBOX_NAME} --gateway ${GATEWAY_NAME} -- sh -c "echo '${b64}' | base64 -d > ${SANDBOX_CONFIG_PATH}"`,
+      `openshell ${getOpenshellSandboxExec()} ${getSandboxName()} --gateway ${GATEWAY_NAME} -- sh -c "echo '${b64}' | base64 -d > ${SANDBOX_CONFIG_PATH}"`,
       { stdio: 'pipe', timeout: 10000 },
     );
   }
@@ -458,6 +569,135 @@ export function restartSandboxGateway(): void {
     }
   }
   cachedSandboxToken = null;
+}
+
+const SANDBOX_BROWSER_PARENT = '/sandbox/.openclaw/browser';
+const SANDBOX_CHROME_EXT = '/sandbox/.openclaw/browser/chrome-extension';
+
+function openshellInvokerForShell(): string {
+  const w = path.join(os.homedir(), '.local', 'bin', 'openshell');
+  if (fs.existsSync(w)) return `"${w}"`;
+  return 'openshell';
+}
+
+/**
+ * NemoClaw runs OpenClaw inside the sandbox; Chrome on the Mac needs the unpacked
+ * extension under ~/.openclaw/browser/chrome-extension. Copy it from the sandbox
+ * when there is no host `openclaw` CLI (doctor --fix never ran on the host).
+ */
+export function syncSandboxChromeExtensionToHost(): { ok: boolean; error?: string } {
+  const pref = loadRuntime();
+  if (pref?.runtime !== 'nemoclaw') {
+    return { ok: false, error: 'not-nemoclaw' };
+  }
+  if (!isSandboxReady()) {
+    return { ok: false, error: 'NemoClaw sandbox is not ready. Start the agent first.' };
+  }
+
+  try {
+    sandboxSSH(`test -f ${SANDBOX_CHROME_EXT}/manifest.json`, 8000);
+  } catch {
+    try {
+      logApp('info', 'Running: openclaw browser extension install (inside sandbox)...');
+      sandboxSSH('openclaw browser extension install', 120000);
+    } catch (e: any) {
+      logApp('warn', `sandbox browser extension install: ${e?.message || e}`);
+    }
+    try {
+      sandboxSSH(`test -f ${SANDBOX_CHROME_EXT}/manifest.json`, 3000);
+    } catch {
+      try {
+        logApp('info', 'Running: openclaw doctor --fix (inside sandbox, fallback)...');
+        sandboxSSH('openclaw doctor --fix', 180000);
+      } catch (e2: any) {
+        logApp('warn', `sandbox doctor --fix: ${e2?.message || e2}`);
+      }
+    }
+    try {
+      sandboxSSH(`test -f ${SANDBOX_CHROME_EXT}/manifest.json`, 8000);
+    } catch {
+      return {
+        ok: false,
+        error:
+          'Extension is missing inside the sandbox. In Terminal run: ' +
+          `${openshellInvokerForShell().replace(/^"|"$/g, '')} ${getOpenshellSandboxExec()} ${getSandboxName()} --gateway ${GATEWAY_NAME} -- openclaw browser extension install`,
+      };
+    }
+  }
+
+  let parent = SANDBOX_BROWSER_PARENT;
+  let base = 'chrome-extension';
+  try {
+    const raw = sandboxSSH('openclaw browser extension path 2>/dev/null | head -1', 15000).trim();
+    if (raw.startsWith('/') && !raw.includes('\n') && !raw.includes(' ')) {
+      parent = path.posix.dirname(raw);
+      base = path.posix.basename(raw);
+    }
+  } catch {
+    /* use defaults */
+  }
+
+  const destBase = path.join(getOpenClawDir(), 'browser');
+  fs.mkdirSync(destBase, { recursive: true });
+  const tmpTar = path.join(os.tmpdir(), `openclaw-chrome-ext-${Date.now()}.tar.gz`);
+  const { execSync } = require('child_process');
+
+  try {
+    let tarGz: Buffer;
+    if (isIntelMac() && isOpenShellSidecarRunning()) {
+      const remote = `tar cz - -C ${parent} ${base}`;
+      const cmd =
+        `docker exec ${OPENSHELL_SIDECAR} ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR ` +
+        `openshell-${getSandboxName()} "${remote.replace(/"/g, '\\"')}"`;
+      tarGz = execSync(cmd, { maxBuffer: 50 * 1024 * 1024, timeout: 120000 }) as Buffer;
+    } else {
+      const osh = openshellInvokerForShell();
+      const cmd =
+        `${osh} ${getOpenshellSandboxExec()} ${getSandboxName()} --gateway ${GATEWAY_NAME} -- sh -c ` +
+        `'tar cz - -C "${parent}" "${base}"'`;
+      tarGz = execSync(cmd, {
+        maxBuffer: 50 * 1024 * 1024,
+        timeout: 120000,
+        shell: '/bin/bash',
+      }) as Buffer;
+    }
+
+    if (!tarGz || tarGz.length < 100) {
+      throw new Error('tar archive from sandbox was empty or too small');
+    }
+
+    fs.writeFileSync(tmpTar, tarGz);
+    const extDest = path.join(destBase, 'chrome-extension');
+    fs.rmSync(extDest, { recursive: true, force: true });
+    execSync(`tar xzf "${tmpTar}" -C "${destBase}"`, {
+      stdio: 'pipe',
+      timeout: 60000,
+      shell: '/bin/bash',
+    });
+  } catch (err: any) {
+    logApp('warn', `syncSandboxChromeExtensionToHost: ${err?.message || err}`);
+    return {
+      ok: false,
+      error:
+        `Could not copy extension from sandbox. In Terminal: ${openshellInvokerForShell()} ${getOpenshellSandboxExec()} ${getSandboxName()} ` +
+        `--gateway ${GATEWAY_NAME} -- openclaw browser extension install` +
+        (err?.message ? ` — ${err.message}` : ''),
+    };
+  } finally {
+    try {
+      fs.unlinkSync(tmpTar);
+    } catch {
+      /* ok */
+    }
+  }
+
+  const manifest = path.join(getOpenClawDir(), 'browser', 'chrome-extension', 'manifest.json');
+  if (!fs.existsSync(manifest)) {
+    return { ok: false, error: 'Copy finished but manifest.json missing under ~/.openclaw/browser/chrome-extension.' };
+  }
+
+  logApp('info', 'Synced chrome-extension from NemoClaw sandbox to ~/.openclaw/browser/');
+  return { ok: true };
 }
 
 /**
@@ -560,7 +800,7 @@ export function ensurePortForward(): void {
     try {
       // Write SSH config for the sandbox into the sidecar
       const sshConfig = execSyncSafe(
-        `docker exec ${OPENSHELL_SIDECAR} /usr/local/bin/openshell sandbox ssh-config ${SANDBOX_NAME} --gateway ${GATEWAY_NAME}`,
+        `docker exec ${OPENSHELL_SIDECAR} /usr/local/bin/openshell sandbox ssh-config ${getSandboxName()} --gateway ${GATEWAY_NAME}`,
         10000,
       );
       execSync(
@@ -573,11 +813,12 @@ export function ensurePortForward(): void {
         { stdio: 'pipe', timeout: 5000 },
       );
 
-      // Start SSH tunnel: sidecar 0.0.0.0:18789 → sandbox 127.0.0.1:18789
+      // Start SSH tunnel: gateway + extension relay ports
       execSync(
         `docker exec -d ${OPENSHELL_SIDECAR} ssh -N -o ExitOnForwardFailure=yes ` +
         `-L 0.0.0.0:${OPENCLAW_PORT}:127.0.0.1:${OPENCLAW_PORT} ` +
-        `openshell-${SANDBOX_NAME}`,
+        `-L 0.0.0.0:${EXTENSION_RELAY_PORT}:127.0.0.1:${EXTENSION_RELAY_PORT} ` +
+        `openshell-${getSandboxName()}`,
         { stdio: 'pipe', timeout: 10000 },
       );
 
@@ -585,7 +826,7 @@ export function ensurePortForward(): void {
       for (let i = 0; i < 10; i++) {
         execSync('sleep 0.5', { stdio: 'pipe' });
         if (isPortForwardAlive()) {
-          logApp('info', `SSH tunnel forwarding port ${OPENCLAW_PORT} to sandbox ${SANDBOX_NAME}`);
+          logApp('info', `SSH tunnel forwarding port ${OPENCLAW_PORT} to sandbox ${getSandboxName()}`);
           return;
         }
       }
@@ -599,17 +840,19 @@ export function ensurePortForward(): void {
   // ARM Mac / native: use openshell forward directly
   try {
     openshellExec(`forward stop ${OPENCLAW_PORT}`, 5000);
+    openshellExec(`forward stop ${EXTENSION_RELAY_PORT}`, 5000);
   } catch { /* ok */ }
 
   try {
-    openshellExec(`forward start --background ${OPENCLAW_PORT} ${SANDBOX_NAME} --gateway ${GATEWAY_NAME}`, 15000);
-    logApp('info', `Port ${OPENCLAW_PORT} forwarded to sandbox ${SANDBOX_NAME}`);
+    openshellExec(`forward start --background ${OPENCLAW_PORT} ${getSandboxName()} --gateway ${GATEWAY_NAME}`, 15000);
+    openshellExec(`forward start --background ${EXTENSION_RELAY_PORT} ${getSandboxName()} --gateway ${GATEWAY_NAME}`, 15000);
+    logApp('info', `Ports ${OPENCLAW_PORT}, ${EXTENSION_RELAY_PORT} forwarded to sandbox ${getSandboxName()}`);
   } catch (err: any) {
     logApp('warn', `Port forward failed: ${err.message}`);
   }
 }
 
-export { SANDBOX_NAME, OPENCLAW_PORT };
+export { OPENCLAW_PORT, EXTENSION_RELAY_PORT };
 
 // ════════════════════════════════════
 // Docker Helpers
@@ -693,7 +936,7 @@ export function launchDockerDesktop(): boolean {
 // ════════════════════════════════════
 
 /** Locate the nemoclaw npm package root (for mounting into the sidecar). */
-function findNemoClawPackageRoot(): string | null {
+export function findNemoClawPackageRoot(): string | null {
   const candidates = [
     '/usr/local/lib/node_modules/nemoclaw',
     path.join(os.homedir(), '.local', 'lib', 'node_modules', 'nemoclaw'),

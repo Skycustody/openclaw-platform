@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' http://127.0.0.1:* ws://127.0.0.1:* https://valnaa.com https://api.valnaa.com; img-src 'self' data: http://127.0.0.1:*; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'">
   <title>Valnaa</title>
-  <link rel="stylesheet" href="../../node_modules/@xterm/xterm/css/xterm.css">
+  <link rel="stylesheet" href="vendor/xterm.css">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -75,6 +75,133 @@
     .panel.active { display: flex; flex-direction: column; }
 
     #agent-panel webview { flex: 1; border: none; }
+    .agent-toolbar {
+      display: flex;
+      gap: 8px;
+      padding: 6px 12px;
+      background: rgba(0,0,0,0.2);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      flex-shrink: 0;
+    }
+    .agent-toolbar-btn {
+      padding: 4px 12px;
+      font-size: 12px;
+      border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.06);
+      color: rgba(255,255,255,0.8);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .agent-toolbar-btn:hover { background: rgba(255,255,255,0.12); color: #fff; }
+    .agent-toolbar-btn.primary {
+      background: rgba(59, 130, 246, 0.25);
+      border-color: rgba(59, 130, 246, 0.45);
+      color: #dbeafe;
+    }
+    .agent-toolbar-btn.primary:hover { background: rgba(59, 130, 246, 0.4); color: #fff; }
+
+    .browser-panel-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px 28px 28px;
+      font-size: 13px;
+      line-height: 1.55;
+      color: rgba(255,255,255,0.75);
+      -webkit-app-region: no-drag;
+      user-select: text;
+    }
+    .browser-panel-content h3 {
+      font-size: 16px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 10px;
+    }
+    .browser-panel-content .chrome-lead {
+      color: rgba(255,255,255,0.45);
+      margin-bottom: 16px;
+      font-size: 12px;
+    }
+    .chrome-field { margin-bottom: 14px; }
+    .chrome-field label {
+      display: block;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: rgba(255,255,255,0.35);
+      margin-bottom: 4px;
+    }
+    .chrome-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+    .chrome-code {
+      flex: 1;
+      min-width: 160px;
+      padding: 6px 8px;
+      background: rgba(0,0,0,0.35);
+      border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.08);
+      font-size: 11px;
+      word-break: break-all;
+      color: rgba(180, 220, 255, 0.95);
+    }
+    .chrome-token {
+      flex: 1;
+      min-width: 160px;
+      padding: 6px 8px;
+      border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(0,0,0,0.4);
+      color: rgba(255,255,255,0.9);
+      font-size: 11px;
+      font-family: 'SF Mono', 'Consolas', monospace;
+    }
+    .browser-panel-content .chrome-mini {
+      font-size: 11px;
+      color: rgba(255,255,255,0.35);
+      margin-top: 8px;
+    }
+    .browser-panel-content ol {
+      margin: 12px 0 0 18px;
+      color: rgba(255,255,255,0.55);
+      font-size: 12px;
+    }
+    .browser-panel-content ol li { margin-bottom: 6px; }
+    .browser-panel-content .link-btn {
+      background: none;
+      border: none;
+      color: #93c5fd;
+      cursor: pointer;
+      padding: 0;
+      font: inherit;
+      text-decoration: underline;
+    }
+    .browser-panel-content .link-btn:hover { color: #bfdbfe; }
+    .chrome-status-warn { color: #fbbf24; margin-top: 6px; font-size: 11px; }
+    .chrome-status-ok { color: #86efac; font-size: 11px; margin-top: 4px; }
+
+    #app-toast {
+      position: fixed;
+      bottom: 52px;
+      left: 50%;
+      transform: translateX(-50%);
+      max-width: min(480px, 92vw);
+      padding: 12px 16px;
+      background: rgba(22, 22, 28, 0.95);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 10px;
+      font-size: 12px;
+      line-height: 1.45;
+      color: rgba(255,255,255,0.9);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.45);
+      z-index: 99999;
+      display: none;
+      pointer-events: none;
+    }
+    #app-toast.visible { display: block; }
 
     .setup-screen {
       flex: 1;
@@ -162,6 +289,36 @@
       margin-bottom: 8px;
     }
 
+    #terminal-panel {
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .terminal-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      padding: 6px 12px;
+      background: rgba(0,0,0,0.3);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      flex-shrink: 0;
+    }
+    .terminal-hint {
+      font-size: 11px;
+      color: rgba(255,255,255,0.35);
+      margin-left: auto;
+    }
+    #terminal-xterm-container {
+      flex: 1;
+      min-height: 0;
+      background: #000;
+      -webkit-app-region: no-drag;
+    }
+    #terminal-xterm-container .xterm {
+      padding: 4px 6px;
+    }
+
     #about-panel {
       align-items: center;
       justify-content: center;
@@ -235,6 +392,7 @@
     .full-overlay h1 { font-size: 24px; font-weight: 700; color: #fff; }
     .full-overlay p { font-size: 14px; color: rgba(255,255,255,0.4); text-align: center; max-width: 400px; line-height: 1.5; }
 
+    /* TUI overlay */
     .google-btn {
       display: inline-flex;
       align-items: center;
@@ -413,27 +571,6 @@
     .step-detail { font-size: 11px; color: rgba(255,255,255,0.25); margin-top: 2px; }
     @keyframes step-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
 
-    #setup-terminal-section {
-      flex: 1;
-      min-height: 0;
-      display: none;
-      border-top: 1px solid rgba(255,255,255,0.06);
-    }
-    #setup-terminal-section.active { display: block; }
-    #setup-terminal {
-      height: 100%;
-      padding: 8px;
-      -webkit-app-region: no-drag;
-      user-select: auto;
-      cursor: text;
-    }
-    #setup-terminal .xterm { height: 100%; }
-    #setup-terminal .xterm-helper-textarea {
-      position: absolute !important;
-      opacity: 0 !important;
-      pointer-events: auto !important;
-    }
-
     .setup-bottom-bar {
       flex-shrink: 0;
       padding: 8px 16px;
@@ -567,6 +704,8 @@
 
   <div class="tabs">
     <div class="tab active" data-tab="agent">Agent</div>
+    <div class="tab" data-tab="browser">Browser</div>
+    <div class="tab" data-tab="terminal">Terminal</div>
     <div class="tab" data-tab="logs">Logs</div>
     <div class="tab" data-tab="about">About</div>
   </div>
@@ -578,7 +717,61 @@
         <h2 id="setup-title">Starting Valnaa...</h2>
         <p id="setup-message">This may take a moment on first launch.</p>
       </div>
+      <div id="agent-toolbar" class="agent-toolbar" style="display:none; flex-wrap: wrap;">
+        <button class="agent-toolbar-btn" id="agent-refresh-btn" title="Refresh chat">Refresh</button>
+        <span class="agent-cli-hint" style="font-size: 11px; color: rgba(255,255,255,0.35); max-width: 420px; line-height: 1.4;">
+          Command line: with the agent running, use <strong style="color: rgba(255,255,255,0.55);">Terminal.app</strong> and run <code style="font-size: 10px;">openclaw tui</code> (use the token from Connect Chrome if the TUI asks for it).
+        </span>
+      </div>
+      <!-- Chrome setup moved to Browser tab -->
       <webview id="agent-webview" style="display:none; flex:1;"></webview>
+    </div>
+
+    <div id="browser-panel" class="panel">
+      <div class="browser-panel-content">
+        <h3>Google Chrome — OpenClaw Browser Relay</h3>
+        <p class="chrome-lead">Install the extension in Chrome (Developer mode → Load unpacked). Download a .zip or copy the files into Downloads, then add your gateway token below.</p>
+        <div class="chrome-field">
+          <label>Get the extension files</label>
+          <div class="chrome-row">
+            <button type="button" class="agent-toolbar-btn primary" id="chrome-btn-download-zip">Download .zip…</button>
+            <button type="button" class="agent-toolbar-btn" id="chrome-btn-copy-downloads">Copy folder to Downloads</button>
+          </div>
+          <p class="chrome-mini">
+            <strong>Download .zip</strong> — save anywhere, unzip, then point Chrome at the inner folder that has <code>manifest.json</code>.
+            <strong>Copy to Downloads</strong> creates <code id="chrome-downloads-folder-name">openclaw-browser-relay-extension</code> and opens it in Finder.
+          </p>
+        </div>
+        <div class="chrome-field">
+          <label>Extension folder on this Mac (advanced)</label>
+          <div class="chrome-row">
+            <code id="chrome-ext-path" class="chrome-code">…</code>
+            <button type="button" class="agent-toolbar-btn" id="chrome-btn-copy-path">Copy path</button>
+            <button type="button" class="agent-toolbar-btn" id="chrome-btn-finder">Show in Finder</button>
+          </div>
+        </div>
+        <div class="chrome-field">
+          <label>Gateway token (extension Options → paste, then Save)</label>
+          <div class="chrome-row">
+            <input type="text" id="chrome-token" class="chrome-token" readonly placeholder="Start the agent to load token" spellcheck="false" />
+            <button type="button" class="agent-toolbar-btn" id="chrome-btn-copy-token">Copy token</button>
+          </div>
+        </div>
+        <p class="chrome-mini">Ports: relay <strong>18792</strong>, gateway <strong>18789</strong> — defaults in the extension.</p>
+        <ol>
+          <li>Open <button type="button" class="link-btn" id="chrome-btn-open-extensions">chrome://extensions</button> and turn on <strong>Developer mode</strong>.</li>
+          <li>
+            <strong>Load unpacked</strong> → pick the extension folder (the one with <code>manifest.json</code>):
+            e.g. from Downloads, or press ⌘⇧G and paste the path under “advanced” above.
+          </li>
+          <li>Open the extension’s <strong>Options</strong> → paste the gateway token → <strong>Save</strong>.</li>
+        </ol>
+        <p id="chrome-setup-status" class="chrome-mini"></p>
+        <div class="chrome-row" style="margin-top: 10px;">
+          <button type="button" class="agent-toolbar-btn" id="chrome-btn-refresh">Refresh path & token</button>
+          <button type="button" class="agent-toolbar-btn" id="chrome-btn-docs">Open docs</button>
+        </div>
+      </div>
     </div>
 
     <div id="logs-panel" class="panel">
@@ -587,6 +780,15 @@
         <button class="btn" id="open-log-file-btn">Open Log File</button>
       </div>
       <div class="logs-viewer" id="logs-content">(Loading...)</div>
+    </div>
+
+    <div id="terminal-panel" class="panel">
+      <div class="terminal-toolbar">
+        <button class="btn" id="terminal-new-btn">New Session</button>
+        <button class="btn" id="terminal-runtime-btn">Runtime: detecting...</button>
+        <span class="terminal-hint" id="terminal-hint-text">Full interactive shell.</span>
+      </div>
+      <div id="terminal-xterm-container"></div>
     </div>
 
     <div id="about-panel" class="panel">
@@ -667,7 +869,7 @@
     <button class="overlay-link" id="nemoclaw-prereq-docs" style="margin-top: 4px;">NemoClaw documentation</button>
   </div>
 
-  <!-- Setup overlay (steps + terminal) -->
+  <!-- Setup overlay (guided steps) -->
   <div id="setup-overlay">
     <div class="titlebar">
       <span class="titlebar-title">Valnaa — Setup</span>
@@ -691,9 +893,6 @@
       <div class="akf-help" id="akf-help"></div>
     </div>
     </div>
-    <div id="setup-terminal-section">
-      <div id="setup-terminal"></div>
-    </div>
     <div class="setup-bottom-bar">
       <span id="setup-status-text">Preparing...</span>
       <span class="setup-fail-actions" id="setup-fail-actions">
@@ -704,6 +903,8 @@
     </div>
   </div>
 
+  <div id="app-toast" role="status" aria-live="polite"></div>
+
   <div class="statusbar">
     <div class="status-left">
       <div class="status-dot stopped" id="status-dot"></div>
@@ -713,14 +914,12 @@
       <button class="status-btn" id="btn-start">Start</button>
       <button class="status-btn" id="btn-stop" disabled>Stop</button>
       <button class="status-btn" id="btn-restart" disabled>Restart</button>
+      <button class="status-btn" id="btn-refresh-agent" disabled title="Refresh chat (fixes event gap sync issues)">Refresh</button>
       <span class="version-label" id="version-label">v0.1.0</span>
     </div>
   </div>
 
   <script type="module">
-    import { Terminal } from '../../node_modules/@xterm/xterm/lib/xterm.mjs';
-    import { FitAddon } from '../../node_modules/@xterm/addon-fit/lib/addon-fit.mjs';
-
     const oc = window.openclaw;
 
     // ── Tab switching ──
@@ -733,6 +932,8 @@
         tab.classList.add('active');
         document.getElementById(tab.dataset.tab + '-panel').classList.add('active');
         if (tab.dataset.tab === 'logs') refreshLogs();
+        if (tab.dataset.tab === 'browser') void refreshChromeSetupPanel();
+        if (tab.dataset.tab === 'terminal') initTerminal();
       });
     });
 
@@ -742,16 +943,16 @@
     const btnStart = document.getElementById('btn-start');
     const btnStop = document.getElementById('btn-stop');
     const btnRestart = document.getElementById('btn-restart');
+    const btnRefreshAgent = document.getElementById('btn-refresh-agent');
     const setupScreen = document.getElementById('agent-setup');
     const webview = document.getElementById('agent-webview');
     const logsContent = document.getElementById('logs-content');
+    const terminalRuntimeBtn = document.getElementById('terminal-runtime-btn');
     const setupOverlay = document.getElementById('setup-overlay');
-    const setupTermEl = document.getElementById('setup-terminal');
     const authOverlay = document.getElementById('auth-overlay');
     const subscribeOverlay = document.getElementById('subscribe-overlay');
     const runtimeOverlay = document.getElementById('runtime-overlay');
     const nemoPrereqOverlay = document.getElementById('nemoclaw-prereq-overlay');
-
     // ══════════════════════════════════
     //  AUTH + SUBSCRIBE SCREENS
     // ══════════════════════════════════
@@ -883,7 +1084,7 @@
 
     document.getElementById('nemoclaw-prereq-install-docker').addEventListener('click', () => {
       nemoPrereqOverlay.classList.remove('active');
-      showOnboardTerminal('docker-install');
+      void oc.openExternalSetupTask('install-docker');
     });
 
     document.getElementById('nemoclaw-prereq-start-docker').addEventListener('click', () => {
@@ -937,6 +1138,7 @@
 
     oc.getRuntime().then(info => {
       updateAboutRuntime(info.runtime || 'openclaw');
+      updateTerminalRuntimeBadge();
     });
 
     // Listen for auth events from main process
@@ -970,9 +1172,10 @@
       btnStart.disabled = s === 'running' || s === 'starting' || s === 'installing';
       btnStop.disabled = s !== 'running';
       btnRestart.disabled = s !== 'running';
+      btnRefreshAgent.disabled = s !== 'running';
 
       if (s === 'running' && status.port) {
-        showWebview(status.port, status.gatewayToken);
+        showWebview(status.port, status.gatewayToken, status.runtime);
       } else if (s === 'crashed') {
         showSetup('Agent stopped unexpectedly', status.error || 'Check the logs for details.', status.errorDetails, true);
       } else if (s === 'installing') {
@@ -984,13 +1187,14 @@
       }
     }
 
-    function showWebview(port, token) {
+    function showWebview(port, token, runtime) {
       setupOverlay.classList.remove('active');
       authOverlay.classList.remove('active');
       subscribeOverlay.classList.remove('active');
       runtimeOverlay.classList.remove('active');
       nemoPrereqOverlay.classList.remove('active');
       setupScreen.style.display = 'none';
+      document.getElementById('agent-toolbar').style.display = 'flex';
       webview.style.display = 'flex';
       const base = `http://127.0.0.1:${port}`;
       const url = token ? `${base}/#token=${encodeURIComponent(token)}` : base;
@@ -1001,6 +1205,7 @@
 
     function showSetup(title, message, details, isError) {
       webview.style.display = 'none';
+      document.getElementById('agent-toolbar').style.display = 'none';
       setupScreen.style.display = 'flex';
 
       if (isError) {
@@ -1025,6 +1230,98 @@
     function escapeHtml(s) {
       if (!s) return '';
       return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    // ══════════════════════════════════
+    //  PTY TERMINAL (xterm.js)
+    // ══════════════════════════════════
+    let xterm = null;
+    let fitAddon = null;
+    let termInitialized = false;
+    let cleanupDataListener = null;
+    let cleanupExitListener = null;
+
+    const terminalHintText = document.getElementById('terminal-hint-text');
+
+    async function updateTerminalRuntimeBadge() {
+      if (!terminalRuntimeBtn) return;
+      try {
+        const info = await oc.getRuntime();
+        const runtime = info?.runtime || 'openclaw';
+        terminalRuntimeBtn.textContent = runtime === 'nemoclaw' ? 'Runtime: NemoClaw' : 'Runtime: OpenClaw';
+        if (terminalHintText) {
+          terminalHintText.textContent = runtime === 'nemoclaw'
+            ? 'Host shell. Use "nemoclaw <name> connect" for sandbox.'
+            : 'Full interactive shell.';
+        }
+      } catch {
+        terminalRuntimeBtn.textContent = 'Runtime: unavailable';
+      }
+    }
+
+    async function initTerminal() {
+      await updateTerminalRuntimeBadge();
+
+      if (termInitialized) {
+        if (fitAddon) setTimeout(() => fitAddon.fit(), 0);
+        if (xterm) xterm.focus();
+        return;
+      }
+      termInitialized = true;
+
+      const { Terminal } = await import('./vendor/xterm.mjs');
+      const { FitAddon } = await import('./vendor/addon-fit.mjs');
+
+      xterm = new Terminal({
+        cursorBlink: true,
+        fontFamily: "'SF Mono', 'Fira Code', 'Consolas', 'Menlo', monospace",
+        fontSize: 13,
+        lineHeight: 1.3,
+        theme: {
+          background: '#0a0a0a',
+          foreground: '#e0e0e0',
+          cursor: '#fff',
+          selectionBackground: 'rgba(255,255,255,0.2)',
+        },
+        allowProposedApi: true,
+      });
+
+      fitAddon = new FitAddon();
+      xterm.loadAddon(fitAddon);
+
+      const container = document.getElementById('terminal-xterm-container');
+      xterm.open(container);
+      fitAddon.fit();
+
+      xterm.onData((data) => oc.terminalInput(data));
+
+      cleanupDataListener = oc.onTerminalData((data) => xterm.write(data));
+      cleanupExitListener = oc.onTerminalExit((code) => {
+        xterm.writeln(`\r\n[Session ended — exit ${code}. Press "New Session" to reconnect.]`);
+      });
+
+      const resizeObserver = new ResizeObserver(() => {
+        if (fitAddon) {
+          fitAddon.fit();
+          const dims = fitAddon.proposeDimensions();
+          if (dims) oc.terminalResize(dims.cols, dims.rows);
+        }
+      });
+      resizeObserver.observe(container);
+
+      await spawnTerminalSession();
+      xterm.focus();
+    }
+
+    async function spawnTerminalSession() {
+      if (!xterm) return;
+      xterm.clear();
+      await oc.terminalSpawn();
+      if (fitAddon) {
+        fitAddon.fit();
+        const dims = fitAddon.proposeDimensions();
+        if (dims) oc.terminalResize(dims.cols, dims.rows);
+      }
     }
 
     // ── Install progress ──
@@ -1053,6 +1350,120 @@
     btnStart.addEventListener('click', () => oc.start());
     btnStop.addEventListener('click', () => oc.stop());
     btnRestart.addEventListener('click', () => oc.restart());
+    btnRefreshAgent.addEventListener('click', () => {
+      if (webview.style.display !== 'none' && webview.src) webview.reload();
+    });
+
+    document.getElementById('agent-refresh-btn').addEventListener('click', () => {
+      if (webview.style.display !== 'none' && webview.src) webview.reload();
+    });
+
+    const appToast = document.getElementById('app-toast');
+    let toastHideTimer = null;
+    function showAppToast(message) {
+      if (!appToast) return;
+      appToast.textContent = message;
+      appToast.classList.add('visible');
+      clearTimeout(toastHideTimer);
+      toastHideTimer = setTimeout(() => {
+        appToast.classList.remove('visible');
+      }, 14000);
+    }
+
+    async function refreshChromeSetupPanel() {
+      const pathEl = document.getElementById('chrome-ext-path');
+      const tokenEl = document.getElementById('chrome-token');
+      const statusEl = document.getElementById('chrome-setup-status');
+      if (!pathEl || !tokenEl || !statusEl) return;
+      try {
+        const info = await oc.getChromeExtensionInfo();
+        pathEl.textContent = info.extensionPath || '—';
+        const dlNameEl = document.getElementById('chrome-downloads-folder-name');
+        if (dlNameEl && info.downloadsFolderName) {
+          dlNameEl.textContent = info.downloadsFolderName;
+        }
+        tokenEl.value = info.gatewayToken || '';
+        tokenEl.placeholder = info.agentRunning
+          ? 'No token — check gateway config'
+          : 'Start the agent to load token';
+        let status = '';
+        if (info.extensionReady) {
+          status += '<span class="chrome-status-ok">✓ Extension files found on this Mac.</span> ';
+        } else {
+          status +=
+            '<span class="chrome-status-warn">Extension folder not ready yet — start the agent and tap Refresh.</span> ';
+        }
+        if (info.ensureWarning) {
+          status += `<span class="chrome-status-warn">${escapeHtml(info.ensureWarning)}</span>`;
+        }
+        statusEl.innerHTML = status;
+      } catch (e) {
+        statusEl.textContent = e?.message || 'Could not load Chrome extension info.';
+      }
+    }
+
+    document.getElementById('chrome-btn-refresh')?.addEventListener('click', () => {
+      void refreshChromeSetupPanel();
+      showAppToast('Path & token refreshed.');
+    });
+    document.getElementById('chrome-btn-copy-path')?.addEventListener('click', async () => {
+      try {
+        const r = await oc.copyExtensionPath();
+        if (!r?.ok) return;
+        showAppToast('Extension folder path copied.');
+      } catch (e) {
+        alert(e?.message || 'Copy failed');
+      }
+    });
+    document.getElementById('chrome-btn-copy-token')?.addEventListener('click', async () => {
+      try {
+        const r = await oc.copyGatewayToken();
+        if (!r?.ok) {
+          alert(r?.error || 'Could not copy token.');
+          return;
+        }
+        showAppToast('Gateway token copied — paste in the extension Options.');
+      } catch (e) {
+        alert(e?.message || 'Copy failed');
+      }
+    });
+    document.getElementById('chrome-btn-finder')?.addEventListener('click', () => {
+      void oc.revealChromeExtensionFolder();
+    });
+    document.getElementById('chrome-btn-open-extensions')?.addEventListener('click', () => {
+      void oc.openChromeExtensionsPage();
+    });
+    document.getElementById('chrome-btn-docs')?.addEventListener('click', async () => {
+      try {
+        const info = await oc.getChromeExtensionInfo();
+        if (info.docsUrl) oc.openExternal(info.docsUrl);
+      } catch {}
+    });
+    document.getElementById('chrome-btn-download-zip')?.addEventListener('click', async () => {
+      try {
+        const r = await oc.saveChromeExtensionZip();
+        if (r?.cancelled) return;
+        if (!r?.ok) {
+          alert(r?.error || 'Could not create zip.');
+          return;
+        }
+        showAppToast('Zip saved. Unzip it, then in Chrome use Load unpacked on the folder that contains manifest.json.');
+      } catch (e) {
+        alert(e?.message || 'Save failed');
+      }
+    });
+    document.getElementById('chrome-btn-copy-downloads')?.addEventListener('click', async () => {
+      try {
+        const r = await oc.copyChromeExtensionToDownloads();
+        if (!r?.ok) {
+          alert(r?.error || 'Could not copy to Downloads.');
+          return;
+        }
+        showAppToast('Extension copied to your Downloads folder — Finder should open. Use Load unpacked on that folder in Chrome.');
+      } catch (e) {
+        alert(e?.message || 'Copy failed');
+      }
+    });
 
     // ── Logs ──
     async function refreshLogs() {
@@ -1062,6 +1473,14 @@
     }
     document.getElementById('refresh-logs-btn').addEventListener('click', refreshLogs);
     document.getElementById('open-log-file-btn').addEventListener('click', () => oc.openLogFile());
+    document.getElementById('terminal-new-btn')?.addEventListener('click', () => {
+      void spawnTerminalSession();
+      showAppToast('New terminal session started.');
+    });
+    terminalRuntimeBtn?.addEventListener('click', () => {
+      void updateTerminalRuntimeBadge();
+      showAppToast('Runtime refreshed.');
+    });
 
     // ── Version ──
     oc.getVersion().then(v => {
@@ -1073,6 +1492,9 @@
     oc.onStatus((status) => {
       updateUI(status);
       if (status.runtime) updateAboutRuntime(status.runtime);
+      if (status.runtime && terminalRuntimeBtn) {
+        terminalRuntimeBtn.textContent = status.runtime === 'nemoclaw' ? 'Runtime: NemoClaw sandbox' : 'Runtime: OpenClaw host shell';
+      }
     });
     oc.getStatus().then((status) => {
       updateUI(status);
@@ -1083,48 +1505,8 @@
     oc.getSession().then(session => updateAboutUser(session));
 
     // ══════════════════════════════════
-    //  SETUP OVERLAY (steps + terminal)
+    //  SETUP OVERLAY (guided steps — heavy work runs in your system terminal)
     // ══════════════════════════════════
-    let term = null;
-    let fitAddon = null;
-    let setupKeyHandler = null;
-    let termInitialized = false;
-
-    function keyToPty(e) {
-      if (e.key === 'PageUp' || e.key === 'PageDown') {
-        if (term && setupOverlay.classList.contains('active')) {
-          e.preventDefault();
-          e.stopPropagation();
-          term.scrollLines(e.key === 'PageUp' ? -term.rows : term.rows);
-        }
-        return;
-      }
-      const map = {
-        Enter: '\r',
-        Tab: '\t',
-        Backspace: '\x7f',
-        ArrowUp: '\x1b[A',
-        ArrowDown: '\x1b[B',
-        ArrowRight: '\x1b[C',
-        ArrowLeft: '\x1b[D',
-      };
-      if (map[e.key]) {
-        e.preventDefault();
-        e.stopPropagation();
-        oc.sendPtyInput(map[e.key]);
-        return;
-      }
-      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        e.preventDefault();
-        e.stopPropagation();
-        oc.sendPtyInput(e.key);
-      } else if (e.ctrlKey && e.key === 'c') {
-        e.preventDefault();
-        e.stopPropagation();
-        oc.sendPtyInput('\x03');
-      }
-    }
-
     function renderSteps(steps) {
       const list = document.getElementById('setup-steps-list');
       const icons = { pending: '○', running: '◉', done: '✓', error: '✕' };
@@ -1160,57 +1542,6 @@
       }
     }
 
-    function initTerminal() {
-      if (termInitialized) return;
-      termInitialized = true;
-
-      term = new Terminal({
-        fontSize: 13,
-        fontFamily: "'SF Mono', 'Fira Code', 'Consolas', 'Menlo', monospace",
-        scrollback: 5000,
-        theme: {
-          background: '#0a0a0a',
-          foreground: '#e0e0e0',
-          cursor: '#e0e0e0',
-          selectionBackground: 'rgba(255,255,255,0.15)',
-        },
-        cursorBlink: true,
-        allowProposedApi: true,
-        disableStdin: true,
-      });
-
-      fitAddon = new FitAddon();
-      term.loadAddon(fitAddon);
-      term.open(setupTermEl);
-
-      setupTermEl.addEventListener('wheel', (e) => {
-        if (!setupOverlay.classList.contains('active')) return;
-        e.preventDefault();
-        const amount = Math.abs(e.deltaY) > 1 ? Math.round(e.deltaY / 3) : Math.sign(e.deltaY);
-        term.scrollLines(amount);
-      }, { passive: false });
-
-      const resizeObserver = new ResizeObserver(() => {
-        if (fitAddon && setupOverlay.classList.contains('active')) {
-          try { fitAddon.fit(); } catch {}
-          try { oc.resizePty(term.cols, term.rows); } catch {}
-        }
-      });
-      resizeObserver.observe(setupTermEl);
-    }
-
-    function showTerminalSection() {
-      const termSection = document.getElementById('setup-terminal-section');
-      if (!termSection.classList.contains('active')) {
-        termSection.classList.add('active');
-        initTerminal();
-        setTimeout(() => {
-          try { fitAddon.fit(); } catch {}
-          try { oc.resizePty(term.cols, term.rows); } catch {}
-        }, 50);
-      }
-    }
-
     function showSetupOverlay(steps) {
       setupOverlay.classList.add('active');
       authOverlay.classList.remove('active');
@@ -1218,45 +1549,14 @@
       runtimeOverlay.classList.remove('active');
       nemoPrereqOverlay.classList.remove('active');
       renderSteps(steps);
-
-      if (!setupKeyHandler) {
-        setupKeyHandler = (e) => {
-          if (!setupOverlay.classList.contains('active')) return;
-          keyToPty(e);
-        };
-        document.addEventListener('keydown', setupKeyHandler, true);
-      }
     }
 
-    // PTY data: show terminal section and write data
-    oc.onPtyData((data) => {
-      if (setupOverlay.classList.contains('active')) {
-        showTerminalSection();
-      }
-      if (term) term.write(data);
-    });
-
-    oc.onPtyExit((code) => {
-      // PTY exit is handled by the main process setup flow;
-      // terminal stays visible showing the output
-    });
-
-    // Main process sends these events
     oc.onShowSetup((steps) => showSetupOverlay(steps));
     oc.onSetupSteps((steps) => renderSteps(steps));
-
-    // Legacy: still handle show-onboard for IPC-triggered onboard
-    oc.onShowOnboard((task) => {
-      showSetupOverlay([{ id: 'task', label: task || 'Setting up...', status: 'running' }]);
-      showTerminalSection();
-      if (task === 'docker-install') oc.startDockerInstall();
-      else oc.startOnboard();
-    });
 
     // Fail actions
     document.getElementById('setup-retry-btn').addEventListener('click', () => {
       document.getElementById('setup-fail-actions').classList.remove('active');
-      if (term) term.clear();
       oc.retryAutoStart();
     });
     document.getElementById('setup-close-btn').addEventListener('click', () => {
@@ -1319,8 +1619,6 @@
       });
 
       akfSection.classList.add('active');
-      // Hide terminal when showing the form so it doesn't steal layout space
-      document.getElementById('setup-terminal-section').classList.remove('active');
       setTimeout(() => akfSection.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
     });
 

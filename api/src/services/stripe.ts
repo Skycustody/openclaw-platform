@@ -112,6 +112,48 @@ export async function createCreditCheckoutSession(
   return session.url!;
 }
 
+/**
+ * Create a Stripe Checkout session for the desktop app subscription.
+ * Price: €5/mo + automatic tax (25% VAT). Optional 3-day free trial.
+ */
+export async function createDesktopCheckoutSession(
+  email: string,
+  userId: string,
+  withTrial: boolean,
+  stripeCustomerId?: string,
+): Promise<string> {
+  const priceId = process.env.STRIPE_PRICE_DESKTOP;
+  if (!priceId) {
+    throw new Error('STRIPE_PRICE_DESKTOP not configured. Create a €5/mo recurring price in Stripe and set STRIPE_PRICE_DESKTOP.');
+  }
+
+  const sessionParams: Stripe.Checkout.SessionCreateParams = {
+    mode: 'subscription',
+    payment_method_types: ['card'],
+    line_items: [{ price: priceId, quantity: 1 }],
+    automatic_tax: { enabled: true },
+    success_url: `${process.env.PLATFORM_URL}/desktop?success=true`,
+    cancel_url: `${process.env.PLATFORM_URL}/desktop`,
+    metadata: { type: 'desktop', userId },
+  };
+
+  if (withTrial) {
+    sessionParams.subscription_data = {
+      trial_period_days: 3,
+      metadata: { type: 'desktop', userId },
+    };
+  }
+
+  if (stripeCustomerId) {
+    sessionParams.customer = stripeCustomerId;
+  } else {
+    sessionParams.customer_email = email;
+  }
+
+  const session = await stripe.checkout.sessions.create(sessionParams);
+  return session.url!;
+}
+
 export async function handleWebhook(event: Stripe.Event): Promise<void> {
   switch (event.type) {
     case 'checkout.session.completed':
@@ -137,6 +179,11 @@ async function handleCheckoutComplete(session: Stripe.Checkout.Session): Promise
 
   if (metadata.type === 'credit_topup') {
     await handleCreditPurchase(session);
+    return;
+  }
+
+  if (metadata.type === 'desktop') {
+    await handleDesktopPurchase(session);
     return;
   }
 
@@ -252,6 +299,31 @@ async function handleCreditPurchase(session: Stripe.Checkout.Session): Promise<v
   console.log(`[stripe] Top-up: user=${userId} pack=${packInfo.label} orBudget=$${orBudgetIncrease}`);
 }
 
+async function handleDesktopPurchase(session: Stripe.Checkout.Session): Promise<void> {
+  const { userId } = session.metadata || {};
+  if (!userId) {
+    console.warn('[stripe] Desktop webhook missing userId in metadata');
+    return;
+  }
+
+  const stripeCustomerId = session.customer as string;
+  const subscriptionId = session.subscription as string;
+
+  if (stripeCustomerId) {
+    await db.query(
+      'UPDATE users SET stripe_customer_id = $1 WHERE id = $2 AND stripe_customer_id IS NULL',
+      [stripeCustomerId, userId]
+    );
+  }
+
+  await db.query(
+    'UPDATE users SET desktop_subscription_id = $1 WHERE id = $2',
+    [subscriptionId, userId]
+  );
+
+  console.log(`[stripe] Desktop subscription activated for user ${userId} (sub=${subscriptionId})`);
+}
+
 async function handleSubscriptionCancelled(subscription: Stripe.Subscription): Promise<void> {
   const customerId = subscription.customer as string;
   const user = await db.getOne<User>(
@@ -259,6 +331,13 @@ async function handleSubscriptionCancelled(subscription: Stripe.Subscription): P
     [customerId]
   );
   if (!user) return;
+
+  // If this is a desktop subscription cancellation, just clear the desktop sub ID
+  if ((user as any).desktop_subscription_id === subscription.id) {
+    await db.query('UPDATE users SET desktop_subscription_id = NULL WHERE id = $1', [user.id]);
+    console.log(`[stripe] Desktop subscription cancelled for user ${user.id}`);
+    return;
+  }
 
   await deprovisionUser(user.id);
 
