@@ -328,6 +328,79 @@
     #about-panel h2 { font-size: 20px; font-weight: 700; color: #fff; }
     #about-panel p { font-size: 13px; color: rgba(255,255,255,0.3); }
 
+    #settings-panel {
+      padding: 24px;
+      overflow-y: auto;
+    }
+    .settings-section {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    .settings-section h3 {
+      font-size: 14px;
+      font-weight: 600;
+      color: #fff;
+      margin: 0 0 4px 0;
+    }
+    .settings-section p {
+      font-size: 12px;
+      color: rgba(255,255,255,0.3);
+      margin: 0 0 14px 0;
+    }
+    .settings-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .settings-row:last-child { border-bottom: none; }
+    .settings-row-label {
+      font-size: 13px;
+      color: rgba(255,255,255,0.6);
+    }
+    .settings-row-value {
+      font-size: 13px;
+      color: #fff;
+      font-weight: 500;
+    }
+    .settings-badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .badge-active { background: rgba(34,197,94,0.15); color: #22c55e; }
+    .badge-trial { background: rgba(99,102,241,0.15); color: #818cf8; }
+    .badge-none { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.3); }
+    .settings-btn {
+      padding: 8px 20px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.05);
+      color: rgba(255,255,255,0.7);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .settings-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+    .settings-btn-primary {
+      background: #6366f1;
+      border-color: #6366f1;
+      color: #fff;
+    }
+    .settings-btn-primary:hover { background: #818cf8; }
+    .settings-btn-danger {
+      border-color: rgba(239,68,68,0.3);
+      color: #ef4444;
+    }
+    .settings-btn-danger:hover { background: rgba(239,68,68,0.1); }
+
     .statusbar {
       height: 36px;
       background: #111;
@@ -707,7 +780,7 @@
     <div class="tab" data-tab="browser">Browser</div>
     <div class="tab" data-tab="terminal">Terminal</div>
     <div class="tab" data-tab="logs">Logs</div>
-    <div class="tab" data-tab="about">About</div>
+    <div class="tab" data-tab="settings">Settings</div>
   </div>
 
   <div class="content">
@@ -791,15 +864,77 @@
       <div id="terminal-xterm-container"></div>
     </div>
 
-    <div id="about-panel" class="panel">
-      <h2>Valnaa</h2>
-      <p id="about-version">v0.1.0</p>
-      <p id="about-runtime-label">Your personal AI agent, powered by OpenClaw.</p>
-      <div style="margin-top: 6px; display: flex; gap: 8px; align-items: center; justify-content: center;">
-        <span id="about-runtime-badge" class="runtime-card-badge badge-green" style="font-size: 12px;"></span>
-        <button class="overlay-link" id="about-change-runtime" style="font-size: 11px;">Change runtime</button>
+    <div id="settings-panel" class="panel">
+      <!-- Profile -->
+      <div class="settings-section">
+        <h3>Profile</h3>
+        <p>Your Valnaa account</p>
+        <div class="settings-row">
+          <span class="settings-row-label">Email</span>
+          <span class="settings-row-value" id="settings-email">—</span>
+        </div>
+        <div class="settings-row">
+          <span class="settings-row-label">Subscription</span>
+          <span id="settings-sub-badge" class="settings-badge badge-none">Checking...</span>
+        </div>
+        <div class="settings-row">
+          <span class="settings-row-label">Plan</span>
+          <span class="settings-row-value" id="settings-plan">—</span>
+        </div>
+        <div style="display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap;">
+          <button class="settings-btn settings-btn-primary" id="settings-manage-sub">Manage Subscription</button>
+          <button class="settings-btn" id="settings-sign-out">Sign Out</button>
+        </div>
       </div>
-      <div id="about-user" style="margin-top: 20px; display: flex; flex-direction: column; gap: 8px; align-items: center;"></div>
+
+      <!-- Runtime -->
+      <div class="settings-section">
+        <h3>Runtime</h3>
+        <p>Which agent engine to use</p>
+        <div class="settings-row">
+          <span class="settings-row-label">Current runtime</span>
+          <span class="settings-row-value" id="settings-runtime">—</span>
+        </div>
+        <div style="margin-top: 14px;">
+          <button class="settings-btn" id="settings-change-runtime">Change Runtime</button>
+        </div>
+      </div>
+
+      <!-- Data -->
+      <div class="settings-section">
+        <h3>Agent Data</h3>
+        <p>Manage local agent files and configuration</p>
+        <div class="settings-row">
+          <span class="settings-row-label">Config &amp; data folder</span>
+          <span class="settings-row-value" id="settings-data-path" style="font-size: 11px; font-family: monospace; opacity: 0.5;">~/.openclaw</span>
+        </div>
+        <div class="settings-row">
+          <span class="settings-row-label">App data folder</span>
+          <span class="settings-row-value" id="settings-appdata-path" style="font-size: 11px; font-family: monospace; opacity: 0.5;">~/.openclaw-desktop</span>
+        </div>
+        <div style="display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap;">
+          <button class="settings-btn" id="settings-open-data">Open Config Folder</button>
+          <button class="settings-btn" id="settings-open-appdata">Open App Data</button>
+          <button class="settings-btn settings-btn-danger" id="settings-delete-agent">Delete Agent &amp; Files</button>
+        </div>
+      </div>
+
+      <!-- App info -->
+      <div class="settings-section">
+        <h3>About</h3>
+        <div class="settings-row">
+          <span class="settings-row-label">Version</span>
+          <span class="settings-row-value" id="settings-version">v0.1.0</span>
+        </div>
+        <div class="settings-row">
+          <span class="settings-row-label">OpenClaw</span>
+          <span class="settings-row-value">Locally installed</span>
+        </div>
+        <div style="display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap;">
+          <button class="settings-btn" id="settings-open-logs">View Logs</button>
+          <button class="settings-btn" id="settings-open-website">valnaa.com</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -934,6 +1069,7 @@
         if (tab.dataset.tab === 'logs') refreshLogs();
         if (tab.dataset.tab === 'browser') void refreshChromeSetupPanel();
         if (tab.dataset.tab === 'terminal') initTerminal();
+        if (tab.dataset.tab === 'settings') void refreshSettingsPanel();
       });
     });
 
@@ -997,28 +1133,65 @@
     }
 
     function updateAboutUser(session) {
-      const el = document.getElementById('about-user');
-      if (session) {
-        el.innerHTML = `
-          <p style="font-size: 13px; color: rgba(255,255,255,0.5);">Signed in as <strong style="color:#fff;">${escapeHtml(session.email)}</strong></p>
-          <button class="overlay-link" id="about-logout">Sign out</button>
-        `;
-        document.getElementById('about-logout')?.addEventListener('click', () => oc.logout());
-      } else {
-        el.innerHTML = `
-          <button class="google-btn" id="about-signin" style="font-size:13px; padding:8px 20px;">
-            <svg viewBox="0 0 24 24" style="width:16px;height:16px;">
-              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
-              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-            </svg>
-            Sign in
-          </button>
-        `;
-        document.getElementById('about-signin')?.addEventListener('click', () => oc.startAuth());
+      document.getElementById('settings-email').textContent = session?.email || 'Not signed in';
+    }
+
+    async function refreshSettingsPanel() {
+      const session = await oc.getSession();
+      document.getElementById('settings-email').textContent = session?.email || 'Not signed in';
+
+      const runtimeInfo = await oc.getRuntime();
+      document.getElementById('settings-runtime').textContent =
+        runtimeInfo?.runtime === 'nemoclaw' ? 'NemoClaw' : 'OpenClaw';
+
+      const paths = await oc.getDataPaths();
+      if (paths) {
+        document.getElementById('settings-data-path').textContent = paths.configDir;
+        document.getElementById('settings-appdata-path').textContent = paths.appDataDir;
+      }
+
+      try {
+        const sub = await oc.checkSubscription();
+        const badge = document.getElementById('settings-sub-badge');
+        const planEl = document.getElementById('settings-plan');
+        if (sub.ok) {
+          if (sub.desktopSubscription) {
+            badge.textContent = 'Desktop Active';
+            badge.className = 'settings-badge badge-active';
+          } else {
+            badge.textContent = 'Cloud Active';
+            badge.className = 'settings-badge badge-active';
+          }
+          planEl.textContent = sub.plan ? sub.plan.charAt(0).toUpperCase() + sub.plan.slice(1) : 'Desktop';
+        } else {
+          badge.textContent = 'No subscription';
+          badge.className = 'settings-badge badge-none';
+          planEl.textContent = '—';
+        }
+      } catch {
+        const badge = document.getElementById('settings-sub-badge');
+        badge.textContent = 'Could not check';
+        badge.className = 'settings-badge badge-none';
       }
     }
+
+    // Settings buttons
+    document.getElementById('settings-manage-sub').addEventListener('click', () => oc.openExternal('https://valnaa.com/desktop'));
+    document.getElementById('settings-sign-out').addEventListener('click', () => oc.logout());
+    document.getElementById('settings-change-runtime').addEventListener('click', () => {
+      oc.clearRuntime();
+      window.location.reload();
+    });
+    document.getElementById('settings-open-data').addEventListener('click', () => oc.openDataFolder('config'));
+    document.getElementById('settings-open-appdata').addEventListener('click', () => oc.openDataFolder('appdata'));
+    document.getElementById('settings-open-logs').addEventListener('click', () => oc.openDataFolder('logs'));
+    document.getElementById('settings-open-website').addEventListener('click', () => oc.openExternal('https://valnaa.com'));
+    document.getElementById('settings-delete-agent').addEventListener('click', async () => {
+      if (!confirm('This will stop the agent and delete all local OpenClaw config, memories, and files. This cannot be undone.\n\nContinue?')) return;
+      if (!confirm('Are you sure? All agent data will be permanently deleted.')) return;
+      await oc.deleteAgentData();
+      window.location.reload();
+    });
 
     // Auth overlay buttons
     document.getElementById('auth-google-btn').addEventListener('click', () => {

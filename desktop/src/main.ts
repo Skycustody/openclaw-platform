@@ -10,7 +10,7 @@ import { installOpenClaw, findOpenClawBinary, isNodeInstalled, getInstallScriptC
 import { readRecentLogs, getLogFilePath, getAppLogPath, logApp, closeStreams } from './openclaw/logger';
 import { loadSession, saveSession, clearSession, checkSubscription, parseDeepLinkToken, parseDeepLinkEmail, isOfflineGraceValid } from './lib/session';
 import { loadRuntime, saveRuntime, clearRuntime, isNemoClawSupported, isDockerInstalled, isDockerRunning, canInstallDocker, getDockerInstallCommand, launchDockerDesktop, RuntimeType, isIntelMac, isOpenShellInstalled, isSidecarReady, setupOpenShellSidecar, ensureSidecarNetworking, isOnboardComplete, getNemoClawOnboardCommand, ensurePortForward, OPENCLAW_PORT, EXTENSION_RELAY_PORT, readSandboxGatewayTokenFresh, readHostOpenclawGatewayToken } from './lib/runtime';
-import { getAppDataDir } from './lib/platform';
+import { getAppDataDir, getOpenClawDir, getLogsDir } from './lib/platform';
 import {
   getChromeExtensionDir,
   ensureChromeExtensionFiles,
@@ -825,6 +825,39 @@ function setupIPC(): void {
     shell.openExternal('https://valnaa.com/desktop');
   });
 
+  ipcMain.handle('data:get-paths', () => {
+    return {
+      configDir: getOpenClawDir(),
+      appDataDir: getAppDataDir(),
+      logsDir: getLogsDir(),
+    };
+  });
+
+  ipcMain.handle('data:open-folder', (_e, which: string) => {
+    if (which === 'config') shell.openPath(getOpenClawDir());
+    else if (which === 'appdata') shell.openPath(getAppDataDir());
+    else if (which === 'logs') shell.openPath(getLogsDir());
+  });
+
+  ipcMain.handle('data:delete-agent', async () => {
+    logApp('info', 'User requested agent data deletion');
+    await manager.stop();
+    const configDir = getOpenClawDir();
+    const appDataDir = getAppDataDir();
+    const fs = await import('fs');
+    try {
+      if (fs.existsSync(configDir)) {
+        fs.rmSync(configDir, { recursive: true, force: true });
+        logApp('info', `Deleted config dir: ${configDir}`);
+      }
+    } catch (err: any) {
+      logApp('error', `Failed to delete config dir: ${err.message}`);
+    }
+    clearRuntime();
+    logApp('info', 'Agent data deleted — runtime cleared');
+    return { ok: true };
+  });
+
   // Runtime selection IPC
   ipcMain.handle('runtime:get', () => {
     const pref = loadRuntime();
@@ -865,6 +898,11 @@ function setupIPC(): void {
     saveRuntime(runtime);
     logApp('info', `Runtime selected: ${runtime}`);
     autoStart();
+  });
+
+  ipcMain.handle('runtime:clear', () => {
+    clearRuntime();
+    logApp('info', 'Runtime cleared by user');
   });
 
   ipcMain.handle('app:retry-autostart', () => {

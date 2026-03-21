@@ -46,7 +46,13 @@ contextBridge.exposeInMainWorld('openclaw', {
   // Runtime
   getRuntime: () => ipcRenderer.invoke('runtime:get'),
   setRuntime: (runtime: string) => ipcRenderer.invoke('runtime:set', runtime),
+  clearRuntime: () => ipcRenderer.invoke('runtime:clear'),
   retryAutoStart: () => ipcRenderer.invoke('app:retry-autostart'),
+
+  // Data management
+  getDataPaths: () => ipcRenderer.invoke('data:get-paths'),
+  openDataFolder: (which: string) => ipcRenderer.invoke('data:open-folder', which),
+  deleteAgentData: () => ipcRenderer.invoke('data:delete-agent'),
 
   onShowRuntimePicker: (cb: () => void) => {
     const handler = () => cb();
