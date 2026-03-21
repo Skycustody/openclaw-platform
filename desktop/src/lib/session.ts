@@ -5,18 +5,22 @@ import { getAppDataDir } from './platform';
 import { logApp } from '../openclaw/logger';
 
 const API_BASE = process.env.VALNAA_API_URL || 'https://api.valnaa.com';
-const ALLOWED_STATUSES = ['active', 'sleeping', 'grace_period', 'provisioning', 'starting'];
+const ALLOWED_VPS_STATUSES = ['active', 'sleeping', 'grace_period', 'provisioning', 'starting'];
+const OFFLINE_GRACE_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 export interface Session {
   token: string;
   email: string;
   savedAt: number;
+  /** Timestamp of last successful subscription verification */
+  lastVerifiedAt?: number;
 }
 
 export interface SubscriptionResult {
   ok: boolean;
   status: string;
   plan: string;
+  desktopSubscription: boolean;
 }
 
 function getSessionPath(): string {
@@ -85,10 +89,20 @@ export async function checkSubscription(token: string): Promise<SubscriptionResu
       plan: string;
       status: string;
       stripeCustomerId?: string;
+      desktopSubscription?: boolean;
+      isInTrial?: boolean;
     }>('/billing', token);
 
-    const ok = ALLOWED_STATUSES.includes(billing.status) || !!billing.stripeCustomerId;
-    return { ok, status: billing.status, plan: billing.plan };
+    const hasDesktop = !!billing.desktopSubscription;
+    const hasVps = ALLOWED_VPS_STATUSES.includes(billing.status) || !!billing.stripeCustomerId;
+    // Desktop app requires either an active desktop subscription OR an active VPS subscription
+    const ok = hasDesktop || hasVps;
+
+    if (ok) {
+      stampLastVerified();
+    }
+
+    return { ok, status: billing.status, plan: billing.plan, desktopSubscription: hasDesktop };
   } catch (err: any) {
     if (err.message === 'unauthorized') {
       throw err;
@@ -96,6 +110,31 @@ export async function checkSubscription(token: string): Promise<SubscriptionResu
     logApp('warn', 'Subscription check failed (network?)', err.message);
     throw err;
   }
+}
+
+/**
+ * Update the last-verified timestamp in the session file.
+ * Used for offline grace period enforcement.
+ */
+export function stampLastVerified(): void {
+  try {
+    const session = loadSession();
+    if (!session) return;
+    session.lastVerifiedAt = Date.now();
+    const dir = getAppDataDir();
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(getSessionPath(), JSON.stringify(session, null, 2), 'utf-8');
+  } catch {}
+}
+
+/**
+ * Check if the offline grace period (24h since last successful verification) has expired.
+ * Returns true if the user should still be allowed in, false if they must reconnect.
+ */
+export function isOfflineGraceValid(): boolean {
+  const session = loadSession();
+  if (!session?.lastVerifiedAt) return false;
+  return (Date.now() - session.lastVerifiedAt) < OFFLINE_GRACE_MS;
 }
 
 export function parseDeepLinkToken(url: string): string | null {

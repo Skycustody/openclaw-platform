@@ -8,7 +8,7 @@ import { autoUpdater } from 'electron-updater';
 import { manager, AgentStatus } from './openclaw/manager';
 import { installOpenClaw, findOpenClawBinary, isNodeInstalled, getInstallScriptCommand, findNemoClawBinary, getNemoClawInstallScriptCommand, getNemoClawSetupScriptCommand } from './openclaw/installer';
 import { readRecentLogs, getLogFilePath, getAppLogPath, logApp, closeStreams } from './openclaw/logger';
-import { loadSession, saveSession, clearSession, checkSubscription, parseDeepLinkToken, parseDeepLinkEmail } from './lib/session';
+import { loadSession, saveSession, clearSession, checkSubscription, parseDeepLinkToken, parseDeepLinkEmail, isOfflineGraceValid } from './lib/session';
 import { loadRuntime, saveRuntime, clearRuntime, isNemoClawSupported, isDockerInstalled, isDockerRunning, canInstallDocker, getDockerInstallCommand, launchDockerDesktop, RuntimeType, isIntelMac, isOpenShellInstalled, isSidecarReady, setupOpenShellSidecar, ensureSidecarNetworking, isOnboardComplete, getNemoClawOnboardCommand, ensurePortForward, OPENCLAW_PORT, EXTENSION_RELAY_PORT, readSandboxGatewayTokenFresh, readHostOpenclawGatewayToken } from './lib/runtime';
 import { getAppDataDir } from './lib/platform';
 import {
@@ -118,6 +118,8 @@ function taskRunsInExternalTerminal(task: SetupShellTask): boolean {
 //  In-App PTY Terminal
 // ════════════════════════════════════
 let activePty: pty.IPty | null = null;
+let subscriptionCheckTimer: ReturnType<typeof setInterval> | null = null;
+const RECHECK_INTERVAL_MS = 2 * 60 * 60 * 1000; // re-verify every 2 hours
 
 function spawnPty(): pty.IPty {
   if (activePty) {
@@ -820,7 +822,7 @@ function setupIPC(): void {
   });
 
   ipcMain.handle('auth:open-pricing', () => {
-    shell.openExternal('https://valnaa.com/pricing');
+    shell.openExternal('https://valnaa.com/desktop');
   });
 
   // Runtime selection IPC
@@ -882,6 +884,42 @@ function setupIPC(): void {
   });
 }
 
+function startSubscriptionRecheck(session: { token: string; email: string }): void {
+  if (subscriptionCheckTimer) clearInterval(subscriptionCheckTimer);
+
+  subscriptionCheckTimer = setInterval(async () => {
+    try {
+      const sub = await Promise.race([
+        checkSubscription(session.token),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('subscription_timeout')), 15000)
+        ),
+      ]);
+      if (!sub.ok) {
+        logApp('info', `Periodic check: subscription no longer valid (${sub.status}) — locking app`);
+        manager.stop();
+        mainWindow?.webContents.send('app:show-subscribe', { email: session.email, status: sub.status, plan: sub.plan });
+        if (subscriptionCheckTimer) clearInterval(subscriptionCheckTimer);
+      }
+    } catch (err: any) {
+      if (err.message === 'unauthorized') {
+        logApp('info', 'Periodic check: token expired — locking app');
+        clearSession();
+        manager.stop();
+        mainWindow?.webContents.send('app:show-auth');
+        if (subscriptionCheckTimer) clearInterval(subscriptionCheckTimer);
+        return;
+      }
+      if (!isOfflineGraceValid()) {
+        logApp('info', 'Periodic check: offline and grace expired — locking app');
+        manager.stop();
+        mainWindow?.webContents.send('app:show-subscribe', { email: session.email, status: 'offline_expired', plan: '' });
+        if (subscriptionCheckTimer) clearInterval(subscriptionCheckTimer);
+      }
+    }
+  }, RECHECK_INTERVAL_MS);
+}
+
 async function autoStart(): Promise<void> {
   // 1. Check auth
   const session = loadSession();
@@ -912,12 +950,27 @@ async function autoStart(): Promise<void> {
       mainWindow?.webContents.send('app:show-auth');
       return;
     }
-    if (err.message === 'subscription_timeout') {
-      logApp('warn', 'Subscription check timed out — allowing local use');
+    if (err.message === 'subscription_timeout' || err.message?.includes('timeout')) {
+      if (isOfflineGraceValid()) {
+        logApp('warn', 'Subscription check timed out — within 24h grace, allowing local use');
+      } else {
+        logApp('info', 'Subscription check timed out and offline grace expired — must reconnect');
+        mainWindow?.webContents.send('app:show-subscribe', { email: session.email, status: 'offline_expired', plan: '' });
+        return;
+      }
     } else {
-      logApp('warn', 'Could not check subscription (offline?) — allowing local use');
+      if (isOfflineGraceValid()) {
+        logApp('warn', 'Could not check subscription (offline?) — within 24h grace, allowing local use');
+      } else {
+        logApp('info', 'Could not check subscription and offline grace expired — must reconnect');
+        mainWindow?.webContents.send('app:show-subscribe', { email: session.email, status: 'offline_expired', plan: '' });
+        return;
+      }
     }
   }
+
+  // 2b. Start periodic subscription re-check
+  startSubscriptionRecheck(session);
 
   // 3. Check runtime selection
   const runtimePref = loadRuntime();
@@ -1014,6 +1067,7 @@ app.whenReady().then(async () => {
 app.on('before-quit', async () => {
   isQuitting = true;
   logApp('info', 'App quitting — stopping OpenClaw');
+  if (subscriptionCheckTimer) { clearInterval(subscriptionCheckTimer); subscriptionCheckTimer = null; }
   if (activePty) {
     try { activePty.kill(); } catch { /* ok */ }
     activePty = null;
