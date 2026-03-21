@@ -119,7 +119,6 @@ export async function createCreditCheckoutSession(
 export async function createDesktopCheckoutSession(
   email: string,
   userId: string,
-  withTrial: boolean,
   stripeCustomerId?: string,
 ): Promise<string> {
   const priceId = process.env.STRIPE_PRICE_DESKTOP;
@@ -136,13 +135,6 @@ export async function createDesktopCheckoutSession(
     cancel_url: `${process.env.PLATFORM_URL}/desktop`,
     metadata: { type: 'desktop', userId },
   };
-
-  if (withTrial) {
-    sessionParams.subscription_data = {
-      trial_period_days: 3,
-      metadata: { type: 'desktop', userId },
-    };
-  }
 
   if (stripeCustomerId) {
     sessionParams.customer = stripeCustomerId;

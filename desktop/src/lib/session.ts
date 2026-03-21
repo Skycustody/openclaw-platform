@@ -89,18 +89,21 @@ export async function checkSubscription(token: string): Promise<SubscriptionResu
       status: string;
       stripeCustomerId?: string;
       desktopSubscription?: boolean;
-      isInTrial?: boolean;
+      desktopTrialActive?: boolean;
+      desktopTrialEndsAt?: string;
     }>('/billing', token);
 
     const hasDesktop = !!billing.desktopSubscription;
-    // Desktop app ONLY checks for desktop subscription — VPS plans do NOT grant desktop access
     const ok = hasDesktop;
 
     if (ok) {
       stampLastVerified();
     }
 
-    return { ok, status: billing.status, plan: billing.plan, desktopSubscription: hasDesktop };
+    const effectiveStatus = !ok && billing.desktopTrialEndsAt && !billing.desktopTrialActive
+      ? 'trial_expired' : billing.status;
+
+    return { ok, status: effectiveStatus, plan: billing.plan, desktopSubscription: hasDesktop };
   } catch (err: any) {
     if (err.message === 'unauthorized') {
       throw err;

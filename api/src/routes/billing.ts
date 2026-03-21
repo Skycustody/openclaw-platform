@@ -27,7 +27,10 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
     const trialDataRetentionUntil = user.trial_data_retention_until ?? null;
     const isInTrial = trialEndsAt && new Date(trialEndsAt) > new Date();
 
-    const desktopSub = !!(user as any).desktop_subscription_id;
+    const desktopSubId = (user as any).desktop_subscription_id;
+    const desktopTrialEndsAt = (user as any).desktop_trial_ends_at;
+    const desktopTrialActive = desktopTrialEndsAt && new Date(desktopTrialEndsAt) > new Date();
+    const hasDesktop = !!desktopSubId || !!desktopTrialActive;
 
     res.json({
       plan: user.plan,
@@ -37,7 +40,9 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
       trialEndsAt: trialEndsAt ? new Date(trialEndsAt).toISOString() : null,
       trialDataRetentionUntil: trialDataRetentionUntil ? new Date(trialDataRetentionUntil).toISOString() : null,
       isInTrial,
-      desktopSubscription: desktopSub,
+      desktopSubscription: hasDesktop,
+      desktopTrialEndsAt: desktopTrialEndsAt ? new Date(desktopTrialEndsAt).toISOString() : null,
+      desktopTrialActive: !!desktopTrialActive,
     });
   } catch (err) {
     next(err);
@@ -113,18 +118,38 @@ router.post('/buy-credits', rateLimitSensitive, async (req: AuthRequest, res: Re
   }
 });
 
-// Start desktop app subscription checkout
+// Start desktop 3-day free trial (no card required)
+router.post('/desktop-trial', rateLimitSensitive, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const user = await db.getOne<any>('SELECT id, desktop_subscription_id, desktop_trial_ends_at FROM users WHERE id = $1', [req.userId]);
+    if (!user) throw new BadRequestError('User not found');
+
+    if (user.desktop_subscription_id) {
+      throw new BadRequestError('You already have an active desktop subscription');
+    }
+    if (user.desktop_trial_ends_at) {
+      throw new BadRequestError('You have already used your free trial');
+    }
+
+    const trialEnd = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000); // 3 days from now
+    await db.query('UPDATE users SET desktop_trial_ends_at = $1 WHERE id = $2', [trialEnd.toISOString(), req.userId]);
+
+    console.log(`[billing] Desktop trial started for user ${req.userId}, ends ${trialEnd.toISOString()}`);
+    res.json({ ok: true, trialEndsAt: trialEnd.toISOString() });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Start desktop app subscription checkout (paid, no trial)
 router.post('/desktop-checkout', rateLimitSensitive, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { trial } = req.body as { trial?: boolean };
-
     const user = await db.getOne<User>('SELECT id, email, stripe_customer_id FROM users WHERE id = $1', [req.userId]);
     if (!user) throw new BadRequestError('User not found');
 
     const checkoutUrl = await createDesktopCheckoutSession(
       user.email,
       req.userId!,
-      !!trial,
       user.stripe_customer_id || undefined,
     );
     res.json({ checkoutUrl });

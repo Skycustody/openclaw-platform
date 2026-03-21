@@ -78,9 +78,11 @@ const INCLUDED = [
 export default function DesktopPage() {
   const [submitting, setSubmitting] = useState(false);
   const [startingTrial, setStartingTrial] = useState(false);
+  const [trialStarted, setTrialStarted] = useState(false);
   const [error, setError] = useState('');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [hasDesktopSub, setHasDesktopSub] = useState(false);
+  const [trialUsed, setTrialUsed] = useState(false);
 
   useEffect(() => {
     const token = api.getToken();
@@ -88,9 +90,12 @@ export default function DesktopPage() {
       setIsLoggedIn(true);
       (async () => {
         try {
-          const billing = await api.get<{ desktopSubscription?: boolean }>('/billing');
-          if ((billing as any).desktopSubscription) {
+          const billing = await api.get<{ desktopSubscription?: boolean; desktopTrialEndsAt?: string }>('/billing');
+          if (billing.desktopSubscription) {
             setHasDesktopSub(true);
+          }
+          if (billing.desktopTrialEndsAt) {
+            setTrialUsed(true);
           }
         } catch { /* proceed */ }
       })();
@@ -121,8 +126,9 @@ export default function DesktopPage() {
     setStartingTrial(true);
     setError('');
     try {
-      const res = await api.post<{ checkoutUrl: string }>('/billing/desktop-checkout', { trial: true });
-      window.location.href = res.checkoutUrl;
+      await api.post<{ ok: boolean; trialEndsAt: string }>('/billing/desktop-trial', {});
+      setTrialStarted(true);
+      setHasDesktopSub(true);
     } catch (e: any) {
       setError(e?.message || 'Unable to start trial. Please try again.');
       setStartingTrial(false);
@@ -249,29 +255,36 @@ export default function DesktopPage() {
               </div>
             )}
 
-            {hasDesktopSub ? (
+            {trialStarted ? (
               <div className="mt-8 rounded-lg border border-green-500/20 bg-green-500/10 p-4 text-center">
-                <p className="text-sm font-medium text-green-400">You have an active Desktop subscription</p>
+                <p className="text-sm font-medium text-green-400">Your 3-day trial is active!</p>
+                <p className="mt-1 text-xs text-green-400/70">Download the app above, sign in, and start using your agent.</p>
+              </div>
+            ) : hasDesktopSub ? (
+              <div className="mt-8 rounded-lg border border-green-500/20 bg-green-500/10 p-4 text-center">
+                <p className="text-sm font-medium text-green-400">You have active Desktop access</p>
                 <p className="mt-1 text-xs text-green-400/70">Download the app above and sign in with your account.</p>
               </div>
             ) : (
               <div className="mt-8 space-y-3">
-                <Button
-                  onClick={startTrial}
-                  disabled={submitting || startingTrial}
-                  size="lg"
-                  className="w-full"
-                >
-                  {startingTrial ? (
-                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Starting trial...</>
-                  ) : (
-                    <>Start 3-day free trial <ArrowRight className="ml-2 h-4 w-4" /></>
-                  )}
-                </Button>
+                {!trialUsed && (
+                  <Button
+                    onClick={startTrial}
+                    disabled={submitting || startingTrial}
+                    size="lg"
+                    className="w-full"
+                  >
+                    {startingTrial ? (
+                      <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Starting trial...</>
+                    ) : (
+                      <>Start 3-day free trial &mdash; no card needed <ArrowRight className="ml-2 h-4 w-4" /></>
+                    )}
+                  </Button>
+                )}
                 <Button
                   onClick={startCheckout}
                   disabled={submitting || startingTrial}
-                  variant="outline"
+                  variant={trialUsed ? 'default' : 'outline'}
                   size="lg"
                   className="w-full"
                 >
@@ -282,7 +295,8 @@ export default function DesktopPage() {
                   )}
                 </Button>
                 <p className="text-center text-xs text-muted-foreground">
-                  Cancel anytime. No commitment. Separate from cloud VPS plans.
+                  {trialUsed ? 'Your free trial has ended. ' : 'No credit card for trial. '}
+                  Cancel anytime. Separate from cloud VPS plans.
                 </p>
               </div>
             )}

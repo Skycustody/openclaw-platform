@@ -1,0 +1,23 @@
+---
+description: Valnaa desktop (Electron) — always rebuild after code changes
+globs: desktop/**/*
+alwaysApply: false
+---
+
+# Valnaa desktop — rebuild discipline
+
+After **any** edit under `desktop/` that affects runtime (TypeScript in `desktop/src/`, or `desktop/src/renderer/*`):
+
+1. **Run a full build** from the desktop package:
+   ```bash
+   cd desktop && npm run build
+   ```
+2. Do **not** assume the user will rebuild. The app loads from `desktop/dist/` (`main.js`, `dist/renderer/`).
+
+**Optional (user):** continuous rebuild while developing:
+
+```bash
+cd desktop && npm run dev:watch
+```
+
+This runs `tsc -w`, copies renderer on HTML changes, then starts Electron once `dist/main.js` exists.
