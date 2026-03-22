@@ -1091,15 +1091,12 @@
       position: fixed;
       inset: 0;
       z-index: 100;
-      background:
-        radial-gradient(ellipse 120% 80% at 50% -20%, rgba(99, 102, 241, 0.07) 0%, transparent 50%),
-        #060606;
+      background: #060606;
       display: none;
       flex-direction: column;
       -webkit-app-region: no-drag;
     }
     #setup-overlay.active { display: flex; }
-    /* Invisible drag strip (no window title text) */
     .setup-overlay-drag {
       flex-shrink: 0;
       height: 28px;
@@ -1109,112 +1106,92 @@
     #setup-scroll-area {
       flex: 1;
       min-height: 0;
-      overflow-y: auto;
       display: flex;
       flex-direction: column;
-      align-items: center;
-      padding: 8px 24px 28px;
-    }
-    /* Center block when content is short; allow normal scroll when tall */
-    #setup-scroll-area::before,
-    #setup-scroll-area::after {
-      content: '';
-      flex: 1 1 auto;
-      min-height: 0;
+      overflow: hidden;
     }
 
+    /* ── Horizontal step bar ── */
     #setup-steps-section {
       width: 100%;
-      max-width: 420px;
-      text-align: center;
       flex-shrink: 0;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      background: rgba(255,255,255,0.015);
     }
     .setup-steps-card {
-      text-align: center;
-      padding: 28px 28px 24px;
-      border-radius: 14px;
-      border: 1px solid rgba(255, 255, 255, 0.06);
-      background: rgba(255, 255, 255, 0.02);
-      box-shadow: 0 24px 48px rgba(0, 0, 0, 0.35);
+      padding: 10px 20px 8px;
     }
-    #setup-steps-section h2 {
-      font-size: 19px;
-      font-weight: 600;
-      letter-spacing: -0.02em;
-      color: #fafafa;
-      margin: 0 0 8px;
-    }
-    #setup-steps-section .subtitle {
-      font-size: 13px;
-      line-height: 1.45;
-      color: rgba(255, 255, 255, 0.38);
-      margin: 0 0 22px;
-    }
+    .setup-steps-card h2, .setup-steps-card .subtitle { display: none; }
     .setup-steps-list {
       margin: 0;
-      text-align: left;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      overflow-x: auto;
     }
     .setup-step {
       display: flex;
-      align-items: flex-start;
-      gap: 12px;
-      padding: 8px 0;
+      align-items: center;
+      gap: 7px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      white-space: nowrap;
+      flex-shrink: 0;
     }
-    .setup-step + .setup-step {
-      border-top: 1px solid rgba(255, 255, 255, 0.04);
-    }
+    .setup-step.running { background: rgba(99,102,241,0.08); }
     .step-icon {
-      width: 24px;
-      height: 24px;
+      width: 20px;
+      height: 20px;
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
-      font-size: 11px;
-      font-weight: 600;
+      font-size: 10px;
+      font-weight: 700;
       line-height: 1;
-      margin-top: 1px;
     }
     .step-icon.pending { border: 1.5px solid rgba(255,255,255,0.1); color: rgba(255,255,255,0.15); background: transparent; }
     .step-icon.running { border: 1.5px solid #818cf8; color: #a5b4fc; background: rgba(99,102,241,0.12); animation: step-pulse 1.5s ease-in-out infinite; }
-    .step-icon.done { background: rgba(34, 197, 94, 0.2); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.35); }
-    .step-icon.error { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.35); }
-    .step-info { flex: 1; min-width: 0; padding-top: 1px; }
-    .step-label { font-size: 13px; color: rgba(255,255,255,0.42); letter-spacing: -0.01em; line-height: 1.35; }
-    .setup-step.running .step-label { color: #f5f5f5; font-weight: 600; }
-    .setup-step.done .step-label { color: rgba(255,255,255,0.32); font-weight: 500; }
+    .step-icon.done { background: rgba(34,197,94,0.2); color: #4ade80; border: 1px solid rgba(34,197,94,0.35); }
+    .step-icon.error { background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.35); }
+    .step-connector { width: 18px; height: 1px; background: rgba(255,255,255,0.08); flex-shrink: 0; }
+    .step-connector.done { background: rgba(34,197,94,0.3); }
+    .step-info { min-width: 0; }
+    .step-label { font-size: 12px; color: rgba(255,255,255,0.35); letter-spacing: -0.01em; line-height: 1; }
+    .setup-step.running .step-label { color: #e5e5e5; font-weight: 600; }
+    .setup-step.done .step-label { color: rgba(255,255,255,0.25); }
     .setup-step.error .step-label { color: #f87171; }
-    .step-detail { font-size: 11px; color: rgba(255,255,255,0.28); margin-top: 4px; line-height: 1.35; }
+    .step-detail { display: none; }
     @keyframes step-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
 
-    /* In-app setup terminal */
+    /* ── Full-screen setup terminal ── */
     #setup-terminal-wrap {
       display: none;
-      width: 100%;
-      max-width: 520px;
-      margin-top: 16px;
-      flex-shrink: 0;
-    }
-    #setup-terminal-wrap.active { display: block; }
-    #setup-terminal-container {
-      border-radius: 10px;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      background: #0d0d0d;
-      padding: 8px 4px 4px;
+      flex: 1;
+      min-height: 0;
       overflow: hidden;
     }
-    #setup-terminal-container .xterm {
-      padding: 0 4px;
+    #setup-terminal-wrap.active { display: flex; flex-direction: column; }
+    #setup-terminal-container {
+      flex: 1;
+      min-height: 0;
+      background: #0a0a0a;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
     }
+    #setup-terminal-container .xterm { flex: 1; }
+    #setup-terminal-el { flex: 1; min-height: 0; }
     .setup-term-header {
       display: flex;
       align-items: center;
       gap: 6px;
-      padding: 0 8px 6px;
+      padding: 6px 12px;
       font-size: 11px;
       color: rgba(255,255,255,0.3);
       letter-spacing: 0.03em;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
       user-select: none;
     }
     .setup-term-dot {
@@ -1245,10 +1222,9 @@
       display: none;
       width: 100%;
       max-width: 420px;
-      margin: 0 auto;
+      margin: auto;
       padding: 20px 8px 8px;
       text-align: center;
-      border-top: 1px solid rgba(255, 255, 255, 0.06);
     }
     #api-key-section.active { display: block; }
     #api-key-section h3 {
@@ -2694,15 +2670,15 @@
     function renderSteps(steps) {
       const list = document.getElementById('setup-steps-list');
       const icons = { pending: '○', running: '◉', done: '✓', error: '✕' };
-      list.innerHTML = steps.map(s => `
-        <div class="setup-step ${s.status}">
-          <div class="step-icon ${s.status}">${icons[s.status]}</div>
-          <div class="step-info">
-            <div class="step-label">${escapeHtml(s.label)}</div>
-            ${s.detail ? `<div class="step-detail">${escapeHtml(s.detail)}</div>` : ''}
-          </div>
-        </div>
-      `).join('');
+      list.innerHTML = steps.map((s, i) => {
+        const connector = i < steps.length - 1
+          ? `<div class="step-connector ${s.status === 'done' ? 'done' : ''}"></div>` : '';
+        return `
+          <div class="setup-step ${s.status}">
+            <div class="step-icon ${s.status}">${icons[s.status]}</div>
+            <div class="step-info"><div class="step-label">${escapeHtml(s.label)}</div></div>
+          </div>${connector}`;
+      }).join('');
 
       const running = steps.find(s => s.status === 'running');
       const error = steps.find(s => s.status === 'error');
@@ -2752,15 +2728,15 @@
       setupXterm = new TerminalCtor({
         cursorBlink: true,
         fontFamily: "'SF Mono', 'Fira Code', 'Consolas', 'Menlo', monospace",
-        fontSize: 12,
-        lineHeight: 1.3,
+        fontSize: 13,
+        lineHeight: 1.35,
         theme: {
-          background: '#0d0d0d',
+          background: '#0a0a0a',
           foreground: '#d4d4d4',
           cursor: '#a5b4fc',
           selectionBackground: 'rgba(255,255,255,0.12)',
         },
-        scrollback: 5000,
+        scrollback: 10000,
         convertEol: true,
       });
       setupFitAddon = new FitAddonCtor();
@@ -2768,7 +2744,12 @@
       setupXterm.open(setupTermEl);
       setupFitAddon.fit();
       setupXterm.onData((data) => oc.setupTerminalInput(data));
-      const ro = new ResizeObserver(() => { if (setupFitAddon) setupFitAddon.fit(); });
+      setupXterm.onResize(({ cols, rows }) => oc.setupTerminalResize(cols, rows));
+      const ro = new ResizeObserver(() => {
+        if (setupFitAddon) {
+          setupFitAddon.fit();
+        }
+      });
       ro.observe(setupTermEl);
     }
 

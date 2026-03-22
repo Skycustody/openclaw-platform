@@ -135,18 +135,23 @@ function runCommandInSetupPty(command: string): Promise<number> {
   return new Promise((resolve) => {
     killSetupPty();
 
+    const isWin = process.platform === 'win32';
+    const sep = isWin ? ';' : ':';
     const localBin = path.join(os.homedir(), '.local', 'bin');
     const envPath = process.env.PATH || '';
-    const patchedPath = envPath.includes(localBin) ? envPath : `${localBin}:${envPath}`;
-    const brewBin = process.arch === 'arm64' ? '/opt/homebrew/bin' : '/usr/local/bin';
-    const fullPath = patchedPath.includes(brewBin) ? patchedPath : `${brewBin}:${patchedPath}`;
+    let fullPath = envPath.includes(localBin) ? envPath : `${localBin}${sep}${envPath}`;
+    if (!isWin) {
+      const brewBin = process.arch === 'arm64' ? '/opt/homebrew/bin' : '/usr/local/bin';
+      if (!fullPath.includes(brewBin)) fullPath = `${brewBin}:${fullPath}`;
+    }
 
-    const shellName = process.platform === 'win32' ? 'powershell.exe' : (process.env.SHELL || '/bin/zsh');
+    const shellName = isWin ? 'powershell.exe' : (process.env.SHELL || '/bin/zsh');
+    const shellArgs = isWin ? ['-Command', command] : ['-c', command];
 
-    setupPtyProc = pty.spawn(shellName, ['-c', command], {
+    setupPtyProc = pty.spawn(shellName, shellArgs, {
       name: 'xterm-256color',
-      cols: 80,
-      rows: 16,
+      cols: 120,
+      rows: 40,
       cwd: os.homedir(),
       env: { ...process.env, PATH: fullPath, TERM: 'xterm-256color', FORCE_COLOR: '1' } as Record<string, string>,
     });
@@ -175,9 +180,11 @@ let subscriptionCheckTimer: ReturnType<typeof setInterval> | null = null;
 const RECHECK_INTERVAL_MS = 2 * 60 * 60 * 1000; // re-verify every 2 hours
 
 function spawnPty(sessionId: string, sandbox = false): pty.IPty {
+  const isWin = process.platform === 'win32';
+  const sep = isWin ? ';' : ':';
   const localBin = path.join(os.homedir(), '.local', 'bin');
   const envPath = process.env.PATH || '';
-  const patchedPath = envPath.includes(localBin) ? envPath : `${localBin}:${envPath}`;
+  const patchedPath = envPath.includes(localBin) ? envPath : `${localBin}${sep}${envPath}`;
   const env = { ...process.env, PATH: patchedPath, TERM: 'xterm-256color' } as Record<string, string>;
 
   let shellName: string;
@@ -435,14 +442,17 @@ async function runSetupShellTaskAsync(task: SetupShellTask): Promise<void> {
     return;
   }
 
-  const shellName = process.platform === 'win32' ? 'powershell.exe' : '/bin/zsh';
+  const isWin = process.platform === 'win32';
+  const shellName = isWin ? 'powershell.exe' : '/bin/zsh';
+  const sep = isWin ? ';' : ':';
   const localBin = path.join(os.homedir(), '.local', 'bin');
   const envPath = process.env.PATH || '';
-  const patchedPath = envPath.includes(localBin) ? envPath : `${localBin}:${envPath}`;
+  const patchedPath = envPath.includes(localBin) ? envPath : `${localBin}${sep}${envPath}`;
   logApp('info', `Headless setup "${task}" via ${shellName}`);
 
   await new Promise<void>((resolve, reject) => {
-    const child = spawn(shellName, ['-c', command], {
+    const shellArgs = isWin ? ['-Command', command] : ['-c', command];
+    const child = spawn(shellName, shellArgs, {
       cwd: os.homedir(),
       env: { ...process.env, FORCE_COLOR: '1', PATH: patchedPath } as NodeJS.ProcessEnv,
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -962,6 +972,12 @@ function setupIPC(): void {
 
   ipcMain.on('setup:terminal-input', (_e, data: string) => {
     setupPtyProc?.write(data);
+  });
+
+  ipcMain.on('setup:terminal-resize', (_e, cols: number, rows: number) => {
+    if (setupPtyProc && cols > 0 && rows > 0) {
+      try { setupPtyProc.resize(cols, rows); } catch { /* ok */ }
+    }
   });
 
   ipcMain.on('terminal:resize', (_e, sessionId: string, cols: number, rows: number) => {

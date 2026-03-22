@@ -98,6 +98,7 @@ contextBridge.exposeInMainWorld('openclaw', {
 
   // Setup in-app terminal
   setupTerminalInput: (data: string) => ipcRenderer.send('setup:terminal-input', data),
+  setupTerminalResize: (cols: number, rows: number) => ipcRenderer.send('setup:terminal-resize', cols, rows),
   onSetupTerminalStart: (cb: () => void) => {
     const handler = () => cb();
     ipcRenderer.on('setup:terminal-start', handler);
