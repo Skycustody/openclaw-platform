@@ -103,9 +103,15 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
     ]);
 
     const desktopRow = await db.getOne<any>(
-      `SELECT COUNT(*) as total FROM users WHERE desktop_subscription_id IS NOT NULL AND LOWER(email) != $1`,
+      `SELECT
+         COUNT(*) FILTER (WHERE desktop_subscription_id IS NOT NULL) as paid,
+         COUNT(*) FILTER (WHERE desktop_trial_ends_at IS NOT NULL AND desktop_trial_ends_at > NOW() AND desktop_subscription_id IS NULL) as trialing,
+         COUNT(*) FILTER (WHERE desktop_subscription_id IS NOT NULL OR (desktop_trial_ends_at IS NOT NULL AND desktop_trial_ends_at > NOW())) as total,
+         COUNT(*) FILTER (WHERE desktop_subscription_id IS NOT NULL AND status IN ('pending') AND server_id IS NULL) as desktop_only,
+         COUNT(*) FILTER (WHERE desktop_subscription_id IS NOT NULL AND status NOT IN ('pending', 'cancelled') AND server_id IS NOT NULL) as desktop_and_vps
+       FROM users WHERE LOWER(email) != $1`,
       [ADMIN_EMAIL]
-    ).catch(() => ({ total: '0' }));
+    ).catch(() => ({ paid: '0', trialing: '0', total: '0', desktop_only: '0', desktop_and_vps: '0' }));
 
     const starterCount = parseInt(plans?.starter || '0');
     const proCount = parseInt(plans?.pro || '0');
@@ -209,13 +215,21 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
       total_balance: creditsRow?.total_balance ?? '0',
       total_purchased: creditsRow?.total_purchased ?? '0',
     };
-    const desktopSubscribers = parseInt(desktopRow?.total || '0');
+    const desktopPaidCount = parseInt(desktopRow?.paid || '0');
+    const desktopTrialingCount = parseInt(desktopRow?.trialing || '0');
+    const desktopTotalCount = parseInt(desktopRow?.total || '0');
+    const desktopOnlyCount = parseInt(desktopRow?.desktop_only || '0');
+    const desktopAndVpsCount = parseInt(desktopRow?.desktop_and_vps || '0');
     const desktopPriceEurCents = 500;
     const desktopVatRate = 0.25;
-    const desktopRevenueEurCents = desktopSubscribers * Math.round(desktopPriceEurCents * (1 + desktopVatRate));
+    const desktopRevenueEurCents = desktopPaidCount * Math.round(desktopPriceEurCents * (1 + desktopVatRate));
 
     const desktop = {
-      subscribers: desktopSubscribers,
+      subscribers: desktopPaidCount,
+      trialing: desktopTrialingCount,
+      total: desktopTotalCount,
+      desktopOnly: desktopOnlyCount,
+      desktopAndVps: desktopAndVpsCount,
       priceEurCents: desktopPriceEurCents,
       vatRate: desktopVatRate,
       revenueEurCents: desktopRevenueEurCents,
@@ -470,12 +484,27 @@ router.get('/users', async (req: AuthRequest, res: Response, next: NextFunction)
       where += ` AND u.stripe_customer_id IS NULL`;
     }
 
+    const desktop = req.query.desktop as string || '';
+    if (desktop === 'true') {
+      where += ` AND (u.desktop_subscription_id IS NOT NULL OR (u.desktop_trial_ends_at IS NOT NULL AND u.desktop_trial_ends_at > NOW()))`;
+    } else if (desktop === 'only') {
+      where += ` AND (u.desktop_subscription_id IS NOT NULL OR (u.desktop_trial_ends_at IS NOT NULL AND u.desktop_trial_ends_at > NOW()))`;
+      where += ` AND u.status IN ('pending')`;
+    } else if (desktop === 'vps_only') {
+      where += ` AND u.status NOT IN ('pending', 'cancelled')`;
+      where += ` AND (u.desktop_subscription_id IS NULL AND (u.desktop_trial_ends_at IS NULL OR u.desktop_trial_ends_at <= NOW()))`;
+    }
+
     const [users, countResult] = await Promise.all([
       db.getMany<any>(
         `SELECT u.id, u.email, u.display_name, u.plan, u.status, u.subdomain,
                 u.created_at, u.last_active, u.is_admin,
                 (u.stripe_customer_id IS NOT NULL) as has_paid,
                 (u.desktop_subscription_id IS NOT NULL) as has_desktop,
+                (u.desktop_trial_ends_at IS NOT NULL AND u.desktop_trial_ends_at > NOW()) as has_desktop_trial,
+                u.desktop_subscription_id,
+                u.desktop_trial_ends_at,
+                (u.status NOT IN ('pending', 'cancelled') AND u.server_id IS NOT NULL) as has_vps,
                 tb.balance as credit_balance, tb.total_used, tb.total_purchased,
                 s.ip as server_ip, s.hostname as server_hostname
          FROM users u
@@ -508,7 +537,9 @@ router.get('/users/:userId', async (req: AuthRequest, res: Response, next: NextF
         `SELECT u.id, u.email, u.display_name, u.plan, u.status, u.subdomain,
                 u.container_name, u.server_id, u.stripe_customer_id, u.referral_code,
                 u.is_admin, u.created_at, u.last_active, u.api_budget_addon_usd,
-                u.desktop_subscription_id,
+                u.desktop_subscription_id, u.desktop_trial_ends_at,
+                (u.desktop_trial_ends_at IS NOT NULL AND u.desktop_trial_ends_at > NOW()) as desktop_trial_active,
+                (u.status NOT IN ('pending', 'cancelled') AND u.server_id IS NOT NULL) as has_vps,
                 s.ip as server_ip, s.hostname as server_hostname
          FROM users u
          LEFT JOIN servers s ON s.id = u.server_id

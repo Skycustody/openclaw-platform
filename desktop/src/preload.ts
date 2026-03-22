@@ -9,6 +9,12 @@ contextBridge.exposeInMainWorld('openclaw', {
   getLogPath: () => ipcRenderer.invoke('agent:log-path'),
   openLogFile: () => ipcRenderer.invoke('agent:open-log-file'),
   getVersion: () => ipcRenderer.invoke('app:version'),
+  getMacFullscreen: () => ipcRenderer.invoke('app:get-mac-fullscreen'),
+  onMacFullscreenChange: (cb: (fullScreen: boolean) => void) => {
+    const handler = (_: Electron.IpcRendererEvent, fs: boolean) => cb(!!fs);
+    ipcRenderer.on('app:mac-fullscreen', handler);
+    return () => ipcRenderer.removeListener('app:mac-fullscreen', handler);
+  },
   signalReady: () => ipcRenderer.send('app:renderer-ready'),
 
   needsSetup: () => ipcRenderer.invoke('setup:needs-setup'),
@@ -21,17 +27,17 @@ contextBridge.exposeInMainWorld('openclaw', {
   copyGatewayToken: () => ipcRenderer.invoke('browser:copy-gateway-token'),
   saveChromeExtensionZip: () => ipcRenderer.invoke('browser:save-chrome-extension-zip'),
   copyChromeExtensionToDownloads: () => ipcRenderer.invoke('browser:copy-chrome-extension-to-downloads'),
-  terminalSpawn: () => ipcRenderer.invoke('terminal:spawn'),
-  terminalInput: (data: string) => ipcRenderer.send('terminal:input', data),
-  terminalResize: (cols: number, rows: number) => ipcRenderer.send('terminal:resize', cols, rows),
-  terminalKill: () => ipcRenderer.invoke('terminal:kill'),
-  onTerminalData: (cb: (data: string) => void) => {
-    const handler = (_: any, data: string) => cb(data);
+  terminalSpawn: (opts?: { sandbox?: boolean }) => ipcRenderer.invoke('terminal:spawn', opts),
+  terminalInput: (sessionId: string, data: string) => ipcRenderer.send('terminal:input', sessionId, data),
+  terminalResize: (sessionId: string, cols: number, rows: number) => ipcRenderer.send('terminal:resize', sessionId, cols, rows),
+  terminalKill: (sessionId: string) => ipcRenderer.invoke('terminal:kill', sessionId),
+  onTerminalData: (cb: (sessionId: string, data: string) => void) => {
+    const handler = (_: any, sessionId: string, data: string) => cb(sessionId, data);
     ipcRenderer.on('terminal:data', handler);
     return () => ipcRenderer.removeListener('terminal:data', handler);
   },
-  onTerminalExit: (cb: (code: number) => void) => {
-    const handler = (_: any, code: number) => cb(code);
+  onTerminalExit: (cb: (sessionId: string, code: number) => void) => {
+    const handler = (_: any, sessionId: string, code: number) => cb(sessionId, code);
     ipcRenderer.on('terminal:exit', handler);
     return () => ipcRenderer.removeListener('terminal:exit', handler);
   },
@@ -42,6 +48,9 @@ contextBridge.exposeInMainWorld('openclaw', {
   checkSubscription: () => ipcRenderer.invoke('auth:check-subscription'),
   logout: () => ipcRenderer.invoke('auth:logout'),
   openPricing: () => ipcRenderer.invoke('auth:open-pricing'),
+  startDesktopTrial: () => ipcRenderer.invoke('auth:start-desktop-trial'),
+  getStripePortal: () => ipcRenderer.invoke('auth:get-stripe-portal'),
+  getDesktopCheckout: () => ipcRenderer.invoke('auth:get-desktop-checkout'),
 
   // Runtime
   getRuntime: () => ipcRenderer.invoke('runtime:get'),
@@ -87,6 +96,24 @@ contextBridge.exposeInMainWorld('openclaw', {
   launchDocker: () => ipcRenderer.invoke('app:launch-docker'),
   openExternalSetupTask: (task: string) => ipcRenderer.invoke('setup:open-external-task', task),
 
+  // Setup in-app terminal
+  setupTerminalInput: (data: string) => ipcRenderer.send('setup:terminal-input', data),
+  onSetupTerminalStart: (cb: () => void) => {
+    const handler = () => cb();
+    ipcRenderer.on('setup:terminal-start', handler);
+    return () => ipcRenderer.removeListener('setup:terminal-start', handler);
+  },
+  onSetupTerminalData: (cb: (data: string) => void) => {
+    const handler = (_: any, data: string) => cb(data);
+    ipcRenderer.on('setup:terminal-data', handler);
+    return () => ipcRenderer.removeListener('setup:terminal-data', handler);
+  },
+  onSetupTerminalExit: (cb: (code: number) => void) => {
+    const handler = (_: any, code: number) => cb(code);
+    ipcRenderer.on('setup:terminal-exit', handler);
+    return () => ipcRenderer.removeListener('setup:terminal-exit', handler);
+  },
+
   onShowSetup: (cb: (steps: any[]) => void) => {
     const handler = (_e: Electron.IpcRendererEvent, steps: any[]) => cb(steps);
     ipcRenderer.on('app:show-setup', handler);
@@ -101,8 +128,18 @@ contextBridge.exposeInMainWorld('openclaw', {
 
   // Inference API key
   submitApiKey: (provider: string, key: string) => ipcRenderer.invoke('setup:submit-api-key', provider, key),
-  onShowApiKeyForm: (cb: (providers: any[]) => void) => {
-    const handler = (_e: Electron.IpcRendererEvent, providers: any[]) => cb(providers);
+  setOptionalModelKeys: (body: { openai?: string; anthropic?: string }) =>
+    ipcRenderer.invoke('settings:set-optional-model-keys', body),
+  onShowApiKeyForm: (
+    cb: (payload: { providers: any[]; sectionTitle?: string; sectionSubtitle?: string } | any[]) => void,
+  ) => {
+    const handler = (_e: Electron.IpcRendererEvent, payload: any[] | Record<string, unknown>) => {
+      if (Array.isArray(payload)) {
+        cb({ providers: payload });
+      } else {
+        cb(payload as { providers: any[]; sectionTitle?: string; sectionSubtitle?: string });
+      }
+    };
     ipcRenderer.on('app:show-api-key-form', handler);
     return () => ipcRenderer.removeListener('app:show-api-key-form', handler);
   },

@@ -111,11 +111,12 @@ function sidecarHasInit(): boolean {
  * - NOT using --pid host (causes false port conflicts)
  */
 function sidecarHasNemoClawBlueprint(): boolean {
+  const pkg = findNemoClawPackageRoot();
+  if (!pkg) return false;
   try {
-    execSyncSafe(
-      `docker exec ${OPENSHELL_SIDECAR} test -f /usr/local/lib/node_modules/nemoclaw/nemoclaw-blueprint/policies/openclaw-sandbox.yaml`,
-      5000,
-    );
+    const resolved = fs.realpathSync(pkg);
+    const policyPath = path.join(resolved, 'nemoclaw-blueprint', 'policies', 'openclaw-sandbox.yaml');
+    execSyncSafe(`docker exec ${OPENSHELL_SIDECAR} test -f "${policyPath}"`, 5000);
     return true;
   } catch {
     return false;
@@ -168,19 +169,28 @@ export async function setupOpenShellSidecar(onProgress?: (msg: string) => void):
     || !sidecarHasInit();
   if (needsRecreate) {
     report('Setting up Docker sidecar...');
-    try { execSync(`docker rm -f ${OPENSHELL_SIDECAR} 2>/dev/null`, { stdio: 'pipe', timeout: 10000 }); } catch { /* ok */ }
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try { execSync(`docker rm -f ${OPENSHELL_SIDECAR} 2>/dev/null`, { stdio: 'pipe', timeout: 15000 }); break; } catch {
+        try { execSync(`docker stop ${OPENSHELL_SIDECAR} 2>/dev/null && docker rm ${OPENSHELL_SIDECAR} 2>/dev/null`, { stdio: 'pipe', timeout: 15000 }); break; } catch { /* retry */ }
+      }
+    }
 
     // Mount the host temp dir so openshell can read build contexts created
     // by nemoclaw onboard. /var/folders is in Docker Desktop's default shares.
     const tmpDir = os.tmpdir().replace(/\/+$/, '');
     const tmpMount = tmpDir ? `-v "${tmpDir}:${tmpDir}"` : '';
+    const nemoClawPkgRoot = findNemoClawPackageRoot();
+    const resolvedPkg = nemoClawPkgRoot ? fs.realpathSync(nemoClawPkgRoot) : null;
+    const sourceMount = resolvedPkg ? `-v "${resolvedPkg}:${resolvedPkg}:ro"` : '';
+    const symlinkMount = (nemoClawPkgRoot && resolvedPkg && resolvedPkg !== nemoClawPkgRoot)
+      ? `-v "${resolvedPkg}:${nemoClawPkgRoot}:ro"` : '';
 
     execSync(
       `docker create --name ${OPENSHELL_SIDECAR} --init ` +
       `-v /var/run/docker.sock:/var/run/docker.sock ` +
       `-v "${OPENSHELL_CONFIG_DIR}:/root/.config/openshell" ` +
       `-v "${OPENSHELL_BIN}:/usr/local/bin/openshell:ro" ` +
-      `${tmpMount} ` +
+      `${tmpMount} ${sourceMount} ${symlinkMount} ` +
       `--add-host "host.docker.internal:host-gateway" ` +
       `-p ${OPENCLAW_PORT}:${OPENCLAW_PORT} ` +
       `-p ${EXTENSION_RELAY_PORT}:${EXTENSION_RELAY_PORT} ` +
@@ -195,18 +205,7 @@ export async function setupOpenShellSidecar(onProgress?: (msg: string) => void):
     report('Sidecar ready');
   }
 
-  // 3b. Copy the nemoclaw-blueprint directory (policy files, presets — ~72KB)
-  // into the sidecar so `openshell sandbox create --policy ...` can read them.
-  // Only the blueprint dir is needed; the full package is 700MB+ due to
-  // node_modules. /usr/local isn't in Docker Desktop's default file shares.
-  const nemoClawPkg = findNemoClawPackageRoot();
-  if (nemoClawPkg && !sidecarHasNemoClawBlueprint()) {
-    report('Copying NemoClaw blueprint to sidecar...');
-    const blueprintSrc = path.join(nemoClawPkg, 'nemoclaw-blueprint');
-    const blueprintDst = path.join(nemoClawPkg, 'nemoclaw-blueprint');
-    execSync(`docker exec ${OPENSHELL_SIDECAR} mkdir -p "${path.dirname(blueprintDst)}"`, { stdio: 'pipe', timeout: 5000 });
-    execSync(`docker cp "${blueprintSrc}" ${OPENSHELL_SIDECAR}:${blueprintDst}`, { stdio: 'pipe', timeout: 15000 });
-  }
+  // NemoClaw source + package root are bind-mounted (ro), so no copy needed.
 
   // 4. Start socat forwarder (port 8080 inside sidecar → host gateway)
   try {
@@ -401,6 +400,37 @@ export function clearSandboxNameCache(): void {
   _resolvedSandboxName = null;
 }
 
+/**
+ * Returns { shell, args } for spawning an interactive PTY session inside
+ * the NemoClaw sandbox.  On Intel Mac, goes through the Docker sidecar
+ * (docker exec … ssh openshell-<sandbox>).  On ARM Mac, uses
+ * `openshell ssh-proxy <sandbox> --gateway nemoclaw`.
+ */
+export function getSandboxShellCommand(): { shell: string; args: string[] } | null {
+  const sandbox = getSandboxName();
+  if (isIntelMac() && isOpenShellSidecarRunning()) {
+    return {
+      shell: 'docker',
+      args: [
+        'exec', '-it', OPENSHELL_SIDECAR,
+        'ssh',
+        '-o', 'StrictHostKeyChecking=no',
+        '-o', 'UserKnownHostsFile=/dev/null',
+        '-o', 'LogLevel=ERROR',
+        '-t',
+        `openshell-${sandbox}`,
+      ],
+    };
+  }
+  const execCmd = getOpenshellSandboxExec();
+  const osh = path.join(os.homedir(), '.local', 'bin', 'openshell');
+  const shell = fs.existsSync(osh) ? osh : 'openshell';
+  return {
+    shell,
+    args: [execCmd, sandbox, '--gateway', GATEWAY_NAME],
+  };
+}
+
 /** Check if a sandbox exists and is Ready inside the openshell gateway. */
 export function isSandboxReady(): boolean {
   try {
@@ -415,16 +445,55 @@ export function isSandboxReady(): boolean {
  * Check if `nemoclaw onboard` has been completed:
  * - Gateway deployed
  * - At least one sandbox registered in ~/.nemoclaw/sandboxes.json
+ *   OR a live sandbox visible via `openshell sandbox list`
  */
 export function isOnboardComplete(): boolean {
   if (!isGatewayDeployed()) return false;
   try {
     const registryPath = path.join(os.homedir(), '.nemoclaw', 'sandboxes.json');
     const data = JSON.parse(fs.readFileSync(registryPath, 'utf-8'));
-    return Object.keys(data.sandboxes || {}).length > 0;
-  } catch {
-    return false;
+    if (Object.keys(data.sandboxes || {}).length > 0) return true;
+  } catch { /* fall through to live check */ }
+
+  // Fallback: check for a live sandbox even if the registry file is missing
+  // (can happen if onboard was interrupted after sandbox creation but before registration)
+  try {
+    const out = openshellExec(`sandbox list --gateway ${GATEWAY_NAME}`, 10000);
+    if (/ready/i.test(out) && !/no sandboxes/i.test(out)) {
+      const sandboxName = autoRegisterLiveSandbox(out);
+      if (sandboxName) {
+        logApp('info', `Auto-registered live sandbox "${sandboxName}" into sandboxes.json`);
+      }
+      return true;
+    }
+  } catch { /* not reachable or no sandbox */ }
+
+  return false;
+}
+
+/**
+ * Parse the first sandbox name from `openshell sandbox list` output and
+ * write it to ~/.nemoclaw/sandboxes.json so subsequent checks are fast.
+ */
+function autoRegisterLiveSandbox(listOutput: string): string | null {
+  try {
+    const lines = listOutput.split(/\r?\n/).map(l => l.replace(/\x1b\[[0-9;]*m/g, '').trim()).filter(Boolean);
+    for (const line of lines) {
+      const cols = line.split(/\s+/);
+      if (cols.length >= 2 && cols.includes('Ready') && !cols.includes('NotReady') && cols[0] !== 'NAME') {
+        const name = cols[0];
+        const registryPath = path.join(os.homedir(), '.nemoclaw', 'sandboxes.json');
+        const dir = path.dirname(registryPath);
+        fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+        const data = { sandboxes: { [name]: { name, createdAt: new Date().toISOString(), model: null, gpuEnabled: false } }, defaultSandbox: name };
+        fs.writeFileSync(registryPath, JSON.stringify(data, null, 2), { mode: 0o600 });
+        return name;
+      }
+    }
+  } catch (err: any) {
+    logApp('warn', `autoRegisterLiveSandbox failed: ${err.message}`);
   }
+  return null;
 }
 
 let cachedSandboxToken: string | null = null;
@@ -700,6 +769,54 @@ export function syncSandboxChromeExtensionToHost(): { ok: boolean; error?: strin
   return { ok: true };
 }
 
+/** Merge OpenAI / Anthropic keys into an openclaw.json object (host or sandbox). */
+export function mergeModelProviderKeysIntoConfig(config: Record<string, any>, apiKeys: Record<string, string>): void {
+  if (!apiKeys || Object.keys(apiKeys).length === 0) return;
+  if (!config.env) config.env = {};
+  for (const [key, value] of Object.entries(apiKeys)) {
+    if (value) config.env[key] = value;
+  }
+  if (!config.models) config.models = {};
+  if (!config.models.providers) config.models.providers = {};
+
+  if (apiKeys.OPENAI_API_KEY) {
+    config.models.providers.openai = {
+      apiKey: apiKeys.OPENAI_API_KEY,
+      models: [
+        { id: 'gpt-4o', name: 'GPT-4o', reasoning: false, input: ['text', 'image'] },
+        { id: 'o3-mini', name: 'o3-mini', reasoning: true, input: ['text'] },
+      ],
+    };
+  }
+  if (apiKeys.ANTHROPIC_API_KEY) {
+    config.models.providers.anthropic = {
+      apiKey: apiKeys.ANTHROPIC_API_KEY,
+      models: [
+        { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4', reasoning: false, input: ['text', 'image'] },
+      ],
+    };
+  }
+}
+
+/**
+ * Add optional model keys to ~/.openclaw/openclaw.json (OpenClaw local runtime).
+ * Restart the gateway afterward (Valnaa does this after a successful save).
+ */
+export function applyHostOpenclawModelKeys(apiKeys: Record<string, string>): void {
+  const dir = getOpenClawDir();
+  const p = path.join(dir, 'openclaw.json');
+  let config: Record<string, any> = {};
+  try {
+    config = JSON.parse(fs.readFileSync(p, 'utf-8'));
+  } catch {
+    config = {};
+  }
+  mergeModelProviderKeysIntoConfig(config, apiKeys);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(p, JSON.stringify(config, null, 2), 'utf-8');
+  logApp('info', 'Wrote optional model keys to host openclaw.json');
+}
+
 /**
  * Write additional API keys and channel config into the sandbox's openclaw.json.
  * Merges with existing config so NemoClaw's NVIDIA inference stays intact.
@@ -713,31 +830,7 @@ export function applySandboxSettings(settings: {
   if (!config) throw new Error('Cannot read sandbox config');
 
   if (settings.apiKeys) {
-    if (!config.env) config.env = {};
-    for (const [key, value] of Object.entries(settings.apiKeys)) {
-      if (value) config.env[key] = value;
-    }
-
-    if (!config.models) config.models = {};
-    if (!config.models.providers) config.models.providers = {};
-
-    if (settings.apiKeys.OPENAI_API_KEY) {
-      config.models.providers.openai = {
-        apiKey: settings.apiKeys.OPENAI_API_KEY,
-        models: [
-          { id: 'gpt-4o', name: 'GPT-4o', reasoning: false, input: ['text', 'image'] },
-          { id: 'o3-mini', name: 'o3-mini', reasoning: true, input: ['text'] },
-        ],
-      };
-    }
-    if (settings.apiKeys.ANTHROPIC_API_KEY) {
-      config.models.providers.anthropic = {
-        apiKey: settings.apiKeys.ANTHROPIC_API_KEY,
-        models: [
-          { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4', reasoning: false, input: ['text', 'image'] },
-        ],
-      };
-    }
+    mergeModelProviderKeysIntoConfig(config, settings.apiKeys);
   }
 
   if (settings.channels) {
@@ -830,11 +923,11 @@ export function ensurePortForward(): void {
           return;
         }
       }
-      logApp('warn', `SSH tunnel started but port ${OPENCLAW_PORT} not yet listening`);
+      throw new Error(`SSH tunnel started but port ${OPENCLAW_PORT} not listening after 5s`);
     } catch (err: any) {
-      logApp('warn', `SSH tunnel port forward failed: ${err.message}`);
+      logApp('error', `Port forward failed: ${err.message}`);
+      throw new Error(`Port forward to sandbox failed: ${err.message}. Tap Retry to try again.`);
     }
-    return;
   }
 
   // ARM Mac / native: use openshell forward directly
@@ -848,7 +941,27 @@ export function ensurePortForward(): void {
     openshellExec(`forward start --background ${EXTENSION_RELAY_PORT} ${getSandboxName()} --gateway ${GATEWAY_NAME}`, 15000);
     logApp('info', `Ports ${OPENCLAW_PORT}, ${EXTENSION_RELAY_PORT} forwarded to sandbox ${getSandboxName()}`);
   } catch (err: any) {
-    logApp('warn', `Port forward failed: ${err.message}`);
+    logApp('error', `Port forward failed: ${err.message}`);
+    throw new Error(`Port forward to sandbox failed: ${err.message}. Tap Retry to try again.`);
+  }
+}
+
+/** Tear down any NemoClaw port forwards so port 18789 is free for local OpenClaw. */
+export function stopPortForward(): void {
+  try {
+    if (isIntelMac() && isOpenShellSidecarRunning()) {
+      const { execSync } = require('child_process');
+      execSync(
+        `docker exec ${OPENSHELL_SIDECAR} pkill -f "ssh -N" 2>/dev/null || true`,
+        { stdio: 'pipe', timeout: 5000 },
+      );
+    } else {
+      try { openshellExec(`forward stop ${OPENCLAW_PORT}`, 5000); } catch { /* ok */ }
+      try { openshellExec(`forward stop ${EXTENSION_RELAY_PORT}`, 5000); } catch { /* ok */ }
+    }
+    logApp('info', 'Stopped NemoClaw port forwards');
+  } catch (err: any) {
+    logApp('warn', `stopPortForward: ${err?.message || err}`);
   }
 }
 
@@ -858,7 +971,23 @@ export { OPENCLAW_PORT, EXTENSION_RELAY_PORT };
 // Docker Helpers
 // ════════════════════════════════════
 
+function findDockerBin(): string | null {
+  const knownPaths = [
+    '/usr/local/bin/docker',
+    '/opt/homebrew/bin/docker',
+    '/Applications/Docker.app/Contents/Resources/bin/docker',
+  ];
+  for (const p of knownPaths) {
+    try { if (fs.existsSync(p)) return p; } catch { /* skip */ }
+  }
+  try {
+    const { execSync } = require('child_process');
+    return execSync('which docker', { encoding: 'utf-8', timeout: 3000 }).trim() || null;
+  } catch { return null; }
+}
+
 export function isDockerInstalled(): boolean {
+  if (findDockerBin()) return true;
   try {
     const { execSync } = require('child_process');
     execSync('docker --version', { encoding: 'utf-8', timeout: 5000 });
@@ -869,9 +998,10 @@ export function isDockerInstalled(): boolean {
 }
 
 export function isDockerRunning(): boolean {
+  const bin = findDockerBin() || 'docker';
   try {
     const { execSync } = require('child_process');
-    execSync('docker info', { encoding: 'utf-8', timeout: 10000, stdio: 'pipe' });
+    execSync(`"${bin}" info`, { encoding: 'utf-8', timeout: 10000, stdio: 'pipe' });
     return true;
   } catch {
     return false;
@@ -955,6 +1085,15 @@ export function findNemoClawBinary(): string | null {
       if (result) return 'wsl';
     } catch { /* not in WSL */ }
     return null;
+  }
+  // Check well-known paths first (Electron launched via `open` may have a minimal PATH)
+  const knownPaths = [
+    '/usr/local/bin/nemoclaw',
+    path.join(os.homedir(), '.local', 'bin', 'nemoclaw'),
+    '/opt/homebrew/bin/nemoclaw',
+  ];
+  for (const p of knownPaths) {
+    try { if (fs.existsSync(p)) return p; } catch { /* skip */ }
   }
   try {
     const { execSync } = require('child_process');

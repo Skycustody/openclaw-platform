@@ -60,3 +60,10 @@ OpenClaw container.
 8. **Valnaa desktop (`desktop/`):** After editing TypeScript or `src/renderer/`,
    run `cd desktop && npm run build` (or use `npm run dev:watch` while developing).
    The running app loads from `desktop/dist/`.
+   App icons: `npm run icons:round` turns `desktop/assets/icon.png` into **white logo on
+   transparent** (black plate removed), scales into ~80% safe zone, rounds outer corners;
+   then `npm run icons:tray`. Restore the repo’s `icon.png` (or your square master) from
+   git before re-running if the file was already processed.
+   Menu bar (Tray) on macOS uses `iconTemplate.png` + `iconTemplate@2x.png` — regenerate
+   with `cd desktop && npm run icons:tray` after changing `icon.png` (black-on-transparent,
+   padded; not the old white-on-black template).

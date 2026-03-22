@@ -10,7 +10,7 @@ import { logApp, logOpenclaw } from './logger';
 import { findOpenClawBinary, findNemoClawBinary } from './installer';
 import { startHealthPolling, stopHealthPolling, HealthStatus } from './health';
 import { findAvailablePort, PortResult } from '../lib/ports';
-import { loadRuntime, RuntimeType, isSandboxReady, ensurePortForward, OPENCLAW_PORT, readSandboxGatewayToken, clearSandboxTokenCache, clearSandboxNameCache } from '../lib/runtime';
+import { loadRuntime, RuntimeType, isSandboxReady, ensurePortForward, stopPortForward, OPENCLAW_PORT, readSandboxGatewayToken, clearSandboxTokenCache, clearSandboxNameCache } from '../lib/runtime';
 
 function checkPortReady(port: number): Promise<boolean> {
   return new Promise((resolve) => {
@@ -67,6 +67,8 @@ class OpenClawManager extends EventEmitter {
   private reused = false;
   private lastError: string | null = null;
   private lastErrorDetails: string | null = null;
+  private activeRuntime: RuntimeType = 'openclaw';
+  private switchingRuntime = false;
 
   getStatus(): AgentStatus {
     const pref = loadRuntime();
@@ -92,6 +94,7 @@ class OpenClawManager extends EventEmitter {
 
     const pref = loadRuntime();
     const runtime = pref?.runtime || 'openclaw';
+    this.activeRuntime = runtime;
 
     if (runtime === 'nemoclaw') {
       const nemoBin = findNemoClawBinary();
@@ -242,9 +245,20 @@ class OpenClawManager extends EventEmitter {
     this.setState('starting');
     clearSandboxNameCache();
     clearSandboxTokenCache();
-    logApp('info', 'Connecting to NemoClaw sandbox...');
 
     const { execSync } = require('child_process');
+
+    // Stop any local OpenClaw gateway so it doesn't occupy port 18789
+    const ocBin = findOpenClawBinary();
+    if (ocBin) {
+      try {
+        execSync(`${ocBin} gateway stop`, { timeout: 8000, stdio: 'pipe' });
+        logApp('info', 'Stopped local OpenClaw gateway service');
+      } catch { /* no service running — fine */ }
+    }
+
+    logApp('info', 'Connecting to NemoClaw sandbox...');
+
     const GATEWAY_CONTAINER = 'openshell-cluster-nemoclaw';
 
     try {
@@ -370,32 +384,40 @@ class OpenClawManager extends EventEmitter {
     this.clearReadinessPoll();
     stopHealthPolling();
 
-    if (!this.proc || this.proc.killed) {
-      this.setState('stopped');
-      return;
+    const wasNemoClaw = this.activeRuntime === 'nemoclaw';
+    const newPref = loadRuntime();
+    this.switchingRuntime = (newPref?.runtime || 'openclaw') !== this.activeRuntime;
+
+    if (this.proc && !this.proc.killed) {
+      this.setState('stopping');
+      logApp('info', `Stopping OpenClaw (PID ${this.proc.pid})`);
+
+      this.proc.kill('SIGTERM');
+
+      await new Promise<void>((resolve) => {
+        const forceKill = setTimeout(() => {
+          if (this.proc && !this.proc.killed) {
+            logApp('warn', 'Force-killing OpenClaw (SIGKILL)');
+            this.proc.kill('SIGKILL');
+          }
+          resolve();
+        }, 5000);
+
+        this.proc!.once('close', () => {
+          clearTimeout(forceKill);
+          resolve();
+        });
+      });
+
+      this.proc = null;
     }
 
-    this.setState('stopping');
-    logApp('info', `Stopping OpenClaw (PID ${this.proc.pid})`);
+    if (wasNemoClaw) {
+      logApp('info', 'Tearing down NemoClaw port forwards');
+      try { stopPortForward(); } catch { /* ok */ }
+    }
 
-    this.proc.kill('SIGTERM');
-
-    await new Promise<void>((resolve) => {
-      const forceKill = setTimeout(() => {
-        if (this.proc && !this.proc.killed) {
-          logApp('warn', 'Force-killing OpenClaw (SIGKILL)');
-          this.proc.kill('SIGKILL');
-        }
-        resolve();
-      }, 5000);
-
-      this.proc!.once('close', () => {
-        clearTimeout(forceKill);
-        resolve();
-      });
-    });
-
-    this.proc = null;
+    this.port = null;
     this.setState('stopped');
   }
 

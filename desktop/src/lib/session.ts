@@ -19,7 +19,11 @@ export interface SubscriptionResult {
   ok: boolean;
   status: string;
   plan: string;
+  email?: string;
   desktopSubscription: boolean;
+  desktopTrialActive: boolean;
+  hasDesktopPaid: boolean;
+  hasStripe: boolean;
 }
 
 function getSessionPath(): string {
@@ -30,7 +34,7 @@ export function loadSession(): Session | null {
   try {
     const raw = fs.readFileSync(getSessionPath(), 'utf-8');
     const session: Session = JSON.parse(raw);
-    if (!session.token || !session.email) return null;
+    if (!session.token) return null;
     return session;
   } catch {
     return null;
@@ -82,12 +86,84 @@ function apiGet<T>(endpoint: string, token: string): Promise<T> {
   });
 }
 
+function apiPost<T>(endpoint: string, token: string, body: Record<string, unknown> = {}): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const url = new URL(endpoint, API_BASE);
+    const data = JSON.stringify(body);
+    const req = https.request(url.toString(), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(data),
+      },
+      timeout: 10000,
+    }, (res) => {
+      let respBody = '';
+      res.on('data', (chunk: Buffer) => { respBody += chunk.toString(); });
+      res.on('end', () => {
+        if (res.statusCode === 401) {
+          reject(new Error('unauthorized'));
+          return;
+        }
+        try {
+          const parsed = JSON.parse(respBody);
+          if (res.statusCode && res.statusCode >= 400) {
+            reject(new Error(parsed.error || parsed.message || `API error ${res.statusCode}`));
+            return;
+          }
+          resolve(parsed);
+        } catch {
+          reject(new Error(`API error ${res.statusCode}: ${respBody}`));
+        }
+      });
+    });
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(); reject(new Error('API timeout')); });
+    req.write(data);
+    req.end();
+  });
+}
+
+export async function getStripePortalUrl(token: string): Promise<string | null> {
+  try {
+    const result = await apiPost<{ url: string }>('/billing/portal', token);
+    return result.url || null;
+  } catch (err: any) {
+    logApp('warn', 'Stripe portal URL failed', err.message);
+    return null;
+  }
+}
+
+export async function getDesktopCheckoutUrl(token: string): Promise<string | null> {
+  try {
+    const result = await apiPost<{ checkoutUrl: string }>('/billing/desktop-checkout', token);
+    return result.checkoutUrl || null;
+  } catch (err: any) {
+    logApp('warn', 'Desktop checkout URL failed', err.message);
+    return null;
+  }
+}
+
+export async function startDesktopTrial(token: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const result = await apiPost<{ ok: boolean; trialEndsAt: string }>('/billing/desktop-trial', token);
+    logApp('info', `Desktop trial started, ends ${result.trialEndsAt}`);
+    return { ok: true };
+  } catch (err: any) {
+    logApp('warn', 'Desktop trial start failed', err.message);
+    return { ok: false, error: err.message };
+  }
+}
+
 export async function checkSubscription(token: string): Promise<SubscriptionResult> {
   try {
     const billing = await apiGet<{
+      email?: string;
       plan: string;
       status: string;
       stripeCustomerId?: string;
+      hasDesktopPaid?: boolean;
       desktopSubscription?: boolean;
       desktopTrialActive?: boolean;
       desktopTrialEndsAt?: string;
@@ -100,10 +176,26 @@ export async function checkSubscription(token: string): Promise<SubscriptionResu
       stampLastVerified();
     }
 
+    if (billing.email) {
+      const session = loadSession();
+      if (session && session.email !== billing.email) {
+        saveSession(session.token, billing.email);
+      }
+    }
+
     const effectiveStatus = !ok && billing.desktopTrialEndsAt && !billing.desktopTrialActive
       ? 'trial_expired' : billing.status;
 
-    return { ok, status: effectiveStatus, plan: billing.plan, desktopSubscription: hasDesktop };
+    return {
+      ok,
+      status: effectiveStatus,
+      plan: billing.plan,
+      email: billing.email,
+      desktopSubscription: hasDesktop,
+      desktopTrialActive: !!billing.desktopTrialActive,
+      hasDesktopPaid: !!billing.hasDesktopPaid,
+      hasStripe: !!billing.stripeCustomerId,
+    };
   } catch (err: any) {
     if (err.message === 'unauthorized') {
       throw err;
@@ -136,6 +228,29 @@ export function isOfflineGraceValid(): boolean {
   const session = loadSession();
   if (!session?.lastVerifiedAt) return false;
   return (Date.now() - session.lastVerifiedAt) < OFFLINE_GRACE_MS;
+}
+
+const TRIAL_CLAIMED_FILE = 'trial-claimed';
+
+/** Mark this computer as having used a free trial (persists across accounts). */
+export function markLocalTrialClaimed(): void {
+  try {
+    const dir = getAppDataDir();
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, TRIAL_CLAIMED_FILE), Date.now().toString(), 'utf-8');
+    logApp('info', 'Local trial-claimed flag written');
+  } catch (err: any) {
+    logApp('warn', 'Failed to write trial-claimed flag', err.message);
+  }
+}
+
+/** Check whether any account on this computer has already used the free trial. */
+export function isLocalTrialClaimed(): boolean {
+  try {
+    return fs.existsSync(path.join(getAppDataDir(), TRIAL_CLAIMED_FILE));
+  } catch {
+    return false;
+  }
 }
 
 export function parseDeepLinkToken(url: string): string | null {

@@ -72,14 +72,19 @@ interface Overview {
   recentSignups: Array<{ id: string; email: string; plan: string; status: string; created_at: string }>;
   plans: { starter: string; pro: string; business: string };
   financials: Financials;
-  desktop: { subscribers: number; priceEurCents: number; vatRate: number; revenueEurCents: number };
+  desktop: {
+    subscribers: number; trialing: number; total: number;
+    desktopOnly: number; desktopAndVps: number;
+    priceEurCents: number; vatRate: number; revenueEurCents: number;
+  };
 }
 
 interface AdminUser {
   id: string; email: string; display_name: string | null; plan: string;
   status: string; subdomain: string | null; created_at: string;
   last_active: string | null; is_admin: boolean; has_paid: boolean;
-  has_desktop: boolean;
+  has_desktop: boolean; has_desktop_trial: boolean; has_vps: boolean;
+  desktop_subscription_id: string | null; desktop_trial_ends_at: string | null;
   credit_balance: number | null; total_used: number | null; total_purchased: number | null;
   server_ip: string | null; server_hostname: string | null;
 }
@@ -126,7 +131,7 @@ interface ServerInfo {
   ram_used: number; status: string; user_count: number;
 }
 
-type Tab = 'overview' | 'users' | 'revenue' | 'servers' | 'feedback';
+type Tab = 'overview' | 'users' | 'desktop' | 'revenue' | 'servers' | 'feedback';
 
 interface FeedbackEntry {
   id: string;
@@ -158,6 +163,9 @@ interface UserDetail {
     last_active: string | null;
     api_budget_addon_usd?: number;
     desktop_subscription_id: string | null;
+    desktop_trial_ends_at: string | null;
+    desktop_trial_active: boolean;
+    has_vps: boolean;
     server_ip: string | null;
     server_hostname: string | null;
   };
@@ -224,6 +232,9 @@ export default function AdminPanel() {
   const [saving, setSaving] = useState(false);
   const [actionMsg, setActionMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [feedbackList, setFeedbackList] = useState<FeedbackEntry[]>([]);
+  const [desktopUsers, setDesktopUsers] = useState<AdminUser[]>([]);
+  const [desktopTotal, setDesktopTotal] = useState(0);
+  const [desktopPage, setDesktopPage] = useState(0);
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
   const [userDetail, setUserDetail] = useState<UserDetail | null>(null);
   const [userDetailLoading, setUserDetailLoading] = useState(false);
@@ -306,6 +317,17 @@ export default function AdminPanel() {
     }
   }, []);
 
+  const fetchDesktopUsers = useCallback(async (page = 0) => {
+    try {
+      const params = new URLSearchParams({ limit: '20', offset: String(page * 20), desktop: 'true' });
+      const data = await api.get<{ users: AdminUser[]; total: number }>(`/admin/users?${params}`);
+      setDesktopUsers(data.users);
+      setDesktopTotal(data.total);
+    } catch (err: any) {
+      console.error('[admin] fetchDesktopUsers failed:', err.message);
+    }
+  }, []);
+
   const fetchFeedback = useCallback(async () => {
     try {
       const data = await api.get<{ feedback: FeedbackEntry[] }>('/feedback/list');
@@ -318,13 +340,13 @@ export default function AdminPanel() {
   useEffect(() => {
     if (authState !== 'authed') return;
     setLoading(true);
-    Promise.all([fetchOverview(), fetchUsers(), fetchRevenue(), fetchFinancials(), fetchServers(), fetchFeedback()])
+    Promise.all([fetchOverview(), fetchUsers(), fetchRevenue(), fetchFinancials(), fetchServers(), fetchDesktopUsers(), fetchFeedback()])
       .finally(() => setLoading(false));
-  }, [authState, fetchOverview, fetchUsers, fetchRevenue, fetchFinancials, fetchServers, fetchFeedback]);
+  }, [authState, fetchOverview, fetchUsers, fetchRevenue, fetchFinancials, fetchServers, fetchDesktopUsers, fetchFeedback]);
 
   const refresh = async () => {
     setRefreshing(true);
-    await Promise.all([fetchOverview(), fetchUsers(userPage, userSearch, userFilter), fetchRevenue(), fetchFinancials(), fetchServers(), fetchFeedback()]);
+    await Promise.all([fetchOverview(), fetchUsers(userPage, userSearch, userFilter), fetchRevenue(), fetchFinancials(), fetchServers(), fetchDesktopUsers(desktopPage), fetchFeedback()]);
     setRefreshing(false);
   };
 
@@ -484,6 +506,7 @@ export default function AdminPanel() {
           {([
             { id: 'overview' as Tab, label: 'Overview', icon: BarChart3 },
             { id: 'users' as Tab, label: 'Users', icon: Users },
+            { id: 'desktop' as Tab, label: 'Desktop', icon: Monitor },
             { id: 'revenue' as Tab, label: 'Revenue & Costs', icon: DollarSign },
             { id: 'servers' as Tab, label: 'Servers', icon: Server },
             { id: 'feedback' as Tab, label: 'Feedback', icon: MessageSquare },
@@ -532,8 +555,8 @@ export default function AdminPanel() {
                 sub={`+${o.users.new_24h} today / +${o.users.new_7d} this week`} color="blue" />
               <StatCard icon={Zap} label="Paying Active" value={formatNum(o.users.paying_active)}
                 sub={`${o.users.active} active / ${o.users.sleeping} sleeping`} color="green" />
-              <StatCard icon={Monitor} label="Desktop Subs" value={String(o.desktop?.subscribers ?? 0)}
-                sub={`€${((o.desktop?.revenueEurCents ?? 0) / 100).toFixed(2)}/mo revenue`} color="purple" />
+              <StatCard icon={Monitor} label="Desktop Users" value={String(o.desktop?.total ?? 0)}
+                sub={`${o.desktop?.subscribers ?? 0} paid · ${o.desktop?.trialing ?? 0} trial · €${((o.desktop?.revenueEurCents ?? 0) / 100).toFixed(2)}/mo`} color="purple" />
               <StatCard icon={Users} label="Unpaid Signups" value={formatNum(o.users.unpaid)}
                 sub={`${o.users.pending} pending / never paid`} color="amber" />
               <StatCard icon={AlertTriangle} label="Churned / Paused" value={formatNum(Number(o.users.paused) + Number(o.users.cancelled))}
@@ -811,19 +834,27 @@ export default function AdminPanel() {
                           </div>
                         </td>
                         <td className="px-4 py-3">
-                          <span className="text-[12px] text-white/50 capitalize">{u.plan}</span>
+                          {u.has_vps
+                            ? <span className="text-[12px] text-white/50 capitalize">{u.plan}</span>
+                            : <span className="text-[12px] text-white/20">—</span>
+                          }
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span className={`text-[11px] px-2 py-0.5 rounded-full ${STATUS_COLORS[u.status] || 'text-white/30 bg-white/5'}`}>
                               {u.status}
                             </span>
-                            {u.has_paid
-                              ? <span className="text-[10px] px-1.5 py-0.5 rounded-full text-green-400 bg-green-500/10">paid</span>
-                              : <span className="text-[10px] px-1.5 py-0.5 rounded-full text-white/20 bg-white/5">unpaid</span>
-                            }
+                            {u.has_vps && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full text-blue-400 bg-blue-500/10">VPS</span>
+                            )}
                             {u.has_desktop && (
                               <span className="text-[10px] px-1.5 py-0.5 rounded-full text-purple-400 bg-purple-500/10">desktop</span>
+                            )}
+                            {u.has_desktop_trial && !u.has_desktop && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full text-amber-400 bg-amber-500/10">trial</span>
+                            )}
+                            {!u.has_vps && !u.has_desktop && !u.has_desktop_trial && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full text-white/20 bg-white/5">unpaid</span>
                             )}
                           </div>
                         </td>
@@ -832,7 +863,11 @@ export default function AdminPanel() {
                           <p className="text-[10px] text-white/20">used: {formatUsdVal(u.total_used)}</p>
                         </td>
                         <td className="px-4 py-3">
-                          <p className="text-[12px] text-green-400/70 tabular-nums">${(PLAN_PRICE_USD[u.plan] ?? 0)}/mo</p>
+                          <div>
+                            {u.has_vps && <p className="text-[12px] text-green-400/70 tabular-nums">${(PLAN_PRICE_USD[u.plan] ?? 0)}/mo</p>}
+                            {u.has_desktop && <p className="text-[11px] text-purple-400/70 tabular-nums">+€5/mo desktop</p>}
+                            {!u.has_vps && !u.has_desktop && <p className="text-[12px] text-white/20">—</p>}
+                          </div>
                         </td>
                         <td className="px-4 py-3">
                           <p className="text-[11px] text-white/30">{u.server_hostname || u.server_ip || '—'}</p>
@@ -880,6 +915,128 @@ export default function AdminPanel() {
                 </button>
               </div>
             </div>
+          </div>
+        )}
+
+        {tab === 'desktop' && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-4 gap-4">
+              <StatCard icon={Monitor} label="Total Desktop" value={String(overview?.desktop?.total ?? 0)}
+                sub="paid + trialing" color="purple" />
+              <StatCard icon={DollarSign} label="Paid Subscribers" value={String(overview?.desktop?.subscribers ?? 0)}
+                sub={`€${((overview?.desktop?.revenueEurCents ?? 0) / 100).toFixed(2)}/mo revenue`} color="green" />
+              <StatCard icon={Activity} label="Active Trials" value={String(overview?.desktop?.trialing ?? 0)}
+                sub="3-day free trial" color="amber" />
+              <StatCard icon={Users} label="Desktop + VPS" value={String(overview?.desktop?.desktopAndVps ?? 0)}
+                sub={`${overview?.desktop?.desktopOnly ?? 0} desktop only`} color="blue" />
+            </div>
+
+            <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
+              <h3 className="text-[14px] font-semibold text-white mb-2">Desktop Revenue Model</h3>
+              <p className="text-[12px] text-white/40 mb-3">
+                Desktop app: €5/mo + 25% VAT = €6.25/mo per subscriber. Separate from VPS plans — users can subscribe to both independently.
+              </p>
+              <div className="grid grid-cols-3 gap-4 text-[12px]">
+                <div>
+                  <p className="text-white/30">Price</p>
+                  <p className="text-white font-medium">€5.00/mo</p>
+                </div>
+                <div>
+                  <p className="text-white/30">Incl. VAT (25%)</p>
+                  <p className="text-white font-medium">€6.25/mo</p>
+                </div>
+                <div>
+                  <p className="text-white/30">Monthly Revenue</p>
+                  <p className="text-green-400 font-medium">€{((overview?.desktop?.revenueEurCents ?? 0) / 100).toFixed(2)}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-white/[0.06] overflow-hidden">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-white/[0.06] bg-white/[0.02]">
+                    <th className="px-4 py-3 text-left text-[11px] font-medium text-white/30 uppercase tracking-wider">User</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-medium text-white/30 uppercase tracking-wider">Desktop</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-medium text-white/30 uppercase tracking-wider">VPS Plan</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-medium text-white/30 uppercase tracking-wider">Revenue</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-medium text-white/30 uppercase tracking-wider">Joined</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {desktopUsers.map(u => (
+                    <tr key={u.id} onClick={() => openUserDetail(u)}
+                      className="border-b border-white/[0.04] hover:bg-white/[0.06] transition-colors cursor-pointer">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <div className="h-7 w-7 rounded-full bg-white/5 flex items-center justify-center text-[11px] text-white/30 font-medium shrink-0">
+                            {u.email[0].toUpperCase()}
+                          </div>
+                          <p className="text-[13px] text-white/70">{u.email}</p>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1.5">
+                          {u.has_desktop ? (
+                            <span className="text-[11px] px-2 py-0.5 rounded-full text-purple-400 bg-purple-500/10">Paid</span>
+                          ) : u.has_desktop_trial ? (
+                            <span className="text-[11px] px-2 py-0.5 rounded-full text-amber-400 bg-amber-500/10">Trial</span>
+                          ) : null}
+                          {u.desktop_trial_ends_at && !u.has_desktop && (
+                            <span className="text-[10px] text-white/20">
+                              {new Date(u.desktop_trial_ends_at) > new Date() ? `ends ${new Date(u.desktop_trial_ends_at).toLocaleDateString()}` : 'expired'}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        {u.has_vps
+                          ? <span className="text-[12px] text-blue-400/70 capitalize">{u.plan}</span>
+                          : <span className="text-[12px] text-white/20">—</span>
+                        }
+                      </td>
+                      <td className="px-4 py-3">
+                        <div>
+                          {u.has_desktop && <p className="text-[12px] text-purple-400/70 tabular-nums">€5/mo</p>}
+                          {u.has_vps && <p className="text-[11px] text-green-400/70 tabular-nums">+${(PLAN_PRICE_USD[u.plan] ?? 0)}/mo VPS</p>}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <p className="text-[11px] text-white/30">{timeAgo(u.created_at)}</p>
+                      </td>
+                    </tr>
+                  ))}
+                  {desktopUsers.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-12 text-center">
+                        <Monitor className="h-10 w-10 text-white/10 mx-auto mb-3" />
+                        <p className="text-[14px] text-white/30">No desktop subscribers yet</p>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {desktopTotal > 20 && (
+              <div className="flex items-center justify-between">
+                <p className="text-[12px] text-white/30">
+                  Showing {desktopTotal > 0 ? desktopPage * 20 + 1 : 0}–{Math.min((desktopPage + 1) * 20, desktopTotal)} of {desktopTotal}
+                </p>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => { setDesktopPage(p => Math.max(0, p - 1)); fetchDesktopUsers(Math.max(0, desktopPage - 1)); }}
+                    disabled={desktopPage === 0}
+                    className="p-2 rounded-lg text-white/30 hover:text-white/50 hover:bg-white/[0.06] disabled:opacity-20 transition-all">
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  <button onClick={() => { setDesktopPage(p => p + 1); fetchDesktopUsers(desktopPage + 1); }}
+                    disabled={(desktopPage + 1) * 20 >= desktopTotal}
+                    className="p-2 rounded-lg text-white/30 hover:text-white/50 hover:bg-white/[0.06] disabled:opacity-20 transition-all">
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -1246,11 +1403,35 @@ export default function AdminPanel() {
                     </div>
                     <div>
                       <p className="text-[11px] text-white/30 uppercase tracking-wider mb-1">Desktop</p>
-                      {userDetail.user.desktop_subscription_id ? (
-                        <span className="text-[12px] px-2 py-0.5 rounded-full text-purple-400 bg-purple-500/10">Active</span>
-                      ) : (
-                        <p className="text-[13px] text-white/30">—</p>
-                      )}
+                      <div className="flex flex-wrap gap-1.5">
+                        {userDetail.user.desktop_subscription_id ? (
+                          <span className="text-[12px] px-2 py-0.5 rounded-full text-purple-400 bg-purple-500/10">Paid</span>
+                        ) : userDetail.user.desktop_trial_active ? (
+                          <span className="text-[12px] px-2 py-0.5 rounded-full text-amber-400 bg-amber-500/10">
+                            Trial (ends {new Date(userDetail.user.desktop_trial_ends_at!).toLocaleDateString()})
+                          </span>
+                        ) : userDetail.user.desktop_trial_ends_at ? (
+                          <span className="text-[12px] px-2 py-0.5 rounded-full text-white/20 bg-white/5">Trial expired</span>
+                        ) : (
+                          <p className="text-[13px] text-white/30">—</p>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-[11px] text-white/30 uppercase tracking-wider mb-1">Subscriptions</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {userDetail.user.has_vps && (
+                          <span className="text-[12px] px-2 py-0.5 rounded-full text-blue-400 bg-blue-500/10">
+                            VPS {userDetail.user.plan}
+                          </span>
+                        )}
+                        {userDetail.user.desktop_subscription_id && (
+                          <span className="text-[12px] px-2 py-0.5 rounded-full text-purple-400 bg-purple-500/10">Desktop €5/mo</span>
+                        )}
+                        {!userDetail.user.has_vps && !userDetail.user.desktop_subscription_id && (
+                          <p className="text-[13px] text-white/30">None</p>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -1318,8 +1499,8 @@ export default function AdminPanel() {
                 <select value={editForm.plan} onChange={e => setEditForm({ ...editForm, plan: e.target.value })}
                   className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[13px] text-white focus:border-white/20 focus:outline-none">
                   <option value="starter">Starter — $15/mo</option>
-                  <option value="pro">Pro — $29/mo</option>
-                  <option value="business">Business — $59/mo</option>
+                  <option value="pro">Pro — $25/mo</option>
+                  <option value="business">Business — $50/mo</option>
                 </select>
               </div>
               <div>

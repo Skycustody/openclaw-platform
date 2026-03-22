@@ -20,47 +20,70 @@
       user-select: none;
     }
 
-    .titlebar {
-      height: 38px;
+    /* Top bar: icons only; entire bar draggable except tab buttons (macOS traffic-light inset via .platform-darwin) */
+    .tabs {
+      display: flex;
+      align-items: center;
       background: #111;
       border-bottom: 1px solid rgba(255,255,255,0.06);
+      padding: 0 12px 0 12px;
+      min-height: 38px;
+      flex-shrink: 0;
+      -webkit-app-region: drag;
+    }
+    html.platform-darwin .tabs {
+      padding-left: 78px;
+    }
+    /* Native fullscreen: traffic lights move to menu bar — tabs can hug the left edge */
+    html.platform-darwin.macos-edge-tabs .tabs {
+      padding-left: 12px;
+    }
+    .tab {
+      padding: 8px 10px;
+      min-width: 36px;
+      min-height: 36px;
+      box-sizing: border-box;
+      color: rgba(255,255,255,0.35);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: color 0.12s, background 0.12s;
+      -webkit-app-region: no-drag;
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 0 80px;
-      -webkit-app-region: drag;
-      flex-shrink: 0;
+      border-radius: 6px;
+      margin: 4px 2px;
     }
-    .titlebar-title {
-      font-size: 13px;
-      font-weight: 600;
-      color: rgba(255,255,255,0.7);
+    .tab:hover {
+      color: rgba(255,255,255,0.65);
+      background: rgba(255,255,255,0.06);
     }
-    .titlebar-runtime {
-      font-weight: 400;
-      color: rgba(255,255,255,0.35);
-      margin-left: 6px;
+    .tab.active {
+      color: #fff;
+      border-bottom-color: #fff;
+      background: rgba(255,255,255,0.04);
     }
-
-    .tabs {
+    .tab svg { width: 18px; height: 18px; flex-shrink: 0; }
+    .tabs-cluster {
       display: flex;
-      background: #0f0f0f;
-      border-bottom: 1px solid rgba(255,255,255,0.06);
-      padding: 0 12px;
+      align-items: center;
       flex-shrink: 0;
     }
-    .tab {
-      padding: 10px 18px;
-      font-size: 13px;
-      font-weight: 500;
-      color: rgba(255,255,255,0.3);
-      cursor: pointer;
-      border-bottom: 2px solid transparent;
-      transition: all 0.15s;
-      -webkit-app-region: no-drag;
+    .tabs-center-slot {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-width: 0;
     }
-    .tab:hover { color: rgba(255,255,255,0.5); }
-    .tab.active { color: #fff; border-bottom-color: #fff; }
+    .tabs-runtime-chip {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      color: rgba(255,255,255,0.42);
+      white-space: nowrap;
+      pointer-events: none;
+    }
 
     .content {
       flex: 1;
@@ -75,14 +98,6 @@
     .panel.active { display: flex; flex-direction: column; }
 
     #agent-panel webview { flex: 1; border: none; }
-    .agent-toolbar {
-      display: flex;
-      gap: 8px;
-      padding: 6px 12px;
-      background: rgba(0,0,0,0.2);
-      border-bottom: 1px solid rgba(255,255,255,0.06);
-      flex-shrink: 0;
-    }
     .agent-toolbar-btn {
       padding: 4px 12px;
       font-size: 12px;
@@ -104,12 +119,136 @@
     .browser-panel-content {
       flex: 1;
       overflow-y: auto;
-      padding: 24px 28px 28px;
+      padding: 20px 24px 32px;
+      max-width: 720px;
+      margin: 0 auto;
       font-size: 13px;
       line-height: 1.55;
-      color: rgba(255,255,255,0.75);
+      color: rgba(255,255,255,0.78);
       -webkit-app-region: no-drag;
       user-select: text;
+    }
+    .browser-hero {
+      margin-bottom: 20px;
+    }
+    .browser-hero h3 {
+      font-size: 20px;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: -0.02em;
+      margin: 0 0 6px 0;
+    }
+    .browser-hero-desc {
+      margin: 0;
+      font-size: 13px;
+      color: rgba(255,255,255,0.42);
+      line-height: 1.45;
+    }
+    .browser-callout {
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-bottom: 18px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(99, 102, 241, 0.08);
+    }
+    .browser-callout-nemoclaw {
+      border-color: rgba(168, 85, 247, 0.35);
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(168, 85, 247, 0.08));
+    }
+    .browser-callout-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: #e9d5ff;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 8px;
+    }
+    .browser-callout p {
+      margin: 0 0 10px 0;
+      font-size: 12px;
+      color: rgba(255,255,255,0.65);
+      line-height: 1.5;
+    }
+    .browser-callout ul {
+      margin: 0;
+      padding-left: 18px;
+      font-size: 12px;
+      color: rgba(255,255,255,0.55);
+      line-height: 1.55;
+    }
+    .browser-callout li { margin-bottom: 6px; }
+    .browser-card {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
+      padding: 16px 18px;
+      margin-bottom: 14px;
+    }
+    .browser-card-head {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .browser-card-step {
+      flex-shrink: 0;
+      width: 26px;
+      height: 26px;
+      border-radius: 8px;
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .browser-card-title {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 600;
+      color: #fff;
+    }
+    .browser-card-sub {
+      margin: 4px 0 0 0;
+      font-size: 12px;
+      color: rgba(255,255,255,0.38);
+      line-height: 1.45;
+    }
+    .browser-meta-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .browser-pill {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.45);
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: rgba(0,0,0,0.35);
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+    .browser-pill code {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: none;
+      letter-spacing: 0;
+      color: rgba(147, 197, 253, 0.95);
+    }
+    .browser-footer {
+      margin-top: 8px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255,255,255,0.06);
+    }
+    .browser-footer-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
     }
     .browser-panel-content h3 {
       font-size: 16px;
@@ -267,7 +406,7 @@
     .btn:hover { background: rgba(255,255,255,0.14); }
     .btn:disabled { opacity: 0.3; cursor: default; }
 
-    #logs-panel { padding: 12px; }
+    #logs-panel { padding: 12px; user-select: text; -webkit-user-select: text; }
     .logs-viewer {
       flex: 1;
       background: #0a0a0a;
@@ -291,32 +430,148 @@
 
     #terminal-panel {
       padding: 0;
+    }
+    #terminal-panel.active {
       display: flex;
       flex-direction: column;
     }
-    .terminal-toolbar {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
-      padding: 6px 12px;
-      background: rgba(0,0,0,0.3);
-      border-bottom: 1px solid rgba(255,255,255,0.06);
-      flex-shrink: 0;
-    }
-    .terminal-hint {
-      font-size: 11px;
-      color: rgba(255,255,255,0.35);
-      margin-left: auto;
-    }
-    #terminal-xterm-container {
+    #terminal-sessions {
       flex: 1;
       min-height: 0;
+      position: relative;
+    }
+    .term-session {
+      position: absolute;
+      inset: 0;
+      display: none;
       background: #000;
       -webkit-app-region: no-drag;
     }
-    #terminal-xterm-container .xterm {
+    .term-session.active {
+      display: block;
+    }
+    .term-session .xterm {
       padding: 4px 6px;
+    }
+
+    .term-tabbar {
+      display: flex;
+      align-items: center;
+      height: 30px;
+      background: #111;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      flex-shrink: 0;
+      padding: 0 4px;
+      gap: 2px;
+      -webkit-app-region: no-drag;
+      user-select: none;
+    }
+    #term-tabs-list {
+      display: contents;
+    }
+    .term-tab {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      height: 22px;
+      border-radius: 4px;
+      font-size: 11px;
+      color: rgba(255,255,255,0.45);
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.15s, color 0.15s;
+    }
+    .term-tab:hover {
+      background: rgba(255,255,255,0.06);
+      color: rgba(255,255,255,0.7);
+    }
+    .term-tab.active {
+      background: rgba(255,255,255,0.08);
+      color: #fff;
+    }
+    .term-tab-close {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 14px;
+      height: 14px;
+      border-radius: 3px;
+      font-size: 12px;
+      line-height: 1;
+      opacity: 0;
+      cursor: pointer;
+      transition: opacity 0.15s, background 0.15s;
+    }
+    .term-tab:hover .term-tab-close,
+    .term-tab.active .term-tab-close {
+      opacity: 0.5;
+    }
+    .term-tab-close:hover {
+      opacity: 1 !important;
+      background: rgba(255,255,255,0.12);
+    }
+    .term-new-menu {
+      position: absolute;
+      bottom: 100%;
+      left: 0;
+      margin-bottom: 4px;
+      background: #1a1a1a;
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 6px;
+      overflow: hidden;
+      z-index: 200;
+      min-width: 150px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+      display: none;
+    }
+    .term-new-menu.open { display: block; }
+    .term-new-menu-item {
+      display: block;
+      width: 100%;
+      padding: 7px 14px;
+      font-size: 12px;
+      color: rgba(255,255,255,0.7);
+      background: none;
+      border: none;
+      text-align: left;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .term-new-menu-item:hover {
+      background: rgba(255,255,255,0.08);
+      color: #fff;
+    }
+    .term-new-menu-item .menu-hint {
+      color: rgba(255,255,255,0.3);
+      font-size: 11px;
+      margin-left: 6px;
+    }
+    .term-tab-add-wrap { position: relative; }
+    .term-tab-add {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      border-radius: 4px;
+      font-size: 14px;
+      color: rgba(255,255,255,0.35);
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+    .term-tab-add:hover {
+      background: rgba(255,255,255,0.08);
+      color: rgba(255,255,255,0.7);
+    }
+    .term-tabbar-spacer {
+      flex: 1;
+    }
+    .term-runtime-label {
+      font-size: 11px;
+      color: rgba(255,255,255,0.3);
+      padding-right: 6px;
+      white-space: nowrap;
     }
 
     #about-panel {
@@ -329,77 +584,220 @@
     #about-panel p { font-size: 13px; color: rgba(255,255,255,0.3); }
 
     #settings-panel {
-      padding: 24px;
+      padding: 0;
+      overflow: hidden;
+      user-select: text;
+      -webkit-user-select: text;
+      background: #000;
+    }
+    #settings-panel.active { display: flex; flex-direction: column; }
+    .settings-scroll {
+      flex: 1;
       overflow-y: auto;
+      overflow-x: hidden;
+      padding: 28px 24px 56px;
+      scroll-behavior: smooth;
     }
-    .settings-section {
-      background: rgba(255,255,255,0.03);
-      border: 1px solid rgba(255,255,255,0.06);
-      border-radius: 12px;
-      padding: 20px;
-      margin-bottom: 16px;
+    @media (min-width: 560px) {
+      .settings-scroll { padding: 36px 40px 64px; }
     }
-    .settings-section h3 {
-      font-size: 14px;
+    .settings-inner {
+      max-width: 560px;
+      margin: 0 auto;
+    }
+    .settings-header {
+      margin-bottom: 36px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    .settings-page-title {
+      font-size: 24px;
       font-weight: 600;
+      letter-spacing: -0.03em;
       color: #fff;
-      margin: 0 0 4px 0;
+      margin: 0 0 6px 0;
+      line-height: 1.15;
     }
-    .settings-section p {
-      font-size: 12px;
-      color: rgba(255,255,255,0.3);
-      margin: 0 0 14px 0;
+    .settings-page-desc {
+      font-size: 13px;
+      font-weight: 400;
+      color: #737373;
+      margin: 0;
+      line-height: 1.45;
+      max-width: 42ch;
+    }
+    .settings-heading {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.11em;
+      color: #666;
+      margin: 0 0 10px 0;
+    }
+    .settings-heading:not(:first-of-type) { margin-top: 36px; }
+    /* Nested section: heading is first child here, so it does not get the margin above */
+    .settings-nemo-only-block {
+      margin-top: 36px;
+    }
+    .settings-card {
+      background: #0a0a0a;
+      border: 1px solid #262626;
+      border-radius: 8px;
+      overflow: hidden;
     }
     .settings-row {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 10px 0;
-      border-bottom: 1px solid rgba(255,255,255,0.04);
+      gap: 20px;
+      padding: 15px 20px;
+      border-bottom: 1px solid #1f1f1f;
+      min-height: 52px;
     }
     .settings-row:last-child { border-bottom: none; }
     .settings-row-label {
       font-size: 13px;
-      color: rgba(255,255,255,0.6);
+      font-weight: 400;
+      color: #a3a3a3;
+      flex-shrink: 0;
+      letter-spacing: -0.01em;
     }
     .settings-row-value {
       font-size: 13px;
-      color: #fff;
       font-weight: 500;
+      color: #fafafa;
+      text-align: right;
+      min-width: 0;
+      word-break: break-word;
+      letter-spacing: -0.01em;
+      line-height: 1.35;
     }
-    .settings-badge {
-      display: inline-block;
-      padding: 3px 10px;
-      border-radius: 20px;
+    .settings-row-value.mono {
+      font-family: 'SF Mono', ui-monospace, 'Menlo', 'Consolas', monospace;
+      font-size: 11px;
+      font-weight: 400;
+      color: #a3a3a3;
+      line-height: 1.4;
+    }
+    .settings-hint {
+      font-size: 12px;
+      color: rgba(255,255,255,0.35);
+      line-height: 1.45;
+      margin: 0 0 12px 0;
+      max-width: 520px;
+    }
+    .settings-field {
+      padding: 14px 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .settings-field:last-child { border-bottom: none; }
+    .settings-field label {
+      display: block;
       font-size: 11px;
       font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: rgba(255,255,255,0.35);
+      margin-bottom: 8px;
     }
-    .badge-active { background: rgba(34,197,94,0.15); color: #22c55e; }
-    .badge-trial { background: rgba(99,102,241,0.15); color: #818cf8; }
-    .badge-none { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.3); }
-    .settings-btn {
-      padding: 8px 20px;
+    .settings-field input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 10px 12px;
       border-radius: 8px;
       border: 1px solid rgba(255,255,255,0.1);
-      background: rgba(255,255,255,0.05);
-      color: rgba(255,255,255,0.7);
+      background: rgba(0,0,0,0.35);
+      color: #fafafa;
+      font-size: 13px;
+    }
+    .settings-field input:focus {
+      outline: none;
+      border-color: rgba(99,102,241,0.5);
+    }
+    .settings-inline-msg {
+      font-size: 12px;
+      color: rgba(255,255,255,0.4);
+      align-self: center;
+    }
+    .settings-plan-cell {
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .settings-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .badge-active {
+      background: #fff;
+      color: #000;
+    }
+    .badge-trial {
+      background: #fff;
+      color: #000;
+      opacity: 0.92;
+    }
+    .badge-none {
+      background: transparent;
+      color: #737373;
+      border: 1px solid #404040;
+    }
+    .settings-btn-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 16px;
+      align-items: center;
+    }
+    .settings-btn {
+      padding: 8px 18px;
+      border-radius: 6px;
+      border: 1px solid #404040;
+      background: #000;
+      color: #e5e5e5;
       font-size: 12px;
       font-weight: 500;
+      letter-spacing: -0.01em;
       cursor: pointer;
-      transition: all 0.15s;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+      font-family: inherit;
     }
-    .settings-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
-    .settings-btn-primary {
-      background: #6366f1;
-      border-color: #6366f1;
+    .settings-btn:hover:not(:disabled) {
+      background: #141414;
+      border-color: #525252;
       color: #fff;
     }
-    .settings-btn-primary:hover { background: #818cf8; }
-    .settings-btn-danger {
-      border-color: rgba(239,68,68,0.3);
-      color: #ef4444;
+    .settings-btn:disabled {
+      opacity: 0.45;
+      cursor: default;
     }
-    .settings-btn-danger:hover { background: rgba(239,68,68,0.1); }
+    .settings-btn-primary {
+      background: #fff;
+      border-color: #fff;
+      color: #000;
+    }
+    .settings-btn-primary:hover:not(:disabled) {
+      background: #e5e5e5;
+      border-color: #e5e5e5;
+      color: #000;
+    }
+    .settings-btn-danger {
+      border-color: #333;
+      color: #737373;
+    }
+    .settings-btn-danger:hover:not(:disabled) {
+      background: #0d0d0d;
+      border-color: #525252;
+      color: #fff;
+    }
 
     .statusbar {
       height: 36px;
@@ -465,6 +863,17 @@
     .full-overlay h1 { font-size: 24px; font-weight: 700; color: #fff; }
     .full-overlay p { font-size: 14px; color: rgba(255,255,255,0.4); text-align: center; max-width: 400px; line-height: 1.5; }
 
+    .switching-spinner {
+      width: 28px;
+      height: 28px;
+      border: 2.5px solid rgba(255,255,255,0.12);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin-bottom: 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
     /* TUI overlay */
     .google-btn {
       display: inline-flex;
@@ -497,17 +906,94 @@
     .overlay-link:hover { color: rgba(255,255,255,0.5); }
 
     .subscribe-btn {
-      padding: 12px 32px;
-      border-radius: 10px;
-      border: none;
-      background: #6366f1;
-      color: #fff;
-      font-size: 15px;
+      width: 100%;
+      max-width: 320px;
+      padding: 13px 24px;
+      border-radius: 8px;
+      font-size: 14px;
       font-weight: 600;
+      letter-spacing: -0.02em;
       cursor: pointer;
-      transition: all 0.15s;
+      transition: background 0.15s, color 0.15s, border-color 0.15s, opacity 0.15s;
+      font-family: inherit;
     }
-    .subscribe-btn:hover { background: #818cf8; }
+    .subscribe-btn:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+    /* Trial: white */
+    .subscribe-btn.subscribe-btn-light {
+      background: #fafafa;
+      color: #0a0a0a;
+      border: 1px solid #fafafa;
+    }
+    .subscribe-btn.subscribe-btn-light:hover:not(:disabled) {
+      background: #e5e5e5;
+      border-color: #e5e5e5;
+    }
+    /* Paid plan: black */
+    .subscribe-btn.subscribe-btn-dark {
+      background: #0a0a0a;
+      color: #fafafa;
+      border: 1px solid #404040;
+    }
+    .subscribe-btn.subscribe-btn-dark:hover:not(:disabled) {
+      background: #141414;
+      border-color: #525252;
+    }
+
+    .subscribe-screen {
+      background:
+        radial-gradient(ellipse 100% 70% at 50% -15%, rgba(255, 255, 255, 0.04) 0%, transparent 55%),
+        #060606;
+      gap: 0;
+      padding: 40px 28px;
+    }
+    .subscribe-inner {
+      width: 100%;
+      max-width: 400px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+    .subscribe-screen h1 {
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: -0.03em;
+      color: #fafafa;
+      margin: 0 0 10px;
+      line-height: 1.25;
+    }
+    .subscribe-screen .subscribe-lede {
+      font-size: 14px;
+      line-height: 1.55;
+      color: rgba(255, 255, 255, 0.42);
+      margin: 0 0 8px;
+      max-width: 34em;
+    }
+    .subscribe-email-line {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.28);
+      margin: 0 0 28px;
+      word-break: break-all;
+    }
+    .subscribe-actions {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      margin-bottom: 8px;
+    }
+    .subscribe-footer-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px 20px;
+      justify-content: center;
+      align-items: center;
+      margin-top: 20px;
+    }
 
     .waiting-text {
       font-size: 12px;
@@ -545,6 +1031,34 @@
       font-size: 28px;
       line-height: 1;
     }
+    .runtime-card-logo {
+      width: 48px;
+      height: 48px;
+      object-fit: contain;
+      align-self: flex-start;
+      flex-shrink: 0;
+    }
+    .runtime-card-logo-wide {
+      width: min(100%, 168px);
+      height: 44px;
+      object-fit: contain;
+      object-position: left center;
+    }
+    /* Official wordmarks (OpenClaw repo, NVIDIA Commons) */
+    .runtime-card-logo-openclaw-wordmark {
+      width: min(100%, 240px);
+      height: 52px;
+      object-fit: contain;
+      object-position: left center;
+      align-self: flex-start;
+    }
+    .runtime-card-logo-nvidia {
+      width: min(100%, 200px);
+      height: 36px;
+      object-fit: contain;
+      object-position: left center;
+      align-self: flex-start;
+    }
     .runtime-card-title {
       font-size: 17px;
       font-weight: 700;
@@ -577,13 +1091,20 @@
       position: fixed;
       inset: 0;
       z-index: 100;
-      background: #0a0a0a;
+      background:
+        radial-gradient(ellipse 120% 80% at 50% -20%, rgba(99, 102, 241, 0.07) 0%, transparent 50%),
+        #060606;
       display: none;
       flex-direction: column;
       -webkit-app-region: no-drag;
     }
     #setup-overlay.active { display: flex; }
-    #setup-overlay .titlebar { -webkit-app-region: drag; }
+    /* Invisible drag strip (no window title text) */
+    .setup-overlay-drag {
+      flex-shrink: 0;
+      height: 28px;
+      -webkit-app-region: drag;
+    }
 
     #setup-scroll-area {
       flex: 1;
@@ -591,66 +1112,127 @@
       overflow-y: auto;
       display: flex;
       flex-direction: column;
+      align-items: center;
+      padding: 8px 24px 28px;
+    }
+    /* Center block when content is short; allow normal scroll when tall */
+    #setup-scroll-area::before,
+    #setup-scroll-area::after {
+      content: '';
+      flex: 1 1 auto;
+      min-height: 0;
     }
 
     #setup-steps-section {
-      padding: 30px 40px 20px;
+      width: 100%;
+      max-width: 420px;
       text-align: center;
       flex-shrink: 0;
     }
+    .setup-steps-card {
+      text-align: center;
+      padding: 28px 28px 24px;
+      border-radius: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      background: rgba(255, 255, 255, 0.02);
+      box-shadow: 0 24px 48px rgba(0, 0, 0, 0.35);
+    }
     #setup-steps-section h2 {
-      font-size: 20px;
-      font-weight: 700;
-      color: #fff;
-      margin: 0 0 4px;
+      font-size: 19px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      color: #fafafa;
+      margin: 0 0 8px;
     }
     #setup-steps-section .subtitle {
       font-size: 13px;
-      color: rgba(255,255,255,0.3);
-      margin-bottom: 24px;
+      line-height: 1.45;
+      color: rgba(255, 255, 255, 0.38);
+      margin: 0 0 22px;
     }
     .setup-steps-list {
-      max-width: 340px;
-      margin: 0 auto;
+      margin: 0;
       text-align: left;
     }
     .setup-step {
       display: flex;
-      align-items: center;
-      gap: 14px;
-      padding: 10px 0;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 8px 0;
+    }
+    .setup-step + .setup-step {
+      border-top: 1px solid rgba(255, 255, 255, 0.04);
     }
     .step-icon {
-      width: 26px;
-      height: 26px;
+      width: 24px;
+      height: 24px;
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
-      font-size: 13px;
-      font-weight: 700;
+      font-size: 11px;
+      font-weight: 600;
       line-height: 1;
+      margin-top: 1px;
     }
-    .step-icon.pending { border: 2px solid rgba(255,255,255,0.12); color: rgba(255,255,255,0.12); }
-    .step-icon.running { border: 2px solid #6366f1; color: #6366f1; animation: step-pulse 1.5s ease-in-out infinite; }
-    .step-icon.done { background: #22c55e; color: #fff; border: none; }
-    .step-icon.error { background: #ef4444; color: #fff; border: none; }
-    .step-info { flex: 1; min-width: 0; }
-    .step-label { font-size: 14px; color: rgba(255,255,255,0.4); }
-    .setup-step.running .step-label { color: #fff; font-weight: 600; }
-    .setup-step.done .step-label { color: rgba(255,255,255,0.25); }
-    .setup-step.error .step-label { color: #ef4444; }
-    .step-detail { font-size: 11px; color: rgba(255,255,255,0.25); margin-top: 2px; }
+    .step-icon.pending { border: 1.5px solid rgba(255,255,255,0.1); color: rgba(255,255,255,0.15); background: transparent; }
+    .step-icon.running { border: 1.5px solid #818cf8; color: #a5b4fc; background: rgba(99,102,241,0.12); animation: step-pulse 1.5s ease-in-out infinite; }
+    .step-icon.done { background: rgba(34, 197, 94, 0.2); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.35); }
+    .step-icon.error { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.35); }
+    .step-info { flex: 1; min-width: 0; padding-top: 1px; }
+    .step-label { font-size: 13px; color: rgba(255,255,255,0.42); letter-spacing: -0.01em; line-height: 1.35; }
+    .setup-step.running .step-label { color: #f5f5f5; font-weight: 600; }
+    .setup-step.done .step-label { color: rgba(255,255,255,0.32); font-weight: 500; }
+    .setup-step.error .step-label { color: #f87171; }
+    .step-detail { font-size: 11px; color: rgba(255,255,255,0.28); margin-top: 4px; line-height: 1.35; }
     @keyframes step-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+    /* In-app setup terminal */
+    #setup-terminal-wrap {
+      display: none;
+      width: 100%;
+      max-width: 520px;
+      margin-top: 16px;
+      flex-shrink: 0;
+    }
+    #setup-terminal-wrap.active { display: block; }
+    #setup-terminal-container {
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: #0d0d0d;
+      padding: 8px 4px 4px;
+      overflow: hidden;
+    }
+    #setup-terminal-container .xterm {
+      padding: 0 4px;
+    }
+    .setup-term-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 8px 6px;
+      font-size: 11px;
+      color: rgba(255,255,255,0.3);
+      letter-spacing: 0.03em;
+      user-select: none;
+    }
+    .setup-term-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: #4ade80;
+      animation: step-pulse 1.5s ease-in-out infinite;
+    }
+    .setup-term-dot.exited { background: rgba(255,255,255,0.15); animation: none; }
 
     .setup-bottom-bar {
       flex-shrink: 0;
-      padding: 8px 16px;
+      padding: 10px 20px 12px;
       font-size: 12px;
-      color: rgba(255,255,255,0.25);
-      background: rgba(0,0,0,0.2);
+      color: rgba(255,255,255,0.32);
+      background: rgba(0, 0, 0, 0.45);
       border-top: 1px solid rgba(255,255,255,0.06);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -661,9 +1243,12 @@
     /* ── API Key Form ── */
     #api-key-section {
       display: none;
-      padding: 24px 40px 20px;
+      width: 100%;
+      max-width: 420px;
+      margin: 0 auto;
+      padding: 20px 8px 8px;
       text-align: center;
-      border-top: 1px solid rgba(255,255,255,0.06);
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
     }
     #api-key-section.active { display: block; }
     #api-key-section h3 {
@@ -771,16 +1356,39 @@
   </style>
 </head>
 <body>
-  <div class="titlebar">
-    <span class="titlebar-title">Valnaa<span class="titlebar-runtime" id="titlebar-runtime"></span></span>
-  </div>
-
+  <script>
+    /* Apply before first paint so macOS traffic-light inset padding is correct immediately (see loadFile ?platform=). */
+    (function () {
+      try {
+        var q = new URLSearchParams(window.location.search.slice(1) || '');
+        var p = (q.get('platform') || '').replace(/[^a-z0-9_-]/gi, '');
+        if (p) document.documentElement.classList.add('platform-' + p);
+      } catch (e) { /* ignore */ }
+    })();
+  </script>
   <div class="tabs">
-    <div class="tab active" data-tab="agent">Agent</div>
-    <div class="tab" data-tab="browser">Browser</div>
-    <div class="tab" data-tab="terminal">Terminal</div>
-    <div class="tab" data-tab="logs">Logs</div>
-    <div class="tab" data-tab="settings">Settings</div>
+    <div class="tabs-cluster">
+      <div class="tab active" data-tab="agent" title="Agent / Chat" aria-label="Agent">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      </div>
+      <div class="tab" data-tab="browser" title="Browser" aria-label="Browser">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+      </div>
+    </div>
+    <div class="tabs-center-slot">
+      <span id="tabs-runtime-label" class="tabs-runtime-chip" title="Agent runtime">OpenClaw</span>
+    </div>
+    <div class="tabs-cluster">
+      <div class="tab" data-tab="terminal" title="Terminal" aria-label="Terminal">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+      </div>
+      <div class="tab" data-tab="logs" title="Logs" aria-label="Logs">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      </div>
+      <div class="tab" data-tab="settings" title="Settings" aria-label="Settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
+      </div>
+    </div>
   </div>
 
   <div class="content">
@@ -790,60 +1398,103 @@
         <h2 id="setup-title">Starting Valnaa...</h2>
         <p id="setup-message">This may take a moment on first launch.</p>
       </div>
-      <div id="agent-toolbar" class="agent-toolbar" style="display:none; flex-wrap: wrap;">
-        <button class="agent-toolbar-btn" id="agent-refresh-btn" title="Refresh chat">Refresh</button>
-        <span class="agent-cli-hint" style="font-size: 11px; color: rgba(255,255,255,0.35); max-width: 420px; line-height: 1.4;">
-          Command line: with the agent running, use <strong style="color: rgba(255,255,255,0.55);">Terminal.app</strong> and run <code style="font-size: 10px;">openclaw tui</code> (use the token from Connect Chrome if the TUI asks for it).
-        </span>
-      </div>
       <!-- Chrome setup moved to Browser tab -->
       <webview id="agent-webview" style="display:none; flex:1;"></webview>
     </div>
 
     <div id="browser-panel" class="panel">
       <div class="browser-panel-content">
-        <h3>Google Chrome — OpenClaw Browser Relay</h3>
-        <p class="chrome-lead">Install the extension in Chrome (Developer mode → Load unpacked). Download a .zip or copy the files into Downloads, then add your gateway token below.</p>
-        <div class="chrome-field">
-          <label>Get the extension files</label>
-          <div class="chrome-row">
-            <button type="button" class="agent-toolbar-btn primary" id="chrome-btn-download-zip">Download .zip…</button>
-            <button type="button" class="agent-toolbar-btn" id="chrome-btn-copy-downloads">Copy folder to Downloads</button>
+        <header class="browser-hero">
+          <h3>Browser relay</h3>
+          <p class="browser-hero-desc">Use Google Chrome on this Mac as the agent’s browser. Install the relay extension, then paste your gateway token so it can reach the running agent.</p>
+        </header>
+
+        <div id="browser-nemoclaw-callout" class="browser-callout browser-callout-nemoclaw" style="display: none;" role="note">
+          <div class="browser-callout-title">NemoClaw — policy &amp; network</div>
+          <p>With <strong>NemoClaw</strong>, the agent runs in a sandbox. Chrome on your Mac still talks to it over <strong>localhost</strong>. If the relay never connects, something on this machine or your org is blocking that path.</p>
+          <p style="margin-top: 10px;"><strong>Sandbox policy (required for browser relay):</strong> allow the relay in your policy YAML. In a <strong>local terminal</strong> (not the sandbox shell), run:</p>
+          <pre style="background: rgba(0,0,0,0.3); border-radius: 6px; padding: 10px 12px; font-size: 12px; color: #c4b5fd; margin: 8px 0 6px; overflow-x: auto; white-space: pre;">nemoclaw &lt;sandbox&gt; policy-add</pre>
+          <p style="font-size: 12px; color: rgba(255,255,255,0.45); margin-bottom: 10px;">Pick the <strong>openclaw-browser</strong> preset, or edit YAML so loopback can reach ports <code>8080</code> and <code>18789</code> as needed.</p>
+          <p style="margin-top: 8px;"><strong>If the relay still won’t connect:</strong></p>
+          <ul style="margin: 6px 0 0 1.1em; padding: 0; font-size: 13px; color: rgba(255,255,255,0.75); line-height: 1.5;">
+            <li><strong>Firewall / VPN:</strong> Allow <code>127.0.0.1</code> (loopback) traffic. Some VPNs block local ports — try disconnecting briefly or allow-listing local traffic.</li>
+            <li><strong>Managed Chrome (work/school):</strong> IT may block <strong>Developer mode</strong> or <strong>unpacked extensions</strong>. Ask them to allow this extension folder, or to permit the relay policy for internal tools.</li>
+            <li><strong>MDM / endpoint policy:</strong> If extensions are restricted, you may need an admin to approve unpacked loading or to deploy the extension via policy.</li>
+            <li><strong>Keep Valnaa running</strong> with the agent <strong>started</strong> so SSH/port forwarding to the sandbox stays up while you use the relay.</li>
+          </ul>
+        </div>
+
+        <section class="browser-card" aria-labelledby="browser-step1-title">
+          <div class="browser-card-head">
+            <span class="browser-card-step" aria-hidden="true">1</span>
+            <div>
+              <h4 id="browser-step1-title" class="browser-card-title">Get the extension files</h4>
+              <p class="browser-card-sub">Download a zip or copy a ready-made folder into Downloads, then load it in Chrome as an unpacked extension.</p>
+            </div>
           </div>
-          <p class="chrome-mini">
-            <strong>Download .zip</strong> — save anywhere, unzip, then point Chrome at the inner folder that has <code>manifest.json</code>.
-            <strong>Copy to Downloads</strong> creates <code id="chrome-downloads-folder-name">openclaw-browser-relay-extension</code> and opens it in Finder.
-          </p>
-        </div>
-        <div class="chrome-field">
-          <label>Extension folder on this Mac (advanced)</label>
-          <div class="chrome-row">
-            <code id="chrome-ext-path" class="chrome-code">…</code>
-            <button type="button" class="agent-toolbar-btn" id="chrome-btn-copy-path">Copy path</button>
-            <button type="button" class="agent-toolbar-btn" id="chrome-btn-finder">Show in Finder</button>
+          <div class="chrome-field" style="margin-bottom: 0;">
+            <div class="chrome-row">
+              <button type="button" class="agent-toolbar-btn primary" id="chrome-btn-download-zip">Download .zip…</button>
+              <button type="button" class="agent-toolbar-btn" id="chrome-btn-copy-downloads">Copy folder to Downloads</button>
+            </div>
+            <p class="chrome-mini">
+              <strong>Download .zip</strong> — unzip anywhere, then in Chrome choose the inner folder that contains <code>manifest.json</code>.<br />
+              <strong>Copy to Downloads</strong> creates <code id="chrome-downloads-folder-name">openclaw-browser-relay-extension</code> and opens it in Finder.
+            </p>
           </div>
-        </div>
-        <div class="chrome-field">
-          <label>Gateway token (extension Options → paste, then Save)</label>
-          <div class="chrome-row">
-            <input type="text" id="chrome-token" class="chrome-token" readonly placeholder="Start the agent to load token" spellcheck="false" />
-            <button type="button" class="agent-toolbar-btn" id="chrome-btn-copy-token">Copy token</button>
+        </section>
+
+        <section class="browser-card" aria-labelledby="browser-step2-title">
+          <div class="browser-card-head">
+            <span class="browser-card-step" aria-hidden="true">2</span>
+            <div>
+              <h4 id="browser-step2-title" class="browser-card-title">Path &amp; gateway token</h4>
+              <p class="browser-card-sub">Advanced: exact folder Chrome should load. Token must match your running gateway (paste in the extension’s Options).</p>
+            </div>
           </div>
-        </div>
-        <p class="chrome-mini">Ports: relay <strong>18792</strong>, gateway <strong>18789</strong> — defaults in the extension.</p>
-        <ol>
-          <li>Open <button type="button" class="link-btn" id="chrome-btn-open-extensions">chrome://extensions</button> and turn on <strong>Developer mode</strong>.</li>
-          <li>
-            <strong>Load unpacked</strong> → pick the extension folder (the one with <code>manifest.json</code>):
-            e.g. from Downloads, or press ⌘⇧G and paste the path under “advanced” above.
-          </li>
-          <li>Open the extension’s <strong>Options</strong> → paste the gateway token → <strong>Save</strong>.</li>
-        </ol>
-        <p id="chrome-setup-status" class="chrome-mini"></p>
-        <div class="chrome-row" style="margin-top: 10px;">
-          <button type="button" class="agent-toolbar-btn" id="chrome-btn-refresh">Refresh path & token</button>
-          <button type="button" class="agent-toolbar-btn" id="chrome-btn-docs">Open docs</button>
-        </div>
+          <div class="chrome-field">
+            <label>Extension folder on this Mac</label>
+            <div class="chrome-row">
+              <code id="chrome-ext-path" class="chrome-code">…</code>
+              <button type="button" class="agent-toolbar-btn" id="chrome-btn-copy-path">Copy path</button>
+              <button type="button" class="agent-toolbar-btn" id="chrome-btn-finder">Show in Finder</button>
+            </div>
+          </div>
+          <div class="chrome-field" style="margin-bottom: 0;">
+            <label>Gateway token</label>
+            <div class="chrome-row">
+              <input type="text" id="chrome-token" class="chrome-token" readonly placeholder="Start the agent to load token" spellcheck="false" />
+              <button type="button" class="agent-toolbar-btn" id="chrome-btn-copy-token">Copy token</button>
+            </div>
+            <div class="browser-meta-pills" aria-label="Default ports">
+              <span class="browser-pill">Relay <code>18792</code></span>
+              <span class="browser-pill">Gateway <code>18789</code></span>
+            </div>
+          </div>
+        </section>
+
+        <section class="browser-card" aria-labelledby="browser-step3-title">
+          <div class="browser-card-head">
+            <span class="browser-card-step" aria-hidden="true">3</span>
+            <div>
+              <h4 id="browser-step3-title" class="browser-card-title">Load in Chrome</h4>
+              <p class="browser-card-sub">Developer mode → Load unpacked → Options → Save token.</p>
+            </div>
+          </div>
+          <ol style="margin: 0; padding-left: 20px;">
+            <li style="margin-bottom: 8px;">Open <button type="button" class="link-btn" id="chrome-btn-open-extensions">chrome://extensions</button> and enable <strong>Developer mode</strong>.</li>
+            <li style="margin-bottom: 8px;"><strong>Load unpacked</strong> → select the folder that contains <code>manifest.json</code> (from Downloads or the path above; in the file picker use ⌘⇧G to paste a path).</li>
+            <li>Open the extension’s <strong>Options</strong>, paste the gateway token, then <strong>Save</strong>.</li>
+          </ol>
+        </section>
+
+        <footer class="browser-footer">
+          <p id="chrome-setup-status" class="chrome-mini" style="margin: 0;"></p>
+          <div class="browser-footer-actions">
+            <button type="button" class="agent-toolbar-btn" id="chrome-btn-refresh">Refresh path &amp; token</button>
+            <button type="button" class="agent-toolbar-btn primary" id="chrome-btn-docs">Open documentation</button>
+          </div>
+        </footer>
       </div>
     </div>
 
@@ -856,83 +1507,112 @@
     </div>
 
     <div id="terminal-panel" class="panel">
-      <div class="terminal-toolbar">
-        <button class="btn" id="terminal-new-btn">New Session</button>
-        <button class="btn" id="terminal-runtime-btn">Runtime: detecting...</button>
-        <span class="terminal-hint" id="terminal-hint-text">Full interactive shell.</span>
+      <div id="terminal-sessions"></div>
+      <div class="term-tabbar" id="term-tabbar">
+        <div id="term-tabs-list"></div>
+        <span class="term-tab-add-wrap">
+          <span class="term-tab-add" id="term-add-btn" title="New session">+</span>
+          <div class="term-new-menu" id="term-new-menu">
+            <button class="term-new-menu-item" id="term-new-sandbox">Sandbox shell<span class="menu-hint">NemoClaw</span></button>
+            <button class="term-new-menu-item" id="term-new-local">Local shell<span class="menu-hint">macOS</span></button>
+          </div>
+        </span>
+        <span class="term-tabbar-spacer"></span>
+        <span class="term-runtime-label" id="term-runtime-label">OpenClaw</span>
       </div>
-      <div id="terminal-xterm-container"></div>
     </div>
 
     <div id="settings-panel" class="panel">
-      <!-- Profile -->
-      <div class="settings-section">
-        <h3>Profile</h3>
-        <p>Your Valnaa account</p>
-        <div class="settings-row">
-          <span class="settings-row-label">Email</span>
-          <span class="settings-row-value" id="settings-email">—</span>
-        </div>
-        <div class="settings-row">
-          <span class="settings-row-label">Subscription</span>
-          <span id="settings-sub-badge" class="settings-badge badge-none">Checking...</span>
-        </div>
-        <div class="settings-row">
-          <span class="settings-row-label">Plan</span>
-          <span class="settings-row-value" id="settings-plan">—</span>
-        </div>
-        <div style="display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap;">
-          <button class="settings-btn settings-btn-primary" id="settings-manage-sub">Manage Subscription</button>
-          <button class="settings-btn" id="settings-sign-out">Sign Out</button>
-        </div>
-      </div>
+      <div class="settings-scroll">
+        <div class="settings-inner">
 
-      <!-- Runtime -->
-      <div class="settings-section">
-        <h3>Runtime</h3>
-        <p>Which agent engine to use</p>
-        <div class="settings-row">
-          <span class="settings-row-label">Current runtime</span>
-          <span class="settings-row-value" id="settings-runtime">—</span>
-        </div>
-        <div style="margin-top: 14px;">
-          <button class="settings-btn" id="settings-change-runtime">Change Runtime</button>
-        </div>
-      </div>
+          <header class="settings-header">
+            <h1 class="settings-page-title">Settings</h1>
+            <p class="settings-page-desc">Account, billing, runtime, and local data for this device.</p>
+          </header>
 
-      <!-- Data -->
-      <div class="settings-section">
-        <h3>Agent Data</h3>
-        <p>Manage local agent files and configuration</p>
-        <div class="settings-row">
-          <span class="settings-row-label">Config &amp; data folder</span>
-          <span class="settings-row-value" id="settings-data-path" style="font-size: 11px; font-family: monospace; opacity: 0.5;">~/.openclaw</span>
-        </div>
-        <div class="settings-row">
-          <span class="settings-row-label">App data folder</span>
-          <span class="settings-row-value" id="settings-appdata-path" style="font-size: 11px; font-family: monospace; opacity: 0.5;">~/.openclaw-desktop</span>
-        </div>
-        <div style="display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap;">
-          <button class="settings-btn" id="settings-open-data">Open Config Folder</button>
-          <button class="settings-btn" id="settings-open-appdata">Open App Data</button>
-          <button class="settings-btn settings-btn-danger" id="settings-delete-agent">Delete Agent &amp; Files</button>
-        </div>
-      </div>
+          <div class="settings-heading">Account</div>
+          <div class="settings-card">
+            <div class="settings-row">
+              <span class="settings-row-label">Email</span>
+              <span class="settings-row-value" id="settings-email">—</span>
+            </div>
+            <div class="settings-row">
+              <span class="settings-row-label">Plan</span>
+              <span class="settings-row-value" id="settings-desktop-desc">
+                <span class="settings-plan-cell">
+                  <span id="settings-desktop-badge" class="settings-badge badge-none" style="display:none;"></span>
+                  <span id="settings-plan-text">Checking…</span>
+                </span>
+              </span>
+            </div>
+          </div>
+          <div class="settings-btn-row">
+            <button type="button" class="settings-btn settings-btn-primary" id="settings-manage-sub">Manage subscription</button>
+            <button type="button" class="settings-btn" id="settings-sign-out">Sign out</button>
+          </div>
 
-      <!-- App info -->
-      <div class="settings-section">
-        <h3>About</h3>
-        <div class="settings-row">
-          <span class="settings-row-label">Version</span>
-          <span class="settings-row-value" id="settings-version">v0.1.0</span>
-        </div>
-        <div class="settings-row">
-          <span class="settings-row-label">OpenClaw</span>
-          <span class="settings-row-value">Locally installed</span>
-        </div>
-        <div style="display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap;">
-          <button class="settings-btn" id="settings-open-logs">View Logs</button>
-          <button class="settings-btn" id="settings-open-website">valnaa.com</button>
+          <div class="settings-heading">Runtime</div>
+          <div class="settings-card">
+            <div class="settings-row">
+              <span class="settings-row-label">Engine</span>
+              <span class="settings-row-value" id="settings-runtime">—</span>
+            </div>
+          </div>
+          <div class="settings-btn-row">
+            <button type="button" class="settings-btn" id="settings-change-runtime">Change runtime</button>
+          </div>
+
+          <!-- NemoClaw only: OpenClaw users configure keys via openclaw onboard / ~/.openclaw -->
+          <div id="settings-nemo-only-model-keys" class="settings-nemo-only-block" style="display: none;">
+            <div class="settings-heading">Model providers (optional)</div>
+            <p class="settings-hint" id="settings-optional-keys-hint"></p>
+            <div class="settings-card">
+              <div class="settings-field">
+                <label for="settings-openai-key">OpenAI API key</label>
+                <input type="password" id="settings-openai-key" placeholder="sk-…" autocomplete="off" spellcheck="false" />
+              </div>
+              <div class="settings-field">
+                <label for="settings-anthropic-key">Anthropic API key</label>
+                <input type="password" id="settings-anthropic-key" placeholder="sk-ant-…" autocomplete="off" spellcheck="false" />
+              </div>
+            </div>
+            <div class="settings-btn-row" style="flex-wrap: wrap; gap: 8px;">
+              <button type="button" class="settings-btn settings-btn-primary" id="settings-save-model-keys">Save model keys</button>
+              <span id="settings-save-model-keys-msg" class="settings-inline-msg" role="status"></span>
+            </div>
+          </div>
+
+          <div class="settings-heading">Data</div>
+          <div class="settings-card">
+            <div class="settings-row">
+              <span class="settings-row-label">Agent config</span>
+              <span class="settings-row-value mono" id="settings-data-path">~/.openclaw</span>
+            </div>
+            <div class="settings-row">
+              <span class="settings-row-label">App data</span>
+              <span class="settings-row-value mono" id="settings-appdata-path">~/.openclaw-desktop</span>
+            </div>
+          </div>
+          <div class="settings-btn-row">
+            <button type="button" class="settings-btn" id="settings-open-data">Open config folder</button>
+            <button type="button" class="settings-btn" id="settings-open-appdata">Open app data</button>
+            <button type="button" class="settings-btn settings-btn-danger" id="settings-delete-agent">Delete agent &amp; files</button>
+          </div>
+
+          <div class="settings-heading">About</div>
+          <div class="settings-card">
+            <div class="settings-row">
+              <span class="settings-row-label">Version</span>
+              <span class="settings-row-value" id="settings-version">v0.1.0</span>
+            </div>
+          </div>
+          <div class="settings-btn-row">
+            <button type="button" class="settings-btn" id="settings-open-logs">View logs</button>
+            <button type="button" class="settings-btn" id="settings-contact-support">Contact support</button>
+            <button type="button" class="settings-btn" id="settings-open-website">valnaa.com</button>
+          </div>
+
         </div>
       </div>
     </div>
@@ -940,7 +1620,6 @@
 
   <!-- Auth overlay -->
   <div id="auth-overlay" class="full-overlay">
-    <h1>Valnaa</h1>
     <p>Sign in to start using your personal AI agent.</p>
     <button class="google-btn" id="auth-google-btn">
       <svg viewBox="0 0 24 24">
@@ -956,14 +1635,20 @@
   </div>
 
   <!-- Subscribe overlay -->
-  <div id="subscribe-overlay" class="full-overlay">
-    <h1 id="subscribe-title">Subscription Required</h1>
-    <p id="subscribe-message">You need an active Valnaa subscription to use this app.</p>
-    <p id="subscribe-email" style="font-size: 12px; color: rgba(255,255,255,0.25);"></p>
-    <button class="subscribe-btn" id="subscribe-btn">Subscribe Now</button>
-    <div style="display: flex; gap: 16px; align-items: center;">
-      <button class="overlay-link" id="subscribe-refresh">I already subscribed — refresh</button>
-      <button class="overlay-link" id="subscribe-logout">Sign out</button>
+  <div id="subscribe-overlay" class="full-overlay subscribe-screen">
+    <div class="subscribe-inner">
+      <h1 id="subscribe-title">Subscription Required</h1>
+      <p id="subscribe-message" class="subscribe-lede">You need an active Valnaa subscription to use this app.</p>
+      <p id="subscribe-email" class="subscribe-email-line"></p>
+      <div class="subscribe-actions">
+        <button type="button" class="subscribe-btn subscribe-btn-light" id="subscribe-trial-btn">Start 3-day free trial. No card needed.</button>
+        <button type="button" class="subscribe-btn subscribe-btn-dark" id="subscribe-btn">Subscribe now · €6.25/mo</button>
+      </div>
+      <p id="subscribe-trial-error" style="font-size: 12px; color: #f87171; display: none; margin: 4px 0 0; max-width: 320px;"></p>
+      <div class="subscribe-footer-links">
+        <button type="button" class="overlay-link" id="subscribe-refresh">Already subscribed? Refresh</button>
+        <button type="button" class="overlay-link" id="subscribe-logout">Sign out</button>
+      </div>
     </div>
   </div>
 
@@ -973,17 +1658,16 @@
     <p>Select the AI agent runtime you'd like to use with Valnaa.</p>
     <div class="runtime-cards">
       <div class="runtime-card" id="pick-openclaw">
-        <div class="runtime-card-icon">&#9889;</div>
-        <div class="runtime-card-title">OpenClaw</div>
+        <img class="runtime-card-logo-openclaw-wordmark" src="branding/openclaw-official.svg" alt="OpenClaw" />
         <span class="runtime-card-badge badge-green">Works Everywhere</span>
         <div class="runtime-card-desc">The original open-source AI agent. Runs directly on your machine — macOS, Windows, or Linux. No Docker needed.</div>
         <div class="runtime-req">Requires: Node.js (auto-installed)</div>
       </div>
       <div class="runtime-card" id="pick-nemoclaw">
-        <div class="runtime-card-icon">&#128737;</div>
+        <img class="runtime-card-logo-nvidia" src="branding/nvidia-for-dark-bg.svg" alt="NVIDIA" />
         <div class="runtime-card-title">NemoClaw</div>
         <span class="runtime-card-badge badge-purple">NVIDIA &middot; Enterprise Security</span>
-        <div class="runtime-card-desc">OpenClaw inside an NVIDIA OpenShell sandbox. Secure inference routing, network policies, and enterprise-grade isolation.</div>
+        <div class="runtime-card-desc">Agent inside an NVIDIA OpenShell sandbox. Secure routing, network policies, and enterprise-grade isolation.</div>
         <div class="runtime-req" id="nemoclaw-req">Requires: Docker Desktop running</div>
       </div>
     </div>
@@ -999,25 +1683,41 @@
       <button class="subscribe-btn" id="nemoclaw-prereq-install-docker" style="background: #0db7ed; display:none;">Install Docker</button>
       <button class="btn" id="nemoclaw-prereq-start-docker" style="display:none;">Start Docker</button>
       <button class="btn" id="nemoclaw-prereq-docker-link" style="display:none;">Get Docker Desktop</button>
-      <button class="btn" id="nemoclaw-prereq-switch">Switch to OpenClaw</button>
+      <button class="btn" id="nemoclaw-prereq-switch">Use OpenClaw</button>
     </div>
     <button class="overlay-link" id="nemoclaw-prereq-docs" style="margin-top: 4px;">NemoClaw documentation</button>
   </div>
 
+  <!-- Runtime switching overlay -->
+  <div id="switching-overlay" class="full-overlay">
+    <div class="switching-spinner"></div>
+    <h1 id="switching-title">Switching runtime…</h1>
+    <p id="switching-subtitle" style="color: rgba(255,255,255,0.35);">Stopping current agent and preparing the new one.</p>
+  </div>
+
   <!-- Setup overlay (guided steps) -->
   <div id="setup-overlay">
-    <div class="titlebar">
-      <span class="titlebar-title">Valnaa — Setup</span>
-    </div>
+    <div class="setup-overlay-drag" aria-hidden="true"></div>
     <div id="setup-scroll-area">
     <div id="setup-steps-section">
-      <h2>Preparing Your Environment</h2>
-      <div class="subtitle">This only happens once.</div>
-      <div class="setup-steps-list" id="setup-steps-list"></div>
+      <div class="setup-steps-card">
+        <h2>Preparing your environment</h2>
+        <p class="subtitle">This only happens once.</p>
+        <div class="setup-steps-list" id="setup-steps-list"></div>
+      </div>
+    </div>
+    <div id="setup-terminal-wrap">
+      <div id="setup-terminal-container">
+        <div class="setup-term-header">
+          <div class="setup-term-dot" id="setup-term-dot"></div>
+          <span>live output</span>
+        </div>
+        <div id="setup-terminal-el"></div>
+      </div>
     </div>
     <div id="api-key-section">
-      <h3>Configure Inference Provider</h3>
-      <div class="akf-subtitle">Choose a provider and paste your API key.</div>
+      <h3 id="akf-section-title">Configure Inference Provider</h3>
+      <div class="akf-subtitle" id="akf-section-subtitle">Choose a provider and paste your API key.</div>
       <div class="provider-cards" id="akf-providers"></div>
       <div class="akf-input-row">
         <input type="password" id="akf-key-input" placeholder="Paste your API key" autocomplete="off" spellcheck="false">
@@ -1057,19 +1757,36 @@
   <script type="module">
     const oc = window.openclaw;
 
+    // macOS: in native fullscreen, traffic lights leave the title bar — reduce left inset so tabs align to edge
+    function applyMacFullscreenTabs(fullScreen) {
+      if (!document.documentElement.classList.contains('platform-darwin')) return;
+      document.documentElement.classList.toggle('macos-edge-tabs', !!fullScreen);
+    }
+    if (oc.getMacFullscreen) {
+      void oc.getMacFullscreen().then(applyMacFullscreenTabs);
+    }
+    if (oc.onMacFullscreenChange) {
+      oc.onMacFullscreenChange(applyMacFullscreenTabs);
+    }
+
     // ── Tab switching ──
     const tabs = document.querySelectorAll('.tab');
     const panels = document.querySelectorAll('.panel');
+    let _activeTab = 'agent';
     tabs.forEach(tab => {
       tab.addEventListener('click', () => {
+        const id = tab.dataset.tab;
+        if (id === _activeTab) return;
+        _activeTab = id;
         tabs.forEach(t => t.classList.remove('active'));
         panels.forEach(p => p.classList.remove('active'));
         tab.classList.add('active');
-        document.getElementById(tab.dataset.tab + '-panel').classList.add('active');
-        if (tab.dataset.tab === 'logs') refreshLogs();
-        if (tab.dataset.tab === 'browser') void refreshChromeSetupPanel();
-        if (tab.dataset.tab === 'terminal') initTerminal();
-        if (tab.dataset.tab === 'settings') void refreshSettingsPanel();
+        document.getElementById(id + '-panel').classList.add('active');
+        // Fire data refreshes asynchronously — panel is already visible
+        if (id === 'logs') refreshLogs();
+        if (id === 'browser') void refreshChromeSetupPanel();
+        if (id === 'terminal') initTerminal();
+        if (id === 'settings') void refreshSettingsPanel();
       });
     });
 
@@ -1083,12 +1800,13 @@
     const setupScreen = document.getElementById('agent-setup');
     const webview = document.getElementById('agent-webview');
     const logsContent = document.getElementById('logs-content');
-    const terminalRuntimeBtn = document.getElementById('terminal-runtime-btn');
+    const termRuntimeLabel = document.getElementById('term-runtime-label');
     const setupOverlay = document.getElementById('setup-overlay');
     const authOverlay = document.getElementById('auth-overlay');
     const subscribeOverlay = document.getElementById('subscribe-overlay');
     const runtimeOverlay = document.getElementById('runtime-overlay');
     const nemoPrereqOverlay = document.getElementById('nemoclaw-prereq-overlay');
+    const switchingOverlay = document.getElementById('switching-overlay');
     // ══════════════════════════════════
     //  AUTH + SUBSCRIBE SCREENS
     // ══════════════════════════════════
@@ -1116,16 +1834,27 @@
 
       const titleEl = document.getElementById('subscribe-title');
       const msgEl = document.getElementById('subscribe-message');
+      const trialBtn = document.getElementById('subscribe-trial-btn');
+      const trialErr = document.getElementById('subscribe-trial-error');
+      trialErr.style.display = 'none';
+
+      const canTrial = !!info?.trialEligible;
+
       if (info?.status === 'offline_expired') {
         titleEl.textContent = 'Connection Required';
         msgEl.textContent = 'Your offline grace period has expired. Please connect to the internet so we can verify your subscription.';
       } else if (info?.status === 'trial_expired') {
         titleEl.textContent = 'Trial Ended';
         msgEl.textContent = 'Your 3-day free trial has ended. Subscribe to keep using Valnaa Desktop.';
+      } else if (canTrial) {
+        titleEl.textContent = 'Start using Valnaa Desktop';
+        msgEl.textContent = 'Try it free for 3 days. No credit card required.';
       } else {
-        titleEl.textContent = 'Subscription Required';
-        msgEl.textContent = 'You need an active Valnaa subscription to use this app.';
+        titleEl.textContent = 'Subscribe to Valnaa Desktop';
+        msgEl.textContent = 'Get your personal AI agent running on your machine.';
       }
+
+      trialBtn.style.display = canTrial ? '' : 'none';
     }
 
     function hideSubscribeScreen() {
@@ -1136,58 +1865,152 @@
       document.getElementById('settings-email').textContent = session?.email || 'Not signed in';
     }
 
-    async function refreshSettingsPanel() {
-      const session = await oc.getSession();
-      document.getElementById('settings-email').textContent = session?.email || 'Not signed in';
+    let _lastSubResult = null;
 
-      const runtimeInfo = await oc.getRuntime();
+    /** Opens Stripe Customer Portal (only if user has a paid desktop sub) or desktop Checkout; falls back to website. */
+    async function openDesktopBillingInBrowser() {
+      try {
+        const sub = await oc.checkSubscription();
+        _lastSubResult = sub;
+        if (sub.hasDesktopPaid) {
+          const url = await oc.getStripePortal();
+          if (url) { oc.openExternal(url); return; }
+        }
+        const checkoutUrl = await oc.getDesktopCheckout();
+        if (checkoutUrl) { oc.openExternal(checkoutUrl); return; }
+      } catch { /* fall through */ }
+      oc.openExternal('https://valnaa.com/desktop');
+    }
+
+    async function refreshSettingsPanel() {
+      const emailEl = document.getElementById('settings-email');
+      const planText = document.getElementById('settings-plan-text');
+      const desktopBadge = document.getElementById('settings-desktop-badge');
+      const manageBtn = document.getElementById('settings-manage-sub');
+
+      const [session, runtimeInfo, paths] = await Promise.all([
+        oc.getSession(),
+        oc.getRuntime(),
+        oc.getDataPaths(),
+      ]);
+
       document.getElementById('settings-runtime').textContent =
         runtimeInfo?.runtime === 'nemoclaw' ? 'NemoClaw' : 'OpenClaw';
 
-      const paths = await oc.getDataPaths();
+      const nemoModelBlock = document.getElementById('settings-nemo-only-model-keys');
+      if (nemoModelBlock) {
+        nemoModelBlock.style.display = runtimeInfo?.runtime === 'nemoclaw' ? 'block' : 'none';
+      }
+      const optHint = document.getElementById('settings-optional-keys-hint');
+      if (optHint) {
+        optHint.textContent =
+          'NVIDIA is set during NemoClaw setup. Add OpenAI or Anthropic here to use those models in the sandbox (saved to the agent config inside the sandbox).';
+      }
+
       if (paths) {
         document.getElementById('settings-data-path').textContent = paths.configDir;
         document.getElementById('settings-appdata-path').textContent = paths.appDataDir;
       }
 
+      emailEl.textContent = session?.email || 'Not signed in';
+
       try {
         const sub = await oc.checkSubscription();
-        const badge = document.getElementById('settings-sub-badge');
-        const planEl = document.getElementById('settings-plan');
-        if (sub.ok) {
-          if (sub.desktopSubscription) {
-            badge.textContent = 'Desktop Active';
-            badge.className = 'settings-badge badge-active';
+        _lastSubResult = sub;
+
+        if (sub.email) emailEl.textContent = sub.email;
+
+        if (sub.desktopSubscription) {
+          if (sub.hasDesktopPaid) {
+            planText.textContent = 'Paid';
+            desktopBadge.style.display = 'none';
+          } else if (sub.desktopTrialActive) {
+            planText.textContent = '';
+            desktopBadge.textContent = 'Free Trial';
+            desktopBadge.className = 'settings-badge badge-trial';
+            desktopBadge.style.display = '';
           } else {
-            badge.textContent = 'Cloud Active';
-            badge.className = 'settings-badge badge-active';
+            planText.textContent = 'Active';
+            desktopBadge.style.display = 'none';
           }
-          planEl.textContent = sub.plan ? sub.plan.charAt(0).toUpperCase() + sub.plan.slice(1) : 'Desktop';
+        } else if (sub.status === 'trial_expired') {
+          planText.textContent = '';
+          desktopBadge.textContent = 'Expired';
+          desktopBadge.className = 'settings-badge badge-none';
+          desktopBadge.style.display = '';
         } else {
-          badge.textContent = 'No subscription';
-          badge.className = 'settings-badge badge-none';
-          planEl.textContent = '—';
+          planText.textContent = 'None';
+          desktopBadge.style.display = 'none';
         }
       } catch {
-        const badge = document.getElementById('settings-sub-badge');
-        badge.textContent = 'Could not check';
-        badge.className = 'settings-badge badge-none';
+        planText.textContent = 'Offline';
+        desktopBadge.style.display = 'none';
       }
     }
 
     // Settings buttons
-    document.getElementById('settings-manage-sub').addEventListener('click', () => oc.openExternal('https://valnaa.com/desktop'));
+    document.getElementById('settings-manage-sub').addEventListener('click', async () => {
+      const btn = document.getElementById('settings-manage-sub');
+      const label = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Opening…';
+      try {
+        await openDesktopBillingInBrowser();
+      } finally {
+        btn.disabled = false;
+        btn.textContent = label;
+      }
+    });
     document.getElementById('settings-sign-out').addEventListener('click', () => oc.logout());
     document.getElementById('settings-change-runtime').addEventListener('click', () => {
-      oc.clearRuntime();
-      window.location.reload();
+      showRuntimePicker();
     });
     document.getElementById('settings-open-data').addEventListener('click', () => oc.openDataFolder('config'));
+    document.getElementById('settings-save-model-keys')?.addEventListener('click', async () => {
+      const openaiEl = document.getElementById('settings-openai-key');
+      const anthEl = document.getElementById('settings-anthropic-key');
+      const msgEl = document.getElementById('settings-save-model-keys-msg');
+      const btn = document.getElementById('settings-save-model-keys');
+      if (!openaiEl || !anthEl || !msgEl || !btn || !oc.setOptionalModelKeys) return;
+      msgEl.textContent = '';
+      btn.disabled = true;
+      try {
+        const r = await oc.setOptionalModelKeys({
+          openai: openaiEl.value,
+          anthropic: anthEl.value,
+        });
+        if (!r?.ok) {
+          msgEl.textContent = r?.error || 'Save failed';
+          msgEl.style.color = '#f87171';
+          return;
+        }
+        msgEl.textContent = 'Saved.';
+        msgEl.style.color = '#4ade80';
+        openaiEl.value = '';
+        anthEl.value = '';
+      } catch (e) {
+        msgEl.textContent = e?.message || 'Save failed';
+        msgEl.style.color = '#f87171';
+      } finally {
+        btn.disabled = false;
+      }
+    });
     document.getElementById('settings-open-appdata').addEventListener('click', () => oc.openDataFolder('appdata'));
     document.getElementById('settings-open-logs').addEventListener('click', () => oc.openDataFolder('logs'));
+    document.getElementById('settings-contact-support').addEventListener('click', async () => {
+      let ver = '';
+      try { ver = await oc.getVersion(); } catch { /* ok */ }
+      const sub = encodeURIComponent('Valnaa Desktop support');
+      const body = encodeURIComponent(
+        'Please describe your issue below.\n\n'
+        + '---\n'
+        + `App: Valnaa Desktop${ver ? ` v${ver}` : ''}\n`,
+      );
+      oc.openExternal(`mailto:hello@valnaa.com?subject=${sub}&body=${body}`);
+    });
     document.getElementById('settings-open-website').addEventListener('click', () => oc.openExternal('https://valnaa.com'));
     document.getElementById('settings-delete-agent').addEventListener('click', async () => {
-      if (!confirm('This will stop the agent and delete all local OpenClaw config, memories, and files. This cannot be undone.\n\nContinue?')) return;
+      if (!confirm('This will stop the agent and delete all local agent config, memories, and files. This cannot be undone.\n\nContinue?')) return;
       if (!confirm('Are you sure? All agent data will be permanently deleted.')) return;
       await oc.deleteAgentData();
       window.location.reload();
@@ -1203,7 +2026,41 @@
     });
 
     // Subscribe overlay buttons
-    document.getElementById('subscribe-btn').addEventListener('click', () => oc.openPricing());
+    document.getElementById('subscribe-trial-btn').addEventListener('click', async () => {
+      const btn = document.getElementById('subscribe-trial-btn');
+      const errEl = document.getElementById('subscribe-trial-error');
+      btn.disabled = true;
+      btn.textContent = 'Starting trial...';
+      errEl.style.display = 'none';
+      try {
+        const res = await oc.startDesktopTrial();
+        if (res.ok) {
+          hideSubscribeScreen();
+          window.location.reload();
+        } else {
+          errEl.textContent = res.error || 'Could not start trial. Try subscribing instead.';
+          errEl.style.display = '';
+        }
+      } catch (e) {
+        errEl.textContent = e?.message || 'Network error. Check your connection.';
+        errEl.style.display = '';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Start 3-day free trial. No card needed.';
+      }
+    });
+    document.getElementById('subscribe-btn').addEventListener('click', async () => {
+      const btn = document.getElementById('subscribe-btn');
+      const label = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Opening…';
+      try {
+        await openDesktopBillingInBrowser();
+      } finally {
+        btn.disabled = false;
+        btn.textContent = label;
+      }
+    });
     document.getElementById('subscribe-refresh').addEventListener('click', async () => {
       const result = await oc.checkSubscription();
       if (result.ok) {
@@ -1244,6 +2101,33 @@
 
     function hideRuntimePicker() {
       runtimeOverlay.classList.remove('active');
+    }
+
+    let switchingTimeout = null;
+    function showSwitchingScreen(targetName) {
+      isSwitchingRuntime = true;
+      const title = document.getElementById('switching-title');
+      const sub = document.getElementById('switching-subtitle');
+      title.textContent = `Switching to ${targetName}…`;
+      sub.textContent = 'Stopping current agent and preparing the new one.';
+      switchingOverlay.classList.add('active');
+      runtimeOverlay.classList.remove('active');
+      authOverlay.classList.remove('active');
+      subscribeOverlay.classList.remove('active');
+      setupOverlay.classList.remove('active');
+      nemoPrereqOverlay.classList.remove('active');
+      webview.style.display = 'none';
+      setupScreen.style.display = 'none';
+      if (switchingTimeout) clearTimeout(switchingTimeout);
+      switchingTimeout = setTimeout(() => {
+        if (isSwitchingRuntime) hideSwitchingScreen();
+      }, 45000);
+    }
+
+    function hideSwitchingScreen() {
+      isSwitchingRuntime = false;
+      switchingOverlay.classList.remove('active');
+      if (switchingTimeout) { clearTimeout(switchingTimeout); switchingTimeout = null; }
     }
 
     function showNemoClawPrereq(info) {
@@ -1287,29 +2171,21 @@
     });
 
     document.getElementById('nemoclaw-prereq-switch').addEventListener('click', () => {
-      nemoPrereqOverlay.classList.remove('active');
+      showSwitchingScreen('OpenClaw');
       oc.setRuntime('openclaw');
     });
 
     document.getElementById('pick-openclaw').addEventListener('click', () => {
-      hideRuntimePicker();
+      showSwitchingScreen('OpenClaw');
       oc.setRuntime('openclaw');
     });
 
     document.getElementById('pick-nemoclaw').addEventListener('click', () => {
-      hideRuntimePicker();
+      showSwitchingScreen('NemoClaw');
       oc.setRuntime('nemoclaw');
     });
 
-    function updateAboutRuntime(runtime) {
-      const titleRuntime = document.getElementById('titlebar-runtime');
-      if (titleRuntime) {
-        titleRuntime.textContent = runtime === 'nemoclaw' ? '\u2014 NemoClaw' : '\u2014 OpenClaw';
-      }
-    }
-
     oc.getRuntime().then(info => {
-      updateAboutRuntime(info.runtime || 'openclaw');
       updateTerminalRuntimeBadge();
     });
 
@@ -1317,7 +2193,10 @@
     oc.onShowAuth(() => showAuthScreen());
     oc.onShowSubscribe((info) => showSubscribeScreen(info));
     oc.onShowRuntimePicker(() => showRuntimePicker());
-    oc.onShowNemoClawPrereq((info) => showNemoClawPrereq(info));
+    oc.onShowNemoClawPrereq((info) => {
+      hideSwitchingScreen();
+      showNemoClawPrereq(info);
+    });
     oc.onAuthResult((result) => {
       if (result.success) {
         hideAuthScreen();
@@ -1327,6 +2206,8 @@
     });
 
     // ── Status updates ──
+    let isSwitchingRuntime = false;
+
     function updateUI(status) {
       const s = status.state;
       statusDot.className = 'status-dot ' + s;
@@ -1346,6 +2227,17 @@
       btnRestart.disabled = s !== 'running';
       btnRefreshAgent.disabled = s !== 'running';
 
+      if (isSwitchingRuntime) {
+        if (s === 'starting' || s === 'installing') {
+          const sub = document.getElementById('switching-subtitle');
+          sub.textContent = s === 'installing' ? 'Installing — this may take a moment.' : 'Starting new agent…';
+          return;
+        }
+        if (s === 'stopped' || s === 'stopping') return;
+        isSwitchingRuntime = false;
+        hideSwitchingScreen();
+      }
+
       if (s === 'running' && status.port) {
         showWebview(status.port, status.gatewayToken, status.runtime);
       } else if (s === 'crashed') {
@@ -1359,25 +2251,32 @@
       }
     }
 
+    let lastWebviewRuntime = null;
+    /** Last token we loaded the webview with — must reload when token changes or UI keeps stale #token= and gateway returns "token mismatch". */
+    let lastWebviewToken = null;
     function showWebview(port, token, runtime) {
       setupOverlay.classList.remove('active');
       authOverlay.classList.remove('active');
       subscribeOverlay.classList.remove('active');
       runtimeOverlay.classList.remove('active');
       nemoPrereqOverlay.classList.remove('active');
+      switchingOverlay.classList.remove('active');
       setupScreen.style.display = 'none';
-      document.getElementById('agent-toolbar').style.display = 'flex';
       webview.style.display = 'flex';
       const base = `http://127.0.0.1:${port}`;
       const url = token ? `${base}/#token=${encodeURIComponent(token)}` : base;
-      if (!webview.src || !webview.src.includes(':' + port)) {
+      const runtimeChanged = runtime && runtime !== lastWebviewRuntime;
+      const normTok = token || '';
+      const tokenChanged = normTok !== (lastWebviewToken || '');
+      if (!webview.src || !webview.src.includes(':' + port) || runtimeChanged || tokenChanged) {
         webview.src = url;
       }
+      lastWebviewRuntime = runtime || lastWebviewRuntime;
+      lastWebviewToken = normTok || null;
     }
 
     function showSetup(title, message, details, isError) {
       webview.style.display = 'none';
-      document.getElementById('agent-toolbar').style.display = 'none';
       setupScreen.style.display = 'flex';
 
       if (isError) {
@@ -1405,46 +2304,83 @@
     }
 
     // ══════════════════════════════════
-    //  PTY TERMINAL (xterm.js)
+    //  PTY TERMINAL — multi-session
     // ══════════════════════════════════
-    let xterm = null;
-    let fitAddon = null;
-    let termInitialized = false;
-    let cleanupDataListener = null;
-    let cleanupExitListener = null;
+    let TerminalCtor = null;
+    let FitAddonCtor = null;
+    let termModulesLoaded = false;
 
-    const terminalHintText = document.getElementById('terminal-hint-text');
+    const sessions = new Map();
+    let activeSessionId = null;
+    let sessionCounter = 0;
 
-    async function updateTerminalRuntimeBadge() {
-      if (!terminalRuntimeBtn) return;
-      try {
-        const info = await oc.getRuntime();
-        const runtime = info?.runtime || 'openclaw';
-        terminalRuntimeBtn.textContent = runtime === 'nemoclaw' ? 'Runtime: NemoClaw' : 'Runtime: OpenClaw';
-        if (terminalHintText) {
-          terminalHintText.textContent = runtime === 'nemoclaw'
-            ? 'Host shell. Use "nemoclaw <name> connect" for sandbox.'
-            : 'Full interactive shell.';
-        }
-      } catch {
-        terminalRuntimeBtn.textContent = 'Runtime: unavailable';
+    const termSessionsEl = document.getElementById('terminal-sessions');
+    const termTabsList = document.getElementById('term-tabs-list');
+    const termAddBtn = document.getElementById('term-add-btn');
+    let currentRuntimeIsNemo = false;
+
+    let lastAppliedRuntime = null;
+    function applyRuntimeUi(runtime) {
+      const r = runtime === 'nemoclaw' ? 'nemoclaw' : 'openclaw';
+      currentRuntimeIsNemo = r === 'nemoclaw';
+      const chip = document.getElementById('tabs-runtime-label');
+      if (chip) chip.textContent = r === 'nemoclaw' ? 'NemoClaw' : 'OpenClaw';
+      const lbl = document.getElementById('term-runtime-label');
+      if (lbl) lbl.textContent = r === 'nemoclaw' ? 'NemoClaw' : 'OpenClaw';
+
+      if (r !== lastAppliedRuntime) {
+        lastAppliedRuntime = r;
+        void refreshChromeSetupPanel();
+        void refreshSettingsPanel();
+        void refreshLogs();
+        updateTerminalRuntimeBadge();
       }
     }
 
-    async function initTerminal() {
-      await updateTerminalRuntimeBadge();
-
-      if (termInitialized) {
-        if (fitAddon) setTimeout(() => fitAddon.fit(), 0);
-        if (xterm) xterm.focus();
-        return;
+    async function updateTerminalRuntimeBadge() {
+      try {
+        const info = await oc.getRuntime();
+        applyRuntimeUi(info?.runtime || 'openclaw');
+      } catch {
+        const chip = document.getElementById('tabs-runtime-label');
+        if (chip) chip.textContent = '—';
+        if (termRuntimeLabel) termRuntimeLabel.textContent = '—';
       }
-      termInitialized = true;
+    }
 
-      const { Terminal } = await import('./vendor/xterm.mjs');
-      const { FitAddon } = await import('./vendor/addon-fit.mjs');
+    async function ensureTermModules() {
+      if (termModulesLoaded) return;
+      const [termMod, fitMod] = await Promise.all([
+        import('./vendor/xterm.mjs'),
+        import('./vendor/addon-fit.mjs'),
+      ]);
+      TerminalCtor = termMod.Terminal;
+      FitAddonCtor = fitMod.FitAddon;
+      termModulesLoaded = true;
+    }
 
-      xterm = new Terminal({
+    function buildTab(sessionId, label) {
+      const tab = document.createElement('span');
+      tab.className = 'term-tab';
+      tab.dataset.session = sessionId;
+      tab.innerHTML = `<span class="term-tab-label">${label}</span><span class="term-tab-close" title="Close">&times;</span>`;
+      tab.querySelector('.term-tab-label').addEventListener('click', () => switchSession(sessionId));
+      tab.querySelector('.term-tab-close').addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeSession(sessionId);
+      });
+      return tab;
+    }
+
+    async function createSession(forceSandbox) {
+      await ensureTermModules();
+      sessionCounter++;
+
+      const container = document.createElement('div');
+      container.className = 'term-session';
+      termSessionsEl.appendChild(container);
+
+      const xterm = new TerminalCtor({
         cursorBlink: true,
         fontFamily: "'SF Mono', 'Fira Code', 'Consolas', 'Menlo', monospace",
         fontSize: 13,
@@ -1457,42 +2393,128 @@
         },
         allowProposedApi: true,
       });
-
-      fitAddon = new FitAddon();
+      const fitAddon = new FitAddonCtor();
       xterm.loadAddon(fitAddon);
-
-      const container = document.getElementById('terminal-xterm-container');
       xterm.open(container);
       fitAddon.fit();
 
-      xterm.onData((data) => oc.terminalInput(data));
+      const opts = forceSandbox != null ? { sandbox: !!forceSandbox } : undefined;
+      const result = await oc.terminalSpawn(opts);
+      const sessionId = result.sessionId;
+      const isSandbox = !!result.sandbox;
 
-      cleanupDataListener = oc.onTerminalData((data) => xterm.write(data));
-      cleanupExitListener = oc.onTerminalExit((code) => {
-        xterm.writeln(`\r\n[Session ended — exit ${code}. Press "New Session" to reconnect.]`);
-      });
+      const baseLabel = isSandbox ? 'sandbox' : 'zsh';
+      const label = sessionCounter === 1 ? baseLabel : `${baseLabel} ${sessionCounter}`;
+
+      xterm.onData((data) => oc.terminalInput(sessionId, data));
 
       const resizeObserver = new ResizeObserver(() => {
-        if (fitAddon) {
-          fitAddon.fit();
-          const dims = fitAddon.proposeDimensions();
-          if (dims) oc.terminalResize(dims.cols, dims.rows);
-        }
+        if (!container.classList.contains('active')) return;
+        fitAddon.fit();
+        const dims = fitAddon.proposeDimensions();
+        if (dims) oc.terminalResize(sessionId, dims.cols, dims.rows);
       });
       resizeObserver.observe(container);
 
-      await spawnTerminalSession();
-      xterm.focus();
-    }
+      const tab = buildTab(sessionId, label);
+      termTabsList.appendChild(tab);
 
-    async function spawnTerminalSession() {
-      if (!xterm) return;
-      xterm.clear();
-      await oc.terminalSpawn();
-      if (fitAddon) {
+      sessions.set(sessionId, { xterm, fitAddon, container, tab, resizeObserver, isSandbox });
+      switchSession(sessionId);
+
+      setTimeout(() => {
         fitAddon.fit();
         const dims = fitAddon.proposeDimensions();
-        if (dims) oc.terminalResize(dims.cols, dims.rows);
+        if (dims) oc.terminalResize(sessionId, dims.cols, dims.rows);
+      }, 50);
+
+      return sessionId;
+    }
+
+    function switchSession(sessionId) {
+      if (!sessions.has(sessionId)) return;
+      activeSessionId = sessionId;
+      for (const [id, s] of sessions) {
+        const isActive = id === sessionId;
+        s.container.classList.toggle('active', isActive);
+        s.tab.classList.toggle('active', isActive);
+      }
+      const s = sessions.get(sessionId);
+      setTimeout(() => {
+        s.fitAddon.fit();
+        s.xterm.focus();
+        const dims = s.fitAddon.proposeDimensions();
+        if (dims) oc.terminalResize(sessionId, dims.cols, dims.rows);
+      }, 0);
+    }
+
+    function closeSession(sessionId) {
+      const s = sessions.get(sessionId);
+      if (!s) return;
+      oc.terminalKill(sessionId);
+      s.resizeObserver.disconnect();
+      s.xterm.dispose();
+      s.container.remove();
+      s.tab.remove();
+      sessions.delete(sessionId);
+
+      if (activeSessionId === sessionId) {
+        const remaining = [...sessions.keys()];
+        if (remaining.length > 0) {
+          switchSession(remaining[remaining.length - 1]);
+        } else {
+          activeSessionId = null;
+        }
+      }
+    }
+
+    oc.onTerminalData((sessionId, data) => {
+      const s = sessions.get(sessionId);
+      if (s) s.xterm.write(data);
+    });
+
+    oc.onTerminalExit((sessionId, code) => {
+      const s = sessions.get(sessionId);
+      if (s) {
+        s.xterm.writeln(`\r\n[Session ended — exit ${code}]`);
+      }
+    });
+
+    const termNewMenu = document.getElementById('term-new-menu');
+
+    termAddBtn.addEventListener('click', (e) => {
+      if (!currentRuntimeIsNemo) {
+        void createSession(false);
+        return;
+      }
+      e.stopPropagation();
+      termNewMenu.classList.toggle('open');
+    });
+
+    document.getElementById('term-new-sandbox').addEventListener('click', () => {
+      termNewMenu.classList.remove('open');
+      void createSession(true);
+    });
+    document.getElementById('term-new-local').addEventListener('click', () => {
+      termNewMenu.classList.remove('open');
+      void createSession(false);
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!termNewMenu.contains(e.target) && e.target !== termAddBtn) {
+        termNewMenu.classList.remove('open');
+      }
+    });
+
+    async function initTerminal() {
+      await updateTerminalRuntimeBadge();
+      if (sessions.size === 0) {
+        await createSession();
+      } else {
+        const s = sessions.get(activeSessionId);
+        if (s) {
+          setTimeout(() => { s.fitAddon.fit(); s.xterm.focus(); }, 0);
+        }
       }
     }
 
@@ -1526,10 +2548,6 @@
       if (webview.style.display !== 'none' && webview.src) webview.reload();
     });
 
-    document.getElementById('agent-refresh-btn').addEventListener('click', () => {
-      if (webview.style.display !== 'none' && webview.src) webview.reload();
-    });
-
     const appToast = document.getElementById('app-toast');
     let toastHideTimer = null;
     function showAppToast(message) {
@@ -1546,9 +2564,14 @@
       const pathEl = document.getElementById('chrome-ext-path');
       const tokenEl = document.getElementById('chrome-token');
       const statusEl = document.getElementById('chrome-setup-status');
+      const nemoCallout = document.getElementById('browser-nemoclaw-callout');
       if (!pathEl || !tokenEl || !statusEl) return;
       try {
-        const info = await oc.getChromeExtensionInfo();
+        const [rtResult, info] = await Promise.all([
+          oc.getRuntime().catch(() => null),
+          oc.getChromeExtensionInfo(),
+        ]);
+        if (nemoCallout) nemoCallout.style.display = rtResult?.runtime === 'nemoclaw' ? 'block' : 'none';
         pathEl.textContent = info.extensionPath || '—';
         const dlNameEl = document.getElementById('chrome-downloads-folder-name');
         if (dlNameEl && info.downloadsFolderName) {
@@ -1645,14 +2668,6 @@
     }
     document.getElementById('refresh-logs-btn').addEventListener('click', refreshLogs);
     document.getElementById('open-log-file-btn').addEventListener('click', () => oc.openLogFile());
-    document.getElementById('terminal-new-btn')?.addEventListener('click', () => {
-      void spawnTerminalSession();
-      showAppToast('New terminal session started.');
-    });
-    terminalRuntimeBtn?.addEventListener('click', () => {
-      void updateTerminalRuntimeBadge();
-      showAppToast('Runtime refreshed.');
-    });
 
     // ── Version ──
     oc.getVersion().then(v => {
@@ -1664,14 +2679,10 @@
     // ── Subscribe to status changes ──
     oc.onStatus((status) => {
       updateUI(status);
-      if (status.runtime) updateAboutRuntime(status.runtime);
-      if (status.runtime && terminalRuntimeBtn) {
-        terminalRuntimeBtn.textContent = status.runtime === 'nemoclaw' ? 'Runtime: NemoClaw sandbox' : 'Runtime: OpenClaw host shell';
-      }
+      if (status.runtime) applyRuntimeUi(status.runtime);
     });
     oc.getStatus().then((status) => {
       updateUI(status);
-      if (status.runtime) updateAboutRuntime(status.runtime);
     });
 
     // ── Load session for About panel ──
@@ -1705,6 +2716,7 @@
       } else if (allDone) {
         statusEl.textContent = 'Setup complete — starting agent...';
         failEl.classList.remove('active');
+        document.getElementById('setup-terminal-wrap')?.classList.remove('active');
         setTimeout(() => { setupOverlay.classList.remove('active'); }, 1500);
       } else if (running) {
         statusEl.textContent = running.detail || `${running.label}...`;
@@ -1726,6 +2738,60 @@
 
     oc.onShowSetup((steps) => showSetupOverlay(steps));
     oc.onSetupSteps((steps) => renderSteps(steps));
+
+    // ── In-app setup terminal ──
+    let setupXterm = null;
+    let setupFitAddon = null;
+    const setupTermWrap = document.getElementById('setup-terminal-wrap');
+    const setupTermEl = document.getElementById('setup-terminal-el');
+    const setupTermDot = document.getElementById('setup-term-dot');
+
+    async function ensureSetupTerminal() {
+      if (setupXterm) return;
+      await ensureTermModules();
+      setupXterm = new TerminalCtor({
+        cursorBlink: true,
+        fontFamily: "'SF Mono', 'Fira Code', 'Consolas', 'Menlo', monospace",
+        fontSize: 12,
+        lineHeight: 1.3,
+        theme: {
+          background: '#0d0d0d',
+          foreground: '#d4d4d4',
+          cursor: '#a5b4fc',
+          selectionBackground: 'rgba(255,255,255,0.12)',
+        },
+        scrollback: 5000,
+        convertEol: true,
+      });
+      setupFitAddon = new FitAddonCtor();
+      setupXterm.loadAddon(setupFitAddon);
+      setupXterm.open(setupTermEl);
+      setupFitAddon.fit();
+      setupXterm.onData((data) => oc.setupTerminalInput(data));
+      const ro = new ResizeObserver(() => { if (setupFitAddon) setupFitAddon.fit(); });
+      ro.observe(setupTermEl);
+    }
+
+    oc.onSetupTerminalStart(async () => {
+      await ensureSetupTerminal();
+      setupXterm.clear();
+      setupTermWrap.classList.add('active');
+      setupTermDot.classList.remove('exited');
+      setTimeout(() => { if (setupFitAddon) setupFitAddon.fit(); }, 50);
+    });
+
+    oc.onSetupTerminalData(async (data) => {
+      await ensureSetupTerminal();
+      setupTermWrap.classList.add('active');
+      setupXterm.write(data);
+    });
+
+    oc.onSetupTerminalExit((code) => {
+      setupTermDot.classList.add('exited');
+      if (setupXterm) {
+        setupXterm.writeln(`\r\n\x1b[2m[done — exit ${code}]\x1b[0m`);
+      }
+    });
 
     // Fail actions
     document.getElementById('setup-retry-btn').addEventListener('click', () => {
@@ -1765,7 +2831,19 @@
       akfKeyInput.type = akfKeyInput.type === 'password' ? 'text' : 'password';
     });
 
-    oc.onShowApiKeyForm((providers) => {
+    oc.onShowApiKeyForm((payload) => {
+      const providers = Array.isArray(payload) ? payload : (payload.providers || []);
+      const titleEl = document.getElementById('akf-section-title');
+      const subEl = document.getElementById('akf-section-subtitle');
+      if (titleEl) {
+        titleEl.textContent = (!Array.isArray(payload) && payload.sectionTitle) ? payload.sectionTitle : 'Configure Inference Provider';
+      }
+      if (subEl) {
+        subEl.textContent = (!Array.isArray(payload) && payload.sectionSubtitle)
+          ? payload.sectionSubtitle
+          : 'Choose a provider and paste your API key.';
+      }
+
       akfSelectedProvider = null;
       akfKeyInput.value = '';
       akfError.textContent = '';
@@ -1790,6 +2868,11 @@
           akfUpdateContinue();
         });
       });
+
+      if (providers.length === 1) {
+        const only = akfProvidersEl.querySelector('.provider-card');
+        if (only) only.click();
+      }
 
       akfSection.classList.add('active');
       setTimeout(() => akfSection.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);

@@ -14,6 +14,8 @@
     "dist:mac": "npm run build && electron-builder --mac",
     "dist:win": "npm run build && electron-builder --win",
     "dist": "npm run build && electron-builder --mac --win",
+    "icons:round": "node scripts/round-app-icon.js",
+    "icons:tray": "node scripts/build-tray-template.js",
     "chrome-cli": "bash scripts/chrome-extension-cli.sh",
     "chrome-cli:all": "bash scripts/chrome-extension-cli.sh all"
   },
@@ -24,7 +26,8 @@
     "electron": "^33.0.0",
     "electron-builder": "^25.0.0",
     "typescript": "^5.7.0",
-    "wait-on": "^8.0.1"
+    "wait-on": "^8.0.1",
+    "sharp": "^0.33.5"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",

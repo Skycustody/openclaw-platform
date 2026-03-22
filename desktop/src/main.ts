@@ -8,8 +8,8 @@ import { autoUpdater } from 'electron-updater';
 import { manager, AgentStatus } from './openclaw/manager';
 import { installOpenClaw, findOpenClawBinary, isNodeInstalled, getInstallScriptCommand, findNemoClawBinary, getNemoClawInstallScriptCommand, getNemoClawSetupScriptCommand } from './openclaw/installer';
 import { readRecentLogs, getLogFilePath, getAppLogPath, logApp, closeStreams } from './openclaw/logger';
-import { loadSession, saveSession, clearSession, checkSubscription, parseDeepLinkToken, parseDeepLinkEmail, isOfflineGraceValid } from './lib/session';
-import { loadRuntime, saveRuntime, clearRuntime, isNemoClawSupported, isDockerInstalled, isDockerRunning, canInstallDocker, getDockerInstallCommand, launchDockerDesktop, RuntimeType, isIntelMac, isOpenShellInstalled, isSidecarReady, setupOpenShellSidecar, ensureSidecarNetworking, isOnboardComplete, getNemoClawOnboardCommand, ensurePortForward, OPENCLAW_PORT, EXTENSION_RELAY_PORT, readSandboxGatewayTokenFresh, readHostOpenclawGatewayToken } from './lib/runtime';
+import { loadSession, saveSession, clearSession, checkSubscription, startDesktopTrial, getStripePortalUrl, getDesktopCheckoutUrl, parseDeepLinkToken, parseDeepLinkEmail, isOfflineGraceValid, markLocalTrialClaimed, isLocalTrialClaimed } from './lib/session';
+import { loadRuntime, saveRuntime, clearRuntime, isNemoClawSupported, isDockerInstalled, isDockerRunning, canInstallDocker, getDockerInstallCommand, launchDockerDesktop, RuntimeType, isIntelMac, isOpenShellInstalled, isSidecarReady, setupOpenShellSidecar, ensureSidecarNetworking, isOnboardComplete, isGatewayDeployed, getNemoClawOnboardCommand, ensurePortForward, OPENCLAW_PORT, EXTENSION_RELAY_PORT, readSandboxGatewayTokenFresh, readHostOpenclawGatewayToken, getSandboxShellCommand, isSandboxReady, applySandboxSettings, findNemoClawPackageRoot } from './lib/runtime';
 import { getAppDataDir, getOpenClawDir, getLogsDir } from './lib/platform';
 import {
   getChromeExtensionDir,
@@ -28,6 +28,11 @@ const gotLock = app.requestSingleInstanceLock();
 
 if (!gotLock) {
   app.quit();
+}
+
+/** In dev, Electron’s default bundle name is “Electron”; align menu bar / About with shipped app. */
+if (!app.isPackaged) {
+  app.setName('Valnaa');
 }
 
 let mainWindow: BrowserWindow | null = null;
@@ -64,7 +69,7 @@ function buildSetupSteps(runtime: RuntimeType): SetupStep[] {
     const onboardDone = isOnboardComplete();
     steps.push(
       { id: 'nemoclaw-install', label: 'Install NemoClaw', status: findNemoClawBinary() ? 'done' : 'pending' },
-      { id: 'collect-api-key', label: 'Configure API key', status: (onboardDone || loadPersistedApiKey() !== null) ? 'done' : 'pending' },
+      { id: 'collect-api-key', label: 'Add NVIDIA API key', status: onboardDone ? 'done' : 'pending' },
       { id: 'nemoclaw-onboard', label: 'Set up NemoClaw', status: onboardDone ? 'done' : 'pending' },
       { id: 'start', label: 'Start agent', status: 'pending' },
     );
@@ -110,53 +115,119 @@ function shEscapeSq(s: string): string {
   return s.replace(/'/g, `'\\''`);
 }
 
-function taskRunsInExternalTerminal(task: SetupShellTask): boolean {
-  return task === 'install-docker' || task === 'install-nemoclaw' || task === 'setup-nemoclaw' || task === 'onboard';
+function taskRunsInExternalTerminal(_task: SetupShellTask): boolean {
+  return false;
 }
 
 // ════════════════════════════════════
-//  In-App PTY Terminal
+//  In-App Setup PTY (runs install/setup commands inside the app)
 // ════════════════════════════════════
-let activePty: pty.IPty | null = null;
+let setupPtyProc: pty.IPty | null = null;
+
+function killSetupPty(): void {
+  if (setupPtyProc) {
+    try { setupPtyProc.kill(); } catch { /* ok */ }
+    setupPtyProc = null;
+  }
+}
+
+function runCommandInSetupPty(command: string): Promise<number> {
+  return new Promise((resolve) => {
+    killSetupPty();
+
+    const localBin = path.join(os.homedir(), '.local', 'bin');
+    const envPath = process.env.PATH || '';
+    const patchedPath = envPath.includes(localBin) ? envPath : `${localBin}:${envPath}`;
+    const brewBin = process.arch === 'arm64' ? '/opt/homebrew/bin' : '/usr/local/bin';
+    const fullPath = patchedPath.includes(brewBin) ? patchedPath : `${brewBin}:${patchedPath}`;
+
+    const shellName = process.platform === 'win32' ? 'powershell.exe' : (process.env.SHELL || '/bin/zsh');
+
+    setupPtyProc = pty.spawn(shellName, ['-c', command], {
+      name: 'xterm-256color',
+      cols: 80,
+      rows: 16,
+      cwd: os.homedir(),
+      env: { ...process.env, PATH: fullPath, TERM: 'xterm-256color', FORCE_COLOR: '1' } as Record<string, string>,
+    });
+
+    setupPtyProc.onData((data: string) => {
+      mainWindow?.webContents.send('setup:terminal-data', data);
+    });
+
+    setupPtyProc.onExit(({ exitCode }) => {
+      mainWindow?.webContents.send('setup:terminal-exit', exitCode ?? 1);
+      setupPtyProc = null;
+      resolve(exitCode ?? 1);
+    });
+
+    mainWindow?.webContents.send('setup:terminal-start');
+    logApp('info', `Setup PTY spawned for command (shell=${shellName})`);
+  });
+}
+
+// ════════════════════════════════════
+//  In-App PTY Terminal (multi-session)
+// ════════════════════════════════════
+const ptyMap = new Map<string, pty.IPty>();
+let nextSessionId = 1;
 let subscriptionCheckTimer: ReturnType<typeof setInterval> | null = null;
 const RECHECK_INTERVAL_MS = 2 * 60 * 60 * 1000; // re-verify every 2 hours
 
-function spawnPty(): pty.IPty {
-  if (activePty) {
-    try { activePty.kill(); } catch { /* ok */ }
-    activePty = null;
-  }
-
-  const pref = loadRuntime();
-  const runtime: RuntimeType = pref?.runtime || 'openclaw';
-  const shellName = process.platform === 'win32' ? 'powershell.exe' : (process.env.SHELL || '/bin/zsh');
-  const shellArgs = ['-l'];
+function spawnPty(sessionId: string, sandbox = false): pty.IPty {
   const localBin = path.join(os.homedir(), '.local', 'bin');
   const envPath = process.env.PATH || '';
   const patchedPath = envPath.includes(localBin) ? envPath : `${localBin}:${envPath}`;
+  const env = { ...process.env, PATH: patchedPath, TERM: 'xterm-256color' } as Record<string, string>;
 
-  logApp('info', `Spawning PTY: ${shellName} ${shellArgs.join(' ')} (runtime: ${runtime})`);
+  let shellName: string;
+  let shellArgs: string[];
+
+  if (sandbox) {
+    const cmd = getSandboxShellCommand();
+    if (cmd) {
+      shellName = cmd.shell;
+      shellArgs = cmd.args;
+      logApp('info', `Spawning sandbox PTY [${sessionId}]: ${shellName} ${shellArgs.join(' ')}`);
+    } else {
+      logApp('warn', `Sandbox shell not available for [${sessionId}], falling back to local`);
+      shellName = process.platform === 'win32' ? 'powershell.exe' : (process.env.SHELL || '/bin/zsh');
+      shellArgs = ['-l'];
+    }
+  } else {
+    shellName = process.platform === 'win32' ? 'powershell.exe' : (process.env.SHELL || '/bin/zsh');
+    shellArgs = ['-l'];
+  }
+
+  logApp('info', `Spawning PTY [${sessionId}]: ${shellName} ${shellArgs.join(' ')}`);
 
   const ptyProc = pty.spawn(shellName, shellArgs, {
     name: 'xterm-256color',
     cols: 80,
     rows: 24,
     cwd: os.homedir(),
-    env: { ...process.env, PATH: patchedPath, TERM: 'xterm-256color' } as Record<string, string>,
+    env,
   });
 
   ptyProc.onData((data: string) => {
-    mainWindow?.webContents.send('terminal:data', data);
+    mainWindow?.webContents.send('terminal:data', sessionId, data);
   });
 
   ptyProc.onExit(({ exitCode, signal }) => {
-    logApp('info', `PTY exited (code=${exitCode}, signal=${signal})`);
-    mainWindow?.webContents.send('terminal:exit', exitCode);
-    if (activePty === ptyProc) activePty = null;
+    logApp('info', `PTY [${sessionId}] exited (code=${exitCode}, signal=${signal})`);
+    mainWindow?.webContents.send('terminal:exit', sessionId, exitCode);
+    ptyMap.delete(sessionId);
   });
 
-  activePty = ptyProc;
+  ptyMap.set(sessionId, ptyProc);
   return ptyProc;
+}
+
+function killAllPtys(): void {
+  for (const [id, p] of ptyMap) {
+    try { p.kill(); } catch { /* ok */ }
+  }
+  ptyMap.clear();
 }
 
 function openUserTerminalWithCommand(shellCommand: string, fileLabel: string): void {
@@ -223,13 +294,115 @@ async function waitForExternalTask(task: SetupShellTask): Promise<void> {
 function nemoclawOnboardShellBlock(): string {
   const saved = loadPersistedApiKey();
   const keyLine = saved?.key ? `export NVIDIA_API_KEY='${shEscapeSq(saved.key)}'\n` : '';
-  return `${keyLine}${getNemoClawOnboardCommand()}`;
+  const nonInteractive = `export NEMOCLAW_NON_INTERACTIVE=1\nexport NEMOCLAW_SANDBOX_NAME=valnaa\n`;
+  return `${keyLine}${nonInteractive}${getNemoClawOnboardCommand()}`;
+}
+
+/**
+ * If the gateway is already deployed, skip the full `nemoclaw onboard` (which
+ * destroys the gateway) and just create a sandbox directly. This avoids the
+ * 30-minute image re-import on every retry (Intel Mac).
+ * Returns true if the sandbox was created, false if we should fall back to
+ * full onboard.
+ */
+async function tryDirectSandboxCreation(): Promise<boolean> {
+  if (!isGatewayDeployed()) return false;
+  if (isSandboxReady()) return true;
+
+  const nemoRoot = findNemoClawPackageRoot();
+  if (!nemoRoot) {
+    logApp('warn', 'Cannot find NemoClaw package root — falling back to full onboard');
+    return false;
+  }
+
+  let sourceDir = path.join(os.homedir(), '.nemoclaw', 'source');
+  if (!fs.existsSync(path.join(sourceDir, 'Dockerfile'))) {
+    sourceDir = nemoRoot;
+  }
+  if (!fs.existsSync(path.join(sourceDir, 'Dockerfile'))) {
+    logApp('warn', 'NemoClaw source directory missing — falling back to full onboard');
+    return false;
+  }
+
+  // Ensure socat forwarder for port 8080 (gateway API) inside sidecar.
+  // Without it, openshell inside the sidecar can't reach the gateway at 127.0.0.1:8080.
+  if (isIntelMac()) {
+    try {
+      const { execSync: exec } = require('child_process');
+      ensureSidecarNetworking();
+      const listening = exec('docker exec openshell-cli sh -c "ss -tln | grep :8080 || true"', { timeout: 5000, stdio: 'pipe' }).toString();
+      if (!listening.includes(':8080')) {
+        exec('docker exec -d openshell-cli socat TCP-LISTEN:8080,fork,reuseaddr TCP:host.docker.internal:8080', { timeout: 5000, stdio: 'pipe' });
+      }
+    } catch (e: any) { logApp('warn', `Socat 8080 setup failed: ${e.message}`); }
+  }
+
+  const saved = loadPersistedApiKey();
+  const keyExport = saved?.key ? `export NVIDIA_API_KEY='${shEscapeSq(saved.key)}'` : '';
+  const pathPrefix = isIntelMac() ? `export PATH="$HOME/.local/bin:$PATH"` : '';
+
+  // Must use the real macOS temp dir ($TMPDIR = /var/folders/...) not /tmp,
+  // because the sidecar mounts $TMPDIR but not /tmp.
+  // Policy path must also be inside the build dir (not source dir) because
+  // the sidecar can only see $TMPDIR, not ~/.nemoclaw/source/.
+  const hostTmp = os.tmpdir().replace(/\/+$/, '');
+  const script = [
+    pathPrefix,
+    keyExport,
+    `cd "${sourceDir}"`,
+    `BUILD_DIR=$(mktemp -d "${hostTmp}/nemoclaw-build-XXXXXX")`,
+    `cp Dockerfile "$BUILD_DIR/"`,
+    `cp -r nemoclaw "$BUILD_DIR/"`,
+    `cp -r nemoclaw-blueprint "$BUILD_DIR/"`,
+    `cp -r scripts "$BUILD_DIR/"`,
+    `rm -rf "$BUILD_DIR/nemoclaw/node_modules"`,
+    `echo "Creating sandbox valnaa (this may take several minutes)..."`,
+    `openshell sandbox create --from "$BUILD_DIR/Dockerfile" --name "valnaa" --policy "$BUILD_DIR/nemoclaw-blueprint/policies/openclaw-sandbox.yaml" -- env CHAT_UI_URL='http://127.0.0.1:18789' ${saved?.key ? `NVIDIA_API_KEY='${shEscapeSq(saved.key)}'` : ''} nemoclaw-start 2>&1`,
+    `EXIT_CODE=$?`,
+    `rm -rf "$BUILD_DIR"`,
+    `exit $EXIT_CODE`,
+  ].filter(Boolean).join('\n');
+
+  logApp('info', 'Gateway already deployed — creating sandbox directly (skipping full onboard)');
+  const exitCode = await runCommandInSetupPty(script);
+  logApp('info', `Direct sandbox creation exited with code ${exitCode}`);
+
+  if (isSandboxReady() || isOnboardComplete()) return true;
+
+  if (exitCode === 0) {
+    try {
+      await waitUntil(() => isSandboxReady(), 60_000, '');
+      return true;
+    } catch { /* fall through */ }
+  }
+
+  logApp('warn', 'Direct sandbox creation did not produce a Ready sandbox');
+  return false;
 }
 
 async function runNemoClawOnboardExternal(): Promise<void> {
-  logApp('info', 'Opening Terminal for NemoClaw onboard');
-  openUserTerminalWithCommand(nemoclawOnboardShellBlock(), 'nemoclaw-onboard');
-  await waitForExternalTask('setup-nemoclaw');
+  logApp('info', 'Running NemoClaw onboard in-app');
+  const cmd = nemoclawOnboardShellBlock();
+  const exitCode = await runCommandInSetupPty(cmd);
+  logApp('info', `NemoClaw onboard PTY exited with code ${exitCode}`);
+
+  if (isOnboardComplete()) return;
+
+  if (exitCode !== 0) {
+    throw new Error(`NemoClaw onboard failed (exit code ${exitCode}). Check the output above, then tap Retry.`);
+  }
+
+  // Exit code 0 but not detected yet — poll briefly, then do a live sandbox
+  // check. On Intel Mac, node-pty can mis-report exit codes after SIGKILL.
+  try {
+    await waitUntil(() => isOnboardComplete(), 15_000, '');
+    return;
+  } catch {
+    // isOnboardComplete's fallback already checks openshell sandbox list.
+    // If that also failed, the sandbox truly doesn't exist.
+    if (isOnboardComplete()) return;
+    throw new Error('NemoClaw onboard appeared to succeed but no sandbox was found. Tap Retry to try again.');
+  }
 }
 
 async function runSetupShellTaskAsync(task: SetupShellTask): Promise<void> {
@@ -238,10 +411,27 @@ async function runSetupShellTaskAsync(task: SetupShellTask): Promise<void> {
     throw new Error(`Cannot determine command for task "${task}"`);
   }
 
-  if (taskRunsInExternalTerminal(task)) {
-    logApp('info', `External setup "${task}": ${redactPtyLog(command)}`);
-    openUserTerminalWithCommand(command, task);
-    await waitForExternalTask(task);
+  const needsPty = task === 'install-docker' || task === 'install-nemoclaw' || task === 'setup-nemoclaw' || task === 'onboard';
+
+  if (needsPty) {
+    logApp('info', `In-app PTY setup "${task}": ${redactPtyLog(command)}`);
+    const exitCode = await runCommandInSetupPty(command);
+    logApp('info', `Setup PTY "${task}" exited with code ${exitCode}`);
+
+    const checks: Record<string, { pred: () => boolean; label: string }> = {
+      'install-docker': { pred: () => isDockerInstalled(), label: 'Docker install' },
+      'install-nemoclaw': { pred: () => !!findNemoClawBinary(), label: 'NemoClaw install' },
+      'setup-nemoclaw': { pred: () => isOnboardComplete(), label: 'NemoClaw setup' },
+      'onboard': { pred: () => !needsSetup(), label: 'OpenClaw setup' },
+    };
+    const check = checks[task];
+    if (check) {
+      if (check.pred()) return;
+      if (exitCode !== 0) {
+        throw new Error(`${check.label} failed (exit code ${exitCode}). Check the output above, then tap Retry.`);
+      }
+      await waitUntil(check.pred, 30_000, `${check.label} finished but was not detected. Tap Retry.`);
+    }
     return;
   }
 
@@ -311,9 +501,15 @@ function waitForDockerInstalled(timeoutMs = 300000): Promise<void> {
 // ════════════════════════════════════
 let apiKeyResolver: ((val: { provider: string; key: string }) => void) | null = null;
 
-function waitForApiKeySubmission(): Promise<{ provider: string; key: string }> {
-  return new Promise((resolve) => {
+function waitForApiKeySubmission(timeoutMs = 600_000): Promise<{ provider: string; key: string }> {
+  return new Promise((resolve, reject) => {
     apiKeyResolver = resolve;
+    setTimeout(() => {
+      if (apiKeyResolver === resolve) {
+        apiKeyResolver = null;
+        reject(new Error('API key entry timed out (10 min). Tap Retry to try again.'));
+      }
+    }, timeoutMs);
   });
 }
 
@@ -352,7 +548,12 @@ function loadPersistedApiKey(): { provider: string; key: string } | null {
 //  Setup Flow Orchestrator
 // ════════════════════════════════════
 async function runSetupFlow(runtime: RuntimeType): Promise<void> {
-  if (setupRunning) return;
+  if (setupRunning) {
+    logApp('info', 'Retry requested — killing active setup PTY');
+    killSetupPty();
+    apiKeyResolver = null;
+    setupRunning = false;
+  }
   setupRunning = true;
 
   try {
@@ -417,25 +618,104 @@ async function runSetupFlow(runtime: RuntimeType): Promise<void> {
             break;
           }
           case 'collect-api-key': {
-            if (loadPersistedApiKey() || isOnboardComplete()) break;
+            if (isOnboardComplete()) break;
+            if (loadPersistedApiKey()) {
+              logApp('info', 'NVIDIA API key already saved — skipping prompt');
+              break;
+            }
             step.detail = 'Waiting for API key...';
             sendSteps(steps);
             await new Promise(r => setTimeout(r, 300));
-            mainWindow?.webContents.send('app:show-api-key-form', [
-              { id: 'openai',    name: 'OpenAI',    keyUrl: 'https://platform.openai.com/api-keys' },
-              { id: 'anthropic', name: 'Anthropic',  keyUrl: 'https://console.anthropic.com/settings/keys' },
-              { id: 'nvidia',    name: 'NVIDIA NIM', keyUrl: 'https://build.nvidia.com/nim' },
-            ]);
+            mainWindow?.webContents.send('app:show-api-key-form', {
+              providers: [
+                { id: 'nvidia', name: 'NVIDIA NIM', keyUrl: 'https://build.nvidia.com/' },
+              ],
+              sectionTitle: 'Add your NVIDIA API key',
+              sectionSubtitle:
+                'NemoClaw requires a valid NVIDIA key to create the secure sandbox and run inference. ' +
+                'OpenAI and other providers are optional — add them later in the sandbox if you want them.',
+            });
             const { provider, key } = await waitForApiKeySubmission();
             persistApiKey(provider, key);
             break;
           }
           case 'nemoclaw-onboard': {
             if (isOnboardComplete()) break;
-            if (isIntelMac()) ensureSidecarNetworking();
+
             step.detail = 'Running NemoClaw setup (this may take several minutes)...';
             sendSteps(steps);
-            await runNemoClawOnboardExternal();
+
+            // Optimization: if gateway is already deployed, create sandbox
+            // directly instead of running full onboard (which destroys the
+            // gateway and re-imports the 4GB image — ~30 min on Intel Mac).
+            if (isGatewayDeployed()) {
+              logApp('info', 'Gateway alive — trying direct sandbox creation (preserving gateway)');
+              const created = await tryDirectSandboxCreation();
+              if (created) {
+                logApp('info', 'Direct sandbox creation succeeded');
+                break;
+              }
+              logApp('info', 'Direct creation failed — falling back to full onboard');
+            }
+
+            // Full onboard path: recreate sidecar WITHOUT port mappings so
+            // onboard can bind 18789 for its own gateway.
+            if (isIntelMac()) {
+              try {
+                const { execSync: exec } = require('child_process');
+                logApp('info', 'Recreating openshell-cli without port mappings for onboard');
+                for (let attempt = 0; attempt < 3; attempt++) {
+                  try { exec('docker rm -f openshell-cli 2>/dev/null', { stdio: 'pipe', timeout: 15000 }); break; } catch {
+                    try { exec('docker stop openshell-cli 2>/dev/null && docker rm openshell-cli 2>/dev/null', { stdio: 'pipe', timeout: 15000 }); break; } catch { /* retry */ }
+                  }
+                }
+                await new Promise(r => setTimeout(r, 1500));
+                const configDir = path.join(os.homedir(), '.config', 'openshell');
+                const openshellBin = path.join(os.homedir(), '.local', 'lib', 'openshell', 'openshell-linux');
+                const tmpDir = os.tmpdir().replace(/\/+$/, '');
+                const tmpMount = tmpDir ? `-v "${tmpDir}:${tmpDir}"` : '';
+                const pkg = findNemoClawPackageRoot();
+                const resolvedPkg = pkg ? fs.realpathSync(pkg) : null;
+                const sourceMount = resolvedPkg ? `-v "${resolvedPkg}:${resolvedPkg}:ro"` : '';
+                const symlinkMount = (pkg && resolvedPkg && resolvedPkg !== pkg)
+                  ? `-v "${resolvedPkg}:${pkg}:ro"` : '';
+                exec(
+                  `docker create --name openshell-cli --init ` +
+                  `-v /var/run/docker.sock:/var/run/docker.sock ` +
+                  `-v "${configDir}:/root/.config/openshell" ` +
+                  `-v "${openshellBin}:/usr/local/bin/openshell:ro" ` +
+                  `${tmpMount} ${sourceMount} ${symlinkMount} ` +
+                  `--add-host "host.docker.internal:host-gateway" ` +
+                  `alpine:latest sleep infinity`,
+                  { timeout: 15000, stdio: 'pipe' }
+                );
+                exec('docker start openshell-cli', { timeout: 10000, stdio: 'pipe' });
+                exec('docker exec openshell-cli apk add --no-cache socat openssh-client 2>/dev/null', { timeout: 60000, stdio: 'pipe' });
+                try {
+                  exec('docker exec -d openshell-cli socat TCP-LISTEN:8080,fork,reuseaddr TCP:host.docker.internal:8080', { timeout: 5000, stdio: 'pipe' });
+                } catch { /* ok if socat not needed yet */ }
+                logApp('info', 'Sidecar recreated without port mappings (with source + pkg mounts)');
+              } catch (e: any) { logApp('warn', `Sidecar rebuild (no-ports) failed: ${e.message}`); }
+            }
+
+            let onboardFailed = false;
+            try {
+              await runNemoClawOnboardExternal();
+            } catch (e: any) {
+              onboardFailed = true;
+              logApp('warn', `Onboard threw: ${e.message}`);
+            }
+            // ALWAYS rebuild sidecar with full port mappings, even on failure.
+            if (isIntelMac()) {
+              try {
+                logApp('info', 'Re-creating openshell-cli sidecar after onboard');
+                await setupOpenShellSidecar((msg) => { logApp('info', `[sidecar-rebuild] ${msg}`); });
+                ensureSidecarNetworking();
+              } catch (e: any) { logApp('warn', `Sidecar rebuild failed: ${e.message}`); }
+            }
+            if (onboardFailed && !isOnboardComplete()) {
+              throw new Error('NemoClaw onboard did not complete. Tap Retry to try again.');
+            }
             break;
           }
           case 'openclaw-install': {
@@ -494,16 +774,23 @@ function handleDeepLink(url: string): void {
     return;
   }
 
-  saveSession(token, email || 'user@valnaa.com');
+  saveSession(token, email || '');
 
   mainWindow?.show();
   mainWindow?.focus();
-  mainWindow?.webContents.send('app:auth-result', { success: true, email: email || 'user@valnaa.com' });
+  mainWindow?.webContents.send('app:auth-result', { success: true, email: email || '' });
 
   autoStart();
 }
 
 function createWindow(): void {
+  const windowIconPath = path.join(__dirname, '..', 'assets', 'icon.png');
+  let windowIcon: Electron.NativeImage | undefined;
+  try {
+    const ni = nativeImage.createFromPath(windowIconPath);
+    if (!ni.isEmpty()) windowIcon = ni;
+  } catch { /* optional */ }
+
   mainWindow = new BrowserWindow({
     width: 1100,
     height: 750,
@@ -512,6 +799,7 @@ function createWindow(): void {
     title: 'Valnaa',
     backgroundColor: '#000000',
     titleBarStyle: 'hiddenInset',
+    ...(windowIcon ? { icon: windowIcon } : {}),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -520,7 +808,9 @@ function createWindow(): void {
     },
   });
 
-  mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'), {
+    query: { platform: process.platform },
+  });
 
   mainWindow.on('close', (e) => {
     if (!isQuitting) {
@@ -529,18 +819,43 @@ function createWindow(): void {
     }
   });
 
+  if (process.platform === 'darwin') {
+    const broadcastMacFullscreen = () => {
+      if (!mainWindow?.isDestroyed()) {
+        mainWindow?.webContents.send('app:mac-fullscreen', mainWindow.isFullScreen());
+      }
+    };
+    mainWindow.on('enter-full-screen', broadcastMacFullscreen);
+    mainWindow.on('leave-full-screen', broadcastMacFullscreen);
+  }
+
   mainWindow.webContents.on('render-process-gone', (_e, details) => {
     logApp('error', `Renderer crashed: ${details.reason}`, JSON.stringify(details));
     mainWindow?.reload();
   });
+
 }
 
 function createTray(): void {
-  const iconPath = path.join(__dirname, '..', 'assets', 'iconTemplate.png');
+  if (tray) {
+    try {
+      tray.removeAllListeners();
+      tray.destroy();
+    } catch { /* already destroyed */ }
+    tray = null;
+  }
+
+  const iconPath =
+    process.platform === 'darwin'
+      ? path.join(__dirname, '..', 'assets', 'iconTemplate.png')
+      : path.join(__dirname, '..', 'assets', 'icon.png');
   let icon: Electron.NativeImage;
   try {
     icon = nativeImage.createFromPath(iconPath);
     if (icon.isEmpty()) throw new Error('empty');
+    if (process.platform === 'darwin') {
+      icon.setTemplateImage(true);
+    }
   } catch {
     icon = nativeImage.createEmpty();
   }
@@ -566,7 +881,7 @@ function updateTrayMenu(): void {
     { type: 'separator' },
     { label: 'Open Window', click: () => { mainWindow?.show(); mainWindow?.focus(); } },
     { type: 'separator' },
-    { label: 'Start Agent', enabled: !isRunning, click: () => manager.start() },
+    { label: 'Start Agent', enabled: !isRunning, click: () => { if (needsSetupFlow()) autoStart(); else manager.start(); } },
     { label: 'Stop Agent', enabled: isRunning, click: () => manager.stop() },
     { label: 'Restart Agent', enabled: isRunning, click: () => manager.restart() },
     { type: 'separator' },
@@ -606,36 +921,61 @@ function prepareChromeExtensionExport(): { ok: true } | { ok: false; error: stri
   return { ok: true };
 }
 
+function needsSetupFlow(): boolean {
+  const rt = loadRuntime();
+  if (!rt) return true;
+  if (rt.runtime === 'nemoclaw') {
+    return !isDockerInstalled() || !isDockerRunning() || !findNemoClawBinary() || !isOnboardComplete();
+  }
+  return !findOpenClawBinary() || needsSetup();
+}
+
 function setupIPC(): void {
   ipcMain.handle('agent:status', () => manager.getStatus());
-  ipcMain.handle('agent:start', () => manager.start());
+  ipcMain.handle('agent:start', () => {
+    if (needsSetupFlow()) return autoStart();
+    return manager.start();
+  });
   ipcMain.handle('agent:stop', () => manager.stop());
   ipcMain.handle('agent:restart', () => manager.restart());
   ipcMain.handle('agent:logs', () => readRecentLogs());
   ipcMain.handle('agent:log-path', () => getLogFilePath());
   ipcMain.handle('agent:open-log-file', () => shell.openPath(getLogFilePath()));
   ipcMain.handle('app:version', () => app.getVersion());
-  ipcMain.handle('terminal:spawn', () => {
+  ipcMain.handle('app:get-mac-fullscreen', () =>
+    process.platform === 'darwin' && !!mainWindow && !mainWindow.isDestroyed() && mainWindow.isFullScreen(),
+  );
+  ipcMain.handle('terminal:spawn', (_e, opts?: { sandbox?: boolean }) => {
     const pref = loadRuntime();
-    const runtime: RuntimeType = pref?.runtime || 'openclaw';
-    spawnPty();
-    return { ok: true, runtime };
+    const isNemo = pref?.runtime === 'nemoclaw';
+    const wantSandbox = opts?.sandbox ?? isNemo;
+    const useSandbox = wantSandbox && isNemo && isSandboxReady();
+    const prefix = useSandbox ? 'sandbox' : 'term';
+    const sessionId = `${prefix}-${nextSessionId++}`;
+    spawnPty(sessionId, useSandbox);
+    return { sessionId, sandbox: useSandbox };
   });
 
-  ipcMain.on('terminal:input', (_e, data: string) => {
-    activePty?.write(data);
+  ipcMain.on('terminal:input', (_e, sessionId: string, data: string) => {
+    ptyMap.get(sessionId)?.write(data);
   });
 
-  ipcMain.on('terminal:resize', (_e, cols: number, rows: number) => {
-    if (activePty && cols > 0 && rows > 0) {
-      try { activePty.resize(cols, rows); } catch { /* ok */ }
+  ipcMain.on('setup:terminal-input', (_e, data: string) => {
+    setupPtyProc?.write(data);
+  });
+
+  ipcMain.on('terminal:resize', (_e, sessionId: string, cols: number, rows: number) => {
+    const p = ptyMap.get(sessionId);
+    if (p && cols > 0 && rows > 0) {
+      try { p.resize(cols, rows); } catch { /* ok */ }
     }
   });
 
-  ipcMain.handle('terminal:kill', () => {
-    if (activePty) {
-      try { activePty.kill(); } catch { /* ok */ }
-      activePty = null;
+  ipcMain.handle('terminal:kill', (_e, sessionId: string) => {
+    const p = ptyMap.get(sessionId);
+    if (p) {
+      try { p.kill(); } catch { /* ok */ }
+      ptyMap.delete(sessionId);
     }
     return { ok: true };
   });
@@ -733,7 +1073,7 @@ function setupIPC(): void {
     const win = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined;
     const defaultPath = path.join(app.getPath('downloads'), CHROME_EXTENSION_ZIP_NAME);
     const saveOpts = {
-      title: 'Save OpenClaw browser extension',
+      title: 'Save browser extension',
       defaultPath,
       filters: [{ name: 'Zip archive', extensions: ['zip'] }],
     };
@@ -768,8 +1108,23 @@ function setupIPC(): void {
   });
 
   ipcMain.handle('app:open-external', (_e, url: string) => {
-    const allowed = [
+    const trimmed = url.trim();
+    if (trimmed.toLowerCase().startsWith('mailto:')) {
+      try {
+        const rest = trimmed.slice(7).split('?')[0].toLowerCase();
+        if (rest && rest.endsWith('@valnaa.com')) {
+          void shell.openExternal(trimmed);
+          return;
+        }
+      } catch { /* fall through */ }
+      logApp('warn', 'open-external blocked (mailto not allowlisted)', trimmed.substring(0, 80));
+      return;
+    }
+
+    const allowedPrefixes = [
       'https://valnaa.com',
+      'https://www.valnaa.com',
+      'https://api.valnaa.com',
       'https://www.docker.com',
       'https://docker.com',
       'https://desktop.docker.com',
@@ -783,8 +1138,21 @@ function setupIPC(): void {
       'https://discord.com',
       'https://docs.openclaw.ai',
     ];
-    if (allowed.some(prefix => url.startsWith(prefix))) {
-      shell.openExternal(url);
+    let ok = allowedPrefixes.some((prefix) => trimmed.startsWith(prefix));
+    if (!ok) {
+      try {
+        const u = new URL(url);
+        if (u.protocol === 'https:' && (u.hostname === 'stripe.com' || u.hostname.endsWith('.stripe.com'))) {
+          ok = true;
+        }
+      } catch {
+        /* invalid URL */
+      }
+    }
+    if (ok) {
+      void shell.openExternal(trimmed);
+    } else {
+      logApp('warn', 'open-external blocked (not allowlisted)', trimmed.substring(0, 80));
     }
   });
 
@@ -804,7 +1172,16 @@ function setupIPC(): void {
     if (!session) return { ok: false, reason: 'no-session' };
     try {
       const result = await checkSubscription(session.token);
-      return { ok: result.ok, status: result.status, plan: result.plan };
+      return {
+        ok: result.ok,
+        status: result.status,
+        plan: result.plan,
+        email: result.email,
+        desktopSubscription: result.desktopSubscription,
+        desktopTrialActive: result.desktopTrialActive,
+        hasDesktopPaid: result.hasDesktopPaid,
+        hasStripe: result.hasStripe,
+      };
     } catch (err: any) {
       if (err.message === 'unauthorized') {
         clearSession();
@@ -823,6 +1200,27 @@ function setupIPC(): void {
 
   ipcMain.handle('auth:open-pricing', () => {
     shell.openExternal('https://valnaa.com/desktop');
+  });
+
+  ipcMain.handle('auth:start-desktop-trial', async () => {
+    const session = loadSession();
+    if (!session?.token) return { ok: false, error: 'Not signed in' };
+    if (isLocalTrialClaimed()) return { ok: false, error: 'A free trial has already been used on this computer' };
+    const result = await startDesktopTrial(session.token);
+    if (result.ok) markLocalTrialClaimed();
+    return result;
+  });
+
+  ipcMain.handle('auth:get-stripe-portal', async () => {
+    const session = loadSession();
+    if (!session?.token) return null;
+    return getStripePortalUrl(session.token);
+  });
+
+  ipcMain.handle('auth:get-desktop-checkout', async () => {
+    const session = loadSession();
+    if (!session?.token) return null;
+    return getDesktopCheckoutUrl(session.token);
   });
 
   ipcMain.handle('data:get-paths', () => {
@@ -858,17 +1256,64 @@ function setupIPC(): void {
     return { ok: true };
   });
 
-  // Runtime selection IPC
+  /** OpenAI / Anthropic in addition to NVIDIA (NemoClaw) or local OpenClaw config. */
+  ipcMain.handle(
+    'settings:set-optional-model-keys',
+    async (_e, body: { openai?: string; anthropic?: string }) => {
+      const openai = typeof body?.openai === 'string' ? body.openai.trim() : '';
+      const anthropic = typeof body?.anthropic === 'string' ? body.anthropic.trim() : '';
+      const apiKeys: Record<string, string> = {};
+      if (openai) apiKeys.OPENAI_API_KEY = openai;
+      if (anthropic) apiKeys.ANTHROPIC_API_KEY = anthropic;
+      if (Object.keys(apiKeys).length === 0) {
+        return { ok: false, error: 'Paste at least one API key.' };
+      }
+      try {
+        const pref = loadRuntime();
+        if (pref?.runtime !== 'nemoclaw') {
+          return {
+            ok: false,
+            error: 'Optional model keys are only available when NemoClaw is selected. For OpenClaw, use Terminal → openclaw onboard or edit ~/.openclaw/openclaw.json.',
+          };
+        }
+        applySandboxSettings({ apiKeys });
+        return { ok: true };
+      } catch (err: any) {
+        logApp('warn', `settings:set-optional-model-keys: ${err.message}`);
+        const msg = err.message || 'Could not save keys.';
+        const friendly =
+          /cannot read sandbox config/i.test(msg)
+            ? 'Could not read sandbox config. Start the agent and ensure NemoClaw is ready, then try again.'
+            : msg;
+        return { ok: false, error: friendly };
+      }
+    },
+  );
+
+  // Runtime selection IPC — cache Docker probe results (they spawn child
+  // processes with multi-second timeouts and block the main thread).
+  let _runtimeCache: { ts: number; data: any } | null = null;
+  const RUNTIME_CACHE_MS = 15_000;
+
   ipcMain.handle('runtime:get', () => {
     const pref = loadRuntime();
-    return {
+    const now = Date.now();
+    if (_runtimeCache && now - _runtimeCache.ts < RUNTIME_CACHE_MS && _runtimeCache.data._rt === (pref?.runtime || null)) {
+      return _runtimeCache.data;
+    }
+    const data = {
+      _rt: pref?.runtime || null,
       runtime: pref?.runtime || null,
       nemoClawSupported: isNemoClawSupported(),
       dockerInstalled: isDockerInstalled(),
       dockerRunning: isDockerRunning(),
       canInstallDocker: canInstallDocker(),
     };
+    _runtimeCache = { ts: now, data };
+    return data;
   });
+
+  ipcMain.handle('runtime:invalidate-cache', () => { _runtimeCache = null; });
 
   ipcMain.handle('app:launch-docker', () => launchDockerDesktop());
 
@@ -893,15 +1338,18 @@ function setupIPC(): void {
     return { ok: true };
   });
 
-  ipcMain.handle('runtime:set', (_e, runtime: RuntimeType) => {
+  ipcMain.handle('runtime:set', async (_e, runtime: RuntimeType) => {
     if (runtime !== 'openclaw' && runtime !== 'nemoclaw') return;
     saveRuntime(runtime);
-    logApp('info', `Runtime selected: ${runtime}`);
-    autoStart();
+    _runtimeCache = null;
+    logApp('info', `Runtime selected: ${runtime} — stopping current agent first`);
+    await manager.stop();
+    await autoStart();
   });
 
   ipcMain.handle('runtime:clear', () => {
     clearRuntime();
+    _runtimeCache = null;
     logApp('info', 'Runtime cleared by user');
   });
 
@@ -936,7 +1384,8 @@ function startSubscriptionRecheck(session: { token: string; email: string }): vo
       if (!sub.ok) {
         logApp('info', `Periodic check: subscription no longer valid (${sub.status}) — locking app`);
         manager.stop();
-        mainWindow?.webContents.send('app:show-subscribe', { email: session.email, status: sub.status, plan: sub.plan });
+        const trialOk = sub.status !== 'trial_expired' && !isLocalTrialClaimed();
+        mainWindow?.webContents.send('app:show-subscribe', { email: session.email, status: sub.status, plan: sub.plan, trialEligible: trialOk });
         if (subscriptionCheckTimer) clearInterval(subscriptionCheckTimer);
       }
     } catch (err: any) {
@@ -951,7 +1400,7 @@ function startSubscriptionRecheck(session: { token: string; email: string }): vo
       if (!isOfflineGraceValid()) {
         logApp('info', 'Periodic check: offline and grace expired — locking app');
         manager.stop();
-        mainWindow?.webContents.send('app:show-subscribe', { email: session.email, status: 'offline_expired', plan: '' });
+        mainWindow?.webContents.send('app:show-subscribe', { email: session.email, status: 'offline_expired', plan: '', trialEligible: false });
         if (subscriptionCheckTimer) clearInterval(subscriptionCheckTimer);
       }
     }
@@ -977,7 +1426,8 @@ async function autoStart(): Promise<void> {
     ]);
     if (!sub.ok) {
       logApp('info', `Subscription not active (status: ${sub.status}) — showing subscribe screen`);
-      mainWindow?.webContents.send('app:show-subscribe', { email: session.email, status: sub.status, plan: sub.plan });
+      const trialOk = sub.status !== 'trial_expired' && !isLocalTrialClaimed();
+      mainWindow?.webContents.send('app:show-subscribe', { email: session.email, status: sub.status, plan: sub.plan, trialEligible: trialOk });
       return;
     }
     logApp('info', `Subscription valid (${sub.plan}/${sub.status})`);
@@ -993,7 +1443,7 @@ async function autoStart(): Promise<void> {
         logApp('warn', 'Subscription check timed out — within 24h grace, allowing local use');
       } else {
         logApp('info', 'Subscription check timed out and offline grace expired — must reconnect');
-        mainWindow?.webContents.send('app:show-subscribe', { email: session.email, status: 'offline_expired', plan: '' });
+        mainWindow?.webContents.send('app:show-subscribe', { email: session.email, status: 'offline_expired', plan: '', trialEligible: false });
         return;
       }
     } else {
@@ -1001,7 +1451,7 @@ async function autoStart(): Promise<void> {
         logApp('warn', 'Could not check subscription (offline?) — within 24h grace, allowing local use');
       } else {
         logApp('info', 'Could not check subscription and offline grace expired — must reconnect');
-        mainWindow?.webContents.send('app:show-subscribe', { email: session.email, status: 'offline_expired', plan: '' });
+        mainWindow?.webContents.send('app:show-subscribe', { email: session.email, status: 'offline_expired', plan: '', trialEligible: false });
         return;
       }
     }
@@ -1077,9 +1527,34 @@ app.on('second-instance', (_event, argv) => {
   mainWindow?.focus();
 });
 
+app.on('web-contents-created', (_e, contents) => {
+  contents.on('context-menu', (_ev, params) => {
+    const menu = Menu.buildFromTemplate([
+      { role: 'cut', enabled: params.editFlags.canCut },
+      { role: 'copy', enabled: params.editFlags.canCopy },
+      { role: 'paste', enabled: params.editFlags.canPaste },
+      { role: 'selectAll', enabled: params.editFlags.canSelectAll },
+    ]);
+    menu.popup();
+  });
+});
+
 app.whenReady().then(async () => {
   logApp('info', `Valnaa v${app.getVersion()} starting`);
   logApp('info', `Diagnostics log: ${getAppLogPath()}`);
+
+  if (process.platform === 'darwin') {
+    Menu.setApplicationMenu(Menu.buildFromTemplate([
+      { role: 'appMenu' },
+      { role: 'editMenu' },
+      { role: 'windowMenu' },
+    ]));
+    try {
+      const dockIconPath = path.join(__dirname, '..', 'assets', 'icon.png');
+      const dockImg = nativeImage.createFromPath(dockIconPath);
+      if (!dockImg.isEmpty()) app.dock.setIcon(dockImg);
+    } catch { /* optional */ }
+  }
 
   createWindow();
   createTray();
@@ -1106,10 +1581,7 @@ app.on('before-quit', async () => {
   isQuitting = true;
   logApp('info', 'App quitting — stopping OpenClaw');
   if (subscriptionCheckTimer) { clearInterval(subscriptionCheckTimer); subscriptionCheckTimer = null; }
-  if (activePty) {
-    try { activePty.kill(); } catch { /* ok */ }
-    activePty = null;
-  }
+  killAllPtys();
   await manager.stop();
   closeStreams();
 });
