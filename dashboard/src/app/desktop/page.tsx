@@ -26,7 +26,8 @@ import {
 const DOWNLOAD_BASE = 'https://github.com/Skycustody/valnaa-desktop/releases/latest';
 const DOWNLOAD_MAC_ARM = `${DOWNLOAD_BASE}/download/Valnaa-arm64.dmg`;
 const DOWNLOAD_MAC_INTEL = `${DOWNLOAD_BASE}/download/Valnaa-x64.dmg`;
-const DOWNLOAD_WIN = `${DOWNLOAD_BASE}/download/Valnaa-Setup.exe`;
+/** Windows .exe not published yet — avoid 404; same as release page */
+const DOWNLOAD_WIN = DOWNLOAD_BASE;
 
 const BASE_PRICE = 5;
 const VAT_RATE = 0.25;
@@ -199,19 +200,25 @@ export default function DesktopPage() {
               <Download className="size-4 opacity-50 transition-opacity group-hover:opacity-100" />
             </Button>
           </a>
-          <a href={DOWNLOAD_WIN} className="group w-full sm:w-auto">
+          <a
+            href={DOWNLOAD_WIN}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Windows installer not published yet — opens GitHub releases"
+            className="group w-full sm:w-auto"
+          >
             <Button size="lg" variant="outline" className="w-full gap-3 rounded-full sm:w-auto">
               <svg className="size-5" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801" />
               </svg>
-              Windows
+              Windows (coming soon)
               <Download className="size-4 opacity-50 transition-opacity group-hover:opacity-100" />
             </Button>
           </a>
         </div>
 
         <p className="mt-4 text-center text-xs text-muted-foreground">
-          Requires a Desktop subscription or active trial.{' '}
+          Requires a Desktop subscription or active trial. Windows installer is not on GitHub yet — Mac DMGs only for now.{' '}
           <a href={DOWNLOAD_BASE} className="underline underline-offset-2 hover:text-foreground" target="_blank" rel="noopener noreferrer">
             All releases
           </a>
