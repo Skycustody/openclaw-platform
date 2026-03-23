@@ -390,10 +390,45 @@
     .cmd-copy-btn:hover { background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.8); }
     .cmd-copy-btn.copied { color: #4ade80; border-color: rgba(34,197,94,0.3); }
     .cmd-desc {
-      padding: 6px 10px 8px;
+      padding: 6px 10px 2px;
       font-size: 11px;
       color: rgba(255,255,255,0.35);
       line-height: 1.4;
+    }
+    .cmd-learn-btn {
+      display: inline-block;
+      padding: 2px 10px 6px;
+      font-size: 10px;
+      color: rgba(139,92,246,0.7);
+      cursor: pointer;
+      background: none;
+      border: none;
+      font-family: inherit;
+      transition: color 0.15s;
+    }
+    .cmd-learn-btn:hover { color: rgba(167,139,250,1); }
+    .cmd-learn-btn::before { content: '▸ '; font-size: 9px; }
+    .cmd-learn-btn.open::before { content: '▾ '; }
+    .cmd-detail {
+      display: none;
+      padding: 8px 12px 10px;
+      margin: 0 10px 8px;
+      font-size: 11.5px;
+      line-height: 1.55;
+      color: rgba(255,255,255,0.55);
+      background: rgba(139,92,246,0.04);
+      border-left: 2px solid rgba(139,92,246,0.25);
+      border-radius: 0 4px 4px 0;
+    }
+    .cmd-detail.open { display: block; }
+    .cmd-detail strong { color: rgba(255,255,255,0.75); font-weight: 600; }
+    .cmd-detail code {
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+      font-size: 11px;
+      background: rgba(0,0,0,0.3);
+      padding: 1px 5px;
+      border-radius: 3px;
+      color: #c4b5fd;
     }
 
     #app-toast {
@@ -1558,20 +1593,33 @@
 
         <!-- OpenClaw commands -->
         <div id="commands-openclaw">
-          <div class="cmd-section-title">Gateway</div>
+          <div class="cmd-section-title">Gateway &amp; Running Tasks</div>
           <div class="cmd-entry">
             <div class="cmd-top">
               <code class="cmd-code">openclaw gateway --port 18789 --bind loopback --allow-unconfigured run</code>
               <button class="cmd-copy-btn" data-cmd="openclaw gateway --port 18789 --bind loopback --allow-unconfigured run">Copy</button>
             </div>
             <div class="cmd-desc">Start the agent gateway on port 18789</div>
+            <button class="cmd-learn-btn">Learn more</button>
+            <div class="cmd-detail">The gateway is like a web server for your AI agent. When you start it, you can open <code>http://localhost:18789</code> in your browser to chat with your agent through a nice UI. The <strong>--bind loopback</strong> flag means only your computer can access it (nobody from the internet). The <strong>--allow-unconfigured</strong> flag lets the gateway run even if you haven't set up an AI model yet — useful for first-time setup.</div>
           </div>
           <div class="cmd-entry">
             <div class="cmd-top">
-              <code class="cmd-code">openclaw run "your task here"</code>
-              <button class="cmd-copy-btn" data-cmd='openclaw run "your task here"'>Copy</button>
+              <code class="cmd-code">openclaw run "summarize my latest emails"</code>
+              <button class="cmd-copy-btn" data-cmd='openclaw run "summarize my latest emails"'>Copy</button>
             </div>
             <div class="cmd-desc">Run a one-shot task without opening the gateway</div>
+            <button class="cmd-learn-btn">Learn more</button>
+            <div class="cmd-detail">Think of this as giving your agent a quick errand. Instead of opening the full chat UI, you just type a task in quotes and the agent does it right in your terminal, then exits. Great for quick things like <strong>"check if my website is down"</strong> or <strong>"write a Python script that renames my photos"</strong>. The agent will use whatever tools and skills it has available.</div>
+          </div>
+          <div class="cmd-entry">
+            <div class="cmd-top">
+              <code class="cmd-code">openclaw gateway --port 18789 --bind lan run</code>
+              <button class="cmd-copy-btn" data-cmd="openclaw gateway --port 18789 --bind lan run">Copy</button>
+            </div>
+            <div class="cmd-desc">Start gateway accessible from your local network</div>
+            <button class="cmd-learn-btn">Learn more</button>
+            <div class="cmd-detail">Same as the regular gateway, but <strong>--bind lan</strong> makes it accessible from other devices on your Wi-Fi network (your phone, tablet, or another computer). Useful if you want to chat with your agent from your phone. Find your computer's local IP with <code>ifconfig</code> and visit <code>http://YOUR_IP:18789</code> from any device on the same network.</div>
           </div>
 
           <div class="cmd-section-title">Configuration</div>
@@ -1581,6 +1629,8 @@
               <button class="cmd-copy-btn" data-cmd="openclaw config get">Copy</button>
             </div>
             <div class="cmd-desc">View the current openclaw.json configuration</div>
+            <button class="cmd-learn-btn">Learn more</button>
+            <div class="cmd-detail">This shows all your agent's settings in one place — which AI model it uses, what tools are enabled, personality settings, channel connections, and more. Everything is stored in a file called <code>openclaw.json</code> in your home folder. If something isn't working, checking the config is usually the first step to figure out why.</div>
           </div>
           <div class="cmd-entry">
             <div class="cmd-top">
@@ -1588,15 +1638,66 @@
               <button class="cmd-copy-btn" data-cmd="openclaw config set models.providers.0.baseUrl https://api.example.com">Copy</button>
             </div>
             <div class="cmd-desc">Update a config value (replace with your key path and value)</div>
+            <button class="cmd-learn-btn">Learn more</button>
+            <div class="cmd-detail">Instead of editing the config file by hand, you can change individual settings with this command. The "path" uses dots to navigate the config structure — for example <code>models.providers.0.baseUrl</code> means "the first AI provider's API URL". You can change things like the AI model name, API keys, tool settings, or personality. After changing config, restart the gateway for changes to take effect.</div>
+          </div>
+          <div class="cmd-entry">
+            <div class="cmd-top">
+              <code class="cmd-code">openclaw config set agents.defaults.model gpt-4o</code>
+              <button class="cmd-copy-btn" data-cmd="openclaw config set agents.defaults.model gpt-4o">Copy</button>
+            </div>
+            <div class="cmd-desc">Change the default AI model your agent uses</div>
+            <button class="cmd-learn-btn">Learn more</button>
+            <div class="cmd-detail">This tells your agent which AI brain to use. Common choices are <strong>gpt-4o</strong> (OpenAI, smartest), <strong>gpt-4o-mini</strong> (cheaper and faster), <strong>claude-sonnet-4-20250514</strong> (Anthropic), or any model your API provider supports. The agent will use this model for all conversations and tasks unless overridden per-agent.</div>
           </div>
 
-          <div class="cmd-section-title">Diagnostics</div>
+          <div class="cmd-section-title">Tools &amp; Skills</div>
+          <div class="cmd-entry">
+            <div class="cmd-top">
+              <code class="cmd-code">openclaw config set tools.web.search.enabled true</code>
+              <button class="cmd-copy-btn" data-cmd="openclaw config set tools.web.search.enabled true">Copy</button>
+            </div>
+            <div class="cmd-desc">Enable web search for your agent</div>
+            <button class="cmd-learn-btn">Learn more</button>
+            <div class="cmd-detail">When enabled, your agent can search the internet for real-time information. This is useful for questions about current events, looking up documentation, or finding answers that require up-to-date knowledge. Without this, your agent only knows what's in its training data.</div>
+          </div>
+          <div class="cmd-entry">
+            <div class="cmd-top">
+              <code class="cmd-code">openclaw config set tools.web.fetch.enabled true</code>
+              <button class="cmd-copy-btn" data-cmd="openclaw config set tools.web.fetch.enabled true">Copy</button>
+            </div>
+            <div class="cmd-desc">Enable web page fetching for your agent</div>
+            <button class="cmd-learn-btn">Learn more</button>
+            <div class="cmd-detail">This lets your agent visit and read the content of web pages. Different from web search — search finds pages, fetch reads them. Together they let your agent research topics deeply: search for relevant pages, then fetch and read each one. Useful for summarizing articles, extracting data from websites, or monitoring web content.</div>
+          </div>
+          <div class="cmd-entry">
+            <div class="cmd-top">
+              <code class="cmd-code">openclaw config set browser.enabled true</code>
+              <button class="cmd-copy-btn" data-cmd="openclaw config set browser.enabled true">Copy</button>
+            </div>
+            <div class="cmd-desc">Enable browser automation for your agent</div>
+            <button class="cmd-learn-btn">Learn more</button>
+            <div class="cmd-detail">This gives your agent a real browser (Chrome) that it can control — clicking buttons, filling out forms, taking screenshots, and navigating websites just like a human would. It's more powerful than web fetch because it can handle JavaScript-heavy sites, login flows, and interactive web apps. Uses more resources than simple web fetch.</div>
+          </div>
+          <div class="cmd-entry">
+            <div class="cmd-top">
+              <code class="cmd-code">openclaw config set memory.enabled true</code>
+              <button class="cmd-copy-btn" data-cmd="openclaw config set memory.enabled true">Copy</button>
+            </div>
+            <div class="cmd-desc">Enable persistent memory for your agent</div>
+            <button class="cmd-learn-btn">Learn more</button>
+            <div class="cmd-detail">Without memory, your agent forgets everything between conversations. With memory enabled, it can remember important facts, preferences, and context across sessions. For example, it'll remember your name, your project details, or coding preferences you told it about last week. The agent decides what's worth remembering automatically.</div>
+          </div>
+
+          <div class="cmd-section-title">Diagnostics &amp; Info</div>
           <div class="cmd-entry">
             <div class="cmd-top">
               <code class="cmd-code">openclaw doctor --fix</code>
               <button class="cmd-copy-btn" data-cmd="openclaw doctor --fix">Copy</button>
             </div>
             <div class="cmd-desc">Diagnose common issues and auto-fix where possible</div>
+            <button class="cmd-learn-btn">Learn more</button>
+            <div class="cmd-detail">Like a health check for your agent setup. It looks for common problems — missing config, broken permissions, connectivity issues — and tries to fix them automatically. Run this whenever something isn't working right. Without <strong>--fix</strong> it only reports problems; with it, the command will try to repair them on the spot.</div>
           </div>
           <div class="cmd-entry">
             <div class="cmd-top">
@@ -1604,6 +1705,46 @@
               <button class="cmd-copy-btn" data-cmd="openclaw version">Copy</button>
             </div>
             <div class="cmd-desc">Check the installed OpenClaw version</div>
+            <button class="cmd-learn-btn">Learn more</button>
+            <div class="cmd-detail">Shows which version of OpenClaw you have installed. Useful when troubleshooting or checking if you need to update. You can update to the latest version by running <code>npm install -g openclaw</code> (or the install script from the OpenClaw docs).</div>
+          </div>
+          <div class="cmd-entry">
+            <div class="cmd-top">
+              <code class="cmd-code">openclaw --help</code>
+              <button class="cmd-copy-btn" data-cmd="openclaw --help">Copy</button>
+            </div>
+            <div class="cmd-desc">Show all available OpenClaw commands and flags</div>
+            <button class="cmd-learn-btn">Learn more</button>
+            <div class="cmd-detail">The built-in help page. Lists every command OpenClaw supports along with a brief description. You can also add <code>--help</code> after any subcommand (e.g. <code>openclaw config --help</code>) to see detailed options for that specific command.</div>
+          </div>
+
+          <div class="cmd-section-title">Channels</div>
+          <div class="cmd-entry">
+            <div class="cmd-top">
+              <code class="cmd-code">openclaw config set channels.telegram.botToken "YOUR_BOT_TOKEN"</code>
+              <button class="cmd-copy-btn" data-cmd='openclaw config set channels.telegram.botToken "YOUR_BOT_TOKEN"'>Copy</button>
+            </div>
+            <div class="cmd-desc">Connect your agent to Telegram</div>
+            <button class="cmd-learn-btn">Learn more</button>
+            <div class="cmd-detail">This connects your AI agent to a Telegram bot. First, create a bot via <strong>@BotFather</strong> on Telegram to get a bot token. Paste that token here. Once configured and the gateway is restarted, people can message your Telegram bot and your AI agent will respond — it's like giving your agent a phone number anyone can text.</div>
+          </div>
+          <div class="cmd-entry">
+            <div class="cmd-top">
+              <code class="cmd-code">openclaw config set channels.discord.botToken "YOUR_BOT_TOKEN"</code>
+              <button class="cmd-copy-btn" data-cmd='openclaw config set channels.discord.botToken "YOUR_BOT_TOKEN"'>Copy</button>
+            </div>
+            <div class="cmd-desc">Connect your agent to Discord</div>
+            <button class="cmd-learn-btn">Learn more</button>
+            <div class="cmd-detail">Makes your AI agent appear as a Discord bot in your server. Create a bot at <strong>discord.com/developers</strong>, get the token, paste it here, then invite the bot to your server. Your agent will respond to messages in channels it's added to. Great for team assistants, community support bots, or fun interactive agents.</div>
+          </div>
+          <div class="cmd-entry">
+            <div class="cmd-top">
+              <code class="cmd-code">openclaw config set channels.slack.botToken "xoxb-YOUR_TOKEN"</code>
+              <button class="cmd-copy-btn" data-cmd='openclaw config set channels.slack.botToken "xoxb-YOUR_TOKEN"'>Copy</button>
+            </div>
+            <div class="cmd-desc">Connect your agent to Slack</div>
+            <button class="cmd-learn-btn">Learn more</button>
+            <div class="cmd-detail">Adds your agent to a Slack workspace. Create a Slack App at <strong>api.slack.com/apps</strong>, enable Socket Mode, add bot permissions, install it to your workspace, and paste the bot token here. Your agent can then respond to DMs and channel mentions — perfect for a team AI assistant that lives right in your company's Slack.</div>
           </div>
         </div>
 
@@ -1616,6 +1757,8 @@
               <button class="cmd-copy-btn" data-cmd="nemoclaw status">Copy</button>
             </div>
             <div class="cmd-desc">Check gateway and sandbox status</div>
+            <button class="cmd-learn-btn">Learn more</button>
+            <div class="cmd-detail">Gives you a quick health check of your NemoClaw setup. It shows whether the gateway (the server your agent runs on) is up, whether your sandbox (the secure container your agent lives in) is ready, and whether the agent is actively running. This is the first command to run if something feels off — it tells you exactly what's running and what isn't.</div>
           </div>
           <div class="cmd-entry">
             <div class="cmd-top">
@@ -1623,6 +1766,8 @@
               <button class="cmd-copy-btn" data-cmd="nemoclaw start">Copy</button>
             </div>
             <div class="cmd-desc">Start the agent and channel bridges (Telegram, etc.)</div>
+            <button class="cmd-learn-btn">Learn more</button>
+            <div class="cmd-detail">Boots up your AI agent and connects it to any messaging channels you've configured (Telegram, Discord, Slack). After running this, your agent is live — you can chat with it through the gateway UI or through the connected channels. The agent runs inside a sandbox, so it's isolated from your system for security.</div>
           </div>
           <div class="cmd-entry">
             <div class="cmd-top">
@@ -1630,6 +1775,26 @@
               <button class="cmd-copy-btn" data-cmd="nemoclaw stop">Copy</button>
             </div>
             <div class="cmd-desc">Stop the running agent</div>
+            <button class="cmd-learn-btn">Learn more</button>
+            <div class="cmd-detail">Shuts down your agent gracefully. It disconnects from all channels and stops the gateway. The sandbox itself stays around (your data and config are preserved), but the agent won't respond to messages until you start it again. Use this when you want to save resources or before making config changes.</div>
+          </div>
+          <div class="cmd-entry">
+            <div class="cmd-top">
+              <code class="cmd-code">nemoclaw restart</code>
+              <button class="cmd-copy-btn" data-cmd="nemoclaw restart">Copy</button>
+            </div>
+            <div class="cmd-desc">Restart the agent (stop + start)</div>
+            <button class="cmd-learn-btn">Learn more</button>
+            <div class="cmd-detail">Equivalent to running <code>nemoclaw stop</code> then <code>nemoclaw start</code>. Useful after changing configuration — the agent needs a restart to pick up new settings like model changes, tool toggles, or channel connections. Faster than stopping and starting manually.</div>
+          </div>
+          <div class="cmd-entry">
+            <div class="cmd-top">
+              <code class="cmd-code">nemoclaw onboard</code>
+              <button class="cmd-copy-btn" data-cmd="nemoclaw onboard">Copy</button>
+            </div>
+            <div class="cmd-desc">Run the initial setup wizard again</div>
+            <button class="cmd-learn-btn">Learn more</button>
+            <div class="cmd-detail">Re-runs the first-time setup wizard that walks you through creating a sandbox, choosing a name, and configuring basic settings. Useful if you want to start fresh or set up a second sandbox. The wizard handles all the Docker and Kubernetes plumbing behind the scenes so you don't have to.</div>
           </div>
 
           <div class="cmd-section-title">Policy Management</div>
@@ -1639,22 +1804,37 @@
               <button class="cmd-copy-btn" data-cmd="nemoclaw valnaa policy-list">Copy</button>
             </div>
             <div class="cmd-desc">List which network policy presets are applied to the valnaa sandbox</div>
+            <button class="cmd-learn-btn">Learn more</button>
+            <div class="cmd-detail">Your sandbox runs in a locked-down network by default — the agent can't access the internet unless you allow it. Policies are like permission slips for specific services. This command shows which services your agent is currently allowed to reach. For example, if you see "telegram" in the list, your agent can connect to Telegram's servers.</div>
           </div>
           <div class="cmd-entry">
             <div class="cmd-top">
               <code class="cmd-code">nemoclaw valnaa policy-add</code>
               <button class="cmd-copy-btn" data-cmd="nemoclaw valnaa policy-add">Copy</button>
             </div>
-            <div class="cmd-desc">Add network policy presets (telegram, slack, discord, npm, pypi, etc.)</div>
+            <div class="cmd-desc">Add network policy presets (interactive chooser)</div>
+            <button class="cmd-learn-btn">Learn more</button>
+            <div class="cmd-detail">Opens an interactive menu where you can pick which internet services your agent should be allowed to access. Available presets include <strong>telegram</strong>, <strong>slack</strong>, <strong>discord</strong>, <strong>npm</strong> (for installing Node packages), <strong>pypi</strong> (for Python packages), <strong>github</strong>, and more. This is how you grant your agent permission to reach specific APIs while keeping everything else blocked for security.</div>
+          </div>
+          <div class="cmd-entry">
+            <div class="cmd-top">
+              <code class="cmd-code">nemoclaw valnaa policy-remove</code>
+              <button class="cmd-copy-btn" data-cmd="nemoclaw valnaa policy-remove">Copy</button>
+            </div>
+            <div class="cmd-desc">Remove network policy presets</div>
+            <button class="cmd-learn-btn">Learn more</button>
+            <div class="cmd-detail">Revokes network access for specific services. If you previously allowed your agent to access Telegram but no longer need it, remove that policy. This keeps your sandbox security tight — only allow what's actively needed. Changes take effect immediately, no restart required.</div>
           </div>
 
-          <div class="cmd-section-title">Sandbox Access</div>
+          <div class="cmd-section-title">Sandbox Access &amp; Management</div>
           <div class="cmd-entry">
             <div class="cmd-top">
               <code class="cmd-code">openshell sandbox list --gateway nemoclaw</code>
               <button class="cmd-copy-btn" data-cmd="openshell sandbox list --gateway nemoclaw">Copy</button>
             </div>
             <div class="cmd-desc">List all sandboxes on the nemoclaw gateway</div>
+            <button class="cmd-learn-btn">Learn more</button>
+            <div class="cmd-detail">Shows all the sandboxes (secure containers) managed by your NemoClaw installation. Each sandbox is an isolated environment where an agent can run. You'll typically see your <strong>valnaa</strong> sandbox listed here along with its status (Ready, Starting, etc.). Think of sandboxes as separate virtual computers your agents live in.</div>
           </div>
           <div class="cmd-entry">
             <div class="cmd-top">
@@ -1662,6 +1842,8 @@
               <button class="cmd-copy-btn" data-cmd="openshell sandbox connect valnaa --gateway nemoclaw">Copy</button>
             </div>
             <div class="cmd-desc">Open a shell inside the valnaa sandbox</div>
+            <button class="cmd-learn-btn">Learn more</button>
+            <div class="cmd-detail">Drops you into a terminal session <strong>inside</strong> your agent's sandbox. It's like SSH-ing into a remote server — you can see files, run commands, install packages, and inspect what your agent has been doing. The sandbox is a full Linux environment. Type <code>exit</code> to leave. Useful for debugging, checking agent logs, or manually installing tools your agent needs.</div>
           </div>
           <div class="cmd-entry">
             <div class="cmd-top">
@@ -1669,15 +1851,64 @@
               <button class="cmd-copy-btn" data-cmd="openshell forward 18789 --sandbox valnaa --gateway nemoclaw">Copy</button>
             </div>
             <div class="cmd-desc">Forward the gateway port from the sandbox to localhost:18789</div>
+            <button class="cmd-learn-btn">Learn more</button>
+            <div class="cmd-detail">The agent's gateway runs inside the sandbox on port 18789, but you can't access it directly from your computer. This command creates a tunnel so that <code>http://localhost:18789</code> on your computer connects to the gateway inside the sandbox. It's like a pipe between your browser and the agent. This is what the Valnaa app does automatically behind the scenes.</div>
+          </div>
+          <div class="cmd-entry">
+            <div class="cmd-top">
+              <code class="cmd-code">openshell logs valnaa --gateway nemoclaw --follow</code>
+              <button class="cmd-copy-btn" data-cmd="openshell logs valnaa --gateway nemoclaw --follow">Copy</button>
+            </div>
+            <div class="cmd-desc">Stream live logs from the valnaa sandbox</div>
+            <button class="cmd-learn-btn">Learn more</button>
+            <div class="cmd-detail">Shows a live stream of everything happening inside your sandbox — agent startup messages, errors, tool usage, and more. The <strong>--follow</strong> flag keeps the stream open so new logs appear in real-time (like <code>tail -f</code>). Press <strong>Ctrl+C</strong> to stop watching. Essential for debugging when your agent isn't behaving as expected.</div>
+          </div>
+          <div class="cmd-entry">
+            <div class="cmd-top">
+              <code class="cmd-code">openshell sandbox delete valnaa --gateway nemoclaw</code>
+              <button class="cmd-copy-btn" data-cmd="openshell sandbox delete valnaa --gateway nemoclaw">Copy</button>
+            </div>
+            <div class="cmd-desc">Delete the valnaa sandbox entirely</div>
+            <button class="cmd-learn-btn">Learn more</button>
+            <div class="cmd-detail"><strong>Warning: this permanently deletes the sandbox and everything in it</strong> — agent data, installed packages, files, and config. Use this only if you want to start completely fresh or remove a sandbox you no longer need. You can recreate it with <code>nemoclaw onboard</code> afterward. There is no undo.</div>
           </div>
 
-          <div class="cmd-section-title">Docker</div>
+          <div class="cmd-section-title">Docker &amp; Infrastructure</div>
           <div class="cmd-entry">
             <div class="cmd-top">
               <code class="cmd-code">docker ps --filter name=openshell</code>
               <button class="cmd-copy-btn" data-cmd="docker ps --filter name=openshell">Copy</button>
             </div>
             <div class="cmd-desc">List running OpenShell/NemoClaw containers</div>
+            <button class="cmd-learn-btn">Learn more</button>
+            <div class="cmd-detail">NemoClaw runs on Docker behind the scenes. This shows the Docker containers that make up your setup: <strong>openshell-cli</strong> (the helper sidecar) and <strong>openshell-cluster-nemoclaw</strong> (the Kubernetes cluster that hosts your sandbox). If both show "Up", the infrastructure is healthy. If one is missing or restarting, that's likely the source of any problems.</div>
+          </div>
+          <div class="cmd-entry">
+            <div class="cmd-top">
+              <code class="cmd-code">docker logs openshell-cluster-nemoclaw --tail 50</code>
+              <button class="cmd-copy-btn" data-cmd="docker logs openshell-cluster-nemoclaw --tail 50">Copy</button>
+            </div>
+            <div class="cmd-desc">View recent logs from the NemoClaw cluster container</div>
+            <button class="cmd-learn-btn">Learn more</button>
+            <div class="cmd-detail">Shows the last 50 lines of logs from the Kubernetes cluster that runs your sandbox. Useful for diagnosing startup failures or infrastructure issues. This is lower-level than sandbox logs — it shows what the container orchestration layer is doing. Look for errors about pods failing to start, image pull issues, or resource constraints.</div>
+          </div>
+          <div class="cmd-entry">
+            <div class="cmd-top">
+              <code class="cmd-code">docker restart openshell-cli openshell-cluster-nemoclaw</code>
+              <button class="cmd-copy-btn" data-cmd="docker restart openshell-cli openshell-cluster-nemoclaw">Copy</button>
+            </div>
+            <div class="cmd-desc">Restart all NemoClaw Docker containers</div>
+            <button class="cmd-learn-btn">Learn more</button>
+            <div class="cmd-detail">The nuclear option for fixing infrastructure issues. This restarts both Docker containers, which effectively reboots the entire NemoClaw stack. Your sandbox data is preserved (it's stored on a volume), but it may take a minute for everything to come back online. Use this when <code>nemoclaw status</code> shows problems that a simple restart doesn't fix.</div>
+          </div>
+          <div class="cmd-entry">
+            <div class="cmd-top">
+              <code class="cmd-code">openshell status</code>
+              <button class="cmd-copy-btn" data-cmd="openshell status">Copy</button>
+            </div>
+            <div class="cmd-desc">Check OpenShell gateway connection and version</div>
+            <button class="cmd-learn-btn">Learn more</button>
+            <div class="cmd-detail">Shows whether the OpenShell CLI tool can connect to the NemoClaw gateway and which version is running. If it says <strong>Connected</strong>, the underlying infrastructure is healthy. If it says <strong>Disconnected</strong> or fails, the cluster container may need a restart. This checks the infrastructure layer, not the agent itself.</div>
           </div>
         </div>
       </div>
@@ -2856,14 +3087,25 @@
     }
 
     document.getElementById('commands-panel').addEventListener('click', (e) => {
-      const btn = e.target.closest('.cmd-copy-btn');
-      if (!btn) return;
-      const cmd = btn.getAttribute('data-cmd');
-      navigator.clipboard.writeText(cmd).then(() => {
-        btn.textContent = 'Copied';
-        btn.classList.add('copied');
-        setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1500);
-      });
+      const copyBtn = e.target.closest('.cmd-copy-btn');
+      if (copyBtn) {
+        const cmd = copyBtn.getAttribute('data-cmd');
+        navigator.clipboard.writeText(cmd).then(() => {
+          copyBtn.textContent = 'Copied';
+          copyBtn.classList.add('copied');
+          setTimeout(() => { copyBtn.textContent = 'Copy'; copyBtn.classList.remove('copied'); }, 1500);
+        });
+        return;
+      }
+      const learnBtn = e.target.closest('.cmd-learn-btn');
+      if (learnBtn) {
+        const detail = learnBtn.nextElementSibling;
+        if (detail && detail.classList.contains('cmd-detail')) {
+          const isOpen = detail.classList.toggle('open');
+          learnBtn.classList.toggle('open', isOpen);
+          learnBtn.textContent = isOpen ? 'Show less' : 'Learn more';
+        }
+      }
     });
 
     // ── Logs ──
