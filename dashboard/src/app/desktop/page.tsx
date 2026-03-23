@@ -24,7 +24,8 @@ import {
 } from 'lucide-react';
 
 const DOWNLOAD_BASE = 'https://github.com/Skycustody/valnaa-desktop/releases/latest';
-const DOWNLOAD_MAC = `${DOWNLOAD_BASE}/download/Valnaa.dmg`;
+const DOWNLOAD_MAC_ARM = `${DOWNLOAD_BASE}/download/Valnaa-arm64.dmg`;
+const DOWNLOAD_MAC_INTEL = `${DOWNLOAD_BASE}/download/Valnaa-x64.dmg`;
 const DOWNLOAD_WIN = `${DOWNLOAD_BASE}/download/Valnaa-Setup.exe`;
 
 const BASE_PRICE = 5;
@@ -184,10 +185,17 @@ export default function DesktopPage() {
 
         {/* Download buttons */}
         <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
-          <a href={DOWNLOAD_MAC} className="group w-full sm:w-auto">
+          <a href={DOWNLOAD_MAC_ARM} className="group w-full sm:w-auto">
             <Button size="lg" className="w-full gap-3 rounded-full sm:w-auto">
               <Apple className="size-5" />
-              Download for macOS
+              Mac (Apple Silicon)
+              <Download className="size-4 opacity-50 transition-opacity group-hover:opacity-100" />
+            </Button>
+          </a>
+          <a href={DOWNLOAD_MAC_INTEL} className="group w-full sm:w-auto">
+            <Button size="lg" variant="outline" className="w-full gap-3 rounded-full sm:w-auto">
+              <Apple className="size-5" />
+              Mac (Intel)
               <Download className="size-4 opacity-50 transition-opacity group-hover:opacity-100" />
             </Button>
           </a>
@@ -196,7 +204,7 @@ export default function DesktopPage() {
               <svg className="size-5" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801" />
               </svg>
-              Download for Windows
+              Windows
               <Download className="size-4 opacity-50 transition-opacity group-hover:opacity-100" />
             </Button>
           </a>
@@ -444,7 +452,7 @@ export default function DesktopPage() {
             <Button onClick={startTrial} disabled={submitting || startingTrial || hasDesktopSub} size="lg" className="rounded-full">
               {hasDesktopSub ? 'Already subscribed' : 'Start free trial'} <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
-            <a href={DOWNLOAD_MAC}>
+            <a href={DOWNLOAD_MAC_ARM}>
               <Button variant="outline" size="lg" className="rounded-full">
                 <Apple className="mr-2 size-4" /> Download for Mac
               </Button>
