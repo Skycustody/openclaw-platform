@@ -1,4 +1,5 @@
 import { Router, Response, NextFunction } from 'express';
+import crypto from 'crypto';
 import { AuthRequest, authenticate } from '../middleware/auth';
 import { rateLimitSensitive } from '../middleware/rateLimit';
 import db from '../lib/db';
@@ -208,6 +209,31 @@ router.get('/credits', async (req: AuthRequest, res: Response, next: NextFunctio
       purchases,
       currentAddonUsd: parseFloat(String(user?.api_budget_addon_usd || 0)),
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Issue a gateway auth token for the desktop app.
+// Requires an active desktop subscription or trial.
+router.post('/desktop-gateway-token', rateLimitSensitive, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const user = await db.getOne<any>(
+      'SELECT id, desktop_subscription_id, desktop_trial_ends_at FROM users WHERE id = $1',
+      [req.userId],
+    );
+    if (!user) throw new BadRequestError('User not found');
+
+    const hasPaid = !!user.desktop_subscription_id;
+    const trialActive = user.desktop_trial_ends_at && new Date(user.desktop_trial_ends_at) > new Date();
+    if (!hasPaid && !trialActive) {
+      return res.status(403).json({ error: 'Active desktop subscription or trial required' });
+    }
+
+    const gatewayToken = crypto.randomBytes(32).toString('hex');
+
+    console.log(`[billing] Issued desktop gateway token for user ${req.userId}`);
+    res.json({ gatewayToken });
   } catch (err) {
     next(err);
   }

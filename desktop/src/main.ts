@@ -8,8 +8,8 @@ import { autoUpdater } from 'electron-updater';
 import { manager, AgentStatus } from './openclaw/manager';
 import { installOpenClaw, findOpenClawBinary, isNodeInstalled, getInstallScriptCommand, findNemoClawBinary, getNemoClawInstallScriptCommand, getNemoClawSetupScriptCommand } from './openclaw/installer';
 import { readRecentLogs, getLogFilePath, getAppLogPath, logApp, closeStreams } from './openclaw/logger';
-import { loadSession, saveSession, clearSession, checkSubscription, startDesktopTrial, getStripePortalUrl, getDesktopCheckoutUrl, parseDeepLinkToken, parseDeepLinkEmail, isOfflineGraceValid, markLocalTrialClaimed, isLocalTrialClaimed } from './lib/session';
-import { loadRuntime, saveRuntime, clearRuntime, isNemoClawSupported, isDockerInstalled, isDockerRunning, canInstallDocker, getDockerInstallCommand, launchDockerDesktop, RuntimeType, isIntelMac, isOpenShellInstalled, isSidecarReady, setupOpenShellSidecar, ensureSidecarNetworking, isOnboardComplete, isGatewayDeployed, getNemoClawOnboardCommand, ensurePortForward, OPENCLAW_PORT, EXTENSION_RELAY_PORT, readSandboxGatewayTokenFresh, readHostOpenclawGatewayToken, getSandboxShellCommand, isSandboxReady, applySandboxSettings, findNemoClawPackageRoot } from './lib/runtime';
+import { loadSession, saveSession, clearSession, checkSubscription, fetchDesktopGatewayToken, startDesktopTrial, getStripePortalUrl, getDesktopCheckoutUrl, parseDeepLinkToken, parseDeepLinkEmail, isOfflineGraceValid, markLocalTrialClaimed, isLocalTrialClaimed } from './lib/session';
+import { loadRuntime, saveRuntime, clearRuntime, isNemoClawSupported, isDockerInstalled, isDockerRunning, canInstallDocker, getDockerInstallCommand, launchDockerDesktop, RuntimeType, isIntelMac, isOpenShellInstalled, isSidecarReady, setupOpenShellSidecar, ensureSidecarNetworking, isOnboardComplete, isGatewayDeployed, getNemoClawOnboardCommand, ensurePortForward, OPENCLAW_PORT, EXTENSION_RELAY_PORT, readSandboxGatewayTokenFresh, readHostOpenclawGatewayToken, writeHostOpenclawGatewayToken, clearHostOpenclawGatewayToken, writeSandboxGatewayToken, clearSandboxGatewayToken, getSandboxShellCommand, isSandboxReady, applySandboxSettings, findNemoClawPackageRoot } from './lib/runtime';
 import { getAppDataDir, getOpenClawDir, getLogsDir } from './lib/platform';
 import {
   getChromeExtensionDir,
@@ -46,6 +46,7 @@ function redactPtyLog(s: string): string {
 }
 let pendingDeepLink: string | null = null;
 let setupRunning = false;
+let currentGatewayToken: string | null = null;
 
 // ════════════════════════════════════
 //  Setup Step Types
@@ -554,6 +555,39 @@ function loadPersistedApiKey(): { provider: string; key: string } | null {
   }
 }
 
+/**
+ * Write the server-issued gateway token to the appropriate config file
+ * before starting the agent. This ensures the gateway uses a token that
+ * was gated by a valid subscription check.
+ */
+function applyGatewayToken(): void {
+  if (!currentGatewayToken) {
+    logApp('warn', 'No gateway token available — agent will use its own token');
+    return;
+  }
+  const pref = loadRuntime();
+  if (pref?.runtime === 'nemoclaw') {
+    try {
+      writeSandboxGatewayToken(currentGatewayToken);
+    } catch (err: any) {
+      logApp('warn', `Could not write sandbox gateway token: ${err.message}`);
+    }
+  } else {
+    writeHostOpenclawGatewayToken(currentGatewayToken);
+  }
+}
+
+/** Clear gateway token from config so the agent can't be accessed without the app. */
+function clearGatewayToken(): void {
+  const pref = loadRuntime();
+  if (pref?.runtime === 'nemoclaw') {
+    try { clearSandboxGatewayToken(); } catch { /* sandbox may not be running */ }
+  } else {
+    clearHostOpenclawGatewayToken();
+  }
+  currentGatewayToken = null;
+}
+
 // ════════════════════════════════════
 //  Setup Flow Orchestrator
 // ════════════════════════════════════
@@ -573,6 +607,7 @@ async function runSetupFlow(runtime: RuntimeType): Promise<void> {
       logApp('info', `All prerequisites met — starting ${runtime}`);
       steps[steps.length - 1].status = 'running';
       sendSteps(steps);
+      applyGatewayToken();
       await manager.start();
       steps[steps.length - 1].status = 'done';
       sendSteps(steps);
@@ -739,6 +774,7 @@ async function runSetupFlow(runtime: RuntimeType): Promise<void> {
             break;
           }
           case 'start': {
+            applyGatewayToken();
             await manager.start();
             break;
           }
@@ -1398,24 +1434,35 @@ function startSubscriptionRecheck(session: { token: string; email: string }): vo
         ),
       ]);
       if (!sub.ok) {
-        logApp('info', `Periodic check: subscription no longer valid (${sub.status}) — locking app`);
-        manager.stop();
+        logApp('info', `Periodic check: subscription no longer valid (${sub.status}) — stopping agent and clearing token`);
+        await manager.stop();
+        clearGatewayToken();
         const trialOk = sub.status !== 'trial_expired' && !isLocalTrialClaimed();
         mainWindow?.webContents.send('app:show-subscribe', { email: session.email, status: sub.status, plan: sub.plan, trialEligible: trialOk });
         if (subscriptionCheckTimer) clearInterval(subscriptionCheckTimer);
+      } else {
+        // Rotate gateway token on each successful recheck
+        try {
+          const newToken = await fetchDesktopGatewayToken(session.token);
+          currentGatewayToken = newToken;
+          applyGatewayToken();
+          logApp('info', 'Rotated gateway token on periodic recheck');
+        } catch { /* non-fatal — keep current token */ }
       }
     } catch (err: any) {
       if (err.message === 'unauthorized') {
-        logApp('info', 'Periodic check: token expired — locking app');
+        logApp('info', 'Periodic check: token expired — stopping agent and clearing token');
         clearSession();
-        manager.stop();
+        await manager.stop();
+        clearGatewayToken();
         mainWindow?.webContents.send('app:show-auth');
         if (subscriptionCheckTimer) clearInterval(subscriptionCheckTimer);
         return;
       }
       if (!isOfflineGraceValid()) {
-        logApp('info', 'Periodic check: offline and grace expired — locking app');
-        manager.stop();
+        logApp('info', 'Periodic check: offline and grace expired — stopping agent and clearing token');
+        await manager.stop();
+        clearGatewayToken();
         mainWindow?.webContents.send('app:show-subscribe', { email: session.email, status: 'offline_expired', plan: '', trialEligible: false });
         if (subscriptionCheckTimer) clearInterval(subscriptionCheckTimer);
       }
@@ -1473,7 +1520,21 @@ async function autoStart(): Promise<void> {
     }
   }
 
-  // 2b. Start periodic subscription re-check
+  // 2b. Fetch gateway token from server (subscription-gated)
+  try {
+    currentGatewayToken = await fetchDesktopGatewayToken(session.token);
+    logApp('info', 'Fetched desktop gateway token from API');
+  } catch (err: any) {
+    if (isOfflineGraceValid() && currentGatewayToken) {
+      logApp('warn', `Could not fetch gateway token (offline?) — reusing cached token`);
+    } else if (isOfflineGraceValid()) {
+      logApp('warn', 'Could not fetch gateway token (offline?) — proceeding within grace period');
+    } else {
+      logApp('warn', `Failed to fetch gateway token: ${err.message}`);
+    }
+  }
+
+  // 2c. Start periodic subscription re-check
   startSubscriptionRecheck(session);
 
   // 3. Check runtime selection
@@ -1595,10 +1656,11 @@ app.whenReady().then(async () => {
 
 app.on('before-quit', async () => {
   isQuitting = true;
-  logApp('info', 'App quitting — stopping OpenClaw');
+  logApp('info', 'App quitting — stopping agent and clearing gateway token');
   if (subscriptionCheckTimer) { clearInterval(subscriptionCheckTimer); subscriptionCheckTimer = null; }
   killAllPtys();
   await manager.stop();
+  clearGatewayToken();
   closeStreams();
 });
 

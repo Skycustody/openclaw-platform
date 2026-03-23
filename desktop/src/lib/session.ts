@@ -125,6 +125,16 @@ function apiPost<T>(endpoint: string, token: string, body: Record<string, unknow
   });
 }
 
+/**
+ * Fetch a fresh gateway auth token from the platform API.
+ * The API verifies the desktop subscription is active before issuing one.
+ */
+export async function fetchDesktopGatewayToken(authToken: string): Promise<string> {
+  const result = await apiPost<{ gatewayToken: string }>('/billing/desktop-gateway-token', authToken);
+  if (!result.gatewayToken) throw new Error('API did not return a gateway token');
+  return result.gatewayToken;
+}
+
 export async function getStripePortalUrl(token: string): Promise<string | null> {
   try {
     const result = await apiPost<{ url: string }>('/billing/portal', token);

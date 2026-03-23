@@ -575,6 +575,65 @@ export function readHostOpenclawGatewayToken(): string | null {
   }
 }
 
+/** Write a gateway auth token into the local OpenClaw config (~/.openclaw/openclaw.json). */
+export function writeHostOpenclawGatewayToken(token: string): void {
+  const dir = getOpenClawDir();
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  const p = path.join(dir, 'openclaw.json');
+  let cfg: Record<string, any> = {};
+  try { cfg = JSON.parse(fs.readFileSync(p, 'utf-8')); } catch { /* start fresh */ }
+  if (!cfg.gateway) cfg.gateway = {};
+  if (!cfg.gateway.auth) cfg.gateway.auth = {};
+  cfg.gateway.auth.token = token;
+  fs.writeFileSync(p, JSON.stringify(cfg, null, 2), 'utf-8');
+  logApp('info', 'Wrote gateway token to host openclaw.json');
+}
+
+/** Remove the gateway auth token from the local OpenClaw config. */
+export function clearHostOpenclawGatewayToken(): void {
+  try {
+    const p = path.join(getOpenClawDir(), 'openclaw.json');
+    const raw = fs.readFileSync(p, 'utf-8');
+    const cfg = JSON.parse(raw);
+    if (cfg?.gateway?.auth?.token) {
+      delete cfg.gateway.auth.token;
+      fs.writeFileSync(p, JSON.stringify(cfg, null, 2), 'utf-8');
+      logApp('info', 'Cleared gateway token from host openclaw.json');
+    }
+  } catch { /* config doesn't exist or isn't readable — nothing to clear */ }
+}
+
+/** Write a gateway auth token into the NemoClaw sandbox config and reload. */
+export function writeSandboxGatewayToken(token: string): void {
+  const config = readSandboxConfig();
+  if (!config) throw new Error('Cannot read sandbox config to write gateway token');
+  if (!config.gateway) config.gateway = {};
+  if (!config.gateway.auth) config.gateway.auth = {};
+  config.gateway.auth.token = token;
+  writeSandboxConfig(config);
+  clearSandboxTokenCache();
+  cachedSandboxToken = token;
+  restartSandboxGateway();
+  logApp('info', 'Wrote gateway token to sandbox and restarted gateway');
+}
+
+/** Remove the gateway auth token from the NemoClaw sandbox config and reload. */
+export function clearSandboxGatewayToken(): void {
+  try {
+    const config = readSandboxConfig();
+    if (!config) return;
+    if (config?.gateway?.auth?.token) {
+      delete config.gateway.auth.token;
+      writeSandboxConfig(config);
+      clearSandboxTokenCache();
+      restartSandboxGateway();
+      logApp('info', 'Cleared gateway token from sandbox and restarted gateway');
+    }
+  } catch (err: any) {
+    logApp('warn', `Failed to clear sandbox gateway token: ${err.message}`);
+  }
+}
+
 function sandboxSSH(cmd: string, timeoutMs = 10000): string {
   if (isIntelMac() && isOpenShellSidecarRunning()) {
     return execSyncSafe(
