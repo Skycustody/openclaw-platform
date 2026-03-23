@@ -1494,12 +1494,12 @@
       <div class="browser-panel-content">
         <header class="browser-hero">
           <h3>Browser relay</h3>
-          <p class="browser-hero-desc">Use Google Chrome on this Mac as the agent’s browser. Install the relay extension, then paste your gateway token so it can reach the running agent.</p>
+          <p class="browser-hero-desc">Use Google Chrome on this computer as the agent’s browser. Install the relay extension, then paste your gateway token so it can reach the running agent.</p>
         </header>
 
         <div id="browser-nemoclaw-callout" class="browser-callout browser-callout-nemoclaw" style="display: none;" role="note">
           <div class="browser-callout-title">NemoClaw — policy &amp; network</div>
-          <p>With <strong>NemoClaw</strong>, the agent runs in a sandbox. Chrome on your Mac still talks to it over <strong>localhost</strong>. If the relay never connects, something on this machine or your org is blocking that path.</p>
+          <p>With <strong>NemoClaw</strong>, the agent runs in a sandbox. Chrome on your computer still talks to it over <strong>localhost</strong>. If the relay never connects, something on this machine or your org is blocking that path.</p>
           <p style="margin-top: 10px;"><strong>Sandbox policy (required for browser relay):</strong> allow the relay in your policy YAML. In a <strong>local terminal</strong> (not the sandbox shell), run:</p>
           <pre style="background: rgba(0,0,0,0.3); border-radius: 6px; padding: 10px 12px; font-size: 12px; color: #c4b5fd; margin: 8px 0 6px; overflow-x: auto; white-space: pre;">nemoclaw &lt;sandbox&gt; policy-add</pre>
           <p style="font-size: 12px; color: rgba(255,255,255,0.45); margin-bottom: 10px;">Pick the <strong>openclaw-browser</strong> preset, or edit YAML so loopback can reach ports <code>8080</code> and <code>18789</code> as needed.</p>
@@ -1527,7 +1527,7 @@
             </div>
             <p class="chrome-mini">
               <strong>Download .zip</strong> — unzip anywhere, then in Chrome choose the inner folder that contains <code>manifest.json</code>.<br />
-              <strong>Copy to Downloads</strong> creates <code id="chrome-downloads-folder-name">openclaw-browser-relay-extension</code> and opens it in Finder.
+              <strong>Copy to Downloads</strong> creates <code id="chrome-downloads-folder-name">openclaw-browser-relay-extension</code> and opens it in your file manager.
             </p>
           </div>
         </section>
@@ -1541,11 +1541,11 @@
             </div>
           </div>
           <div class="chrome-field">
-            <label>Extension folder on this Mac</label>
+            <label>Extension folder on this computer</label>
             <div class="chrome-row">
               <code id="chrome-ext-path" class="chrome-code">…</code>
               <button type="button" class="agent-toolbar-btn" id="chrome-btn-copy-path">Copy path</button>
-              <button type="button" class="agent-toolbar-btn" id="chrome-btn-finder">Show in Finder</button>
+              <button type="button" class="agent-toolbar-btn" id="chrome-btn-finder">Show in folder</button>
             </div>
           </div>
           <div class="chrome-field" style="margin-bottom: 0;">
@@ -1571,7 +1571,7 @@
           </div>
           <ol style="margin: 0; padding-left: 20px;">
             <li style="margin-bottom: 8px;">Open <button type="button" class="link-btn" id="chrome-btn-open-extensions">chrome://extensions</button> and enable <strong>Developer mode</strong>.</li>
-            <li style="margin-bottom: 8px;"><strong>Load unpacked</strong> → select the folder that contains <code>manifest.json</code> (from Downloads or the path above; in the file picker use ⌘⇧G to paste a path).</li>
+            <li style="margin-bottom: 8px;"><strong>Load unpacked</strong> → select the folder that contains <code>manifest.json</code> (from Downloads or the path above; in the file picker, paste the path in the address bar).</li>
             <li>Open the extension’s <strong>Options</strong>, paste the gateway token, then <strong>Save</strong>.</li>
           </ol>
         </section>
@@ -1619,7 +1619,7 @@
             </div>
             <div class="cmd-desc">Start gateway accessible from your local network</div>
             <button class="cmd-learn-btn">Learn more</button>
-            <div class="cmd-detail">Same as the regular gateway, but <strong>--bind lan</strong> makes it accessible from other devices on your Wi-Fi network (your phone, tablet, or another computer). Useful if you want to chat with your agent from your phone. Find your computer's local IP with <code>ifconfig</code> and visit <code>http://YOUR_IP:18789</code> from any device on the same network.</div>
+            <div class="cmd-detail">Same as the regular gateway, but <strong>--bind lan</strong> makes it accessible from other devices on your Wi-Fi network (your phone, tablet, or another computer). Useful if you want to chat with your agent from your phone. Find your computer's local IP with <code>ipconfig</code> (Windows) or <code>ifconfig</code> (Mac/Linux) and visit <code>http://YOUR_IP:18789</code> from any device on the same network.</div>
           </div>
 
           <div class="cmd-section-title">Configuration</div>
@@ -1930,7 +1930,7 @@
           <span class="term-tab-add" id="term-add-btn" title="New session">+</span>
           <div class="term-new-menu" id="term-new-menu">
             <button class="term-new-menu-item" id="term-new-sandbox">Sandbox shell<span class="menu-hint">NemoClaw</span></button>
-            <button class="term-new-menu-item" id="term-new-local">Local shell<span class="menu-hint">macOS</span></button>
+            <button class="term-new-menu-item" id="term-new-local">Local shell<span class="menu-hint" id="term-local-os-label">System</span></button>
           </div>
         </span>
         <span class="term-tabbar-spacer"></span>
@@ -2172,6 +2172,13 @@
 
   <script type="module">
     const oc = window.openclaw;
+    const _isWin = document.documentElement.classList.contains('platform-win32');
+    const _isMac = document.documentElement.classList.contains('platform-darwin');
+    const _osLabel = _isWin ? 'Windows' : (_isMac ? 'macOS' : 'Linux');
+
+    // Set OS-aware labels
+    const _osLabelEl = document.getElementById('term-local-os-label');
+    if (_osLabelEl) _osLabelEl.textContent = _osLabel;
 
     // macOS: in native fullscreen, traffic lights leave the title bar — reduce left inset so tabs align to edge
     function applyMacFullscreenTabs(fullScreen) {
@@ -3000,7 +3007,7 @@
           : 'Start the agent to load token';
         let status = '';
         if (info.extensionReady) {
-          status += '<span class="chrome-status-ok">✓ Extension files found on this Mac.</span> ';
+          status += '<span class="chrome-status-ok">✓ Extension files found on this computer.</span> ';
         } else {
           status +=
             '<span class="chrome-status-warn">Extension folder not ready yet — start the agent and tap Refresh.</span> ';
@@ -3071,7 +3078,7 @@
           alert(r?.error || 'Could not copy to Downloads.');
           return;
         }
-        showAppToast('Extension copied to your Downloads folder — Finder should open. Use Load unpacked on that folder in Chrome.');
+        showAppToast('Extension copied to your Downloads folder — Your file manager should open. Use Load unpacked on that folder in Chrome.');
       } catch (e) {
         alert(e?.message || 'Copy failed');
       }

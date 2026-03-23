@@ -55,7 +55,8 @@ const OPENSHELL_CONFIG_DIR = path.join(os.homedir(), '.config', 'openshell');
 
 function execSyncSafe(cmd: string, timeoutMs = 30000): string {
   const { execSync } = require('child_process');
-  return execSync(cmd, { encoding: 'utf-8', timeout: timeoutMs, stdio: 'pipe' }).trim();
+  const safeCmd = IS_WIN ? cmd.replace(/ 2>\/dev\/null/g, ' 2>NUL') : cmd;
+  return execSync(safeCmd, { encoding: 'utf-8', timeout: timeoutMs, stdio: 'pipe' }).trim();
 }
 
 export function isOpenShellInstalled(): boolean {
@@ -786,7 +787,7 @@ export function syncSandboxChromeExtensionToHost(): { ok: boolean; error?: strin
       tarGz = execSync(cmd, {
         maxBuffer: 50 * 1024 * 1024,
         timeout: 120000,
-        shell: '/bin/bash',
+        shell: IS_WIN ? 'cmd.exe' : '/bin/bash',
       }) as Buffer;
     }
 
@@ -797,10 +798,10 @@ export function syncSandboxChromeExtensionToHost(): { ok: boolean; error?: strin
     fs.writeFileSync(tmpTar, tarGz);
     const extDest = path.join(destBase, 'chrome-extension');
     fs.rmSync(extDest, { recursive: true, force: true });
-    execSync(`tar xzf "${tmpTar}" -C "${destBase}"`, {
+    execSync(IS_WIN ? `tar -xzf "${tmpTar}" -C "${destBase}"` : `tar xzf "${tmpTar}" -C "${destBase}"`, {
       stdio: 'pipe',
       timeout: 60000,
-      shell: '/bin/bash',
+      shell: IS_WIN ? 'cmd.exe' : '/bin/bash',
     });
   } catch (err: any) {
     logApp('warn', `syncSandboxChromeExtensionToHost: ${err?.message || err}`);
@@ -916,6 +917,10 @@ export function applySandboxSettings(settings: {
 export function isPortForwardAlive(): boolean {
   if (!isIntelMac() || !isOpenShellSidecarRunning()) {
     try {
+      if (IS_WIN) {
+        const out = execSyncSafe(`powershell -Command "Get-NetTCPConnection -LocalPort ${OPENCLAW_PORT} -State Listen -ErrorAction SilentlyContinue"`, 5000);
+        return out.includes('Listen');
+      }
       execSyncSafe(`lsof -i :${OPENCLAW_PORT} -sTCP:LISTEN -t 2>/dev/null`, 5000);
       return true;
     } catch {
@@ -1031,17 +1036,24 @@ export { OPENCLAW_PORT, EXTENSION_RELAY_PORT };
 // ════════════════════════════════════
 
 function findDockerBin(): string | null {
-  const knownPaths = [
-    '/usr/local/bin/docker',
-    '/opt/homebrew/bin/docker',
-    '/Applications/Docker.app/Contents/Resources/bin/docker',
-  ];
+  const knownPaths = IS_WIN
+    ? [
+        path.join(process.env.ProgramFiles || 'C:\\Program Files', 'Docker', 'Docker', 'resources', 'bin', 'docker.exe'),
+        path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Docker', 'Docker', 'resources', 'bin', 'docker.exe'),
+      ]
+    : [
+        '/usr/local/bin/docker',
+        '/opt/homebrew/bin/docker',
+        '/Applications/Docker.app/Contents/Resources/bin/docker',
+      ];
   for (const p of knownPaths) {
     try { if (fs.existsSync(p)) return p; } catch { /* skip */ }
   }
   try {
     const { execSync } = require('child_process');
-    return execSync('which docker', { encoding: 'utf-8', timeout: 3000 }).trim() || null;
+    const whichCmd = IS_WIN ? 'where docker' : 'which docker';
+    const result = execSync(whichCmd, { encoding: 'utf-8', timeout: 3000 }).trim();
+    return (IS_WIN ? result.split('\n')[0].trim() : result) || null;
   } catch { return null; }
 }
 

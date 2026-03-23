@@ -200,11 +200,11 @@ function spawnPty(sessionId: string, sandbox = false): pty.IPty {
     } else {
       logApp('warn', `Sandbox shell not available for [${sessionId}], falling back to local`);
       shellName = process.platform === 'win32' ? 'powershell.exe' : (process.env.SHELL || '/bin/zsh');
-      shellArgs = ['-l'];
+      shellArgs = process.platform === 'win32' ? [] : ['-l'];
     }
   } else {
     shellName = process.platform === 'win32' ? 'powershell.exe' : (process.env.SHELL || '/bin/zsh');
-    shellArgs = ['-l'];
+    shellArgs = process.platform === 'win32' ? [] : ['-l'];
   }
 
   logApp('info', `Spawning PTY [${sessionId}]: ${shellName} ${shellArgs.join(' ')}`);
