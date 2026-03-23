@@ -322,6 +322,80 @@
     .chrome-status-warn { color: #fbbf24; margin-top: 6px; font-size: 11px; }
     .chrome-status-ok { color: #86efac; font-size: 11px; margin-top: 4px; }
 
+    /* ── Commands panel ── */
+    .commands-panel-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px 24px 32px;
+    }
+    .commands-panel-content h3 {
+      font-size: 16px;
+      font-weight: 700;
+      color: #fff;
+      margin: 0 0 4px;
+    }
+    .commands-subtitle {
+      font-size: 12px;
+      color: rgba(255,255,255,0.35);
+      margin: 0 0 20px;
+    }
+    .cmd-section-title {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: rgba(255,255,255,0.25);
+      margin: 20px 0 10px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .cmd-section-title:first-of-type { margin-top: 0; }
+    .cmd-entry {
+      margin-bottom: 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.06);
+      background: rgba(255,255,255,0.02);
+      overflow: hidden;
+    }
+    .cmd-top {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      background: rgba(0,0,0,0.25);
+    }
+    .cmd-code {
+      flex: 1;
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+      font-size: 12px;
+      color: #c4b5fd;
+      white-space: nowrap;
+      overflow-x: auto;
+      user-select: all;
+      -webkit-user-select: all;
+    }
+    .cmd-copy-btn {
+      flex-shrink: 0;
+      padding: 3px 10px;
+      font-size: 11px;
+      font-weight: 500;
+      color: rgba(255,255,255,0.5);
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 5px;
+      cursor: pointer;
+      transition: all 0.12s;
+      white-space: nowrap;
+    }
+    .cmd-copy-btn:hover { background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.8); }
+    .cmd-copy-btn.copied { color: #4ade80; border-color: rgba(34,197,94,0.3); }
+    .cmd-desc {
+      padding: 6px 10px 8px;
+      font-size: 11px;
+      color: rgba(255,255,255,0.35);
+      line-height: 1.4;
+    }
+
     #app-toast {
       position: fixed;
       bottom: 52px;
@@ -1350,6 +1424,9 @@
       <div class="tab" data-tab="browser" title="Browser" aria-label="Browser">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
       </div>
+      <div class="tab" data-tab="commands" title="Commands" aria-label="Commands">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      </div>
     </div>
     <div class="tabs-center-slot">
       <span id="tabs-runtime-label" class="tabs-runtime-chip" title="Agent runtime">OpenClaw</span>
@@ -1471,6 +1548,138 @@
             <button type="button" class="agent-toolbar-btn primary" id="chrome-btn-docs">Open documentation</button>
           </div>
         </footer>
+      </div>
+    </div>
+
+    <div id="commands-panel" class="panel">
+      <div class="commands-panel-content">
+        <h3>Command Reference</h3>
+        <p class="commands-subtitle">Essential CLI commands for <strong id="commands-runtime-label">OpenClaw</strong></p>
+
+        <!-- OpenClaw commands -->
+        <div id="commands-openclaw">
+          <div class="cmd-section-title">Gateway</div>
+          <div class="cmd-entry">
+            <div class="cmd-top">
+              <code class="cmd-code">openclaw gateway --port 18789 --bind loopback --allow-unconfigured run</code>
+              <button class="cmd-copy-btn" data-cmd="openclaw gateway --port 18789 --bind loopback --allow-unconfigured run">Copy</button>
+            </div>
+            <div class="cmd-desc">Start the agent gateway on port 18789</div>
+          </div>
+          <div class="cmd-entry">
+            <div class="cmd-top">
+              <code class="cmd-code">openclaw run "your task here"</code>
+              <button class="cmd-copy-btn" data-cmd='openclaw run "your task here"'>Copy</button>
+            </div>
+            <div class="cmd-desc">Run a one-shot task without opening the gateway</div>
+          </div>
+
+          <div class="cmd-section-title">Configuration</div>
+          <div class="cmd-entry">
+            <div class="cmd-top">
+              <code class="cmd-code">openclaw config get</code>
+              <button class="cmd-copy-btn" data-cmd="openclaw config get">Copy</button>
+            </div>
+            <div class="cmd-desc">View the current openclaw.json configuration</div>
+          </div>
+          <div class="cmd-entry">
+            <div class="cmd-top">
+              <code class="cmd-code">openclaw config set models.providers.0.baseUrl https://api.example.com</code>
+              <button class="cmd-copy-btn" data-cmd="openclaw config set models.providers.0.baseUrl https://api.example.com">Copy</button>
+            </div>
+            <div class="cmd-desc">Update a config value (replace with your key path and value)</div>
+          </div>
+
+          <div class="cmd-section-title">Diagnostics</div>
+          <div class="cmd-entry">
+            <div class="cmd-top">
+              <code class="cmd-code">openclaw doctor --fix</code>
+              <button class="cmd-copy-btn" data-cmd="openclaw doctor --fix">Copy</button>
+            </div>
+            <div class="cmd-desc">Diagnose common issues and auto-fix where possible</div>
+          </div>
+          <div class="cmd-entry">
+            <div class="cmd-top">
+              <code class="cmd-code">openclaw version</code>
+              <button class="cmd-copy-btn" data-cmd="openclaw version">Copy</button>
+            </div>
+            <div class="cmd-desc">Check the installed OpenClaw version</div>
+          </div>
+        </div>
+
+        <!-- NemoClaw commands -->
+        <div id="commands-nemoclaw" style="display:none;">
+          <div class="cmd-section-title">Agent Lifecycle</div>
+          <div class="cmd-entry">
+            <div class="cmd-top">
+              <code class="cmd-code">nemoclaw status</code>
+              <button class="cmd-copy-btn" data-cmd="nemoclaw status">Copy</button>
+            </div>
+            <div class="cmd-desc">Check gateway and sandbox status</div>
+          </div>
+          <div class="cmd-entry">
+            <div class="cmd-top">
+              <code class="cmd-code">nemoclaw start</code>
+              <button class="cmd-copy-btn" data-cmd="nemoclaw start">Copy</button>
+            </div>
+            <div class="cmd-desc">Start the agent and channel bridges (Telegram, etc.)</div>
+          </div>
+          <div class="cmd-entry">
+            <div class="cmd-top">
+              <code class="cmd-code">nemoclaw stop</code>
+              <button class="cmd-copy-btn" data-cmd="nemoclaw stop">Copy</button>
+            </div>
+            <div class="cmd-desc">Stop the running agent</div>
+          </div>
+
+          <div class="cmd-section-title">Policy Management</div>
+          <div class="cmd-entry">
+            <div class="cmd-top">
+              <code class="cmd-code">nemoclaw valnaa policy-list</code>
+              <button class="cmd-copy-btn" data-cmd="nemoclaw valnaa policy-list">Copy</button>
+            </div>
+            <div class="cmd-desc">List which network policy presets are applied to the valnaa sandbox</div>
+          </div>
+          <div class="cmd-entry">
+            <div class="cmd-top">
+              <code class="cmd-code">nemoclaw valnaa policy-add</code>
+              <button class="cmd-copy-btn" data-cmd="nemoclaw valnaa policy-add">Copy</button>
+            </div>
+            <div class="cmd-desc">Add network policy presets (telegram, slack, discord, npm, pypi, etc.)</div>
+          </div>
+
+          <div class="cmd-section-title">Sandbox Access</div>
+          <div class="cmd-entry">
+            <div class="cmd-top">
+              <code class="cmd-code">openshell sandbox list --gateway nemoclaw</code>
+              <button class="cmd-copy-btn" data-cmd="openshell sandbox list --gateway nemoclaw">Copy</button>
+            </div>
+            <div class="cmd-desc">List all sandboxes on the nemoclaw gateway</div>
+          </div>
+          <div class="cmd-entry">
+            <div class="cmd-top">
+              <code class="cmd-code">openshell sandbox connect valnaa --gateway nemoclaw</code>
+              <button class="cmd-copy-btn" data-cmd="openshell sandbox connect valnaa --gateway nemoclaw">Copy</button>
+            </div>
+            <div class="cmd-desc">Open a shell inside the valnaa sandbox</div>
+          </div>
+          <div class="cmd-entry">
+            <div class="cmd-top">
+              <code class="cmd-code">openshell forward 18789 --sandbox valnaa --gateway nemoclaw</code>
+              <button class="cmd-copy-btn" data-cmd="openshell forward 18789 --sandbox valnaa --gateway nemoclaw">Copy</button>
+            </div>
+            <div class="cmd-desc">Forward the gateway port from the sandbox to localhost:18789</div>
+          </div>
+
+          <div class="cmd-section-title">Docker</div>
+          <div class="cmd-entry">
+            <div class="cmd-top">
+              <code class="cmd-code">docker ps --filter name=openshell</code>
+              <button class="cmd-copy-btn" data-cmd="docker ps --filter name=openshell">Copy</button>
+            </div>
+            <div class="cmd-desc">List running OpenShell/NemoClaw containers</div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -1758,10 +1967,10 @@
         panels.forEach(p => p.classList.remove('active'));
         tab.classList.add('active');
         document.getElementById(id + '-panel').classList.add('active');
-        // Fire data refreshes asynchronously — panel is already visible
         if (id === 'logs') refreshLogs();
         if (id === 'browser') void refreshChromeSetupPanel();
         if (id === 'terminal') initTerminal();
+        if (id === 'commands') updateCommandsPanel();
         if (id === 'settings') void refreshSettingsPanel();
       });
     });
@@ -2310,6 +2519,7 @@
         void refreshSettingsPanel();
         void refreshLogs();
         updateTerminalRuntimeBadge();
+        updateCommandsPanel();
       }
     }
 
@@ -2634,6 +2844,26 @@
       } catch (e) {
         alert(e?.message || 'Copy failed');
       }
+    });
+
+    // ── Commands panel ──
+    function updateCommandsPanel() {
+      const runtime = lastAppliedRuntime || 'openclaw';
+      const isNemo = runtime === 'nemoclaw';
+      document.getElementById('commands-runtime-label').textContent = isNemo ? 'NemoClaw' : 'OpenClaw';
+      document.getElementById('commands-openclaw').style.display = isNemo ? 'none' : '';
+      document.getElementById('commands-nemoclaw').style.display = isNemo ? '' : 'none';
+    }
+
+    document.getElementById('commands-panel').addEventListener('click', (e) => {
+      const btn = e.target.closest('.cmd-copy-btn');
+      if (!btn) return;
+      const cmd = btn.getAttribute('data-cmd');
+      navigator.clipboard.writeText(cmd).then(() => {
+        btn.textContent = 'Copied';
+        btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1500);
+      });
     });
 
     // ── Logs ──
