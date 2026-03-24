@@ -1,9 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import api from '@/lib/api';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
 import {
@@ -12,7 +10,6 @@ import {
   Download,
   Check,
   ArrowRight,
-  Loader2,
   Shield,
   Wifi,
   WifiOff,
@@ -73,68 +70,10 @@ const INCLUDED = [
   'Browser extension for web agent',
   'All OpenClaw skills & tools',
   'Automatic updates',
-  '3-day free trial',
+  '1-day free trial',
 ];
 
 export default function DesktopPage() {
-  const [submitting, setSubmitting] = useState(false);
-  const [startingTrial, setStartingTrial] = useState(false);
-  const [trialStarted, setTrialStarted] = useState(false);
-  const [error, setError] = useState('');
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [hasDesktopSub, setHasDesktopSub] = useState(false);
-  const [trialUsed, setTrialUsed] = useState(false);
-
-  useEffect(() => {
-    const token = api.getToken();
-    if (token) {
-      setIsLoggedIn(true);
-      (async () => {
-        try {
-          const billing = await api.get<{ desktopSubscription?: boolean; desktopTrialEndsAt?: string }>('/billing');
-          if (billing.desktopSubscription) {
-            setHasDesktopSub(true);
-          }
-          if (billing.desktopTrialEndsAt) {
-            setTrialUsed(true);
-          }
-        } catch { /* proceed */ }
-      })();
-    }
-  }, []);
-
-  const startCheckout = async () => {
-    if (!isLoggedIn) {
-      window.location.href = '/auth/signup?next=/desktop';
-      return;
-    }
-    setSubmitting(true);
-    setError('');
-    try {
-      const res = await api.post<{ checkoutUrl: string }>('/billing/desktop-checkout', {});
-      window.location.href = res.checkoutUrl;
-    } catch (e: any) {
-      setError(e?.message || 'Unable to start checkout. Please try again.');
-      setSubmitting(false);
-    }
-  };
-
-  const startTrial = async () => {
-    if (!isLoggedIn) {
-      window.location.href = '/auth/signup?next=/desktop';
-      return;
-    }
-    setStartingTrial(true);
-    setError('');
-    try {
-      await api.post<{ ok: boolean; trialEndsAt: string }>('/billing/desktop-trial', {});
-      setTrialStarted(true);
-      setHasDesktopSub(true);
-    } catch (e: any) {
-      setError(e?.message || 'Unable to start trial. Please try again.');
-      setStartingTrial(false);
-    }
-  };
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -149,20 +88,9 @@ export default function DesktopPage() {
             <Link href="/#pricing" className="text-sm text-muted-foreground transition-colors hover:text-foreground">
               Cloud Plans
             </Link>
-            {isLoggedIn ? (
-              <Link href="/dashboard">
-                <Button variant="outline" size="sm">Dashboard</Button>
-              </Link>
-            ) : (
-              <>
-                <Link href="/auth/login">
-                  <Button variant="outline" size="sm">Sign In</Button>
-                </Link>
-                <Link href="/auth/signup">
-                  <Button size="sm">Get Started</Button>
-                </Link>
-              </>
-            )}
+            <Link href="/auth/login">
+              <Button variant="outline" size="sm">Sign In</Button>
+            </Link>
           </div>
         </div>
       </nav>
@@ -257,57 +185,27 @@ export default function DesktopPage() {
               ))}
             </ul>
 
-            {error && (
-              <div className="mt-6 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-[13px] text-red-400">
-                {error}
-              </div>
-            )}
-
-            {trialStarted ? (
-              <div className="mt-8 rounded-lg border border-green-500/20 bg-green-500/10 p-4 text-center">
-                <p className="text-sm font-medium text-green-400">Your 3-day trial is active!</p>
-                <p className="mt-1 text-xs text-green-400/70">Download the app above, sign in, and start using your agent.</p>
-              </div>
-            ) : hasDesktopSub ? (
-              <div className="mt-8 rounded-lg border border-green-500/20 bg-green-500/10 p-4 text-center">
-                <p className="text-sm font-medium text-green-400">You have active Desktop access</p>
-                <p className="mt-1 text-xs text-green-400/70">Download the app above and sign in with your account.</p>
-              </div>
-            ) : (
-              <div className="mt-8 space-y-3">
-                {!trialUsed && (
-                  <Button
-                    onClick={startTrial}
-                    disabled={submitting || startingTrial}
-                    size="lg"
-                    className="w-full"
-                  >
-                    {startingTrial ? (
-                      <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Starting trial...</>
-                    ) : (
-                      <>Start 3-day free trial &mdash; no card needed <ArrowRight className="ml-2 h-4 w-4" /></>
-                    )}
+            <div className="mt-8 space-y-3">
+              <p className="text-center text-sm text-muted-foreground">
+                Download the app, sign in with Google, and your free trial starts automatically.
+              </p>
+              <div className="flex flex-col gap-2 sm:flex-row sm:justify-center">
+                <a href={DOWNLOAD_MAC_ARM}>
+                  <Button size="lg" className="w-full gap-2 sm:w-auto">
+                    <Apple className="size-4" /> Mac (Apple Silicon)
                   </Button>
-                )}
-                <Button
-                  onClick={startCheckout}
-                  disabled={submitting || startingTrial}
-                  variant={trialUsed ? 'default' : 'outline'}
-                  size="lg"
-                  className="w-full"
-                >
-                  {submitting ? (
-                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Redirecting to Stripe...</>
-                  ) : (
-                    <>Subscribe now &mdash; &euro;{TOTAL_PRICE.toFixed(2)}/mo</>
-                  )}
-                </Button>
-                <p className="text-center text-xs text-muted-foreground">
-                  {trialUsed ? 'Your free trial has ended. ' : 'No credit card for trial. '}
-                  Cancel anytime. Separate from cloud VPS plans.
-                </p>
+                </a>
+                <a href={DOWNLOAD_WIN}>
+                  <Button size="lg" variant="outline" className="w-full gap-2 sm:w-auto">
+                    <svg className="size-4" viewBox="0 0 24 24" fill="currentColor"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801" /></svg>
+                    Windows
+                  </Button>
+                </a>
               </div>
-            )}
+              <p className="text-center text-xs text-muted-foreground">
+                1-day free trial &mdash; no credit card needed. Separate from cloud VPS plans.
+              </p>
+            </div>
           </div>
         </div>
       </section>
@@ -375,9 +273,9 @@ export default function DesktopPage() {
                 </li>
               ))}
             </ul>
-            <Button onClick={startTrial} disabled={submitting || startingTrial || hasDesktopSub} className="mt-6 w-full" size="sm">
-              {hasDesktopSub ? 'Already subscribed' : 'Start free trial'}
-            </Button>
+            <a href={DOWNLOAD_WIN} className="mt-6 block">
+              <Button className="w-full" size="sm">Download &amp; try free</Button>
+            </a>
           </div>
         </div>
       </section>
@@ -416,8 +314,8 @@ export default function DesktopPage() {
                 a: 'No. The desktop app has its own separate subscription. You don\'t need a cloud VPS plan, and a cloud plan doesn\'t include desktop access.',
               },
               {
-                q: 'What happens after the 3-day trial?',
-                a: 'Your trial converts to a paid subscription at \u20AC5/mo + VAT. You can cancel anytime during the trial and won\'t be charged.',
+                q: 'What happens after the free trial?',
+                a: 'Your 1-day trial lets you test everything. After that, subscribe at \u20AC5/mo + VAT to keep using the app. You can cancel anytime.',
               },
               {
                 q: 'Do I need my own API keys?',
@@ -446,15 +344,18 @@ export default function DesktopPage() {
         <div className="rounded-2xl border border-border bg-card/50 p-10 text-center">
           <h2 className="text-2xl font-bold tracking-tight">Ready to try it?</h2>
           <p className="mt-3 text-sm text-muted-foreground">
-            3-day free trial. &euro;{BASE_PRICE}/mo + VAT after that. Cancel anytime.
+            1-day free trial. &euro;{BASE_PRICE}/mo + VAT after that. Cancel anytime.
           </p>
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Button onClick={startTrial} disabled={submitting || startingTrial || hasDesktopSub} size="lg" className="rounded-full">
-              {hasDesktopSub ? 'Already subscribed' : 'Start free trial'} <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
             <a href={DOWNLOAD_MAC_ARM}>
+              <Button size="lg" className="rounded-full">
+                <Apple className="mr-2 size-4" /> Download for Mac <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </a>
+            <a href={DOWNLOAD_WIN}>
               <Button variant="outline" size="lg" className="rounded-full">
-                <Apple className="mr-2 size-4" /> Download for Mac
+                <svg className="mr-2 size-4" viewBox="0 0 24 24" fill="currentColor"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801" /></svg>
+                Download for Windows
               </Button>
             </a>
           </div>
