@@ -17,7 +17,6 @@ protocols:
     schemes:
       - valnaa
 
-# Trusted by Gatekeeper: sign with Apple Developer ID + notarize (see desktop/README-APPLE-SIGNING.md)
 mac:
   artifactName: Valnaa-${arch}.${ext}
   category: public.app-category.developer-tools
@@ -31,10 +30,8 @@ mac:
   hardenedRuntime: true
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
-  # Notarization (after Team ID + APPLE_ID + APPLE_APP_SPECIFIC_PASSWORD in env):
-  # notarize:
-  #   teamId: YOUR_TEAM_ID
-  # See desktop/README-APPLE-SIGNING.md
+  notarize:
+    teamId: 3K5P6R49A5
   gatekeeperAssess: false
 
 dmg:

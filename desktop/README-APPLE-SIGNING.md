@@ -1,39 +1,54 @@
-# Apple Gatekeeper: signed & notarized macOS builds
+# Apple Code Signing & Notarization
 
-macOS shows **“Valnaa can’t be opened because Apple cannot verify it”** when the app is **not** signed with a **Developer ID** certificate and **notarized** by Apple. There is no free way to remove that warning for arbitrary downloads; Apple requires a paid developer account and their notary service.
+This app is signed with a Developer ID Application certificate and notarized by Apple,
+so macOS Gatekeeper trusts it on download.
 
-## What you need
+## Certificate
 
-1. **Apple Developer Program** — [developer.apple.com/programs](https://developer.apple.com/programs/) (~$99 USD/year, per organization or individual).
-2. **Developer ID Application** certificate (not “Mac App Distribution”) — create in Certificates, Identifiers & Profiles, then install in Keychain.
-3. **Export a `.p12`** (or use the certificate in Keychain on the Mac that runs the build).
-4. **App-specific password** — for your Apple ID: [appleid.apple.com](https://appleid.apple.com) → Sign-In and Security → App-Specific Passwords (used by `notarytool`, not your normal password).
-5. **Team ID** — 10-character ID in the [Membership](https://developer.apple.com/account/#/membership/) page.
+- **Identity:** `Developer ID Application: Mac-Bride Nana Zemkwe (3K5P6R49A5)`
+- **Team ID:** `3K5P6R49A5`
 
-## Build-time environment (CI or local)
+Already installed in Keychain on the build Mac.
 
-Set these when running `electron-builder` (e.g. GitHub Actions secrets):
+## Notarization credentials (one-time setup)
+
+1. Go to [appleid.apple.com](https://appleid.apple.com) → Sign-In and Security → App-Specific Passwords.
+2. Generate a password named `notarytool`.
+3. Store it in Keychain:
+
+```bash
+xcrun notarytool store-credentials "notarytool-profile" \
+  --apple-id "YOUR_APPLE_ID_EMAIL" \
+  --team-id "3K5P6R49A5" \
+  --password "xxxx-xxxx-xxxx-xxxx"
+```
+
+## Building signed + notarized DMGs
+
+```bash
+cd desktop
+npm run dist:mac
+```
+
+`electron-builder` will:
+1. Sign the `.app` with hardened runtime + entitlements
+2. Submit to Apple's notary service (requires internet)
+3. Staple the notarization ticket to the DMG
+
+The resulting DMGs in `desktop/release/` are Gatekeeper-trusted.
+
+## Environment variables (for CI)
 
 | Variable | Purpose |
 |----------|---------|
-| `CSC_LINK` | Path or base64 of the **.p12** (Developer ID Application) |
-| `CSC_KEY_PASSWORD` | Password for the .p12 |
-| `APPLE_ID` | Apple ID email used for the developer account |
-| `APPLE_APP_SPECIFIC_PASSWORD` | App-specific password from appleid.apple.com |
-| `APPLE_TEAM_ID` | 10-character Team ID |
+| `CSC_LINK` | Base64 of the .p12 certificate |
+| `CSC_KEY_PASSWORD` | .p12 password |
+| `APPLE_ID` | Apple ID email |
+| `APPLE_APP_SPECIFIC_PASSWORD` | App-specific password |
+| `APPLE_TEAM_ID` | `3K5P6R49A5` |
 
-With signing configured, `electron-builder` signs the app. Add **notarization** by uncommenting and filling in `mac.notarize` in `electron-builder.yml` (see comment in that file), or follow [electron-builder mac notarize](https://www.electron.build/configuration/mac) for your exact version.
+## Troubleshooting
 
-## After notarization
-
-- Users who download the **DMG from your site/GitHub** should see a normal open prompt (first open may still say the app was downloaded from the internet — that is expected).
-- **Stapling**: `electron-builder` usually staples the notarization ticket to the app/DMG so offline Gatekeeper checks work.
-
-## Without signing (current default)
-
-Users can still run the app: **Right-click → Open** once, or **System Settings → Privacy & Security → Open Anyway** after a blocked launch. This is normal for unsigned apps.
-
-## Related
-
-- [Notarizing macOS software before distribution](https://developer.apple.com/documentation/security/notarizing_macos_software_before_distribution)
-- [Hardened Runtime](https://developer.apple.com/documentation/security/hardened_runtime) (enabled in this repo via `electron-builder.yml` + `build/entitlements.mac.plist`)
+- **"skipped macOS notarization"** → Credentials not found. Run `store-credentials` above.
+- **"The signature of the binary is invalid"** → Clean build: `rm -rf release/ dist/` then rebuild.
+- **Notarization rejected** → Check `xcrun notarytool log <submission-id> --keychain-profile "notarytool-profile"` for details.
