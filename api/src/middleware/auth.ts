@@ -150,6 +150,38 @@ export function generateToken(userId: string, plan: string): string {
   });
 }
 
+export function generateDesktopToken(userId: string): string {
+  return jwt.sign({ userId, type: 'desktop' }, JWT_SECRET, {
+    algorithm: 'HS256',
+    expiresIn: '30d',
+  });
+}
+
+export function authenticateDesktop(req: AuthRequest, _res: Response, next: NextFunction) {
+  try {
+    const header = req.headers.authorization;
+    if (!header?.startsWith('Bearer ')) {
+      throw new UnauthorizedError('Missing authorization token');
+    }
+    const token = header.slice(7);
+    const payload = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as {
+      userId: string;
+      type?: string;
+    };
+    if (payload.type !== 'desktop') {
+      throw new UnauthorizedError('Invalid desktop token');
+    }
+    req.userId = payload.userId;
+    next();
+  } catch (err) {
+    if (err instanceof UnauthorizedError) {
+      next(err);
+    } else {
+      next(new UnauthorizedError('Invalid or expired token'));
+    }
+  }
+}
+
 export async function refreshToken(userId: string): Promise<string> {
   const user = await db.getOne('SELECT id, plan FROM users WHERE id = $1', [userId]);
   if (!user) throw new UnauthorizedError('User not found');

@@ -94,6 +94,8 @@ function AuthForm() {
     if (!clientId || !window.google || gsiInitialized.current) return;
     gsiInitialized.current = true;
 
+    const googleEndpoint = isDesktop ? '/auth/desktop/google' : '/auth/google';
+
     window.google.accounts.id.initialize({
       client_id: clientId,
       callback: async (response: any) => {
@@ -101,7 +103,7 @@ function AuthForm() {
         setError('');
         try {
           const data = await api.post<{ token: string; isNewUser: boolean; email?: string }>(
-            '/auth/google',
+            googleEndpoint,
             {
               credential: response.credential,
               referralCode: referralCode || undefined,
@@ -124,7 +126,7 @@ function AuthForm() {
         theme: 'outline',
       });
     }
-  }, [referralCode, handlePostAuth]);
+  }, [referralCode, handlePostAuth, isDesktop]);
 
   useEffect(() => {
     if (window.google) initGsi();
@@ -182,10 +184,10 @@ function AuthForm() {
           <Image src="/favicon.png" alt="Valnaa" width={28} height={28} />
         </Link>
         <h1 className="text-2xl font-bold tracking-tight">
-          {isLogin ? 'Welcome back' : 'Create your account'}
+          {isDesktop ? 'Sign in to Valnaa Desktop' : (isLogin ? 'Welcome back' : 'Create your account')}
         </h1>
         <p className="mt-1.5 text-sm text-muted-foreground">
-          {isLogin ? 'Sign in to your dashboard' : 'Get your AI agent in 60 seconds'}
+          {isDesktop ? 'Use your Google account to continue' : (isLogin ? 'Sign in to your dashboard' : 'Get your AI agent in 60 seconds')}
         </p>
         {!isLogin && referralCode && (
           <p className="mt-2 text-[13px] text-green-400">
@@ -227,82 +229,94 @@ function AuthForm() {
             </div>
           )}
 
-          <div className="flex items-center gap-4">
-            <div className="h-px flex-1 bg-border" />
-            <span className="text-[12px] uppercase tracking-wider text-muted-foreground">or</span>
-            <div className="h-px flex-1 bg-border" />
-          </div>
+          {!isDesktop && (
+            <>
+              <div className="flex items-center gap-4">
+                <div className="h-px flex-1 bg-border" />
+                <span className="text-[12px] uppercase tracking-wider text-muted-foreground">or</span>
+                <div className="h-px flex-1 bg-border" />
+              </div>
 
-          <form onSubmit={handleEmailSubmit} className="space-y-4">
-            <div className="space-y-1.5">
-              <label className="block text-[13px] font-medium text-muted-foreground">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full rounded-lg border border-input bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 transition-colors focus:border-foreground/30 focus:outline-none"
-                placeholder="you@example.com"
-                required
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="block text-[13px] font-medium text-muted-foreground">Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-lg border border-input bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 transition-colors focus:border-foreground/30 focus:outline-none"
-                placeholder={isLogin ? 'Your password' : 'At least 8 characters'}
-                minLength={isLogin ? undefined : 8}
-                required
-              />
-            </div>
-            <Button type="submit" disabled={loading} className="w-full" size="lg">
-              {loading ? (
-                <span className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  {isLogin ? 'Signing in...' : 'Setting up...'}
-                </span>
-              ) : (
-                <>
-                  {isLogin ? 'Sign In' : 'Create Account'}
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </>
-              )}
-            </Button>
-          </form>
+              <form onSubmit={handleEmailSubmit} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="block text-[13px] font-medium text-muted-foreground">Email</label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full rounded-lg border border-input bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 transition-colors focus:border-foreground/30 focus:outline-none"
+                    placeholder="you@example.com"
+                    required
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="block text-[13px] font-medium text-muted-foreground">Password</label>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full rounded-lg border border-input bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 transition-colors focus:border-foreground/30 focus:outline-none"
+                    placeholder={isLogin ? 'Your password' : 'At least 8 characters'}
+                    minLength={isLogin ? undefined : 8}
+                    required
+                  />
+                </div>
+                <Button type="submit" disabled={loading} className="w-full" size="lg">
+                  {loading ? (
+                    <span className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      {isLogin ? 'Signing in...' : 'Setting up...'}
+                    </span>
+                  ) : (
+                    <>
+                      {isLogin ? 'Sign In' : 'Create Account'}
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </>
+                  )}
+                </Button>
+              </form>
+            </>
+          )}
 
-          {!isLogin && (
+          {!isLogin && !isDesktop && (
             <p className="text-center text-xs text-muted-foreground">
               Free trial available — no credit card required
+            </p>
+          )}
+
+          {isDesktop && (
+            <p className="text-center text-xs text-muted-foreground">
+              Sign in with Google to get started. 1-day free trial included.
             </p>
           )}
         </div>
       </div>
 
-      <p className="mt-6 text-center text-sm text-muted-foreground">
-        {isLogin ? (
-          <>
-            Don&apos;t have an account?{' '}
-            <button
-              onClick={() => navigateTo('/auth/signup')}
-              className="text-foreground underline underline-offset-4 transition-colors hover:text-foreground/80"
-            >
-              Sign up
-            </button>
-          </>
-        ) : (
-          <>
-            Already have an account?{' '}
-            <button
-              onClick={() => navigateTo('/auth/login')}
-              className="text-foreground underline underline-offset-4 transition-colors hover:text-foreground/80"
-            >
-              Sign in
-            </button>
-          </>
-        )}
-      </p>
+      {!isDesktop && (
+        <p className="mt-6 text-center text-sm text-muted-foreground">
+          {isLogin ? (
+            <>
+              Don&apos;t have an account?{' '}
+              <button
+                onClick={() => navigateTo('/auth/signup')}
+                className="text-foreground underline underline-offset-4 transition-colors hover:text-foreground/80"
+              >
+                Sign up
+              </button>
+            </>
+          ) : (
+            <>
+              Already have an account?{' '}
+              <button
+                onClick={() => navigateTo('/auth/login')}
+                className="text-foreground underline underline-offset-4 transition-colors hover:text-foreground/80"
+              >
+                Sign in
+              </button>
+            </>
+          )}
+        </p>
+      )}
       <p className="mt-8 text-center text-xs text-muted-foreground">
         By {isLogin ? 'signing in' : 'creating an account'}, you agree to our{' '}
         <Link href="/terms" className="underline underline-offset-2 hover:text-foreground/80">Terms of Service</Link>

@@ -2057,7 +2057,7 @@
       <p id="subscribe-message" class="subscribe-lede">You need an active Valnaa subscription to use this app.</p>
       <p id="subscribe-email" class="subscribe-email-line"></p>
       <div class="subscribe-actions">
-        <button type="button" class="subscribe-btn subscribe-btn-light" id="subscribe-trial-btn">Start 3-day free trial. No card needed.</button>
+        <button type="button" class="subscribe-btn subscribe-btn-light" id="subscribe-trial-btn">Start 1-day free trial. No card needed.</button>
         <button type="button" class="subscribe-btn subscribe-btn-dark" id="subscribe-btn">Subscribe now · €6.25/mo</button>
       </div>
       <p id="subscribe-trial-error" style="font-size: 12px; color: #f87171; display: none; margin: 4px 0 0; max-width: 320px;"></p>
@@ -2268,10 +2268,10 @@
         msgEl.textContent = 'Your offline grace period has expired. Please connect to the internet so we can verify your subscription.';
       } else if (info?.status === 'trial_expired') {
         titleEl.textContent = 'Trial Ended';
-        msgEl.textContent = 'Your 3-day free trial has ended. Subscribe to keep using Valnaa Desktop.';
+        msgEl.textContent = 'Your free trial has ended. Subscribe to keep using Valnaa Desktop.';
       } else if (canTrial) {
         titleEl.textContent = 'Start using Valnaa Desktop';
-        msgEl.textContent = 'Try it free for 3 days. No credit card required.';
+        msgEl.textContent = 'Try it free for 1 day. No credit card required.';
       } else {
         titleEl.textContent = 'Subscribe to Valnaa Desktop';
         msgEl.textContent = 'Get your personal AI agent running on your machine.';
@@ -2469,7 +2469,7 @@
         errEl.style.display = '';
       } finally {
         btn.disabled = false;
-        btn.textContent = 'Start 3-day free trial. No card needed.';
+        btn.textContent = 'Start 1-day free trial. No card needed.';
       }
     });
     document.getElementById('subscribe-btn').addEventListener('click', async () => {

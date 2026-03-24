@@ -303,13 +303,13 @@ async function handleDesktopPurchase(session: Stripe.Checkout.Session): Promise<
 
   if (stripeCustomerId) {
     await db.query(
-      'UPDATE users SET stripe_customer_id = $1 WHERE id = $2 AND stripe_customer_id IS NULL',
+      'UPDATE desktop_users SET stripe_customer_id = $1 WHERE id = $2 AND stripe_customer_id IS NULL',
       [stripeCustomerId, userId]
     );
   }
 
   await db.query(
-    'UPDATE users SET desktop_subscription_id = $1 WHERE id = $2',
+    'UPDATE desktop_users SET desktop_subscription_id = $1, updated_at = NOW() WHERE id = $2',
     [subscriptionId, userId]
   );
 
@@ -318,18 +318,23 @@ async function handleDesktopPurchase(session: Stripe.Checkout.Session): Promise<
 
 async function handleSubscriptionCancelled(subscription: Stripe.Subscription): Promise<void> {
   const customerId = subscription.customer as string;
+
+  // Check desktop_users first for desktop subscription cancellation
+  const desktopUser = await db.getOne<any>(
+    'SELECT id, desktop_subscription_id FROM desktop_users WHERE stripe_customer_id = $1',
+    [customerId]
+  );
+  if (desktopUser && desktopUser.desktop_subscription_id === subscription.id) {
+    await db.query('UPDATE desktop_users SET desktop_subscription_id = NULL, updated_at = NOW() WHERE id = $1', [desktopUser.id]);
+    console.log(`[stripe] Desktop subscription cancelled for desktop_user ${desktopUser.id}`);
+    return;
+  }
+
   const user = await db.getOne<User>(
     'SELECT * FROM users WHERE stripe_customer_id = $1',
     [customerId]
   );
   if (!user) return;
-
-  // If this is a desktop subscription cancellation, just clear the desktop sub ID
-  if ((user as any).desktop_subscription_id === subscription.id) {
-    await db.query('UPDATE users SET desktop_subscription_id = NULL WHERE id = $1', [user.id]);
-    console.log(`[stripe] Desktop subscription cancelled for user ${user.id}`);
-    return;
-  }
 
   await deprovisionUser(user.id);
 

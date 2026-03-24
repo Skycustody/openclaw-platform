@@ -23,7 +23,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { OAuth2Client } from 'google-auth-library';
 import db from '../lib/db';
-import { generateToken, refreshToken as issueRefreshToken } from '../middleware/auth';
+import { generateToken, generateDesktopToken, refreshToken as issueRefreshToken } from '../middleware/auth';
 import { rateLimitAuth, rateLimitSignup } from '../middleware/rateLimit';
 import { BadRequestError, UnauthorizedError } from '../lib/errors';
 import { v4 as uuid } from 'uuid';
@@ -207,6 +207,72 @@ router.post('/google', rateLimitAuth, async (req: Request, res: Response, next: 
       isNewUser: true,
     });
   } catch (err: any) {
+    next(err);
+  }
+});
+
+// ── Desktop Google Sign-In (Google-only, separate desktop_users table, 1-day trial) ──
+router.post('/desktop/google', rateLimitAuth, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { credential } = req.body;
+    if (!credential) throw new BadRequestError('Google credential is required');
+    if (!process.env.GOOGLE_CLIENT_ID) throw new BadRequestError('Google sign-in is not configured.');
+
+    let payload: any;
+    try {
+      const ticket = await googleClient.verifyIdToken({
+        idToken: credential,
+        audience: process.env.GOOGLE_CLIENT_ID,
+      });
+      payload = ticket.getPayload();
+    } catch (verifyErr: any) {
+      const msg = verifyErr.message || '';
+      if (msg.includes('Token used too late') || msg.includes('expired'))
+        throw new BadRequestError('Google sign-in expired. Please try again.');
+      if (msg.includes('audience') || msg.includes('recipient') || msg.includes('client_id'))
+        throw new BadRequestError('Google sign-in configuration mismatch.');
+      throw new BadRequestError('Google sign-in failed. Please try again.');
+    }
+
+    if (!payload || !payload.email) throw new UnauthorizedError('Could not get email from Google.');
+
+    const { email, name, picture, sub: googleId } = payload;
+
+    const existing = await db.getOne<any>(
+      'SELECT id, email, desktop_subscription_id, desktop_trial_ends_at, stripe_customer_id FROM desktop_users WHERE email = $1',
+      [email]
+    );
+
+    if (existing) {
+      await db.query(
+        `UPDATE desktop_users SET google_id = COALESCE(google_id, $1), avatar_url = COALESCE(avatar_url, $2), display_name = COALESCE(display_name, $3), updated_at = NOW() WHERE id = $4`,
+        [googleId, picture, name, existing.id]
+      );
+      const token = generateDesktopToken(existing.id);
+      const trialActive = existing.desktop_trial_ends_at && new Date(existing.desktop_trial_ends_at) > new Date();
+      return res.json({
+        token,
+        user: { id: existing.id, email: existing.email, hasDesktopPaid: !!existing.desktop_subscription_id, trialActive: !!trialActive },
+        isNewUser: false,
+      });
+    }
+
+    const userId = uuid();
+    const trialEnd = new Date(Date.now() + 1 * 24 * 60 * 60 * 1000); // 1-day trial
+    await db.query(
+      `INSERT INTO desktop_users (id, email, google_id, avatar_url, display_name, desktop_trial_ends_at)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [userId, email, googleId, picture, name, trialEnd.toISOString()]
+    );
+
+    console.log(`[auth] Desktop user created ${userId} (${email}), 1-day trial ends ${trialEnd.toISOString()}`);
+    const token = generateDesktopToken(userId);
+    res.json({
+      token,
+      user: { id: userId, email, hasDesktopPaid: false, trialActive: true },
+      isNewUser: true,
+    });
+  } catch (err) {
     next(err);
   }
 });

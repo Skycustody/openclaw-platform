@@ -130,14 +130,14 @@ function apiPost<T>(endpoint: string, token: string, body: Record<string, unknow
  * The API verifies the desktop subscription is active before issuing one.
  */
 export async function fetchDesktopGatewayToken(authToken: string): Promise<string> {
-  const result = await apiPost<{ gatewayToken: string }>('/billing/desktop-gateway-token', authToken);
+  const result = await apiPost<{ gatewayToken: string }>('/desktop-billing/gateway-token', authToken);
   if (!result.gatewayToken) throw new Error('API did not return a gateway token');
   return result.gatewayToken;
 }
 
 export async function getStripePortalUrl(token: string): Promise<string | null> {
   try {
-    const result = await apiPost<{ url: string }>('/billing/portal', token);
+    const result = await apiPost<{ url: string }>('/desktop-billing/portal', token);
     return result.url || null;
   } catch (err: any) {
     logApp('warn', 'Stripe portal URL failed', err.message);
@@ -147,7 +147,7 @@ export async function getStripePortalUrl(token: string): Promise<string | null> 
 
 export async function getDesktopCheckoutUrl(token: string): Promise<string | null> {
   try {
-    const result = await apiPost<{ checkoutUrl: string }>('/billing/desktop-checkout', token);
+    const result = await apiPost<{ checkoutUrl: string }>('/desktop-billing/checkout', token);
     return result.checkoutUrl || null;
   } catch (err: any) {
     logApp('warn', 'Desktop checkout URL failed', err.message);
@@ -157,7 +157,7 @@ export async function getDesktopCheckoutUrl(token: string): Promise<string | nul
 
 export async function startDesktopTrial(token: string): Promise<{ ok: boolean; error?: string }> {
   try {
-    const result = await apiPost<{ ok: boolean; trialEndsAt: string }>('/billing/desktop-trial', token);
+    const result = await apiPost<{ ok: boolean; trialEndsAt: string }>('/desktop-billing/trial', token);
     logApp('info', `Desktop trial started, ends ${result.trialEndsAt}`);
     return { ok: true };
   } catch (err: any) {
@@ -170,14 +170,12 @@ export async function checkSubscription(token: string): Promise<SubscriptionResu
   try {
     const billing = await apiGet<{
       email?: string;
-      plan: string;
-      status: string;
       stripeCustomerId?: string;
       hasDesktopPaid?: boolean;
       desktopSubscription?: boolean;
       desktopTrialActive?: boolean;
       desktopTrialEndsAt?: string;
-    }>('/billing', token);
+    }>('/desktop-billing', token);
 
     const hasDesktop = !!billing.desktopSubscription;
     const ok = hasDesktop;
@@ -194,12 +192,12 @@ export async function checkSubscription(token: string): Promise<SubscriptionResu
     }
 
     const effectiveStatus = !ok && billing.desktopTrialEndsAt && !billing.desktopTrialActive
-      ? 'trial_expired' : billing.status;
+      ? 'trial_expired' : 'active';
 
     return {
       ok,
       status: effectiveStatus,
-      plan: billing.plan,
+      plan: 'desktop',
       email: billing.email,
       desktopSubscription: hasDesktop,
       desktopTrialActive: !!billing.desktopTrialActive,
