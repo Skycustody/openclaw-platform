@@ -30,8 +30,6 @@ mac:
   hardenedRuntime: true
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
-  notarize:
-    teamId: 3K5P6R49A5
   gatekeeperAssess: false
 
 dmg:
