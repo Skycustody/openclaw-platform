@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version tag (e.g. v0.1.0)'
-        required: true
-        default: 'v0.1.0'
+        description: 'Release version tag (e.g. v0.3.0) — leave empty to auto-detect from package.json'
+        required: false
+        default: ''
 
 jobs:
   build-windows:
@@ -28,6 +28,20 @@ jobs:
 
       - name: Install Python setuptools (needed by node-gyp)
         run: pip install setuptools
+
+      - name: Detect version
+        id: version
+        shell: pwsh
+        run: |
+          $inputVersion = "${{ github.event.inputs.version }}"
+          if ($inputVersion -and $inputVersion -ne '') {
+            $tag = $inputVersion
+          } else {
+            $pkg = Get-Content package.json | ConvertFrom-Json
+            $tag = "v$($pkg.version)"
+          }
+          Write-Host "Release tag: $tag"
+          echo "tag=$tag" >> $env:GITHUB_OUTPUT
 
       - name: Install dependencies
         run: npm ci || npm install
@@ -52,8 +66,8 @@ jobs:
             if ($exe.Name -ne $targetName) {
               Copy-Item $exe.FullName $targetPath
             }
-            Write-Host "Uploading $targetName ($([math]::Round((Get-Item $targetPath).Length / 1MB, 1)) MB)"
-            gh release upload ${{ github.event.inputs.version }} $targetPath --repo Skycustody/valnaa-desktop --clobber
+            Write-Host "Uploading $targetName ($([math]::Round((Get-Item $targetPath).Length / 1MB, 1)) MB) to ${{ steps.version.outputs.tag }}"
+            gh release upload ${{ steps.version.outputs.tag }} $targetPath --repo Skycustody/valnaa-desktop --clobber
           } else {
             Write-Error "No .exe installer found in release/"
             exit 1
