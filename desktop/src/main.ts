@@ -1555,24 +1555,85 @@ async function autoStart(): Promise<void> {
 }
 
 function setupAutoUpdater(): void {
+  let updateDownloaded = false;
+
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
 
   autoUpdater.on('update-available', (info) => {
     logApp('info', `Update available: v${info.version}`);
-    mainWindow?.webContents.send('app:update-available', info.version);
+    mainWindow?.webContents.send('app:update-available', { version: info.version, canAutoInstall: false });
   });
 
   autoUpdater.on('update-downloaded', (info) => {
+    updateDownloaded = true;
     logApp('info', `Update downloaded: v${info.version} — will install on quit`);
-    mainWindow?.webContents.send('app:update-downloaded', info.version);
+    mainWindow?.webContents.send('app:update-available', { version: info.version, canAutoInstall: true });
   });
 
   autoUpdater.on('error', (err) => {
     logApp('warn', 'Auto-updater error (non-fatal)', err.message);
+    // electron-updater failed (common on unsigned macOS DMGs) — fall back to GitHub check
+    checkGitHubForUpdate();
   });
 
-  autoUpdater.checkForUpdatesAndNotify().catch(() => {});
+  ipcMain.handle('app:install-update', () => {
+    if (updateDownloaded) {
+      autoUpdater.quitAndInstall(false, true);
+    } else {
+      shell.openExternal('https://valnaa.com/desktop');
+    }
+  });
+
+  autoUpdater.checkForUpdatesAndNotify().catch(() => {
+    checkGitHubForUpdate();
+  });
+
+  // Re-check every 4 hours
+  setInterval(() => {
+    autoUpdater.checkForUpdatesAndNotify().catch(() => checkGitHubForUpdate());
+  }, 4 * 60 * 60 * 1000);
+}
+
+function checkGitHubForUpdate(): void {
+  const https = require('https');
+  const currentVersion = app.getVersion();
+
+  const options = {
+    hostname: 'api.github.com',
+    path: '/repos/Skycustody/valnaa-desktop/releases/latest',
+    headers: { 'User-Agent': `Valnaa/${currentVersion}` },
+    timeout: 10000,
+  };
+
+  const req = https.get(options, (res: any) => {
+    let body = '';
+    res.on('data', (chunk: Buffer) => { body += chunk.toString(); });
+    res.on('end', () => {
+      try {
+        const release = JSON.parse(body);
+        const latestTag = (release.tag_name || '').replace(/^v/, '');
+        if (latestTag && isNewerVersion(currentVersion, latestTag)) {
+          logApp('info', `GitHub reports newer version: v${latestTag} (current: v${currentVersion})`);
+          mainWindow?.webContents.send('app:update-available', { version: latestTag, canAutoInstall: false });
+        }
+      } catch { /* ignore parse errors */ }
+    });
+  });
+  req.on('error', () => {});
+  req.on('timeout', () => { req.destroy(); });
+}
+
+function isNewerVersion(current: string, latest: string): boolean {
+  const c = current.split('.').map(Number);
+  const l = latest.split('.').map(Number);
+  for (let i = 0; i < Math.max(c.length, l.length); i++) {
+    const cv = c[i] || 0;
+    const lv = l[i] || 0;
+    if (lv > cv) return true;
+    if (lv < cv) return false;
+  }
+  return false;
 }
 
 // Register protocol for deep links (dev mode)

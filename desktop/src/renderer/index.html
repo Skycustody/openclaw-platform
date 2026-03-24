@@ -1438,6 +1438,74 @@
       cursor: pointer;
     }
     .akf-help a:hover { color: rgba(255,255,255,0.6); }
+
+    /* Update toast */
+    .update-toast {
+      position: fixed;
+      bottom: 16px;
+      left: 16px;
+      z-index: 99999;
+      display: none;
+      align-items: center;
+      gap: 10px;
+      background: #1a1a2e;
+      border: 1px solid rgba(99, 102, 241, 0.4);
+      border-radius: 10px;
+      padding: 10px 14px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      font-size: 13px;
+      color: #e2e8f0;
+      max-width: 340px;
+      animation: updateSlideIn 0.35s ease-out;
+    }
+    .update-toast.visible { display: flex; }
+    @keyframes updateSlideIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .update-toast-icon {
+      flex-shrink: 0;
+      width: 20px;
+      height: 20px;
+      color: #818cf8;
+    }
+    .update-toast-body {
+      flex: 1;
+      min-width: 0;
+    }
+    .update-toast-title {
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+    .update-toast-version {
+      font-size: 11px;
+      color: rgba(255,255,255,0.45);
+    }
+    .update-toast-btn {
+      flex-shrink: 0;
+      padding: 5px 12px;
+      border: none;
+      border-radius: 6px;
+      background: #6366f1;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      font-family: inherit;
+    }
+    .update-toast-btn:hover { background: #4f46e5; }
+    .update-toast-close {
+      flex-shrink: 0;
+      background: none;
+      border: none;
+      color: rgba(255,255,255,0.3);
+      cursor: pointer;
+      font-size: 16px;
+      padding: 0 2px;
+      line-height: 1;
+    }
+    .update-toast-close:hover { color: rgba(255,255,255,0.6); }
   </style>
 </head>
 <body>
@@ -3362,6 +3430,48 @@
 
     // Signal main process that renderer is ready to receive messages
     oc.signalReady();
+  </script>
+
+  <!-- Update notification toast -->
+  <div class="update-toast" id="update-toast">
+    <svg class="update-toast-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+      <polyline points="7 10 12 15 17 10"/>
+      <line x1="12" y1="15" x2="12" y2="3"/>
+    </svg>
+    <div class="update-toast-body">
+      <div class="update-toast-title">Update available</div>
+      <div class="update-toast-version" id="update-toast-version"></div>
+    </div>
+    <button class="update-toast-btn" id="update-toast-action">Download</button>
+    <button class="update-toast-close" id="update-toast-close" title="Dismiss">&times;</button>
+  </div>
+
+  <script>
+    (function() {
+      const toast = document.getElementById('update-toast');
+      const versionEl = document.getElementById('update-toast-version');
+      const actionBtn = document.getElementById('update-toast-action');
+      const closeBtn = document.getElementById('update-toast-close');
+      let canAutoInstall = false;
+
+      window.openclaw.onUpdateAvailable(function(info) {
+        versionEl.textContent = 'v' + info.version + ' is ready';
+        canAutoInstall = !!info.canAutoInstall;
+        actionBtn.textContent = canAutoInstall ? 'Restart to update' : 'Download';
+        toast.classList.add('visible');
+      });
+
+      actionBtn.addEventListener('click', function() {
+        actionBtn.disabled = true;
+        actionBtn.textContent = canAutoInstall ? 'Restarting…' : 'Opening…';
+        window.openclaw.installUpdate();
+      });
+
+      closeBtn.addEventListener('click', function() {
+        toast.classList.remove('visible');
+      });
+    })();
   </script>
 </body>
 </html>
