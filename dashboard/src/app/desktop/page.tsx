@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
 import {
   Monitor,
-  Apple,
   Download,
   Check,
   ArrowRight,
@@ -19,6 +18,14 @@ import {
   Zap,
   Globe,
 } from 'lucide-react';
+
+function AppleLogo({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 814 1000" fill="currentColor">
+      <path d="M788.1 340.9c-5.8 4.5-108.2 62.2-108.2 190.5 0 148.4 130.3 200.9 134.2 202.2-.6 3.2-20.7 71.9-68.7 141.9-42.8 61.6-87.5 123.1-155.5 123.1s-85.5-39.5-164-39.5c-76.5 0-103.7 40.8-165.9 40.8s-105.6-57.8-155.5-127.4c-58.3-81.3-105.9-207.5-105.9-328.1 0-193 125.5-295.3 249.1-295.3 65.6 0 120.3 43.1 161.5 43.1 39.2 0 100.2-45.7 174.5-45.7 28.2 0 129.6 2.6 196.4 99.4zm-141.1-136.3c31.2-36.9 53.4-88.1 53.4-139.3 0-7.1-.6-14.3-1.9-20.1-50.9 1.9-110.8 33.8-147.1 75.8-28.9 32.5-57.8 83.8-57.8 135.6 0 7.8.6 15.6 1.3 18.2 2.6.6 6.4 1.3 10.2 1.3 45.7 0 103.1-30.4 141.9-71.5z" />
+    </svg>
+  );
+}
 
 const DOWNLOAD_BASE = 'https://github.com/Skycustody/valnaa-desktop/releases/latest';
 const DOWNLOAD_MAC_ARM = `${DOWNLOAD_BASE}/download/Valnaa-arm64.dmg`;
@@ -103,11 +110,11 @@ export default function DesktopPage() {
             Desktop App
           </div>
           <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
-            OpenClaw + NemoClaw on your computer
+            Install OpenClaw and NemoClaw on your PC for free
           </h1>
           <p className="mx-auto mt-5 max-w-xl text-lg leading-relaxed text-muted-foreground">
-            A full AI agent running locally, set up without touching a terminal.
-            Download, sign in, and NemoClaw handles the rest.
+            Download Valnaa Desktop and run a full AI agent locally.
+            Private, fast, and always available. No terminal interaction needed.
           </p>
         </div>
 
@@ -115,14 +122,14 @@ export default function DesktopPage() {
         <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
           <a href={DOWNLOAD_MAC_ARM} className="group w-full sm:w-auto">
             <Button size="lg" className="w-full gap-3 rounded-full sm:w-auto">
-              <Apple className="size-5" />
+              <AppleLogo className="size-5" />
               Mac (Apple Silicon)
               <Download className="size-4 opacity-50 transition-opacity group-hover:opacity-100" />
             </Button>
           </a>
           <a href={DOWNLOAD_MAC_INTEL} className="group w-full sm:w-auto">
             <Button size="lg" variant="outline" className="w-full gap-3 rounded-full sm:w-auto">
-              <Apple className="size-5" />
+              <AppleLogo className="size-5" />
               Mac (Intel)
               <Download className="size-4 opacity-50 transition-opacity group-hover:opacity-100" />
             </Button>
@@ -160,7 +167,7 @@ export default function DesktopPage() {
             <div className="text-center">
               <h2 className="text-2xl font-bold">Valnaa Desktop</h2>
               <p className="mt-2 text-sm text-muted-foreground">
-                Run OpenClaw on your own computer
+                OpenClaw + NVIDIA NemoClaw on your own computer
               </p>
             </div>
 
@@ -192,7 +199,7 @@ export default function DesktopPage() {
               <div className="flex flex-col gap-2 sm:flex-row sm:justify-center">
                 <a href={DOWNLOAD_MAC_ARM}>
                   <Button size="lg" className="w-full gap-2 sm:w-auto">
-                    <Apple className="size-4" /> Mac (Apple Silicon)
+                    <AppleLogo className="size-4" /> Mac (Apple Silicon)
                   </Button>
                 </a>
                 <a href={DOWNLOAD_WIN}>
@@ -349,7 +356,7 @@ export default function DesktopPage() {
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <a href={DOWNLOAD_MAC_ARM}>
               <Button size="lg" className="rounded-full">
-                <Apple className="mr-2 size-4" /> Download for Mac <ArrowRight className="ml-2 h-4 w-4" />
+                <AppleLogo className="mr-2 size-4" /> Download for Mac <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </a>
             <a href={DOWNLOAD_WIN}>
