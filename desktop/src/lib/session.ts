@@ -279,3 +279,45 @@ export function parseDeepLinkEmail(url: string): string | null {
     return null;
   }
 }
+
+// ── Usage Heartbeat ──
+
+let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+let currentSessionId: string | null = null;
+const HEARTBEAT_INTERVAL_MS = 60_000;
+
+export function startHeartbeat(): void {
+  if (heartbeatTimer) return;
+
+  const send = async () => {
+    const session = loadSession();
+    if (!session?.token) return;
+
+    try {
+      const result = await apiPost<{ ok: boolean; sessionId: string }>(
+        '/desktop-billing/heartbeat',
+        session.token,
+        {
+          sessionId: currentSessionId,
+          appVersion: require('../../package.json').version,
+          os: `${process.platform}-${process.arch}`,
+          arch: process.arch,
+        },
+      );
+      if (result.sessionId) currentSessionId = result.sessionId;
+    } catch {
+      // non-critical — silently ignore
+    }
+  };
+
+  send();
+  heartbeatTimer = setInterval(send, HEARTBEAT_INTERVAL_MS);
+}
+
+export function stopHeartbeat(): void {
+  if (heartbeatTimer) {
+    clearInterval(heartbeatTimer);
+    heartbeatTimer = null;
+  }
+  currentSessionId = null;
+}

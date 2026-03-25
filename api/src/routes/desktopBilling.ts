@@ -119,4 +119,32 @@ router.post('/portal', rateLimitSensitive, async (req: AuthRequest, res: Respons
   }
 });
 
+// ── Usage Heartbeat (desktop app calls this every 60s while running) ──
+router.post('/heartbeat', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { sessionId, appVersion, os, arch } = req.body;
+
+    if (sessionId) {
+      const updated = await db.query(
+        `UPDATE desktop_usage SET last_heartbeat = NOW() WHERE id = $1 AND user_id = $2`,
+        [sessionId, req.userId]
+      );
+      if (updated.rowCount && updated.rowCount > 0) {
+        return res.json({ ok: true, sessionId });
+      }
+    }
+
+    const row = await db.getOne<any>(
+      `INSERT INTO desktop_usage (user_id, app_version, os, arch)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id`,
+      [req.userId, appVersion || null, os || null, arch || null]
+    );
+
+    res.json({ ok: true, sessionId: row.id });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;

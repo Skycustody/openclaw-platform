@@ -8,7 +8,7 @@ import { autoUpdater } from 'electron-updater';
 import { manager, AgentStatus } from './openclaw/manager';
 import { installOpenClaw, findOpenClawBinary, isNodeInstalled, getInstallScriptCommand, findNemoClawBinary, getNemoClawInstallScriptCommand, getNemoClawSetupScriptCommand } from './openclaw/installer';
 import { readRecentLogs, getLogFilePath, getAppLogPath, logApp, closeStreams } from './openclaw/logger';
-import { loadSession, saveSession, clearSession, checkSubscription, fetchDesktopGatewayToken, startDesktopTrial, getStripePortalUrl, getDesktopCheckoutUrl, parseDeepLinkToken, parseDeepLinkEmail, isOfflineGraceValid, markLocalTrialClaimed, isLocalTrialClaimed } from './lib/session';
+import { loadSession, saveSession, clearSession, checkSubscription, fetchDesktopGatewayToken, startDesktopTrial, getStripePortalUrl, getDesktopCheckoutUrl, parseDeepLinkToken, parseDeepLinkEmail, isOfflineGraceValid, markLocalTrialClaimed, isLocalTrialClaimed, startHeartbeat, stopHeartbeat } from './lib/session';
 import { loadRuntime, saveRuntime, clearRuntime, isNemoClawSupported, isDockerInstalled, isDockerRunning, canInstallDocker, getDockerInstallCommand, launchDockerDesktop, RuntimeType, isIntelMac, isOpenShellInstalled, isSidecarReady, setupOpenShellSidecar, ensureSidecarNetworking, isOnboardComplete, isGatewayDeployed, getNemoClawOnboardCommand, ensurePortForward, OPENCLAW_PORT, EXTENSION_RELAY_PORT, readSandboxGatewayToken, readSandboxGatewayTokenFresh, getCachedSandboxToken, readHostOpenclawGatewayToken, writeHostOpenclawGatewayToken, clearHostOpenclawGatewayToken, writeSandboxGatewayToken, clearSandboxGatewayToken, getSandboxShellCommand, isSandboxReady, applySandboxSettings, findNemoClawPackageRoot, getDockerInfoError, ensureWslReady, isWslHealthy, hasUsableWslDistro, isDockerWslMountHealthy, repairDockerWslMount, getNemoClawSandboxName, getOpenShellTermCommand, clearSandboxNameCache } from './lib/runtime';
 import { getAppDataDir, getOpenClawDir, getLogsDir } from './lib/platform';
 import {
@@ -1895,8 +1895,9 @@ async function autoStart(): Promise<void> {
     }
   }
 
-  // 2c. Start periodic subscription re-check
+  // 2c. Start periodic subscription re-check + usage heartbeat
   startSubscriptionRecheck(session);
+  startHeartbeat();
 
   // 3. Check runtime selection
   const runtimePref = loadRuntime();
@@ -2084,6 +2085,7 @@ app.whenReady().then(async () => {
 app.on('before-quit', async () => {
   isQuitting = true;
   logApp('info', 'App quitting — stopping agent and clearing gateway token');
+  stopHeartbeat();
   if (subscriptionCheckTimer) { clearInterval(subscriptionCheckTimer); subscriptionCheckTimer = null; }
   killAllPtys();
   await manager.stop();

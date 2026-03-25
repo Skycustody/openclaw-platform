@@ -6,7 +6,7 @@ import {
   Users, Server, Coins, TrendingUp, Activity, Search,
   Shield, Loader2, RefreshCw, AlertTriangle, Edit3,
   BarChart3, Zap, HardDrive, LogOut, ChevronLeft, ChevronRight,
-  DollarSign, MessageSquare, Star, X, Monitor,
+  DollarSign, MessageSquare, Star, X, Monitor, Download, Clock, Eye,
 } from 'lucide-react';
 
 interface PlanDetail {
@@ -73,8 +73,10 @@ interface Overview {
   plans: { starter: string; pro: string; business: string };
   financials: Financials;
   desktop: {
-    subscribers: number; trialing: number; total: number;
+    subscribers: number; trialing: number; trialExpired: number;
+    total: number; totalSignups: number;
     desktopOnly: number; desktopAndVps: number;
+    new24h: number; new7d: number;
     priceEurCents: number; vatRate: number; revenueEurCents: number;
   };
 }
@@ -87,6 +89,24 @@ interface AdminUser {
   desktop_subscription_id: string | null; desktop_trial_ends_at: string | null;
   credit_balance: number | null; total_used: number | null; total_purchased: number | null;
   server_ip: string | null; server_hostname: string | null;
+}
+
+interface DesktopUser {
+  id: string; email: string; display_name: string | null; avatar_url: string | null;
+  stripe_customer_id: string | null; desktop_subscription_id: string | null;
+  desktop_trial_ends_at: string | null; created_at: string; updated_at: string;
+  has_paid: boolean; has_active_trial: boolean;
+  total_use_seconds: number | null; last_seen: string | null;
+  app_version: string | null; os: string | null;
+}
+
+interface DesktopUsageStats {
+  active24h: number; active7d: number; totalUseHours: number;
+}
+
+interface DownloadStats {
+  total: number;
+  byAsset: Array<{ name: string; downloads: number }>;
 }
 
 interface RevenueData {
@@ -232,9 +252,13 @@ export default function AdminPanel() {
   const [saving, setSaving] = useState(false);
   const [actionMsg, setActionMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [feedbackList, setFeedbackList] = useState<FeedbackEntry[]>([]);
-  const [desktopUsers, setDesktopUsers] = useState<AdminUser[]>([]);
+  const [desktopUsers, setDesktopUsers] = useState<DesktopUser[]>([]);
   const [desktopTotal, setDesktopTotal] = useState(0);
   const [desktopPage, setDesktopPage] = useState(0);
+  const [desktopFilter, setDesktopFilter] = useState<'all' | 'paid' | 'trialing' | 'expired' | 'free'>('all');
+  const [desktopSearch, setDesktopSearch] = useState('');
+  const [desktopUsage, setDesktopUsage] = useState<DesktopUsageStats | null>(null);
+  const [downloadStats, setDownloadStats] = useState<DownloadStats | null>(null);
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
   const [userDetail, setUserDetail] = useState<UserDetail | null>(null);
   const [userDetailLoading, setUserDetailLoading] = useState(false);
@@ -317,14 +341,40 @@ export default function AdminPanel() {
     }
   }, []);
 
-  const fetchDesktopUsers = useCallback(async (page = 0) => {
+  const fetchDesktopUsers = useCallback(async (page = 0, filter = 'all', search = '') => {
     try {
-      const params = new URLSearchParams({ limit: '20', offset: String(page * 20), desktop: 'true' });
-      const data = await api.get<{ users: AdminUser[]; total: number }>(`/admin/users?${params}`);
+      const params = new URLSearchParams({ limit: '20', offset: String(page * 20) });
+      if (filter !== 'all') params.set('filter', filter);
+      if (search) params.set('search', search);
+      const data = await api.get<{ users: DesktopUser[]; total: number; usage: DesktopUsageStats }>(`/admin/desktop-users?${params}`);
       setDesktopUsers(data.users);
       setDesktopTotal(data.total);
+      setDesktopUsage(data.usage);
     } catch (err: any) {
       console.error('[admin] fetchDesktopUsers failed:', err.message);
+    }
+  }, []);
+
+  const fetchDownloadStats = useCallback(async () => {
+    try {
+      const resp = await fetch('https://api.github.com/repos/Skycustody/valnaa-desktop/releases');
+      if (!resp.ok) return;
+      const releases: Array<{ assets: Array<{ name: string; download_count: number }> }> = await resp.json();
+      let total = 0;
+      const byAsset: Array<{ name: string; downloads: number }> = [];
+      for (const rel of releases) {
+        for (const a of rel.assets) {
+          if (a.name.endsWith('.dmg') || a.name.endsWith('.exe')) {
+            total += a.download_count;
+            const existing = byAsset.find(x => x.name === a.name);
+            if (existing) existing.downloads += a.download_count;
+            else byAsset.push({ name: a.name, downloads: a.download_count });
+          }
+        }
+      }
+      setDownloadStats({ total, byAsset: byAsset.sort((a, b) => b.downloads - a.downloads) });
+    } catch {
+      // GitHub API rate limit or network error — non-critical
     }
   }, []);
 
@@ -340,13 +390,13 @@ export default function AdminPanel() {
   useEffect(() => {
     if (authState !== 'authed') return;
     setLoading(true);
-    Promise.all([fetchOverview(), fetchUsers(), fetchRevenue(), fetchFinancials(), fetchServers(), fetchDesktopUsers(), fetchFeedback()])
+    Promise.all([fetchOverview(), fetchUsers(), fetchRevenue(), fetchFinancials(), fetchServers(), fetchDesktopUsers(), fetchDownloadStats(), fetchFeedback()])
       .finally(() => setLoading(false));
-  }, [authState, fetchOverview, fetchUsers, fetchRevenue, fetchFinancials, fetchServers, fetchDesktopUsers, fetchFeedback]);
+  }, [authState, fetchOverview, fetchUsers, fetchRevenue, fetchFinancials, fetchServers, fetchDesktopUsers, fetchDownloadStats, fetchFeedback]);
 
   const refresh = async () => {
     setRefreshing(true);
-    await Promise.all([fetchOverview(), fetchUsers(userPage, userSearch, userFilter), fetchRevenue(), fetchFinancials(), fetchServers(), fetchDesktopUsers(desktopPage), fetchFeedback()]);
+    await Promise.all([fetchOverview(), fetchUsers(userPage, userSearch, userFilter), fetchRevenue(), fetchFinancials(), fetchServers(), fetchDesktopUsers(desktopPage, desktopFilter, desktopSearch), fetchDownloadStats(), fetchFeedback()]);
     setRefreshing(false);
   };
 
@@ -920,21 +970,33 @@ export default function AdminPanel() {
 
         {tab === 'desktop' && (
           <div className="space-y-6">
+            {/* Stats row 1: Users */}
             <div className="grid grid-cols-4 gap-4">
-              <StatCard icon={Monitor} label="Total Desktop" value={String(overview?.desktop?.total ?? 0)}
-                sub="paid + trialing" color="purple" />
+              <StatCard icon={Users} label="Total Signups" value={String(overview?.desktop?.totalSignups ?? 0)}
+                sub={`+${overview?.desktop?.new24h ?? 0} today, +${overview?.desktop?.new7d ?? 0} this week`} color="purple" />
               <StatCard icon={DollarSign} label="Paid Subscribers" value={String(overview?.desktop?.subscribers ?? 0)}
                 sub={`€${((overview?.desktop?.revenueEurCents ?? 0) / 100).toFixed(2)}/mo revenue`} color="green" />
               <StatCard icon={Activity} label="Active Trials" value={String(overview?.desktop?.trialing ?? 0)}
-                sub="3-day free trial" color="amber" />
-              <StatCard icon={Users} label="Desktop + VPS" value={String(overview?.desktop?.desktopAndVps ?? 0)}
+                sub={`${overview?.desktop?.trialExpired ?? 0} expired`} color="amber" />
+              <StatCard icon={Monitor} label="Desktop + VPS" value={String(overview?.desktop?.desktopAndVps ?? 0)}
                 sub={`${overview?.desktop?.desktopOnly ?? 0} desktop only`} color="blue" />
             </div>
 
+            {/* Stats row 2: Downloads & Usage */}
+            <div className="grid grid-cols-3 gap-4">
+              <StatCard icon={Download} label="App Downloads" value={String(downloadStats?.total ?? '—')}
+                sub={downloadStats?.byAsset.map(a => `${a.name}: ${a.downloads}`).join(', ') || 'loading...'} color="cyan" />
+              <StatCard icon={Clock} label="Total Use Time" value={`${desktopUsage?.totalUseHours ?? 0}h`}
+                sub="all users combined" color="orange" />
+              <StatCard icon={Eye} label="Active Users" value={String(desktopUsage?.active24h ?? 0)}
+                sub={`${desktopUsage?.active7d ?? 0} active this week`} color="green" />
+            </div>
+
+            {/* Revenue box */}
             <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
               <h3 className="text-[14px] font-semibold text-white mb-2">Desktop Revenue Model</h3>
               <p className="text-[12px] text-white/40 mb-3">
-                Desktop app: €5/mo + 25% VAT = €6.25/mo per subscriber. Separate from VPS plans — users can subscribe to both independently.
+                Desktop app: €5/mo + 25% VAT = €6.25/mo per subscriber. Separate from VPS plans.
               </p>
               <div className="grid grid-cols-3 gap-4 text-[12px]">
                 <div>
@@ -952,65 +1014,102 @@ export default function AdminPanel() {
               </div>
             </div>
 
+            {/* Search and filter */}
+            <div className="flex items-center gap-3">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/20" />
+                <input
+                  type="text"
+                  placeholder="Search desktop users..."
+                  value={desktopSearch}
+                  onChange={e => setDesktopSearch(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') { setDesktopPage(0); fetchDesktopUsers(0, desktopFilter, desktopSearch); } }}
+                  className="w-full rounded-lg border border-white/[0.06] bg-white/[0.02] pl-10 pr-4 py-2 text-[13px] text-white placeholder:text-white/20 focus:outline-none focus:ring-1 focus:ring-purple-500/50"
+                />
+              </div>
+              <div className="flex items-center gap-1.5 text-[12px]">
+                {(['all', 'paid', 'trialing', 'expired', 'free'] as const).map(f => (
+                  <button key={f} onClick={() => { setDesktopFilter(f); setDesktopPage(0); fetchDesktopUsers(0, f, desktopSearch); }}
+                    className={`px-3 py-1.5 rounded-lg capitalize transition-all ${desktopFilter === f ? 'bg-purple-500/20 text-purple-400' : 'text-white/30 hover:text-white/50 hover:bg-white/[0.06]'}`}>
+                    {f}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Users table */}
             <div className="rounded-xl border border-white/[0.06] overflow-hidden">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-white/[0.06] bg-white/[0.02]">
                     <th className="px-4 py-3 text-left text-[11px] font-medium text-white/30 uppercase tracking-wider">User</th>
-                    <th className="px-4 py-3 text-left text-[11px] font-medium text-white/30 uppercase tracking-wider">Desktop</th>
-                    <th className="px-4 py-3 text-left text-[11px] font-medium text-white/30 uppercase tracking-wider">VPS Plan</th>
-                    <th className="px-4 py-3 text-left text-[11px] font-medium text-white/30 uppercase tracking-wider">Revenue</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-medium text-white/30 uppercase tracking-wider">Status</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-medium text-white/30 uppercase tracking-wider">Use Time</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-medium text-white/30 uppercase tracking-wider">Last Seen</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-medium text-white/30 uppercase tracking-wider">Version / OS</th>
                     <th className="px-4 py-3 text-left text-[11px] font-medium text-white/30 uppercase tracking-wider">Joined</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {desktopUsers.map(u => (
-                    <tr key={u.id} onClick={() => openUserDetail(u)}
-                      className="border-b border-white/[0.04] hover:bg-white/[0.06] transition-colors cursor-pointer">
+                  {desktopUsers.map(u => {
+                    const useHours = u.total_use_seconds ? Math.round(u.total_use_seconds / 3600) : 0;
+                    const useMins = u.total_use_seconds ? Math.round(u.total_use_seconds / 60) : 0;
+                    const useDisplay = useHours > 0 ? `${useHours}h` : useMins > 0 ? `${useMins}m` : '—';
+                    return (
+                    <tr key={u.id}
+                      className="border-b border-white/[0.04] hover:bg-white/[0.06] transition-colors">
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
-                          <div className="h-7 w-7 rounded-full bg-white/5 flex items-center justify-center text-[11px] text-white/30 font-medium shrink-0">
-                            {u.email[0].toUpperCase()}
+                          {u.avatar_url ? (
+                            <img src={u.avatar_url} className="h-7 w-7 rounded-full shrink-0" alt="" />
+                          ) : (
+                            <div className="h-7 w-7 rounded-full bg-white/5 flex items-center justify-center text-[11px] text-white/30 font-medium shrink-0">
+                              {u.email[0].toUpperCase()}
+                            </div>
+                          )}
+                          <div>
+                            <p className="text-[13px] text-white/70">{u.email}</p>
+                            {u.display_name && <p className="text-[11px] text-white/30">{u.display_name}</p>}
                           </div>
-                          <p className="text-[13px] text-white/70">{u.email}</p>
                         </div>
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1.5">
-                          {u.has_desktop ? (
-                            <span className="text-[11px] px-2 py-0.5 rounded-full text-purple-400 bg-purple-500/10">Paid</span>
-                          ) : u.has_desktop_trial ? (
+                          {u.has_paid ? (
+                            <span className="text-[11px] px-2 py-0.5 rounded-full text-green-400 bg-green-500/10">Paid</span>
+                          ) : u.has_active_trial ? (
                             <span className="text-[11px] px-2 py-0.5 rounded-full text-amber-400 bg-amber-500/10">Trial</span>
-                          ) : null}
-                          {u.desktop_trial_ends_at && !u.has_desktop && (
-                            <span className="text-[10px] text-white/20">
-                              {new Date(u.desktop_trial_ends_at) > new Date() ? `ends ${new Date(u.desktop_trial_ends_at).toLocaleDateString()}` : 'expired'}
-                            </span>
+                          ) : u.desktop_trial_ends_at ? (
+                            <span className="text-[11px] px-2 py-0.5 rounded-full text-red-400 bg-red-500/10">Expired</span>
+                          ) : (
+                            <span className="text-[11px] px-2 py-0.5 rounded-full text-white/30 bg-white/5">Free</span>
                           )}
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        {u.has_vps
-                          ? <span className="text-[12px] text-blue-400/70 capitalize">{u.plan}</span>
-                          : <span className="text-[12px] text-white/20">—</span>
-                        }
+                        <p className="text-[12px] text-white/50 tabular-nums">{useDisplay}</p>
+                      </td>
+                      <td className="px-4 py-3">
+                        <p className="text-[11px] text-white/30">{u.last_seen ? timeAgo(u.last_seen) : '—'}</p>
                       </td>
                       <td className="px-4 py-3">
                         <div>
-                          {u.has_desktop && <p className="text-[12px] text-purple-400/70 tabular-nums">€5/mo</p>}
-                          {u.has_vps && <p className="text-[11px] text-green-400/70 tabular-nums">+${(PLAN_PRICE_USD[u.plan] ?? 0)}/mo VPS</p>}
+                          {u.app_version && <p className="text-[11px] text-white/40">v{u.app_version}</p>}
+                          {u.os && <p className="text-[10px] text-white/20">{u.os}</p>}
+                          {!u.app_version && !u.os && <span className="text-[11px] text-white/20">—</span>}
                         </div>
                       </td>
                       <td className="px-4 py-3">
                         <p className="text-[11px] text-white/30">{timeAgo(u.created_at)}</p>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                   {desktopUsers.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="px-4 py-12 text-center">
+                      <td colSpan={6} className="px-4 py-12 text-center">
                         <Monitor className="h-10 w-10 text-white/10 mx-auto mb-3" />
-                        <p className="text-[14px] text-white/30">No desktop subscribers yet</p>
+                        <p className="text-[14px] text-white/30">No desktop users found</p>
                       </td>
                     </tr>
                   )}
@@ -1024,12 +1123,12 @@ export default function AdminPanel() {
                   Showing {desktopTotal > 0 ? desktopPage * 20 + 1 : 0}–{Math.min((desktopPage + 1) * 20, desktopTotal)} of {desktopTotal}
                 </p>
                 <div className="flex items-center gap-2">
-                  <button onClick={() => { setDesktopPage(p => Math.max(0, p - 1)); fetchDesktopUsers(Math.max(0, desktopPage - 1)); }}
+                  <button onClick={() => { setDesktopPage(p => Math.max(0, p - 1)); fetchDesktopUsers(Math.max(0, desktopPage - 1), desktopFilter, desktopSearch); }}
                     disabled={desktopPage === 0}
                     className="p-2 rounded-lg text-white/30 hover:text-white/50 hover:bg-white/[0.06] disabled:opacity-20 transition-all">
                     <ChevronLeft className="h-4 w-4" />
                   </button>
-                  <button onClick={() => { setDesktopPage(p => p + 1); fetchDesktopUsers(desktopPage + 1); }}
+                  <button onClick={() => { setDesktopPage(p => p + 1); fetchDesktopUsers(desktopPage + 1, desktopFilter, desktopSearch); }}
                     disabled={(desktopPage + 1) * 20 >= desktopTotal}
                     className="p-2 rounded-lg text-white/30 hover:text-white/50 hover:bg-white/[0.06] disabled:opacity-20 transition-all">
                     <ChevronRight className="h-4 w-4" />
@@ -1556,6 +1655,8 @@ function StatCard({ icon: Icon, label, value, sub, color }: {
     purple: 'bg-purple-500/10 text-purple-400',
     amber: 'bg-amber-500/10 text-amber-400',
     red: 'bg-red-500/10 text-red-400',
+    cyan: 'bg-cyan-500/10 text-cyan-400',
+    orange: 'bg-orange-500/10 text-orange-400',
   };
   return (
     <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">

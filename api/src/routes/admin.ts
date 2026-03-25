@@ -104,14 +104,25 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
 
     const desktopRow = await db.getOne<any>(
       `SELECT
+         COUNT(*) as total_signups,
          COUNT(*) FILTER (WHERE desktop_subscription_id IS NOT NULL) as paid,
          COUNT(*) FILTER (WHERE desktop_trial_ends_at IS NOT NULL AND desktop_trial_ends_at > NOW() AND desktop_subscription_id IS NULL) as trialing,
-         COUNT(*) FILTER (WHERE desktop_subscription_id IS NOT NULL OR (desktop_trial_ends_at IS NOT NULL AND desktop_trial_ends_at > NOW())) as total,
-         COUNT(*) FILTER (WHERE desktop_subscription_id IS NOT NULL AND status IN ('pending') AND server_id IS NULL) as desktop_only,
-         COUNT(*) FILTER (WHERE desktop_subscription_id IS NOT NULL AND status NOT IN ('pending', 'cancelled') AND server_id IS NOT NULL) as desktop_and_vps
-       FROM users WHERE LOWER(email) != $1`,
+         COUNT(*) FILTER (WHERE desktop_trial_ends_at IS NOT NULL AND desktop_trial_ends_at <= NOW() AND desktop_subscription_id IS NULL) as trial_expired,
+         COUNT(*) FILTER (WHERE desktop_subscription_id IS NOT NULL OR (desktop_trial_ends_at IS NOT NULL AND desktop_trial_ends_at > NOW())) as active,
+         COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '24 hours') as new_24h,
+         COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days') as new_7d
+       FROM desktop_users WHERE LOWER(email) != $1`,
       [ADMIN_EMAIL]
-    ).catch(() => ({ paid: '0', trialing: '0', total: '0', desktop_only: '0', desktop_and_vps: '0' }));
+    ).catch(() => ({ total_signups: '0', paid: '0', trialing: '0', trial_expired: '0', active: '0', new_24h: '0', new_7d: '0' }));
+
+    const desktopVpsOverlap = await db.getOne<any>(
+      `SELECT
+         COUNT(*) as desktop_and_vps
+       FROM desktop_users d
+       INNER JOIN users u ON LOWER(u.email) = LOWER(d.email)
+         AND u.status NOT IN ('pending', 'cancelled') AND u.server_id IS NOT NULL
+       WHERE d.desktop_subscription_id IS NOT NULL`,
+    ).catch(() => ({ desktop_and_vps: '0' }));
 
     const starterCount = parseInt(plans?.starter || '0');
     const proCount = parseInt(plans?.pro || '0');
@@ -217,9 +228,13 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
     };
     const desktopPaidCount = parseInt(desktopRow?.paid || '0');
     const desktopTrialingCount = parseInt(desktopRow?.trialing || '0');
-    const desktopTotalCount = parseInt(desktopRow?.total || '0');
-    const desktopOnlyCount = parseInt(desktopRow?.desktop_only || '0');
-    const desktopAndVpsCount = parseInt(desktopRow?.desktop_and_vps || '0');
+    const desktopActiveCount = parseInt(desktopRow?.active || '0');
+    const desktopTotalSignups = parseInt(desktopRow?.total_signups || '0');
+    const desktopTrialExpired = parseInt(desktopRow?.trial_expired || '0');
+    const desktopNew24h = parseInt(desktopRow?.new_24h || '0');
+    const desktopNew7d = parseInt(desktopRow?.new_7d || '0');
+    const desktopAndVpsCount = parseInt(desktopVpsOverlap?.desktop_and_vps || '0');
+    const desktopOnlyCount = desktopPaidCount - desktopAndVpsCount;
     const desktopPriceEurCents = 500;
     const desktopVatRate = 0.25;
     const desktopRevenueEurCents = desktopPaidCount * Math.round(desktopPriceEurCents * (1 + desktopVatRate));
@@ -227,9 +242,13 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
     const desktop = {
       subscribers: desktopPaidCount,
       trialing: desktopTrialingCount,
-      total: desktopTotalCount,
+      trialExpired: desktopTrialExpired,
+      total: desktopActiveCount,
+      totalSignups: desktopTotalSignups,
       desktopOnly: desktopOnlyCount,
       desktopAndVps: desktopAndVpsCount,
+      new24h: desktopNew24h,
+      new7d: desktopNew7d,
       priceEurCents: desktopPriceEurCents,
       vatRate: desktopVatRate,
       revenueEurCents: desktopRevenueEurCents,
@@ -522,6 +541,101 @@ router.get('/users', async (req: AuthRequest, res: Response, next: NextFunction)
     ]);
 
     res.json({ users, total: parseInt(countResult?.total || '0') });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── Desktop Users (from desktop_users table) ──
+router.get('/desktop-users', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
+    const offset = parseInt(req.query.offset as string) || 0;
+    const filter = (req.query.filter as string) || 'all';
+    const search = (req.query.search as string) || '';
+
+    let where = `WHERE LOWER(d.email) != $1`;
+    const params: any[] = [ADMIN_EMAIL];
+    let paramIdx = 2;
+
+    if (filter === 'paid') {
+      where += ` AND d.desktop_subscription_id IS NOT NULL`;
+    } else if (filter === 'trialing') {
+      where += ` AND d.desktop_trial_ends_at IS NOT NULL AND d.desktop_trial_ends_at > NOW() AND d.desktop_subscription_id IS NULL`;
+    } else if (filter === 'expired') {
+      where += ` AND d.desktop_trial_ends_at IS NOT NULL AND d.desktop_trial_ends_at <= NOW() AND d.desktop_subscription_id IS NULL`;
+    } else if (filter === 'free') {
+      where += ` AND d.desktop_subscription_id IS NULL AND (d.desktop_trial_ends_at IS NULL OR d.desktop_trial_ends_at <= NOW())`;
+    }
+
+    if (search) {
+      where += ` AND (LOWER(d.email) LIKE $${paramIdx} OR LOWER(d.display_name) LIKE $${paramIdx})`;
+      params.push(`%${search.toLowerCase()}%`);
+      paramIdx++;
+    }
+
+    const [users, countResult, usageData] = await Promise.all([
+      db.getMany<any>(
+        `SELECT d.id, d.email, d.display_name, d.avatar_url,
+                d.stripe_customer_id, d.desktop_subscription_id,
+                d.desktop_trial_ends_at, d.created_at, d.updated_at,
+                (d.desktop_subscription_id IS NOT NULL) as has_paid,
+                (d.desktop_trial_ends_at IS NOT NULL AND d.desktop_trial_ends_at > NOW() AND d.desktop_subscription_id IS NULL) as has_active_trial,
+                (SELECT SUM(EXTRACT(EPOCH FROM (last_heartbeat - session_start))) FROM desktop_usage WHERE user_id = d.id) as total_use_seconds,
+                (SELECT MAX(last_heartbeat) FROM desktop_usage WHERE user_id = d.id) as last_seen,
+                (SELECT app_version FROM desktop_usage WHERE user_id = d.id ORDER BY last_heartbeat DESC LIMIT 1) as app_version,
+                (SELECT os FROM desktop_usage WHERE user_id = d.id ORDER BY last_heartbeat DESC LIMIT 1) as os
+         FROM desktop_users d
+         ${where}
+         ORDER BY d.created_at DESC
+         LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`,
+        [...params, limit, offset]
+      ),
+      db.getOne<any>(
+        `SELECT COUNT(*) as total FROM desktop_users d ${where}`,
+        params
+      ),
+      db.getOne<any>(
+        `SELECT
+           COUNT(DISTINCT user_id) FILTER (WHERE last_heartbeat > NOW() - INTERVAL '24 hours') as active_24h,
+           COUNT(DISTINCT user_id) FILTER (WHERE last_heartbeat > NOW() - INTERVAL '7 days') as active_7d,
+           SUM(EXTRACT(EPOCH FROM (last_heartbeat - session_start))) as total_use_seconds
+         FROM desktop_usage`
+      ).catch(() => ({ active_24h: '0', active_7d: '0', total_use_seconds: '0' })),
+    ]);
+
+    res.json({
+      users,
+      total: parseInt(countResult?.total || '0'),
+      usage: {
+        active24h: parseInt(usageData?.active_24h || '0'),
+        active7d: parseInt(usageData?.active_7d || '0'),
+        totalUseHours: Math.round(parseFloat(usageData?.total_use_seconds || '0') / 3600),
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── Desktop Usage Heartbeat (for admin viewing) ──
+router.get('/desktop-usage/:userId', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { userId } = req.params;
+    if (!validateUuid(userId)) return res.status(400).json({ error: 'Invalid user ID format' });
+
+    const sessions = await db.getMany<any>(
+      `SELECT id, session_start, last_heartbeat,
+              EXTRACT(EPOCH FROM (last_heartbeat - session_start)) as duration_seconds,
+              app_version, os, arch
+       FROM desktop_usage
+       WHERE user_id = $1
+       ORDER BY session_start DESC
+       LIMIT 50`,
+      [userId]
+    );
+
+    res.json({ sessions });
   } catch (err) {
     next(err);
   }
