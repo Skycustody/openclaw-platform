@@ -1923,27 +1923,27 @@ function setupAutoUpdater(): void {
   autoUpdater.autoInstallOnAppQuit = true;
 
   autoUpdater.on('update-available', (info) => {
-    logApp('info', `Update available: v${info.version}`);
-    mainWindow?.webContents.send('app:update-available', { version: info.version, canAutoInstall: false });
+    logApp('info', `Update available: v${info.version} — downloading in background`);
   });
 
   autoUpdater.on('update-downloaded', (info) => {
     updateDownloaded = true;
-    logApp('info', `Update downloaded: v${info.version} — will install on quit`);
+    logApp('info', `Update downloaded: v${info.version} — ready to install`);
     mainWindow?.webContents.send('app:update-available', { version: info.version, canAutoInstall: true });
   });
 
   autoUpdater.on('error', (err) => {
     logApp('warn', 'Auto-updater error (non-fatal)', err.message);
-    // electron-updater failed (common on unsigned macOS DMGs) — fall back to GitHub check
     checkGitHubForUpdate();
   });
 
   ipcMain.handle('app:install-update', () => {
     if (updateDownloaded) {
+      logApp('info', 'User clicked Install Now — quitting and installing update');
       autoUpdater.quitAndInstall(false, true);
     } else {
-      shell.openExternal('https://valnaa.com/desktop');
+      logApp('info', 'Update not yet downloaded — triggering download');
+      autoUpdater.checkForUpdatesAndNotify().catch(() => {});
     }
   });
 
@@ -1951,7 +1951,6 @@ function setupAutoUpdater(): void {
     checkGitHubForUpdate();
   });
 
-  // Re-check every 4 hours
   setInterval(() => {
     autoUpdater.checkForUpdatesAndNotify().catch(() => checkGitHubForUpdate());
   }, 4 * 60 * 60 * 1000);
@@ -1985,6 +1984,7 @@ function checkGitHubForUpdate(): void {
   req.on('error', () => {});
   req.on('timeout', () => { req.destroy(); });
 }
+
 
 function isNewerVersion(current: string, latest: string): boolean {
   const c = current.split('.').map(Number);
