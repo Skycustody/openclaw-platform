@@ -72,3 +72,10 @@ jobs:
             Write-Error "No .exe installer found in release/"
             exit 1
           }
+
+          # Upload latest.yml for electron-updater auto-update on Windows
+          $yml = Get-ChildItem -Path release -Filter "latest.yml" | Select-Object -First 1
+          if ($yml) {
+            Write-Host "Uploading latest.yml for Windows auto-update"
+            gh release upload ${{ steps.version.outputs.tag }} $yml.FullName --repo Skycustody/valnaa-desktop --clobber
+          }
