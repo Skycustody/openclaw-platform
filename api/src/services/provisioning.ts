@@ -1,0 +1,641 @@
+/**
+ * Container Provisioning — creates and manages OpenClaw containers on worker servers.
+ *
+ * ┌─────────────────────────────────────────────────────────────────────────┐
+ * │ ARCHITECTURE DECISIONS — DO NOT CHANGE WITHOUT UNDERSTANDING           │
+ * │                                                                        │
+ * │ 1. DOCKER NETWORKING:                                                  │
+ * │    - Containers start on `openclaw-net` (Traefik's discovery network). │
+ * │      Traefik config has `network: openclaw-net` — if a container is    │
+ * │      NOT on this network, Traefik returns 404 for all requests.        │
+ * │    - Each container also gets `{name}-net` (isolation network) so      │
+ * │      containers can't reach each other's ports directly.               │
+ * │    DO NOT remove openclaw-net from docker run — Traefik routing breaks.│
+ * │                                                                        │
+ * │ 2. CONTAINER_SECRET (not INTERNAL_SECRET):                             │
+ * │    - Containers get CONTAINER_SECRET = HMAC(INTERNAL_SECRET, userId).  │
+ * │    - This prevents a compromised container from impersonating other    │
+ * │      users on webhook endpoints. Never pass raw INTERNAL_SECRET.       │
+ * │                                                                        │
+ * │ 3. SHELL INJECTION PREVENTION:                                         │
+ * │    - All user-derived values in SSH commands must be escaped or base64 │
+ * │      encoded. updateContainerConfig() uses base64 piping.             │
+ * │    - userIds are UUIDs (safe) but always validate before shell use.    │
+ * │                                                                        │
+ * │ 4. RESOURCE LIMITS:                                                    │
+ * │    - --memory, --memory-swap, --cpus from PLAN_LIMITS                  │
+ * │    - --pids-limit 256 prevents fork bombs                              │
+ * │                                                                        │
+ * │ 5. DOCKERFILE BUILD TOOLS:                                             │
+ * │    - The Dockerfile must include `python3 make g++` for native module  │
+ * │      compilation (@discordjs/opus). Without these, npm install fails.  │
+ * └─────────────────────────────────────────────────────────────────────────┘
+ */
+import crypto from 'crypto';
+import db from '../lib/db';
+import { sshExec, waitForReady } from './ssh';
+import { findBestServer, updateServerRam } from './serverRegistry';
+import { PLAN_LIMITS, Plan, Server, User } from '../types';
+import { sendWelcomeEmail } from './email';
+import { cloudflareDNS } from './cloudflare';
+import { v4 as uuid } from 'uuid';
+import { buildOpenclawConfig, injectApiKeys } from './apiKeys';
+import { reapplyGatewayConfig, writeContainerConfig } from './containerConfig';
+import { ensureNexosKey, deleteNexosKey } from './nexos';
+import { preInstallSkills } from './defaultSkills';
+import { ensureDockerImage } from './dockerImage';
+import { UserSettings } from '../types';
+
+const UUID_RE = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+const CONTAINER_NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9_.-]+$/;
+
+function validateUserId(userId: string): void {
+  if (!UUID_RE.test(userId)) throw new Error('Invalid user ID format');
+}
+
+function validateContainerName(name: string): void {
+  if (!CONTAINER_NAME_RE.test(name)) throw new Error('Invalid container name format');
+}
+
+function redactSecrets(cmd: string): string {
+  return cmd
+    .replace(/CONTAINER_SECRET=[^\s"]+/g, 'CONTAINER_SECRET=[REDACTED]')
+    .replace(/BROWSERLESS_URL=[^\s"]+/g, 'BROWSERLESS_URL=[REDACTED]')
+    .replace(/OPENCLAW_GATEWAY_TOKEN=[^\s"]+/g, 'OPENCLAW_GATEWAY_TOKEN=[REDACTED]')
+    .replace(/OPENROUTER_API_KEY=[^\s"]+/g, 'OPENROUTER_API_KEY=[REDACTED]')
+    .replace(/token=[a-zA-Z0-9_-]+/gi, 'token=[REDACTED]');
+}
+
+/** Generate a per-container secret bound to a specific userId. */
+export function generateContainerSecret(userId: string): string {
+  const secret = process.env.INTERNAL_SECRET;
+  if (!secret) throw new Error('INTERNAL_SECRET required');
+  return crypto.createHmac('sha256', secret).update(userId).digest('hex');
+}
+
+interface ProvisionParams {
+  userId: string;
+  email: string;
+  plan: Plan;
+  stripeCustomerId?: string;
+}
+
+/**
+ * Regenerate USER.md for a user's container.
+ * Called during provisioning and on agent/open to keep instructions current.
+ */
+export async function regenerateUserMd(serverIp: string, userId: string): Promise<void> {
+  validateUserId(userId);
+  const settings = await db.getOne<UserSettings>(
+    'SELECT * FROM user_settings WHERE user_id = $1',
+    [userId]
+  );
+
+  if (!settings?.agent_name && !settings?.custom_instructions) return;
+
+  const parts: string[] = ['# User Profile'];
+  if (settings.agent_name) parts.push(`\nThe user's name is: ${settings.agent_name}`);
+  if (settings.language) parts.push(`Preferred language: ${settings.language}`);
+  if (settings.agent_tone) parts.push(`Communication style: ${settings.agent_tone}`);
+  if (settings.response_length) parts.push(`Response length: ${settings.response_length}`);
+  if (settings.custom_instructions) parts.push(`\n## Instructions\n${settings.custom_instructions}`);
+  parts.push(`\nIMPORTANT: You are the user's AI assistant. The user's name above is who you are talking to — it is NOT your name. If asked your name, say you are their AI assistant.`);
+  parts.push(`\n## CRITICAL: User Has NO Technical Access\nThe user can ONLY interact with you through chat (web dashboard or messaging apps). They have NO access to:\n- Terminals, command lines, or shell\n- VPS, servers, or SSH\n- File systems, config files, or environment variables\n- Docker containers or any infrastructure\n\nNEVER ask the user to:\n- Run commands or check terminal output\n- Edit files, config, or environment variables\n- Verify things in a terminal or CLI\n- Look at logs or server output\n- Install anything themselves\n\nIf something needs to be done, YOU do it. If something needs to be verified, YOU verify it. Only tell the user the final result. The user is a consumer — treat them like someone using an app, not a developer.`);
+  parts.push(`\n## Communication During Tasks — CRITICAL\nYour text responses are only delivered to messaging channels (WhatsApp, Telegram, etc.) AFTER ALL tool calls in the same response finish executing. If you write "Okay, working on it" and use tools in the same response, the user sees NOTHING until every tool finishes — then "Okay" and the result arrive together. This makes you look broken and unresponsive.\n\nRULES:\n1. NEVER include filler text ("Okay", "Sure", "Let me do that") in a response that also contains tool calls. The user won't see it until the work is done anyway, making it pointless.\n2. For tasks you can finish quickly (under ~10 seconds): just do the work silently and give a comprehensive result.\n3. For longer tasks (building, browsing, multi-step research): send an immediate status update FIRST using openclaw message send as your very first tool call BEFORE any other tools:\n   openclaw message send --channel <channel_type> --target "<sender_id>" --message "On it, give me a moment."\n   Replace <channel_type> with whatsapp/telegram/discord and <sender_id> with the sender's phone number or chat ID from the conversation context. This delivers the message instantly because each tool call executes immediately.\n4. If you don't know the sender's channel info, skip the acknowledgment — a late result is better than a batched "Okay" + result.\n5. Your final response should be comprehensive: what you did, the result, and any relevant links. No need for a separate "Done!" message.\n6. If something fails and you need to retry, tell the user: "First approach didn't work, trying another way." Don't silently retry 5 times.`);
+  parts.push(`\n## Tool & Command Rules — CRITICAL\n1. You CANNOT interact with interactive CLI tools (TUIs, prompts, menus, "press enter to continue"). You can only run commands and read output. If a tool requires interactive input, use its non-interactive / headless / --print / --yes / --batch flag instead. If no non-interactive mode exists, tell the user honestly.\n2. NEVER retry the same failing command more than twice. If it fails twice, STOP, explain what went wrong, and suggest an alternative approach.\n3. If a website or service is down (4xx/5xx error), tell the user immediately. Do NOT try 5 different ways to access it — it's down.\n4. NEVER say you will do X and then secretly do Y. If the user asks you to use a specific tool, USE that tool. If the tool doesn't work, explain why and ask what they'd prefer instead.\n5. When something fails, tell the user plainly: what you tried, why it failed, and what the options are. Do NOT hide failures or pretend it worked.`);
+  parts.push(`\n## Memory\nYou have persistent memory. Always save important facts, user preferences, project details, and key decisions to MEMORY.md. For daily notes and conversation context, use memory/YYYY-MM-DD.md. When you're unsure about something the user mentioned before, search your memory first.`);
+  parts.push(`\n## Web Preview — CRITICAL\nWhen you build websites or web apps, start the dev server on port 8080.\n\nThe user's preview link is stored in the PREVIEW_URL environment variable. At the start of any web project, run: echo $PREVIEW_URL — and save that URL.\n\nRULES:\n- The user is on a DIFFERENT COMPUTER. They CANNOT open localhost, 127.0.0.1, or any local address. NEVER send these to the user.\n- ALWAYS send the PREVIEW_URL (https://xxx.valnaa.com) to the user. This is the ONLY link they can open.\n- After starting a dev server on port 8080, immediately tell the user: "Your site is live at [PREVIEW_URL]" and send it to all connected messaging apps.\n- You can use localhost:8080 for YOUR OWN verification. But every link you share with the user MUST be the PREVIEW_URL.\n- Do NOT debug the external URL if it's slow. If localhost:8080 works, the site is fine.`);
+  parts.push(`\n## Installing Software\nYou can install software in your container when the user needs it. Use \`apt-get update && apt-get install -y <package>\` for system packages, \`npm install\` for Node.js, \`pip install\` for Python, or download binaries with \`curl\`. Common pre-installed tools: Node.js 22, Python 3, Git, Chromium, curl, make, g++.`);
+  parts.push(`\n## Notifications\nWhen the user asks you to do a task and notify them (or says "let me know when done", "notify me", etc.), you MUST send a notification message to ALL connected messaging apps (Telegram, WhatsApp, Discord, Slack — whichever are connected) when the task is complete. Format: "✅ Task complete: [brief summary of what was done]". Also send notifications for important events: errors that need attention, long tasks finishing, or anything the user would want to know about while away. If no messaging apps are connected, mention the result in the chat.`);
+  parts.push(`\n## Conversation History\nWhen the user asks about past conversations ("what did we discuss Friday?", "find where I mentioned X"), use the conversation-history skill to query the platform database. Do NOT rely on the built-in sessions tool — it is unreliable. The platform stores all conversations across all channels. If the conversation-history skill is not installed, use curl to query the API directly:\n\`\`\`sh\ncurl -s -X POST "$PLATFORM_API/webhooks/container/history" -H "Content-Type: application/json" -H "x-container-secret: $CONTAINER_SECRET" -d '{"userId": "'"$USER_ID"'", "date": "YYYY-MM-DD"}'\n\`\`\`\nYou can also pass "search": "keyword" to search by topic, or omit filters to see available dates.`);
+  parts.push(`\n## Your Skills — IMPORTANT\nYou have many skills pre-installed that give you powerful capabilities. To see your installed skills, run: \`ls skills/\`\nEach skill folder has a markdown file explaining how to use it.\n\nYour key skills by category:\n\n**Browser & Automation**: browser-use (cloud browser automation), browse (web automation functions), deep-scraper (web scraping), firecrawl-skills (crawl & scrape), autofillin (form filling), job-auto-apply (job search & apply), desktop-control (mouse/keyboard automation)\n\n**YouTube & Video**: youtube-full (transcripts, search, playlists), youtube-summarizer, youtube-watcher, tube-summary, transcript, yt-dlp-downloader-skill (download videos)\n\n**Communication**: chirp (X/Twitter), smtp-send (email), slack, linkedin-automation, multiposting (post to multiple platforms)\n\n**Productivity**: clawflows (multi-skill automations), automation-workflows, ez-cronjob (scheduled tasks), grab (download/archive content)\n\n**Memory & Intelligence**: cognitive-memory (advanced recall), agentmemory (persistent cloud memory), create-agent-skills (create new skills), ralph-evolver (self-improvement)\n\n**Research**: deepwiki (GitHub docs), read-github (repo documentation)\n\n**Platform**: switch-model (change AI model), conversation-history (look up past chats)\n\nWhen a user asks "what can you do?", "what skills do you have?", or "help" — list your key skills organized by category. Also mention they can browse and manage skills from Dashboard > Skills.\n\nTo check for new available skills or get detailed info:\n\`\`\`sh\ncurl -s -X POST "$PLATFORM_API/webhooks/container/skills" -H "Content-Type: application/json" -H "x-container-secret: $CONTAINER_SECRET" -d '{"userId": "'"$USER_ID"'"}'\n\`\`\`\n\nTo read how a specific skill works: \`cat skills/SKILL_NAME/*.md\``);
+  parts.push(`\n## AI Models — IMPORTANT\nWhen the user asks to switch models ("use sonnet", "switch to GPT-4o", etc.), you MUST use the switch-model skill. Do NOT use the built-in session model switching tool — it does not work on this platform.\n\nAvailable model shortcuts: sonnet, opus, haiku, gpt-4o, gpt-4.1, gpt-4.1-mini, gpt-4.1-nano, gemini-pro, gemini-flash, deepseek, deepseek-r1, grok, gpt-5-image (image generation), auto.\n\nQuick reference:\n\`\`\`sh\ncurl -s -X POST "$PLATFORM_API/webhooks/container/switch-model" -H "Content-Type: application/json" -H "x-container-secret: $CONTAINER_SECRET" -d '{"userId": "'"$USER_ID"'", "model": "MODEL_SHORTCUT"}'\n\`\`\`\nThe change takes effect on the NEXT message. Always tell the user which model you switched to.`);
+
+  const userMdB64 = Buffer.from(parts.join('\n')).toString('base64');
+  await sshExec(serverIp, `echo '${userMdB64}' | base64 -d > /opt/openclaw/instances/${userId}/USER.md`);
+}
+
+export async function provisionUser(params: ProvisionParams): Promise<User> {
+  const { userId, email, plan, stripeCustomerId } = params;
+  validateUserId(userId);
+  const limits = PLAN_LIMITS[plan];
+  const startTime = Date.now();
+
+  const existing = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [userId]);
+  if (!existing) {
+    throw new Error(`User ${userId} not found — cannot provision a deleted user`);
+  }
+
+  // Check retry count — don't infinite-loop server creation
+  const retryCount = (existing as any)?.provision_retries || 0;
+  if (retryCount >= 3) {
+    // Before giving up, check if the container is actually running (partial success from earlier attempt)
+    if (existing.container_name && existing.server_id) {
+      try {
+        const srv = await db.getOne<Server>('SELECT ip FROM servers WHERE id = $1', [existing.server_id]);
+        if (srv) {
+          const check = await sshExec(srv.ip, `docker inspect ${existing.container_name} --format '{{.State.Running}}' 2>/dev/null || echo false`);
+          if (check.stdout.trim() === 'true') {
+            console.log(`[provision] User ${userId} hit retry limit but container is running — setting active`);
+            await db.query(
+              `UPDATE users SET status = 'active', provision_retries = 0, last_active = NOW() WHERE id = $1`,
+              [userId]
+            );
+            const user = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [userId]);
+            return user!;
+          }
+        }
+      } catch {}
+    }
+    console.error(`[provision] User ${userId} has failed provisioning ${retryCount} times — halting. Manual intervention needed.`);
+    await db.query(
+      `UPDATE users SET status = 'paused' WHERE id = $1`,
+      [userId]
+    );
+    throw new Error(`Provisioning failed ${retryCount} times. Please contact support.`);
+  }
+
+  await db.query(
+    `UPDATE users SET provision_retries = COALESCE(provision_retries, 0) + 1
+     WHERE id = $1 AND COALESCE(provision_retries, 0) < 3`,
+    [userId]
+  ).catch(() => {
+    // Column may not exist yet — non-fatal
+  });
+
+  const subdomain = existing?.subdomain || (
+    email.split('@')[0].replace(/[^a-z0-9]/gi, '').toLowerCase().slice(0, 20) + '-' + uuid().slice(0, 6)
+  );
+  const referralCode = existing?.referral_code || uuid().slice(0, 8).toUpperCase();
+  const containerName = existing?.container_name || `openclaw-${userId.slice(0, 12)}`;
+
+  console.log(`[provision] Starting for ${email} (${userId}), plan=${plan}, retry=${retryCount}`);
+
+  // Step 1: Find server — reuse existing if user already has one (re-provision case)
+  let server: Server | null = null;
+  if (existing.server_id) {
+    server = await db.getOne<Server>(
+      `SELECT * FROM servers WHERE id = $1 AND status = 'active'`,
+      [existing.server_id]
+    );
+    if (server) {
+      console.log(`[provision] Reusing existing server ${server.ip} for re-provision of ${userId}`);
+    }
+  }
+  if (!server) {
+    try {
+      server = await findBestServer(limits.ramMb, true);
+    } catch (err: any) {
+      console.error(`[provision] findBestServer failed for ${userId}: ${err.message}`);
+      throw err;
+    }
+  }
+  console.log(`[provision] Using server ${server.ip} (${server.hostname || server.id})`);
+
+  let provisionSucceeded = false;
+  let dnsCreated = false;
+  try {
+
+  // Step 2: Update user record (S3 removed — files live in container workspace)
+  await db.query(
+    `UPDATE users SET
+      server_id = $1,
+      container_name = $2,
+      subdomain = $3,
+      stripe_customer_id = $4,
+      referral_code = $5,
+      status = 'provisioning'
+    WHERE id = $6`,
+    [server.id, containerName, subdomain, stripeCustomerId || null, referralCode, userId]
+  );
+
+  // Step 4: Initialize user settings and channels
+  await Promise.all([
+    db.query(
+      `INSERT INTO user_settings (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING`,
+      [userId]
+    ),
+    db.query(
+      `INSERT INTO user_channels (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING`,
+      [userId]
+    ),
+  ]);
+
+  // Step 5: SSH into server and create container
+  const domain = process.env.DOMAIN || 'yourdomain.com';
+  const apiUrl = process.env.API_URL || 'https://api.yourdomain.com';
+  const browserlessToken = process.env.BROWSERLESS_TOKEN || '';
+  const image = `${process.env.DOCKER_REGISTRY || 'openclaw/openclaw'}:latest`;
+  const hostRule = `${subdomain}.${domain}`;
+  const previewHost = `preview-${subdomain}.${domain}`;
+
+  validateContainerName(containerName);
+
+  // Batch: cleanup + networks + instance dir in a single SSH call
+  const setupResult = await sshExec(server.ip, [
+    `docker rm -f ${containerName} 2>/dev/null || true`,
+    `docker network create --opt com.docker.network.bridge.enable_icc=false openclaw-net 2>/dev/null || true`,
+    `docker network create ${containerName}-net 2>/dev/null || true`,
+    `mkdir -p /opt/openclaw/instances/${userId} && chmod 700 /opt/openclaw/instances/${userId}`,
+  ].join(' && '));
+  if (setupResult.code !== 0) {
+    console.error(`[provision] setup failed:`, setupResult.stderr);
+    throw new Error(`Server setup failed: ${setupResult.stderr}`);
+  }
+
+  // Traefik check — single SSH call to inspect both state and env
+  const traefikInfo = await sshExec(server.ip,
+    `docker inspect traefik --format='RUNNING={{.State.Running}} ENV={{range .Config.Env}}{{.}},{{end}}' 2>/dev/null || echo 'MISSING'`
+  ).catch(() => ({ stdout: 'MISSING', stderr: '', code: 1 }));
+  const traefikRunning = traefikInfo.stdout.includes('RUNNING=true');
+  const hasApiVersion = traefikInfo.stdout.includes('DOCKER_API_VERSION');
+  if (!traefikRunning || !hasApiVersion) {
+    console.log(`[provision] Starting Traefik on ${server.ip}`);
+    const traefikCfgB64 = Buffer.from([
+      'api:',
+      '  dashboard: false',
+      'entryPoints:',
+      '  web:',
+      '    address: ":80"',
+      '  websecure:',
+      '    address: ":443"',
+      'providers:',
+      '  docker:',
+      '    endpoint: "unix:///var/run/docker.sock"',
+      '    exposedByDefault: false',
+      '    network: openclaw-net',
+    ].join('\n')).toString('base64');
+    await sshExec(server.ip, [
+      `mkdir -p /opt/openclaw/config`,
+      `echo '${traefikCfgB64}' | base64 -d > /opt/openclaw/config/traefik.yml`,
+      `docker rm -f traefik 2>/dev/null || true`,
+      `docker run -d --name traefik --restart unless-stopped --network openclaw-net -e DOCKER_API_VERSION=$(docker version --format '{{.Server.APIVersion}}' 2>/dev/null || echo 1.44) -p 80:80 -p 443:443 -v /var/run/docker.sock:/var/run/docker.sock:ro -v /opt/openclaw/config/traefik.yml:/etc/traefik/traefik.yml:ro traefik:latest`,
+    ].join(' && '));
+  }
+
+  const internalSecret = process.env.INTERNAL_SECRET;
+  if (!internalSecret) throw new Error('INTERNAL_SECRET env var is required');
+
+  // Generate gateway auth token early so it goes into the config JSON
+  const gatewayToken = crypto.randomBytes(32).toString('hex');
+  await db.query(
+    `UPDATE users SET gateway_token = $1 WHERE id = $2`,
+    [gatewayToken, userId]
+  ).catch(() => {
+    console.warn(`[provision] Could not store gateway_token (column may not exist)`);
+  });
+
+  const openclawConfig = buildOpenclawConfig(gatewayToken);
+  await writeContainerConfig(server.ip, userId, openclawConfig);
+  console.log(`[provision] Base config written for ${userId}`);
+
+  // Ensure Docker image exists (pre-built at server registration, fallback build here)
+  // Run in parallel with API key creation — neither depends on the other
+  const [, nexosKey] = await Promise.all([
+    ensureDockerImage(server.ip),
+    ensureNexosKey(userId),
+  ]);
+
+  // Inject API keys + model config into openclaw.json BEFORE container starts
+  await injectApiKeys(server.ip, userId, containerName, plan);
+
+  // Upload skills + enable in config BEFORE container starts (no restart needed)
+  await preInstallSkills(server.ip, userId);
+
+  // Write USER.md + seed MEMORY.md BEFORE container starts
+  try {
+    const settings = await db.getOne<UserSettings>(
+      'SELECT * FROM user_settings WHERE user_id = $1',
+      [userId]
+    );
+
+    // Ensure workspace + memory directories exist
+    await sshExec(server.ip,
+      `mkdir -p /opt/openclaw/instances/${userId}/workspace/memory /opt/openclaw/instances/${userId}/agents/main/agent /opt/openclaw/instances/${userId}/credentials && chmod 700 /opt/openclaw/instances/${userId}/credentials`
+    );
+
+    if (settings?.agent_name || settings?.custom_instructions) {
+      await regenerateUserMd(server.ip, userId);
+
+      // Seed MEMORY.md with user profile so it survives context compaction
+      const memParts: string[] = ['# User Profile (from onboarding)'];
+      if (settings.agent_name) memParts.push(`- Name: ${settings.agent_name}`);
+      if (settings.language) memParts.push(`- Preferred language: ${settings.language}`);
+      if (settings.agent_tone) memParts.push(`- Communication style: ${settings.agent_tone}`);
+      if (settings.response_length) memParts.push(`- Response length: ${settings.response_length}`);
+      if (settings.custom_instructions) memParts.push(`- Custom instructions: ${settings.custom_instructions}`);
+      memParts.push('');
+      const memB64 = Buffer.from(memParts.join('\n')).toString('base64');
+      await sshExec(server.ip, `echo '${memB64}' | base64 -d > /opt/openclaw/instances/${userId}/workspace/MEMORY.md`);
+    }
+  } catch { /* non-fatal */ }
+
+  // Keep a backup copy after full config is built
+  await sshExec(
+    server.ip,
+    [
+      `cp /opt/openclaw/instances/${userId}/openclaw.json /opt/openclaw/instances/${userId}/openclaw.default.json`,
+      `cp /opt/openclaw/instances/${userId}/openclaw.json /opt/openclaw/instances/${userId}/config.json`,
+    ].join(' && ')
+  );
+
+  // Give Node.js ~75% of the container memory for its heap
+  const heapMb = Math.floor(limits.ramMb * 0.75);
+
+  // Mount the instance directory at /root/.openclaw so config + credentials persist.
+  // The startup script launches the gateway in the background, waits for it to
+  // initialize (which may strip auth config via implicit doctor/validation),
+  // then re-applies the gateway auth settings using `openclaw config set`.
+  // This ensures dangerouslyDisableDeviceAuth survives gateway startup.
+  const startScript = [
+    `sh -c '`,
+    `rm -f /root/.openclaw/agents/*/sessions/*.lock 2>/dev/null;`,
+    `openclaw gateway --port 18789 --bind lan --allow-unconfigured run &`,
+    `GW_PID=$!;`,
+    `sleep 10;`,
+    `openclaw config set browser.defaultProfile openclaw 2>/dev/null;`,
+    `openclaw config set browser.headless true 2>/dev/null;`,
+    `openclaw config set browser.noSandbox true 2>/dev/null;`,
+    `openclaw devices approve --latest --token "$OPENCLAW_GATEWAY_TOKEN" 2>/dev/null;`,
+    `sleep 3;`,
+    `openclaw devices approve --latest --token "$OPENCLAW_GATEWAY_TOKEN" 2>/dev/null;`,
+    `wait $GW_PID`,
+    `'`,
+  ].join(' ');
+  const dockerRunCmd = [
+    'docker run -d',
+    `--name ${containerName}`,
+    '--restart unless-stopped',
+    '--no-healthcheck',
+    '--network openclaw-net',
+    '--cap-drop ALL',
+    '--cap-add NET_BIND_SERVICE',
+    '--cap-add CHOWN',
+    '--cap-add FOWNER',
+    '--cap-add SETUID',
+    '--cap-add SETGID',
+    '--security-opt seccomp=unconfined',
+    '--security-opt no-new-privileges',
+    '--pids-limit 256',
+    `--memory ${limits.ramMb}m`,
+    `--memory-swap ${limits.ramMb}m`,
+    `--cpus ${limits.cpus}`,
+    `-e "NODE_OPTIONS=--max-old-space-size=${heapMb}"`,
+    `-e USER_ID=${userId}`,
+    `-e PLATFORM_API=${apiUrl}`,
+    `-e CONTAINER_SECRET=${generateContainerSecret(userId)}`,
+    `-e "BROWSERLESS_URL=wss://production-sfo.browserless.io?token=${browserlessToken}"`,
+    `-e OPENCLAW_GATEWAY_TOKEN=${gatewayToken}`,
+    `-e OPENROUTER_API_KEY=${nexosKey}`,
+    `-e PREVIEW_PORT=8080`,
+    `-e "PREVIEW_URL=https://${previewHost}"`,
+    `-v /opt/openclaw/instances/${userId}:/root/.openclaw`,
+    `--label traefik.enable=true`,
+    // Gateway routes (port 18789)
+    `--label 'traefik.http.routers.${containerName}.rule=Host(\`${hostRule}\`)'`,
+    `--label 'traefik.http.routers.${containerName}.entrypoints=web'`,
+    `--label 'traefik.http.routers.${containerName}.service=${containerName}'`,
+    `--label 'traefik.http.routers.${containerName}-secure.rule=Host(\`${hostRule}\`)'`,
+    `--label 'traefik.http.routers.${containerName}-secure.entrypoints=websecure'`,
+    `--label 'traefik.http.routers.${containerName}-secure.tls=true'`,
+    `--label 'traefik.http.routers.${containerName}-secure.service=${containerName}'`,
+    `--label traefik.http.services.${containerName}.loadbalancer.server.port=18789`,
+    `--label 'traefik.http.middlewares.${containerName}-iframe.headers.customResponseHeaders.X-Frame-Options='`,
+    `--label 'traefik.http.middlewares.${containerName}-iframe.headers.customResponseHeaders.Content-Security-Policy=frame-ancestors self https://${domain} https://*.${domain}'`,
+    `--label 'traefik.http.routers.${containerName}.middlewares=${containerName}-iframe'`,
+    `--label 'traefik.http.routers.${containerName}-secure.middlewares=${containerName}-iframe'`,
+    // Web preview routes (port 8080) — agent serves websites here
+    `--label 'traefik.http.routers.${containerName}-preview.rule=Host(\`${previewHost}\`)'`,
+    `--label 'traefik.http.routers.${containerName}-preview.entrypoints=web'`,
+    `--label 'traefik.http.routers.${containerName}-preview.service=${containerName}-preview'`,
+    `--label 'traefik.http.routers.${containerName}-preview-secure.rule=Host(\`${previewHost}\`)'`,
+    `--label 'traefik.http.routers.${containerName}-preview-secure.entrypoints=websecure'`,
+    `--label 'traefik.http.routers.${containerName}-preview-secure.tls=true'`,
+    `--label 'traefik.http.routers.${containerName}-preview-secure.service=${containerName}-preview'`,
+    `--label traefik.http.services.${containerName}-preview.loadbalancer.server.port=8080`,
+    image,
+    startScript,
+  ].join(' ');
+
+  console.log(`[provision] Running docker on ${server.ip}: ${redactSecrets(dockerRunCmd).slice(0, 300)}...`);
+  const runResult = await sshExec(server.ip, dockerRunCmd);
+
+  if (runResult.code !== 0) {
+    console.error(`[provision] docker run FAILED (code ${runResult.code}):`, runResult.stderr, runResult.stdout);
+    throw new Error(`docker run failed: ${runResult.stderr || runResult.stdout}`);
+  }
+
+  console.log(`[provision] Container ${containerName} started: ${runResult.stdout.slice(0, 20)}`);
+
+  // Batch: connect isolation network + metadata firewall in one SSH call
+  await sshExec(server.ip, [
+    `docker network connect ${containerName}-net ${containerName} 2>/dev/null || true`,
+    `iptables -C FORWARD -d 169.254.169.254 -j DROP 2>/dev/null || iptables -I FORWARD -d 169.254.169.254 -j DROP 2>/dev/null || true`,
+    `iptables -C OUTPUT -d 169.254.169.254 -m owner ! --uid-owner 0 -j DROP 2>/dev/null || iptables -I OUTPUT -d 169.254.169.254 -m owner ! --uid-owner 0 -j DROP 2>/dev/null || true`,
+  ].join(' && '));
+
+  // Step 6: Fast alive check — poll every 1s instead of hard sleep
+  let containerAlive = false;
+  for (let i = 0; i < 10; i++) {
+    await new Promise(r => setTimeout(r, 1000));
+    const check = await sshExec(
+      server.ip,
+      `docker inspect ${containerName} --format='{{.State.Running}}' 2>/dev/null`
+    ).catch(() => null);
+    if (check?.stdout.includes('true')) {
+      containerAlive = true;
+      break;
+    }
+  }
+
+  if (!containerAlive) {
+    const crashLogs = await sshExec(server.ip, `docker logs --tail 30 ${containerName} 2>&1`).catch(() => null);
+    console.error(`[provision] Container ${containerName} not running after 10s! Logs:\n${crashLogs?.stdout || 'no logs'}`);
+    console.log(`[provision] Attempting restart of ${containerName}`);
+    await sshExec(server.ip, `docker start ${containerName} 2>/dev/null`).catch(() => null);
+    await new Promise(r => setTimeout(r, 3000));
+  }
+
+  // Step 7: Create DNS records BEFORE waiting — gives Cloudflare time to propagate
+  await Promise.all([
+    cloudflareDNS.upsertRecord(subdomain, server.ip),
+    cloudflareDNS.upsertRecord(`preview-${subdomain}`, server.ip),
+  ]);
+  dnsCreated = true;
+
+  // Re-apply gateway auth config (doctor --fix on startup may strip it) — needs running container
+  await reapplyGatewayConfig(server.ip, userId, containerName);
+
+  // Step 8: Container is running — mark active immediately.
+  // The gateway takes a few extra seconds to initialize but will be ready
+  // by the time the user clicks "Open Agent". The /agent/open endpoint
+  // has self-healing checks if anything is actually wrong.
+  await db.query(
+    `UPDATE users SET status = 'active', last_active = NOW(), provision_retries = 0 WHERE id = $1`,
+    [userId]
+  );
+  console.log(`[provision] ${containerName} marked 'active'`);
+
+  await updateServerRam(server.id);
+
+  // Send welcome email (non-blocking)
+  sendWelcomeEmail(email, subdomain, domain).catch((err) => {
+    console.error('[provision] Welcome email failed:', err);
+  });
+
+  const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+  console.log(`[provision] Complete for ${email}: https://${hostRule} (took ${elapsed}s)`);
+
+  provisionSucceeded = true;
+  const user = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [userId]);
+  return user!;
+
+  } catch (provisionErr) {
+    // Release RAM reservation on failure so the server isn't phantom-full
+    if (!provisionSucceeded) {
+      console.warn(`[provision] Releasing RAM for failed provisioning of ${userId} on server ${server.id}`);
+      await updateServerRam(server.id).catch((e) =>
+        console.error(`[provision] RAM release failed for server ${server.id}:`, e.message)
+      );
+      // Clean up DNS if it was created but provisioning failed
+      if (dnsCreated) {
+        console.warn(`[provision] Cleaning up DNS records for ${subdomain} after failed provisioning`);
+        await Promise.all([
+          cloudflareDNS.deleteRecord(subdomain).catch((e) =>
+            console.error(`[provision] DNS cleanup failed for ${subdomain}:`, e.message)
+          ),
+          cloudflareDNS.deleteRecord(`preview-${subdomain}`).catch((e) =>
+            console.error(`[provision] DNS cleanup failed for preview-${subdomain}:`, e.message)
+          ),
+        ]);
+      }
+    }
+    throw provisionErr;
+  }
+}
+
+/**
+ * Remove trial user's container to free VPS RAM. Keeps instance dir for 30 days
+ * so they can restore data if they pay. Called when trial_ends_at passes.
+ */
+export async function removeTrialContainer(userId: string): Promise<void> {
+  validateUserId(userId);
+  const user = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [userId]);
+  if (!user || !user.server_id || !user.container_name) return;
+
+  const server = await db.getOne<any>('SELECT * FROM servers WHERE id = $1', [user.server_id]);
+  if (!server) return;
+
+  const containerName = user.container_name;
+  validateContainerName(containerName);
+
+  try {
+    await sshExec(server.ip, `docker stop ${containerName} 2>/dev/null; docker rm ${containerName} 2>/dev/null || true`);
+    // Do NOT delete /opt/openclaw/instances/${userId} — keep data for 30 days
+  } catch (err) {
+    console.error('[provision] Trial container removal failed:', err);
+  }
+
+  // Clean up DNS records
+  if (user.subdomain) {
+    await Promise.all([
+      cloudflareDNS.deleteRecord(user.subdomain).catch(() => {}),
+      cloudflareDNS.deleteRecord(`preview-${user.subdomain}`).catch(() => {}),
+    ]);
+  }
+
+  // Revoke OpenRouter key (prevents leaked key usage)
+  await deleteNexosKey(userId).catch((err) =>
+    console.warn(`[provision] OpenRouter key cleanup failed for ${userId}:`, err.message)
+  );
+
+  const retentionUntil = user.trial_ends_at
+    ? new Date(new Date(user.trial_ends_at).getTime() + 30 * 24 * 60 * 60 * 1000)
+    : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+  await db.query(
+    `UPDATE users SET status = 'trial_expired', container_name = NULL, trial_data_retention_until = $1 WHERE id = $2`,
+    [retentionUntil, userId]
+  );
+
+  await updateServerRam(server.id);
+  console.log(`[provision] Trial container removed for ${userId}, data retained until ${retentionUntil.toISOString()}`);
+}
+
+export async function deprovisionUser(userId: string): Promise<void> {
+  validateUserId(userId);
+  const user = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [userId]);
+  if (!user || !user.server_id) return;
+
+  const server = await db.getOne<any>('SELECT * FROM servers WHERE id = $1', [user.server_id]);
+  if (!server) return;
+
+  const containerName = user.container_name || `openclaw-${userId}`;
+  validateContainerName(containerName);
+
+  try {
+    await sshExec(server.ip, `docker stop ${containerName} 2>/dev/null; docker rm ${containerName} 2>/dev/null || true`);
+    await sshExec(server.ip, `rm -rf /opt/openclaw/instances/${userId}`);
+  } catch (err) {
+    console.error('Container cleanup failed:', err);
+  }
+
+  if (user.subdomain) {
+    await Promise.all([
+      cloudflareDNS.deleteRecord(user.subdomain),
+      cloudflareDNS.deleteRecord(`preview-${user.subdomain}`).catch(() => {}),
+    ]);
+  }
+
+  await db.query(
+    `UPDATE users SET status = 'cancelled', server_id = NULL, container_name = NULL, trial_data_retention_until = NULL WHERE id = $1`,
+    [userId]
+  );
+
+  await updateServerRam(server.id);
+}
+
+export async function restartContainer(userId: string): Promise<void> {
+  validateUserId(userId);
+  const user = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [userId]);
+  if (!user?.server_id) throw new Error('User has no server assigned');
+
+  const server = await db.getOne<any>('SELECT * FROM servers WHERE id = $1', [user.server_id]);
+  if (!server) throw new Error('Server not found');
+
+  const containerName = user.container_name || `openclaw-${userId}`;
+  validateContainerName(containerName);
+
+  // Clear stale session locks before restart — a hung request leaves .lock files
+  // that block all subsequent messages with "session file locked (timeout)"
+  await sshExec(server.ip,
+    `rm -f /opt/openclaw/instances/${userId}/agents/*/sessions/*.lock 2>/dev/null`
+  ).catch(() => {});
+
+  await sshExec(server.ip, `docker restart ${containerName}`);
+
+  // Wait for the gateway process to finish its startup initialization
+  // (which may strip auth config), then re-apply gateway auth settings.
+  // The startup script already does this via config set commands (8s delay),
+  // but we also apply from the platform side for containers with older scripts.
+  await new Promise(r => setTimeout(r, 10000));
+  await reapplyGatewayConfig(server.ip, userId, containerName);
+}
+
+export async function updateContainerConfig(userId: string, config: Record<string, any>): Promise<void> {
+  validateUserId(userId);
+  const user = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [userId]);
+  if (!user?.server_id) throw new Error('User has no server assigned');
+
+  const server = await db.getOne<any>('SELECT * FROM servers WHERE id = $1', [user.server_id]);
+  if (!server) throw new Error('Server not found');
+
+  const containerName = user.container_name || `openclaw-${userId}`;
+  validateContainerName(containerName);
+  const configB64 = Buffer.from(JSON.stringify(config)).toString('base64');
+
+  await sshExec(
+    server.ip,
+    `echo '${configB64}' | base64 -d | docker exec -i ${containerName} openclaw config merge -`
+  );
+}

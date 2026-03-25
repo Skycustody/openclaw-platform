@@ -1,0 +1,361 @@
+/**
+ * Webhook endpoints — receive callbacks from Stripe, worker servers, and containers.
+ *
+ * ┌─────────────────────────────────────────────────────────────────────────┐
+ * │ ARCHITECTURE DECISIONS — DO NOT CHANGE WITHOUT UNDERSTANDING           │
+ * │                                                                        │
+ * │ 1. CONTAINER AUTH (verifyContainerAuth):                               │
+ * │    - Container webhooks (/container/*) verify the caller matches the   │
+ * │      userId they claim using HMAC(INTERNAL_SECRET, userId).            │
+ * │    - This prevents container A from sending webhooks as user B.        │
+ * │    - Legacy containers may still send x-internal-secret (global        │
+ * │      secret). This is accepted but should be migrated.                 │
+ * │                                                                        │
+ * │ 2. SERVER REGISTRATION (/servers/register):                            │
+ * │    - Uses internalAuth (global INTERNAL_SECRET) because worker servers │
+ * │      are not bound to a userId. Only cloud-init scripts call this.     │
+ * │                                                                        │
+ * │ 3. STRIPE WEBHOOK:                                                     │
+ * │    - Uses Stripe's signature verification (constructEvent), NOT our    │
+ * │      internal auth. Requires raw body (express.raw middleware in       │
+ * │      index.ts). The HTTPS redirect in index.ts MUST skip /webhooks/*  │
+ * │      or POST bodies are lost during 301 redirect.                     │
+ * └─────────────────────────────────────────────────────────────────────────┘
+ */
+import crypto from 'crypto';
+import { Router, Request, Response, NextFunction } from 'express';
+import Stripe from 'stripe';
+import { handleWebhook } from '../services/stripe';
+import { internalAuth } from '../middleware/auth';
+import { registerServer } from '../services/serverRegistry';
+import { confirmWhatsAppConnected } from '../services/messaging';
+import { touchActivity } from '../services/sleepWake';
+import { wakeContainer } from '../services/sleepWake';
+import { invalidateProxyCache } from './proxy';
+
+const router = Router();
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Verify that a container webhook request is authorized for the given userId.
+ * Accepts either:
+ *   - x-container-secret header = HMAC(INTERNAL_SECRET, userId)  (per-container token)
+ *   - x-internal-secret header = INTERNAL_SECRET                  (legacy, server-to-server only)
+ */
+function verifyContainerAuth(req: Request, userId: string): boolean {
+  const internalSecret = process.env.INTERNAL_SECRET;
+  if (!internalSecret) return false;
+
+  const containerSecret = req.headers['x-container-secret'] as string;
+  if (!containerSecret) return false;
+
+  const expected = crypto.createHmac('sha256', internalSecret).update(userId).digest('hex');
+  if (containerSecret.length !== expected.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(containerSecret), Buffer.from(expected));
+}
+
+// Stripe webhook — raw body required
+router.post(
+  '/stripe',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+      const sig = req.headers['stripe-signature'] as string;
+      const secret = process.env.STRIPE_WEBHOOK_SECRET;
+
+      if (!secret) {
+        console.error('[stripe-webhook] STRIPE_WEBHOOK_SECRET is not set');
+        return res.status(500).json({ error: 'Webhook secret not configured' });
+      }
+      if (!sig) {
+        console.error('[stripe-webhook] No stripe-signature header');
+        return res.status(400).json({ error: 'Missing stripe-signature header' });
+      }
+
+      const body = (req as any).rawBody;
+      if (!body) {
+        console.error('[stripe-webhook] rawBody is missing — express.json verify callback did not fire');
+        return res.status(400).json({ error: 'Raw body not captured' });
+      }
+      console.log(`[stripe-webhook] sig=${sig.substring(0, 20)}... bodyLen=${body.length}`);
+
+      const event = stripe.webhooks.constructEvent(body, sig, secret);
+
+      console.log(`[stripe-webhook] Verified event: ${event.type} (${event.id})`);
+      await handleWebhook(event);
+      res.json({ received: true });
+    } catch (err: any) {
+      console.error(`[stripe-webhook] ERROR: ${err.message}`);
+      res.status(400).json({ error: 'Webhook processing failed' });
+    }
+  }
+);
+
+// Server self-registration (called by cloud-init on new workers)
+router.post('/servers/register', internalAuth, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { ip, ram, hostname, hostingerId } = req.body;
+    if (!ip || !ram) {
+      return res.status(400).json({ error: 'IP and RAM required' });
+    }
+
+    const server = await registerServer(ip, ram, hostname, hostingerId);
+    res.json({ server });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Container message webhook (called by OpenClaw containers)
+router.post('/container/message', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { userId, channel, role, content, model, tokens } = req.body;
+    if (!userId || !UUID_RE.test(userId)) return res.status(400).json({ error: 'Valid userId required' });
+
+    if (!verifyContainerAuth(req, userId)) {
+      return res.status(401).json({ error: 'Invalid container authentication' });
+    }
+
+    const db = (await import('../lib/db')).default;
+
+    // Log with channel name (whatsapp, telegram, etc.) for history filtering.
+    // The proxy also logs to conversations with channel=direct/auto, but
+    // container webhooks carry the real channel name for channel messages.
+    await db.query(
+      `INSERT INTO conversations (user_id, channel, role, content, model_used, tokens_used)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [userId, channel || 'direct', role || 'user', content, model, tokens || 0]
+    );
+
+    await touchActivity(userId);
+
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Container wake trigger
+router.post('/container/wake', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { userId } = req.body;
+    if (!userId || !UUID_RE.test(userId)) return res.status(400).json({ error: 'Valid userId required' });
+
+    if (!verifyContainerAuth(req, userId)) {
+      return res.status(401).json({ error: 'Invalid container authentication' });
+    }
+
+    await wakeContainer(userId);
+    res.json({ status: 'active' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Model switch — agent calls this to change its own AI model
+const MODEL_ALIASES: Record<string, string> = {
+  auto: 'auto',
+  sonnet: 'anthropic/claude-sonnet-4',
+  'claude-sonnet': 'anthropic/claude-sonnet-4',
+  'claude-sonnet-4': 'anthropic/claude-sonnet-4',
+  opus: 'anthropic/claude-opus-4',
+  'claude-opus': 'anthropic/claude-opus-4',
+  'claude-opus-4': 'anthropic/claude-opus-4',
+  haiku: 'anthropic/claude-3.5-haiku',
+  'claude-haiku': 'anthropic/claude-3.5-haiku',
+  'gpt-4o': 'openai/gpt-4o',
+  gpt4o: 'openai/gpt-4o',
+  'gpt-4o-mini': 'openai/gpt-4o-mini',
+  'gpt4o-mini': 'openai/gpt-4o-mini',
+  'gpt-4.1': 'openai/gpt-4.1',
+  'gpt4.1': 'openai/gpt-4.1',
+  'gpt-4.1-mini': 'openai/gpt-4.1-mini',
+  'gpt4.1-mini': 'openai/gpt-4.1-mini',
+  'gpt-4.1-nano': 'openai/gpt-4.1-nano',
+  'gpt4.1-nano': 'openai/gpt-4.1-nano',
+  'o3-mini': 'openai/o3-mini',
+  o3: 'openai/o3-mini',
+  'gemini-pro': 'google/gemini-2.5-pro',
+  'gemini-2.5-pro': 'google/gemini-2.5-pro',
+  'gemini-flash': 'google/gemini-2.5-flash',
+  'gemini-2.5-flash': 'google/gemini-2.5-flash',
+  gemini: 'google/gemini-2.5-flash',
+  deepseek: 'deepseek/deepseek-chat-v3-0324',
+  'deepseek-v3': 'deepseek/deepseek-chat-v3-0324',
+  'deepseek-r1': 'deepseek/deepseek-r1',
+  grok: 'x-ai/grok-3-beta',
+  'grok-3': 'x-ai/grok-3-beta',
+  'grok-mini': 'x-ai/grok-3-mini-beta',
+  mistral: 'mistralai/mistral-large-2',
+  llama: 'meta-llama/llama-4-maverick',
+  qwen: 'qwen/qwen-2.5-coder-32b-instruct',
+  'gpt-5-image': 'openai/gpt-5-image',
+  'gpt5-image': 'openai/gpt-5-image',
+  'gpt-5-image-mini': 'openai/gpt-5-image-mini',
+  'gpt5-image-mini': 'openai/gpt-5-image-mini',
+};
+
+router.post('/container/switch-model', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { userId, model } = req.body;
+    if (!userId || !UUID_RE.test(userId) || !model) return res.status(400).json({ error: 'Valid userId and model required' });
+
+    if (!verifyContainerAuth(req, userId)) {
+      return res.status(401).json({ error: 'Invalid container authentication' });
+    }
+
+    const db = (await import('../lib/db')).default;
+
+    const normalized = model.trim().toLowerCase();
+    const resolvedModel = MODEL_ALIASES[normalized] || normalized;
+
+    if (resolvedModel === 'auto') {
+      await db.query(
+        `UPDATE user_settings SET brain_mode = 'auto', manual_model = NULL WHERE user_id = $1`,
+        [userId]
+      );
+      invalidateProxyCache(userId);
+      return res.json({ ok: true, model: 'auto', mode: 'auto', message: 'Switched to smart auto-routing. I will pick the best model for each task.' });
+    }
+
+    await db.query(
+      `UPDATE user_settings SET brain_mode = 'manual', manual_model = $1 WHERE user_id = $2`,
+      [resolvedModel, userId]
+    );
+    invalidateProxyCache(userId);
+
+    res.json({ ok: true, model: resolvedModel, mode: 'manual', message: `Switched to ${resolvedModel}. All responses will now use this model.` });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// WhatsApp connected confirmation
+router.post('/container/whatsapp-connected', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { userId } = req.body;
+    if (!userId || !UUID_RE.test(userId)) return res.status(400).json({ error: 'Valid userId required' });
+
+    if (!verifyContainerAuth(req, userId)) {
+      return res.status(401).json({ error: 'Invalid container authentication' });
+    }
+
+    await confirmWhatsAppConnected(userId);
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Conversation history — agent queries its own past conversations
+router.post('/container/history', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { userId, date, channel, search, limit: rawLimit } = req.body;
+    if (!userId || !UUID_RE.test(userId)) return res.status(400).json({ error: 'Valid userId required' });
+
+    if (!verifyContainerAuth(req, userId)) {
+      return res.status(401).json({ error: 'Invalid container authentication' });
+    }
+
+    const db = (await import('../lib/db')).default;
+    const conditions = ['user_id = $1'];
+    const params: any[] = [userId];
+    let idx = 2;
+
+    if (date) {
+      conditions.push(`created_at::date = $${idx++}::date`);
+      params.push(date);
+    }
+    if (channel) {
+      conditions.push(`channel = $${idx++}`);
+      params.push(channel);
+    }
+    if (search) {
+      conditions.push(`content ILIKE $${idx++}`);
+      params.push(`%${search}%`);
+    }
+
+    const limit = Math.min(parseInt(rawLimit) || 50, 200);
+    const where = conditions.join(' AND ');
+
+    const rows = await db.getMany(
+      `SELECT role, channel, content, model_used, created_at
+       FROM conversations
+       WHERE ${where}
+       ORDER BY created_at DESC
+       LIMIT $${idx}`,
+      [...params, limit]
+    );
+
+    // Also return available dates for browsing
+    const dates = await db.getMany<{ day: string; count: string }>(
+      `SELECT created_at::date as day, COUNT(*) as count
+       FROM conversations WHERE user_id = $1
+       GROUP BY created_at::date ORDER BY day DESC LIMIT 30`,
+      [userId]
+    );
+
+    res.json({
+      conversations: rows,
+      available_dates: dates.map(d => ({ date: d.day, messages: parseInt(d.count) })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Skills catalog — agent queries available and installed skills
+router.post('/container/skills', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { userId } = req.body;
+    if (!userId || !UUID_RE.test(userId)) return res.status(400).json({ error: 'Valid userId required' });
+
+    if (!verifyContainerAuth(req, userId)) {
+      return res.status(401).json({ error: 'Invalid container authentication' });
+    }
+
+    const { PLATFORM_SKILLS } = await import('../data/platformSkills');
+
+    const db = (await import('../lib/db')).default;
+    const user = await db.getOne<{ server_id: string; container_name: string }>(
+      'SELECT server_id, container_name FROM users WHERE id = $1', [userId]
+    );
+
+    // Check which skills are installed by reading the container's openclaw.json
+    let installed: string[] = [];
+    if (user?.server_id) {
+      const server = await db.getOne<{ ip: string }>('SELECT ip FROM servers WHERE id = $1', [user.server_id]);
+      if (server) {
+        const { sshExec } = await import('../services/ssh');
+        const configResult = await sshExec(
+          server.ip,
+          `cat /opt/openclaw/instances/${userId}/openclaw.json 2>/dev/null || echo '{}'`
+        ).catch(() => ({ stdout: '{}', stderr: '', code: 0 }));
+        try {
+          const config = JSON.parse(configResult.stdout);
+          installed = Object.keys(config.skills?.entries || {}).filter(
+            k => config.skills.entries[k]?.enabled !== false
+          );
+        } catch {}
+      }
+    }
+
+    const catalog = PLATFORM_SKILLS.map(s => ({
+      id: s.id,
+      name: s.label,
+      description: s.description,
+      category: s.category,
+      installed: installed.includes(s.id),
+    }));
+
+    res.json({
+      installed_skills: catalog.filter(s => s.installed),
+      available_skills: catalog.filter(s => !s.installed),
+      install_instructions: 'To install a skill, tell the user to go to Dashboard > Skills and click Install. Or the user can ask you to install it and you relay the skill name.',
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+export default router;

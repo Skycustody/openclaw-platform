@@ -1,0 +1,240 @@
+/**
+ * OPENCLAW SAAS PLATFORM — API SERVER
+ *
+ * This is NOT a standalone AI service. This is the control plane for a hosted
+ * OpenClaw platform. Every user gets their own OpenClaw container. The API:
+ *  - Provisions and manages containers on worker servers
+ *  - Injects OpenRouter API keys so containers talk directly to OpenRouter
+ *  - Syncs settings/skills/channels to container config (openclaw.json)
+ *  - Serves auth, billing, and admin endpoints
+ *
+ * ALL user AI interactions go through the OpenClaw container, never direct.
+ * See AGENTS.md and .cursor/rules/openclaw-saas-mission.mdc for full details.
+ */
+process.on('uncaughtException', (err) => {
+  console.error('FATAL uncaught exception:', err);
+  process.exit(1);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('FATAL unhandled rejection:', reason);
+  process.exit(1);
+});
+
+import './loadEnv'; // Must run before any import that pulls in auth (JWT_SECRET check)
+
+const sshKey = process.env.SSH_PRIVATE_KEY;
+const sshKeyPath = process.env.SSH_PRIVATE_KEY_PATH?.trim();
+if (sshKey) {
+  console.log(`SSH key loaded from env (${sshKey.replace(/\s/g, '').length} chars) for worker SSH`);
+} else if (sshKeyPath) {
+  console.log(`SSH key will be read from file`);
+} else {
+  console.warn('SSH_PRIVATE_KEY or SSH_PRIVATE_KEY_PATH not set — SSH to workers will fail');
+}
+
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import morgan from 'morgan';
+import { createServer } from 'http';
+import { Server as SocketServer } from 'socket.io';
+
+import db from './lib/db';
+import { errorHandler } from './middleware/errorHandler';
+import { rateLimitGeneral, rateLimitProxy } from './middleware/rateLimit';
+import jwt from 'jsonwebtoken';
+
+import authRoutes from './routes/auth';
+import agentRoutes from './routes/agent';
+import settingsRoutes from './routes/settings';
+import channelRoutes from './routes/channels';
+import memoryRoutes from './routes/memories';
+import cronRoutes from './routes/cron';
+import routerRoutes from './routes/router';
+import activityRoutes from './routes/activity';
+import conversationRoutes from './routes/conversations';
+import fileRoutes from './routes/files';
+import billingRoutes from './routes/billing';
+import desktopBillingRoutes from './routes/desktopBilling';
+import referralRoutes from './routes/referrals';
+import templateRoutes from './routes/templates';
+import webhookRoutes from './routes/webhooks';
+import adminRoutes from './routes/admin';
+import autoRoutes from './routes/auto';
+import agentsRoutes from './routes/agents';
+import skillsRoutes from './routes/skills';
+import proxyRoutes from './routes/proxy';
+import feedbackRoutes from './routes/feedback';
+
+import { startScheduler } from './jobs/scheduler';
+import redis from './lib/redis';
+
+const app = express();
+const httpServer = createServer(app);
+
+const ALLOWED_ORIGINS = process.env.PLATFORM_URL
+  ? process.env.PLATFORM_URL.split(',').map(s => s.trim())
+  : ['http://localhost:3000'];
+
+// ── WebSocket ──
+const io = new SocketServer(httpServer, {
+  cors: { origin: ALLOWED_ORIGINS, methods: ['GET', 'POST'] },
+});
+
+io.use((socket, next) => {
+  const token = socket.handshake.auth?.token;
+  if (!token) return next(new Error('Authentication required'));
+  try {
+    const payload = jwt.verify(token, process.env.JWT_SECRET!, { algorithms: ['HS256'] }) as { userId: string };
+    socket.data.userId = payload.userId;
+    next();
+  } catch {
+    next(new Error('Invalid or expired token'));
+  }
+});
+
+io.on('connection', (socket) => {
+  const userId = socket.data.userId;
+  if (userId) {
+    socket.join(userId);
+  }
+  socket.on('disconnect', () => {});
+});
+
+// Make io available to routes
+app.set('io', io);
+
+// ── Middleware ──
+// Trust the first reverse proxy (nginx/Cloudflare) for req.ip
+app.set('trust proxy', 1);
+
+// HTTPS redirect in production.
+// CRITICAL: /webhooks/* and /health MUST be skipped. Workers call back via
+// HTTP POST to /webhooks/servers/register. A 301 redirect converts POST→GET,
+// losing the body and silently failing worker registration.
+if (process.env.NODE_ENV === 'production') {
+  app.use((req, res, next) => {
+    if (req.path.startsWith('/webhooks/') || req.path.startsWith('/proxy/') || req.path === '/health') {
+      return next();
+    }
+    if (req.headers['x-forwarded-proto'] !== 'https') {
+      return res.redirect(301, `https://${req.hostname}${req.url}`);
+    }
+    next();
+  });
+}
+
+// JSON parser with raw body capture for Stripe webhook signature verification.
+// The verify callback saves the raw Buffer before JSON parsing so constructEvent
+// can validate the HMAC signature against the untouched payload.
+app.use(express.json({
+  limit: '10mb',
+  verify: (req: any, _res, buf) => {
+    if (req.originalUrl === '/webhooks/stripe') {
+      req.rawBody = buf;
+    }
+  },
+}));
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.warn(`[CORS] Rejected origin: "${origin}" | Allowed: [${ALLOWED_ORIGINS.join(', ')}]`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+}));
+app.use(helmet());
+app.use(morgan('short'));
+app.use((req, res, next) => {
+  if (req.path.startsWith('/proxy/')) return rateLimitProxy(req, res, next);
+  rateLimitGeneral(req, res, next);
+});
+
+// ── Routes ──
+app.use('/auth', authRoutes);
+app.use('/agent', agentRoutes);
+app.use('/settings', settingsRoutes);
+app.use('/channels', channelRoutes);
+app.use('/memories', memoryRoutes);
+app.use('/cron', cronRoutes);
+app.use('/router', routerRoutes);
+app.use('/activity', activityRoutes);
+app.use('/conversations', conversationRoutes);
+app.use('/files', fileRoutes);
+app.use('/billing', billingRoutes);
+app.use('/desktop-billing', desktopBillingRoutes);
+app.use('/referrals', referralRoutes);
+app.use('/templates', templateRoutes);
+app.use('/webhooks', webhookRoutes);
+app.use('/admin', adminRoutes);
+app.use('/auto', autoRoutes);
+app.use('/agents', agentsRoutes);
+app.use('/skills', skillsRoutes);
+app.use('/proxy', proxyRoutes);
+app.use('/feedback', feedbackRoutes);
+
+// Health check
+app.get('/health', (_req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// ── 404 handler for unmatched routes ──
+app.use((_req, res) => {
+  res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Endpoint not found' } });
+});
+
+// ── Error Handler ──
+app.use(errorHandler);
+
+// ── Start ──
+const PORT = parseInt(process.env.PORT || '4000');
+
+async function start() {
+  try {
+    const { verifyCreditMathAtStartup } = await import('./services/creditAudit');
+    verifyCreditMathAtStartup();
+    console.log('Credit math verified');
+  } catch (err) {
+    console.warn('Credit math verification failed (non-fatal):', err);
+  }
+
+  // Ensure activity_log has status column (safe migration — no-op if exists)
+  try {
+    await db.query(`ALTER TABLE activity_log ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'completed'`);
+  } catch { /* table or column may already exist */ }
+
+  try {
+    await redis.connect();
+    console.log('Redis connected');
+  } catch (err) {
+    console.warn('Redis connection failed, continuing without cache:', err);
+  }
+
+  httpServer.listen(PORT, () => {
+    console.log(`OpenClaw API running on port ${PORT}`);
+    startScheduler();
+  });
+}
+
+start().catch(console.error);
+
+function gracefulShutdown(signal: string) {
+  console.log(`${signal} received — shutting down gracefully`);
+  httpServer.close(async () => {
+    console.log('HTTP server closed');
+    try { await redis.quit(); } catch {}
+    try { const { pool: dbPool } = await import('./lib/db'); await dbPool.end(); } catch {}
+    process.exit(0);
+  });
+  setTimeout(() => {
+    console.error('Forced shutdown after timeout');
+    process.exit(1);
+  }, 10_000);
+}
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+export { app, io };

@@ -1,0 +1,56 @@
+---
+description: THE foundational rule for this entire project. Read this FIRST before making any change.
+alwaysApply: true
+---
+
+# OpenClaw SaaS — Architectural Mission
+
+THIS IS AN OPENCLAW SAAS PLATFORM. Every feature is a web UI layer around OpenClaw.
+
+## What this project IS
+
+- A hosted platform that provisions, manages, and wraps OpenClaw containers for users.
+- Every user gets their own OpenClaw container running on a worker server.
+- The dashboard is a UI shell around OpenClaw's capabilities — not a replacement.
+- Chat goes through the container's gateway (WebSocket / Control UI iframe), never direct to OpenAI/Anthropic.
+- Skills are OpenClaw tools configured in the container's `openclaw.json`.
+- Scheduled tasks execute inside the container via `openclaw run`.
+- Channels (Telegram, Discord, Slack, WhatsApp) are OpenClaw channels configured in `openclaw.json`.
+- Model/brain settings are written to the container's `openclaw.json`.
+- Token tracking happens via the platform proxy — containers use `val_sk_xxx` proxy keys.
+
+## What this project is NOT
+
+- NOT a custom AI pipeline. Do not call OpenAI/Anthropic directly from the platform API for user tasks.
+- NOT a chatbot with its own conversation logic. The container handles all conversations.
+- NOT a place for hardcoded/fake feature UIs that don't connect to OpenClaw.
+
+## Architecture rules
+
+1. **All user AI interactions go through the OpenClaw container.** Never bypass it.
+2. **Container config is the source of truth.** When settings change, write to `openclaw.json` on the host volume via SSH, then restart the container.
+3. **The proxy is for token tracking only.** Containers call the platform proxy which forwards to AI providers and deducts tokens. The proxy does not process or transform messages.
+4. **The dashboard is a mirror.** If a feature exists in the OpenClaw CLI, the dashboard shows a UI for it. If it doesn't exist in OpenClaw, don't build it as a custom feature.
+5. **The control plane never runs user containers.** Worker servers (Hetzner) run containers. The control plane runs the API and dashboard only.
+
+## Key flow: Chat
+
+```
+Dashboard (iframe) → Container Control UI → WebSocket → Container Gateway
+→ Container calls AI via platform proxy → Proxy deducts tokens
+→ Response back via WebSocket → iframe → User sees it
+```
+
+## Key flow: Channels
+
+```
+Telegram/Discord/etc → Container adapter → Container processes
+→ Container calls AI via proxy → Proxy deducts tokens → Response to channel
+```
+
+## Key flow: Settings
+
+```
+Dashboard saves to DB → Also writes to container openclaw.json via SSH
+→ Container restarts → Container uses new config
+```

@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: openclaw
+      POSTGRES_USER: openclaw
+      POSTGRES_PASSWORD: localdev
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ../migrations/001_initial_schema.sql:/docker-entrypoint-initdb.d/001_schema.sql
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redisdata:/data
+
+  api:
+    build:
+      context: ../api
+      dockerfile: ../docker/Dockerfile.api
+    ports:
+      - "4000:4000"
+    environment:
+      DATABASE_URL: postgresql://openclaw:localdev@postgres:5432/openclaw
+      # Must use Docker service name; .env REDIS_URL=localhost breaks rate limiter inside container
+      REDIS_URL: redis://redis:6379
+      NODE_ENV: development
+    env_file:
+      - ../.env
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ../api/src:/app/src
+
+volumes:
+  pgdata:
+  redisdata:

@@ -1,0 +1,50 @@
+CANVA AI PROMPT — Instagram Carousel (3 slides)
+================================================
+
+Create a 3-slide Instagram carousel (1080x1080). Black background, white bold sans-serif text, minimal and clean like Apple marketing. No photos, no screenshots — text and simple icons only.
+
+SLIDE 1 — HOOK
+Big bold headline centered: "OpenClaw is amazing. Hosting it is not."
+Below in smaller gray text: "Setting up servers. Configuring Docker. Managing updates. Debugging gateway tokens. Connecting Telegram, Discord, Slack. Sound familiar?"
+Bottom right corner in tiny gray: "swipe →"
+
+SLIDE 2 — SOLUTION
+Headline: "We built Valnaa so you never deal with that again."
+Three feature rows with simple icons:
+- Chat icon → "Chat with your agent in the browser"
+- Message icon → "Telegram, Discord, Slack, WhatsApp — connected in seconds"
+- Toggle icon → "Skills & tools — toggle on/off from the dashboard"
+Highlighted text below: "Sign up. Pay. Your agent is live in 2 minutes."
+Bottom right: "swipe →"
+
+SLIDE 3 — FEATURES + CTA
+Headline: "Everything OpenClaw needs. Nothing you have to manage."
+Checklist:
+✓ One-click hosting — runs 24/7
+✓ Telegram, Discord, Slack, WhatsApp
+✓ Skills & tools — toggle from dashboard
+✓ GPT-4o, Claude, Gemini, DeepSeek
+✓ Token tracking — see what you spend
+✓ We handle updates, you just use it
+White rounded button: "Start now"
+Below button: "valnaa.com"
+
+Keep it premium, dark, minimal. No clutter. Lots of spacing.
+
+
+IG CAPTION
+==========
+
+OpenClaw is powerful. But hosting it, configuring Docker, connecting channels, managing updates — that's where people get stuck.
+
+We built Valnaa to fix that.
+
+Sign up, pay, and your AI agent is live in 2 minutes. Chat in the browser. Connect Telegram, Discord, Slack, WhatsApp. Toggle skills on and off. Pick your model. Track your spending.
+
+No servers. No terminal. No config files.
+
+Just your agent, working 24/7.
+
+Link in bio → valnaa.com
+
+#OpenClaw #AIAgent #SaaS #Automation #Telegram #Discord #Slack #WhatsApp #AITools #NoCode #DevTools #BuildInPublic

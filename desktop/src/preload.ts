@@ -1,0 +1,188 @@
+import { contextBridge, ipcRenderer } from 'electron';
+
+contextBridge.exposeInMainWorld('openclaw', {
+  getStatus: () => ipcRenderer.invoke('agent:status'),
+  start: () => ipcRenderer.invoke('agent:start'),
+  stop: () => ipcRenderer.invoke('agent:stop'),
+  restart: () => ipcRenderer.invoke('agent:restart'),
+  getLogs: () => ipcRenderer.invoke('agent:logs'),
+  getLogPath: () => ipcRenderer.invoke('agent:log-path'),
+  openLogFile: () => ipcRenderer.invoke('agent:open-log-file'),
+  getVersion: () => ipcRenderer.invoke('app:version'),
+  /** Windows: open native app submenu from in-window menubar (client coords). */
+  popupWinMenubarSubmenu: (index: number, x: number, y: number) =>
+    ipcRenderer.invoke('app:popup-win-submenu', index, { x, y }),
+  getMacFullscreen: () => ipcRenderer.invoke('app:get-mac-fullscreen'),
+  onMacFullscreenChange: (cb: (fullScreen: boolean) => void) => {
+    const handler = (_: Electron.IpcRendererEvent, fs: boolean) => cb(!!fs);
+    ipcRenderer.on('app:mac-fullscreen', handler);
+    return () => ipcRenderer.removeListener('app:mac-fullscreen', handler);
+  },
+  signalReady: () => ipcRenderer.send('app:renderer-ready'),
+
+  needsSetup: () => ipcRenderer.invoke('setup:needs-setup'),
+  openExternal: (url: string) => ipcRenderer.invoke('app:open-external', url),
+  /** Path, token, ports for manual Chrome setup (in-app card). */
+  getChromeExtensionInfo: () => ipcRenderer.invoke('browser:get-chrome-extension-info'),
+  revealChromeExtensionFolder: () => ipcRenderer.invoke('browser:reveal-extension-folder'),
+  openChromeExtensionsPage: () => ipcRenderer.invoke('browser:open-chrome-extensions'),
+  copyExtensionPath: () => ipcRenderer.invoke('browser:copy-extension-path'),
+  copyGatewayToken: () => ipcRenderer.invoke('browser:copy-gateway-token'),
+  saveChromeExtensionZip: () => ipcRenderer.invoke('browser:save-chrome-extension-zip'),
+  copyChromeExtensionToDownloads: () => ipcRenderer.invoke('browser:copy-chrome-extension-to-downloads'),
+  // OpenShell TUI
+  openshellSpawn: (size?: { cols: number; rows: number }) => ipcRenderer.invoke('openshell:spawn', size),
+  openshellInput: (data: string) => ipcRenderer.send('openshell:input', data),
+  openshellResize: (cols: number, rows: number) => ipcRenderer.send('openshell:resize', cols, rows),
+  openshellKill: () => ipcRenderer.invoke('openshell:kill'),
+  onOpenshellData: (cb: (data: string) => void) => {
+    const handler = (_: any, data: string) => cb(data);
+    ipcRenderer.on('openshell:data', handler);
+    return () => ipcRenderer.removeListener('openshell:data', handler);
+  },
+  onOpenshellExit: (cb: (code: number) => void) => {
+    const handler = (_: any, code: number) => cb(code);
+    ipcRenderer.on('openshell:exit', handler);
+    return () => ipcRenderer.removeListener('openshell:exit', handler);
+  },
+
+  terminalSpawn: (opts?: { sandbox?: boolean; wsl?: boolean }) => ipcRenderer.invoke('terminal:spawn', opts),
+  terminalInput: (sessionId: string, data: string) => ipcRenderer.send('terminal:input', sessionId, data),
+  terminalResize: (sessionId: string, cols: number, rows: number) => ipcRenderer.send('terminal:resize', sessionId, cols, rows),
+  terminalKill: (sessionId: string) => ipcRenderer.invoke('terminal:kill', sessionId),
+  onTerminalData: (cb: (sessionId: string, data: string) => void) => {
+    const handler = (_: any, sessionId: string, data: string) => cb(sessionId, data);
+    ipcRenderer.on('terminal:data', handler);
+    return () => ipcRenderer.removeListener('terminal:data', handler);
+  },
+  onTerminalExit: (cb: (sessionId: string, code: number) => void) => {
+    const handler = (_: any, sessionId: string, code: number) => cb(sessionId, code);
+    ipcRenderer.on('terminal:exit', handler);
+    return () => ipcRenderer.removeListener('terminal:exit', handler);
+  },
+
+  // Auth
+  getSession: () => ipcRenderer.invoke('auth:get-session'),
+  startAuth: () => ipcRenderer.invoke('auth:start'),
+  checkSubscription: () => ipcRenderer.invoke('auth:check-subscription'),
+  logout: () => ipcRenderer.invoke('auth:logout'),
+  openPricing: () => ipcRenderer.invoke('auth:open-pricing'),
+  startDesktopTrial: () => ipcRenderer.invoke('auth:start-desktop-trial'),
+  getStripePortal: () => ipcRenderer.invoke('auth:get-stripe-portal'),
+  getDesktopCheckout: () => ipcRenderer.invoke('auth:get-desktop-checkout'),
+
+  // Runtime
+  getRuntime: () => ipcRenderer.invoke('runtime:get'),
+  setRuntime: (runtime: string) => ipcRenderer.invoke('runtime:set', runtime),
+  clearRuntime: () => ipcRenderer.invoke('runtime:clear'),
+  getSandboxName: () => ipcRenderer.invoke('runtime:sandbox-name'),
+  retryAutoStart: () => ipcRenderer.invoke('app:retry-autostart'),
+
+  // Data management
+  getDataPaths: () => ipcRenderer.invoke('data:get-paths'),
+  openDataFolder: (which: string) => ipcRenderer.invoke('data:open-folder', which),
+  deleteAgentData: () => ipcRenderer.invoke('data:delete-agent'),
+
+  onShowRuntimePicker: (cb: () => void) => {
+    const handler = () => cb();
+    ipcRenderer.on('app:show-runtime-picker', handler);
+    return () => ipcRenderer.removeListener('app:show-runtime-picker', handler);
+  },
+
+  onShowNemoClawPrereq: (cb: (info: any) => void) => {
+    const handler = (_: any, info: any) => cb(info);
+    ipcRenderer.on('app:show-nemoclaw-prereq', handler);
+    return () => ipcRenderer.removeListener('app:show-nemoclaw-prereq', handler);
+  },
+
+  onAuthResult: (cb: (result: any) => void) => {
+    const handler = (_: any, result: any) => cb(result);
+    ipcRenderer.on('app:auth-result', handler);
+    return () => ipcRenderer.removeListener('app:auth-result', handler);
+  },
+
+  onShowAuth: (cb: () => void) => {
+    const handler = () => cb();
+    ipcRenderer.on('app:show-auth', handler);
+    return () => ipcRenderer.removeListener('app:show-auth', handler);
+  },
+
+  onShowSubscribe: (cb: (info: any) => void) => {
+    const handler = (_: any, info: any) => cb(info);
+    ipcRenderer.on('app:show-subscribe', handler);
+    return () => ipcRenderer.removeListener('app:show-subscribe', handler);
+  },
+
+  launchDocker: () => ipcRenderer.invoke('app:launch-docker'),
+  openExternalSetupTask: (task: string) => ipcRenderer.invoke('setup:open-external-task', task),
+
+  // Setup in-app terminal
+  setupTerminalInput: (data: string) => ipcRenderer.send('setup:terminal-input', data),
+  setupTerminalResize: (cols: number, rows: number) => ipcRenderer.send('setup:terminal-resize', cols, rows),
+  onSetupTerminalStart: (cb: () => void) => {
+    const handler = () => cb();
+    ipcRenderer.on('setup:terminal-start', handler);
+    return () => ipcRenderer.removeListener('setup:terminal-start', handler);
+  },
+  onSetupTerminalData: (cb: (data: string) => void) => {
+    const handler = (_: any, data: string) => cb(data);
+    ipcRenderer.on('setup:terminal-data', handler);
+    return () => ipcRenderer.removeListener('setup:terminal-data', handler);
+  },
+  onSetupTerminalExit: (cb: (code: number) => void) => {
+    const handler = (_: any, code: number) => cb(code);
+    ipcRenderer.on('setup:terminal-exit', handler);
+    return () => ipcRenderer.removeListener('setup:terminal-exit', handler);
+  },
+
+  onShowSetup: (cb: (steps: any[]) => void) => {
+    const handler = (_e: Electron.IpcRendererEvent, steps: any[]) => cb(steps);
+    ipcRenderer.on('app:show-setup', handler);
+    return () => ipcRenderer.removeListener('app:show-setup', handler);
+  },
+
+  onSetupSteps: (cb: (steps: any[]) => void) => {
+    const handler = (_e: Electron.IpcRendererEvent, steps: any[]) => cb(steps);
+    ipcRenderer.on('app:setup-steps', handler);
+    return () => ipcRenderer.removeListener('app:setup-steps', handler);
+  },
+
+  // Inference API key
+  submitApiKey: (provider: string, key: string) => ipcRenderer.invoke('setup:submit-api-key', provider, key),
+  setOptionalModelKeys: (body: { openai?: string; anthropic?: string }) =>
+    ipcRenderer.invoke('settings:set-optional-model-keys', body),
+  onShowApiKeyForm: (
+    cb: (payload: { providers: any[]; sectionTitle?: string; sectionSubtitle?: string } | any[]) => void,
+  ) => {
+    const handler = (_e: Electron.IpcRendererEvent, payload: any[] | Record<string, unknown>) => {
+      if (Array.isArray(payload)) {
+        cb({ providers: payload });
+      } else {
+        cb(payload as { providers: any[]; sectionTitle?: string; sectionSubtitle?: string });
+      }
+    };
+    ipcRenderer.on('app:show-api-key-form', handler);
+    return () => ipcRenderer.removeListener('app:show-api-key-form', handler);
+  },
+
+
+  onStatus: (cb: (status: any) => void) => {
+    const handler = (_: any, status: any) => cb(status);
+    ipcRenderer.on('agent:status-update', handler);
+    return () => ipcRenderer.removeListener('agent:status-update', handler);
+  },
+
+  onInstallProgress: (cb: (progress: any) => void) => {
+    const handler = (_: any, progress: any) => cb(progress);
+    ipcRenderer.on('agent:install-progress', handler);
+    return () => ipcRenderer.removeListener('agent:install-progress', handler);
+  },
+
+  // Update
+  onUpdateAvailable: (cb: (info: { version: string; canAutoInstall: boolean }) => void) => {
+    const handler = (_: any, info: { version: string; canAutoInstall: boolean }) => cb(info);
+    ipcRenderer.on('app:update-available', handler);
+    return () => ipcRenderer.removeListener('app:update-available', handler);
+  },
+  installUpdate: () => ipcRenderer.invoke('app:install-update'),
+});

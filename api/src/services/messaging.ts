@@ -1,0 +1,770 @@
+import db from '../lib/db';
+import { encrypt } from '../lib/encryption';
+import { sshExec } from './ssh';
+import { User, Server } from '../types';
+import { injectApiKeys } from './apiKeys';
+import { readContainerConfig, writeContainerConfig, reapplyGatewayConfig } from './containerConfig';
+
+// ── Helpers ──
+
+const INSTANCE_DIR = '/opt/openclaw/instances';
+const UUID_RE = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+
+function validateUserId(userId: string): void {
+  if (!UUID_RE.test(userId)) throw new Error('Invalid user ID format');
+}
+
+async function getUserContainer(userId: string): Promise<{
+  serverIp: string;
+  containerName: string;
+  user: User;
+}> {
+  const user = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [userId]);
+  if (!user?.server_id) {
+    console.warn(`[channels] getUserContainer: user ${userId} has no server_id (status=${user?.status})`);
+    const err: any = new Error('Your agent is not provisioned yet. Open Agent first, then try again.');
+    err.statusCode = 409;
+    throw err;
+  }
+
+  const server = await db.getOne<Server>('SELECT * FROM servers WHERE id = $1', [user.server_id]);
+  if (!server) {
+    console.warn(`[channels] getUserContainer: server ${user.server_id} not found for user ${userId}`);
+    const err: any = new Error('Worker server not found. Please open your agent again to re-provision.');
+    err.statusCode = 409;
+    throw err;
+  }
+
+  const containerName = user.container_name || `openclaw-${userId}`;
+
+  const running = await sshExec(
+    server.ip,
+    `docker inspect ${containerName} --format='{{.State.Running}}' 2>/dev/null`
+  ).catch(() => null);
+
+  if (!running || !running.stdout.includes('true')) {
+    // Auto-wake: try to start the container instead of failing
+    console.log(`[channels] Container ${containerName} not running for user ${userId} (status=${user.status}) — auto-waking`);
+    const startResult = await sshExec(
+      server.ip,
+      `docker start ${containerName} 2>/dev/null`
+    ).catch((err) => {
+      console.error(`[channels] docker start failed for ${containerName}: ${err.message}`);
+      return null;
+    });
+
+    if (startResult && startResult.code === 0) {
+      // Wait for container to come up
+      const maxWait = 30000;
+      const start = Date.now();
+      let isRunning = false;
+      while (Date.now() - start < maxWait) {
+        const check = await sshExec(
+          server.ip,
+          `docker inspect ${containerName} --format='{{.State.Running}}' 2>/dev/null`
+        ).catch(() => null);
+        if (check?.stdout.includes('true')) {
+          isRunning = true;
+          break;
+        }
+        await new Promise(r => setTimeout(r, 2000));
+      }
+
+      if (isRunning) {
+        console.log(`[channels] Container ${containerName} auto-woke successfully`);
+        // Update status to active if it was sleeping
+        if (user.status === 'sleeping') {
+          await db.query(
+            `UPDATE users SET status = 'active', last_active = NOW() WHERE id = $1`,
+            [userId]
+          );
+        }
+        // Re-apply gateway config in background (doctor --fix strips auth keys on startup)
+        setTimeout(() => {
+          reapplyGatewayConfig(server.ip, userId, containerName).catch(() => {});
+        }, 10000);
+      } else {
+        console.error(`[channels] Container ${containerName} failed to start within ${maxWait}ms`);
+        const err: any = new Error('Your agent failed to start. Please open your Agent dashboard first, then retry.');
+        err.statusCode = 409;
+        throw err;
+      }
+    } else {
+      console.error(`[channels] Container ${containerName} does not exist or cannot start`);
+      const err: any = new Error('Your agent is not running. Open Agent, wait until it is online, then retry.');
+      err.statusCode = 409;
+      throw err;
+    }
+  }
+
+  return { serverIp: server.ip, containerName, user };
+}
+
+
+/**
+ * Poll until a container is running, up to timeoutMs.
+ */
+async function waitForContainer(serverIp: string, containerName: string, timeoutMs = 30000): Promise<boolean> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const check = await sshExec(
+      serverIp,
+      `docker inspect ${containerName} --format='{{.State.Running}}' 2>/dev/null`
+    ).catch(() => null);
+    if (check?.stdout.includes('true')) return true;
+    await new Promise(r => setTimeout(r, 2000));
+  }
+  return false;
+}
+
+// ── Telegram ──
+
+export async function connectTelegram(userId: string, botToken: string): Promise<void> {
+  console.log(`[telegram] Connecting for user ${userId}`);
+  const res = await fetch(`https://api.telegram.org/bot${botToken}/getMe`);
+  if (!res.ok) {
+    console.warn(`[telegram] Invalid bot token for user ${userId}: HTTP ${res.status}`);
+    throw new Error('Invalid Telegram bot token');
+  }
+  const botInfo: any = await res.json();
+  console.log(`[telegram] Bot validated: @${botInfo.result?.username} for user ${userId}`);
+
+  const { serverIp, containerName, user } = await getUserContainer(userId);
+
+  await injectApiKeys(serverIp, userId, containerName, user.plan as any);
+
+  const config = await readContainerConfig(serverIp, userId);
+  if (!config.channels) config.channels = {};
+  config.channels.telegram = {
+    enabled: true,
+    botToken,
+    dmPolicy: 'open',
+    allowFrom: ['*'],
+    groups: { '*': { requireMention: true } },
+  };
+  await writeContainerConfig(serverIp, userId, config);
+  console.log(`[telegram] Config written for user ${userId}`);
+
+  await sshExec(serverIp, `docker restart ${containerName}`);
+
+  const ready = await waitForContainer(serverIp, containerName);
+  if (!ready) {
+    console.error(`[telegram] Container ${containerName} failed to restart for user ${userId}`);
+    throw new Error('Agent failed to restart after configuring Telegram. Please try again.');
+  }
+
+  await db.query(
+    `UPDATE user_channels
+     SET telegram_token = $1, telegram_connected = true, telegram_chat_id = $2, updated_at = NOW()
+     WHERE user_id = $3`,
+    [encrypt(botToken), botInfo.result?.username || '', userId]
+  );
+  console.log(`[telegram] Connected for user ${userId} (@${botInfo.result?.username})`);
+}
+
+export async function disconnectTelegram(userId: string): Promise<void> {
+  try {
+    const { serverIp, containerName } = await getUserContainer(userId);
+
+    const config = await readContainerConfig(serverIp, userId);
+    delete config.channels?.telegram;
+    await writeContainerConfig(serverIp, userId, config);
+
+    await sshExec(serverIp, `docker restart ${containerName}`);
+  } catch {
+    // agent might not be running — still update DB
+  }
+
+  await db.query(
+    `UPDATE user_channels
+     SET telegram_token = NULL, telegram_connected = false, telegram_chat_id = NULL, updated_at = NOW()
+     WHERE user_id = $1`,
+    [userId]
+  );
+}
+
+// ── Discord ──
+
+export async function connectDiscord(userId: string, botToken: string, guildId?: string): Promise<void> {
+  console.log(`[discord] Connecting for user ${userId}`);
+  const res = await fetch('https://discord.com/api/v10/users/@me', {
+    headers: { Authorization: `Bot ${botToken}` },
+  });
+  if (!res.ok) {
+    console.warn(`[discord] Invalid bot token for user ${userId}: HTTP ${res.status}`);
+    throw new Error('Invalid Discord bot token');
+  }
+
+  const { serverIp, containerName, user } = await getUserContainer(userId);
+
+  await injectApiKeys(serverIp, userId, containerName, user.plan as any);
+
+  const config = await readContainerConfig(serverIp, userId);
+  if (!config.channels) config.channels = {};
+  config.channels.discord = {
+    enabled: true,
+    token: botToken,
+    dmPolicy: 'open',
+    allowFrom: ['*'],
+  };
+  await writeContainerConfig(serverIp, userId, config);
+  console.log(`[discord] Config written for user ${userId}`);
+
+  await sshExec(serverIp, `docker restart ${containerName}`);
+
+  const ready = await waitForContainer(serverIp, containerName);
+  if (!ready) {
+    console.error(`[discord] Container failed to restart for user ${userId}`);
+    throw new Error('Agent failed to restart after configuring Discord. Please try again.');
+  }
+
+  await db.query(
+    `UPDATE user_channels
+     SET discord_token = $1, discord_connected = true, discord_guild_id = $2, updated_at = NOW()
+     WHERE user_id = $3`,
+    [encrypt(botToken), guildId || null, userId]
+  );
+  console.log(`[discord] Connected for user ${userId}`);
+}
+
+export async function disconnectDiscord(userId: string): Promise<void> {
+  try {
+    const { serverIp, containerName } = await getUserContainer(userId);
+
+    const config = await readContainerConfig(serverIp, userId);
+    delete config.channels?.discord;
+    await writeContainerConfig(serverIp, userId, config);
+
+    await sshExec(serverIp, `docker restart ${containerName}`);
+  } catch {
+    // agent might not be running
+  }
+
+  await db.query(
+    `UPDATE user_channels
+     SET discord_token = NULL, discord_connected = false, discord_guild_id = NULL, updated_at = NOW()
+     WHERE user_id = $1`,
+    [userId]
+  );
+}
+
+// ── Slack ──
+
+export async function connectSlack(userId: string, accessToken: string, teamId: string): Promise<void> {
+  console.log(`[slack] Connecting for user ${userId}, team=${teamId}`);
+  const { serverIp, containerName, user } = await getUserContainer(userId);
+
+  await injectApiKeys(serverIp, userId, containerName, user.plan as any);
+
+  const config = await readContainerConfig(serverIp, userId);
+  if (!config.channels) config.channels = {};
+  config.channels.slack = {
+    enabled: true,
+    token: accessToken,
+  };
+  await writeContainerConfig(serverIp, userId, config);
+  console.log(`[slack] Config written for user ${userId}`);
+
+  await sshExec(serverIp, `docker restart ${containerName}`);
+
+  const ready = await waitForContainer(serverIp, containerName);
+  if (!ready) {
+    console.error(`[slack] Container failed to restart for user ${userId}`);
+    throw new Error('Agent failed to restart after configuring Slack. Please try again.');
+  }
+
+  await db.query(
+    `UPDATE user_channels
+     SET slack_token = $1, slack_connected = true, slack_team_id = $2, updated_at = NOW()
+     WHERE user_id = $3`,
+    [encrypt(accessToken), teamId, userId]
+  );
+  console.log(`[slack] Connected for user ${userId}`);
+}
+
+export async function disconnectSlack(userId: string): Promise<void> {
+  try {
+    const { serverIp, containerName } = await getUserContainer(userId);
+
+    const config = await readContainerConfig(serverIp, userId);
+    delete config.channels?.slack;
+    await writeContainerConfig(serverIp, userId, config);
+
+    await sshExec(serverIp, `docker restart ${containerName}`);
+  } catch {
+    // agent might not be running
+  }
+
+  await db.query(
+    `UPDATE user_channels
+     SET slack_token = NULL, slack_connected = false, slack_team_id = NULL, updated_at = NOW()
+     WHERE user_id = $1`,
+    [userId]
+  );
+}
+
+// ── WhatsApp ──
+
+/**
+ * Extract QR data from combined log output.
+ * Searches newest-to-oldest for:
+ *  1. Raw Baileys pairing string (2@…) — renderable client-side via qrcode.react
+ *  2. Any long base64-ish token that looks like a WhatsApp QR payload
+ *  3. Content between ---QR CODE--- markers
+ *  4. Unicode block-art QR (≥15 contiguous lines of block chars)
+ */
+function extractQrFromLogs(raw: string): string | null {
+  const cleaned = raw.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '');
+  const lines = cleaned.split('\n');
+
+  // 1. Raw Baileys pairing string (2@...) — search whole content then newest line
+  const globalBaileys = cleaned.match(/(2@[A-Za-z0-9+/=,._-]{20,})/);
+  if (globalBaileys) return globalBaileys[1];
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const m = lines[i].match(/(2@[A-Za-z0-9+/=,._-]{20,})/);
+    if (m) return m[1];
+  }
+
+  // 2. Generic WhatsApp QR payload (long alphanumeric strings on their own line)
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const trimmed = lines[i].trim();
+    if (/^[A-Za-z0-9+/=,._@-]{50,}$/.test(trimmed) && !trimmed.startsWith('eyJ')) {
+      return trimmed;
+    }
+  }
+
+  // 3. Between ---QR CODE--- markers
+  const mm = cleaned.match(/---\s*QR\s*CODE\s*---\r?\n([\s\S]*?)\r?\n[\s\S]*?---/i);
+  if (mm) {
+    const block = mm[1].trim();
+    if (block.length > 10) return block;
+  }
+
+  // 4. Unicode block art — collect contiguous blocks, pick last ≥ 15 lines
+  const qrRe = /[\u2580\u2584\u2588\u2591\u2592\u2593\u2596-\u259F]/;
+  const blocks: string[][] = [];
+  let cur: string[] = [];
+  let gap = 0;
+
+  for (const line of lines) {
+    const t = line.trimEnd();
+    if (qrRe.test(t) && t.length > 20) {
+      cur.push(t);
+      gap = 0;
+    } else if (cur.length > 0) {
+      if (++gap > 1) { blocks.push(cur); cur = []; gap = 0; }
+    }
+  }
+  if (cur.length > 0) blocks.push(cur);
+
+  for (let i = blocks.length - 1; i >= 0; i--) {
+    if (blocks[i].length >= 15) return blocks[i].join('\n');
+  }
+
+  return null;
+}
+
+/**
+ * Check for WhatsApp credentials on the host-mounted volume.
+ */
+async function hasWhatsAppCredentials(serverIp: string, userId: string): Promise<boolean> {
+  const check = await sshExec(
+    serverIp,
+    `ls ${INSTANCE_DIR}/${userId}/credentials/whatsapp/*/creds.json 2>/dev/null || echo NONE`
+  ).catch(() => null);
+  return !!check && !check.stdout.includes('NONE');
+}
+
+/**
+ * Re-read openclaw.json and force whatsapp.dmPolicy = 'open'.
+ * `openclaw channels login` can overwrite dmPolicy with the default 'pairing',
+ * which blocks all unknown senders and asks for manual approval the user can't do.
+ */
+async function ensureWhatsAppOpenPolicy(serverIp: string, userId: string): Promise<void> {
+  try {
+    const config = await readContainerConfig(serverIp, userId);
+    if (!config.channels?.whatsapp) return;
+
+    const wa = config.channels.whatsapp;
+    if (wa.dmPolicy === 'open' && JSON.stringify(wa.allowFrom) === '["*"]') return;
+
+    wa.dmPolicy = 'open';
+    wa.allowFrom = ['*'];
+    await writeContainerConfig(serverIp, userId, config);
+    console.log(`[whatsapp] Enforced dmPolicy=open for user ${userId}`);
+  } catch (err: any) {
+    console.warn(`[whatsapp] Failed to enforce open policy for ${userId}:`, err.message);
+  }
+}
+
+/**
+ * Start WhatsApp pairing:
+ *  1. Write WhatsApp into the config via host filesystem
+ *  2. Clear old QR artifacts
+ *  3. Restart container and wait for it to be healthy
+ *  4. Run `openclaw channels login --channel whatsapp` with output captured to the host volume
+ *
+ * Returns immediately — the frontend polls GET /channels/whatsapp/qr for the code.
+ */
+export async function initiateWhatsAppPairing(userId: string): Promise<{
+  agentUrl: string;
+  dashboardUrl: string;
+  alreadyLinked: boolean;
+}> {
+  const t0 = Date.now();
+  const lap = (label: string) => console.log(`[whatsapp:pair] ${label} +${Date.now() - t0}ms`);
+
+  const { serverIp, containerName, user } = await getUserContainer(userId);
+  lap(`getUserContainer (server=${serverIp}, container=${containerName})`);
+
+  const domain = process.env.DOMAIN || 'yourdomain.com';
+  const subdomain = user.subdomain || '';
+  const agentUrl = subdomain ? `https://${subdomain}.${domain}` : '';
+  const dashboardUrl = agentUrl && user.gateway_token
+    ? `${agentUrl}/?token=${encodeURIComponent(user.gateway_token)}`
+    : agentUrl;
+
+  const config = await readContainerConfig(serverIp, userId);
+  lap('readContainerConfig');
+
+  let configChanged = false;
+  if (!config.channels) config.channels = {};
+  if (!config.channels.whatsapp) {
+    config.channels.whatsapp = { dmPolicy: 'open', allowFrom: ['*'] };
+    configChanged = true;
+  } else if (config.channels.whatsapp.dmPolicy !== 'open') {
+    config.channels.whatsapp.dmPolicy = 'open';
+    config.channels.whatsapp.allowFrom = ['*'];
+    configChanged = true;
+  }
+
+  if (!config.models?.providers || Object.keys(config.models.providers).length === 0) {
+    await injectApiKeys(serverIp, userId, containerName, user.plan as any);
+    lap('injectApiKeys (models missing, had to inject)');
+  } else if (configChanged) {
+    await writeContainerConfig(serverIp, userId, config);
+    lap('writeContainerConfig (whatsapp channel added)');
+  } else {
+    lap('config OK — no injectApiKeys, no write needed');
+  }
+
+  const hasCreds = await hasWhatsAppCredentials(serverIp, userId);
+  lap(`hasWhatsAppCredentials → ${hasCreds}`);
+  if (hasCreds) {
+    await db.query(
+      `UPDATE user_channels SET whatsapp_connected = true, updated_at = NOW() WHERE user_id = $1`,
+      [userId]
+    );
+    lap('alreadyLinked — returning early');
+    return { agentUrl, dashboardUrl, alreadyLinked: true };
+  }
+
+  await sshExec(
+    serverIp,
+    `rm -f ${INSTANCE_DIR}/${userId}/whatsapp-qr.log`
+  ).catch(() => {});
+  lap('cleared old QR log');
+
+  // Always restart when no credentials exist — the container needs a clean
+  // WhatsApp adapter init for QR generation. Without this, reconnecting
+  // after a disconnect silently fails because the adapter has stale state.
+  await sshExec(serverIp, `docker restart ${containerName}`);
+  lap('docker restart issued');
+  const ready = await waitForContainer(serverIp, containerName);
+  lap(`waitForContainer → ${ready}`);
+  if (!ready) {
+    throw new Error('Agent failed to restart. Please try again in a moment.');
+  }
+  await new Promise(r => setTimeout(r, 3000));
+  lap('post-restart 3s pause done');
+
+  const execResult = await sshExec(
+    serverIp,
+    `docker exec -d ${containerName} sh -c 'openclaw channels login --channel whatsapp > /root/.openclaw/whatsapp-qr.log 2>&1'`
+  ).catch((err) => {
+    console.warn(`[whatsapp:pair] channels login exec failed:`, err.message);
+    return { code: 1, stderr: err.message, stdout: '' };
+  });
+  lap(`channels login exec → code=${execResult?.code}`);
+
+  console.log(`[whatsapp:pair] TOTAL ${Date.now() - t0}ms for user ${userId}`);
+  return { agentUrl, dashboardUrl, alreadyLinked: false };
+}
+
+/**
+ * Poll for the WhatsApp QR code.
+ * Reads from the host-mounted volume + docker logs for maximum coverage.
+ */
+export async function getWhatsAppQr(userId: string): Promise<{
+  status: 'waiting' | 'qr' | 'paired' | 'finalizing' | 'error';
+  qrText?: string;
+  message?: string;
+}> {
+  const t0 = Date.now();
+  let serverIp: string;
+  let containerName: string;
+
+  try {
+    const result = await getUserContainer(userId);
+    serverIp = result.serverIp;
+    containerName = result.containerName;
+  } catch {
+    console.log(`[whatsapp:qr] getUserContainer failed +${Date.now() - t0}ms — returning waiting`);
+    return { status: 'waiting', message: 'Waiting for agent to start...' };
+  }
+  console.log(`[whatsapp:qr] getUserContainer +${Date.now() - t0}ms`);
+
+  const hasCreds = await hasWhatsAppCredentials(serverIp, userId);
+  console.log(`[whatsapp:qr] hasWhatsAppCredentials → ${hasCreds} +${Date.now() - t0}ms`);
+
+  if (hasCreds) {
+    const needsRestart = await sshExec(
+      serverIp,
+      `cat ${INSTANCE_DIR}/${userId}/whatsapp-qr.log 2>/dev/null`
+    ).catch(() => null);
+
+    if (needsRestart?.stdout && needsRestart.stdout.trim().length > 0) {
+      console.log(`[whatsapp:qr] Credentials found, restarting to finalize +${Date.now() - t0}ms`);
+      await sshExec(serverIp, `rm -f ${INSTANCE_DIR}/${userId}/whatsapp-qr.log`).catch(() => {});
+
+      // Ensure dmPolicy is 'open' before restart — `channels login` may
+      // have overwritten it with the default 'pairing' policy.
+      await ensureWhatsAppOpenPolicy(serverIp, userId);
+
+      void sshExec(serverIp, `docker restart ${containerName}`).catch(() => {});
+      await db.query(
+        `UPDATE user_channels SET whatsapp_connected = true, updated_at = NOW() WHERE user_id = $1`,
+        [userId]
+      );
+      return { status: 'finalizing', message: 'Finalizing connection...' };
+    }
+
+    // Already paired — still enforce open policy in case of drift.
+    await ensureWhatsAppOpenPolicy(serverIp, userId);
+
+    await db.query(
+      `UPDATE user_channels SET whatsapp_connected = true, updated_at = NOW() WHERE user_id = $1`,
+      [userId]
+    );
+    console.log(`[whatsapp:qr] → paired +${Date.now() - t0}ms`);
+    return { status: 'paired' };
+  }
+
+  const qrFile = await sshExec(
+    serverIp,
+    `cat ${INSTANCE_DIR}/${userId}/whatsapp-qr.log 2>/dev/null`
+  ).catch(() => null);
+  const qrFileLen = qrFile?.stdout?.trim().length || 0;
+  console.log(`[whatsapp:qr] cat QR log → ${qrFileLen} chars +${Date.now() - t0}ms`);
+
+  let fallbackLogs = '';
+  if (!qrFile?.stdout?.trim()) {
+    const logs = await sshExec(
+      serverIp,
+      `docker logs --tail 30 ${containerName} 2>&1`
+    ).catch(() => null);
+    fallbackLogs = logs?.stdout || '';
+    console.log(`[whatsapp:qr] docker logs fallback → ${fallbackLogs.length} chars +${Date.now() - t0}ms`);
+  }
+
+  // Try QR file first (most reliable), then docker logs as fallback.
+  // Check each source independently so config errors in docker logs
+  // don't mask QR data in the dedicated log file.
+  const qrFileContent = qrFile?.stdout?.trim() || '';
+  if (qrFileContent) {
+    const qrFromFile = extractQrFromLogs(qrFileContent);
+    if (qrFromFile) {
+      console.log(`[whatsapp:qr] → QR found from file (${qrFromFile.length} chars) +${Date.now() - t0}ms`);
+      return { status: 'qr', qrText: qrFromFile };
+    }
+  }
+
+  if (fallbackLogs) {
+    const qrFromLogs = extractQrFromLogs(fallbackLogs);
+    if (qrFromLogs) {
+      console.log(`[whatsapp:qr] → QR found from docker logs (${qrFromLogs.length} chars) +${Date.now() - t0}ms`);
+      return { status: 'qr', qrText: qrFromLogs };
+    }
+  }
+
+  const combined = [qrFileContent, fallbackLogs].filter(Boolean).join('\n');
+  if (!combined || combined.trim().length === 0) {
+    console.log(`[whatsapp:qr] → waiting (empty) +${Date.now() - t0}ms`);
+    return { status: 'waiting', message: 'Generating QR code...' };
+  }
+
+  const lowerCombined = combined.toLowerCase();
+  if (lowerCombined.includes('failed to persist plugin')) {
+    console.log(`[whatsapp:qr] → waiting (non-fatal persist error) +${Date.now() - t0}ms`);
+    return { status: 'waiting', message: 'Waiting for QR code from WhatsApp...' };
+  }
+
+  const whatsappErrorPatterns = [
+    'Connection Closed',
+    'QR refs attempts ended',
+    'Stream Errored',
+    'DisconnectReason',
+    'connection refused',
+    'ECONNREFUSED',
+    'Unknown channel',
+    'channel not found',
+    'command not found',
+    'is not a function',
+  ];
+  const hasWhatsAppError = whatsappErrorPatterns.some(p => lowerCombined.includes(p.toLowerCase()));
+  if (hasWhatsAppError) {
+    const errorLines = combined.split('\n')
+      .filter(l => whatsappErrorPatterns.some(p => l.toLowerCase().includes(p.toLowerCase())))
+      .slice(-3);
+    const msg = errorLines.join(' ').trim().slice(0, 220) || 'WhatsApp connection failed. Click Retry to try again.';
+    console.warn(`[whatsapp:qr] → error: ${msg} +${Date.now() - t0}ms`);
+    return { status: 'error', message: msg };
+  }
+
+  console.log(`[whatsapp:qr] → waiting (no QR in ${combined.trim().length} chars of output) +${Date.now() - t0}ms`);
+  return { status: 'waiting', message: 'Waiting for QR code from WhatsApp...' };
+}
+
+export async function checkWhatsAppStatus(userId: string): Promise<{ paired: boolean; unlinked?: boolean }> {
+  try {
+    const user = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [userId]);
+    if (!user?.server_id) return { paired: false };
+
+    const server = await db.getOne<any>('SELECT ip FROM servers WHERE id = $1', [user.server_id]);
+    if (!server) return { paired: false };
+
+    // Check if credentials exist on disk
+    if (!(await hasWhatsAppCredentials(server.ip, userId))) {
+      await db.query(
+        `UPDATE user_channels SET whatsapp_connected = false, updated_at = NOW() WHERE user_id = $1`,
+        [userId]
+      );
+      return { paired: false };
+    }
+
+    // Credentials exist — check recent logs for disconnect signals.
+    // When a user removes the device from WhatsApp's linked devices list,
+    // Baileys emits a disconnect event with statusCode 401 or 515 (logged out).
+    const containerName = user.container_name || `openclaw-${userId}`;
+    const logs = await sshExec(
+      server.ip,
+      `docker logs --tail 100 ${containerName} 2>&1`
+    ).catch(() => null);
+
+    if (logs?.stdout) {
+      const lower = logs.stdout.toLowerCase();
+      const loggedOut = lower.includes('logged out') ||
+        lower.includes('device removed') ||
+        lower.includes('statuscode: 401') ||
+        lower.includes('connection closed') && lower.includes('loggedout');
+
+      if (loggedOut) {
+        // Device was unlinked from the phone — clean up
+        await sshExec(
+          server.ip,
+          `rm -rf ${INSTANCE_DIR}/${userId}/credentials/whatsapp`
+        ).catch(() => {});
+        await db.query(
+          `UPDATE user_channels SET whatsapp_connected = false, updated_at = NOW() WHERE user_id = $1`,
+          [userId]
+        );
+        return { paired: false, unlinked: true };
+      }
+    }
+
+    await db.query(
+      `UPDATE user_channels SET whatsapp_connected = true, updated_at = NOW() WHERE user_id = $1`,
+      [userId]
+    );
+    return { paired: true };
+  } catch {
+    return { paired: false };
+  }
+}
+
+export async function confirmWhatsAppConnected(userId: string): Promise<void> {
+  await db.query(
+    `UPDATE user_channels SET whatsapp_connected = true, updated_at = NOW() WHERE user_id = $1`,
+    [userId]
+  );
+}
+
+export async function disconnectWhatsApp(userId: string): Promise<void> {
+  try {
+    const { serverIp, containerName } = await getUserContainer(userId);
+
+    // Remove WhatsApp from config and clear all credentials/session data
+    const config = await readContainerConfig(serverIp, userId);
+    delete config.channels?.whatsapp;
+    await writeContainerConfig(serverIp, userId, config);
+
+    await sshExec(
+      serverIp,
+      `rm -rf ${INSTANCE_DIR}/${userId}/credentials/whatsapp ${INSTANCE_DIR}/${userId}/whatsapp-qr.log`
+    ).catch(() => {});
+
+    await sshExec(serverIp, `docker restart ${containerName}`);
+  } catch {
+    // Agent might not be running — still clean up credentials if possible
+    try {
+      const user = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [userId]);
+      if (user?.server_id) {
+        const server = await db.getOne<any>('SELECT ip FROM servers WHERE id = $1', [user.server_id]);
+        if (server) {
+          await sshExec(
+            server.ip,
+            `rm -rf ${INSTANCE_DIR}/${userId}/credentials/whatsapp ${INSTANCE_DIR}/${userId}/whatsapp-qr.log`
+          ).catch(() => {});
+        }
+      }
+    } catch {}
+  }
+
+  await db.query(
+    `UPDATE user_channels SET whatsapp_connected = false, updated_at = NOW() WHERE user_id = $1`,
+    [userId]
+  );
+}
+
+// ── Get all channel statuses ──
+
+export async function getChannelStatuses(userId: string): Promise<{
+  telegram: boolean;
+  discord: boolean;
+  slack: boolean;
+  whatsapp: boolean;
+  signal: boolean;
+}> {
+  const channels = await db.getOne<any>(
+    'SELECT * FROM user_channels WHERE user_id = $1',
+    [userId]
+  );
+
+  if (!channels) {
+    return { telegram: false, discord: false, slack: false, whatsapp: false, signal: false };
+  }
+
+  return {
+    telegram: channels.telegram_connected,
+    discord: channels.discord_connected,
+    slack: channels.slack_connected,
+    whatsapp: channels.whatsapp_connected,
+    signal: channels.signal_connected,
+  };
+}
+
+export async function getMessageCounts(userId: string): Promise<Record<string, number>> {
+  const result = await db.getMany<{ channel: string; count: string }>(
+    `SELECT channel, COUNT(*) as count
+     FROM conversations
+     WHERE user_id = $1 AND created_at > DATE_TRUNC('month', NOW())
+     GROUP BY channel`,
+    [userId]
+  );
+
+  const counts: Record<string, number> = {};
+  for (const r of result) {
+    counts[r.channel] = parseInt(r.count);
+  }
+  return counts;
+}
