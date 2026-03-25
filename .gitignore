@@ -6,7 +6,6 @@ dist/
 .env.production
 .DS_Store
 *.log
-*.certSigningRequest
 .next/
 out/
 coverage/
