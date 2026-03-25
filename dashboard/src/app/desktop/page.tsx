@@ -13,11 +13,12 @@ import {
   Shield,
   Wifi,
   WifiOff,
-  Terminal,
   Brain,
   MessageSquare,
-  Zap,
   Globe,
+  MousePointerClick,
+  Box,
+  Layers,
 } from 'lucide-react';
 
 const DOWNLOAD_BASE = 'https://github.com/Skycustody/valnaa-desktop/releases/latest';
@@ -32,43 +33,44 @@ const TOTAL_PRICE = BASE_PRICE + VAT_AMOUNT;
 
 const FEATURES = [
   {
-    icon: Terminal,
-    title: 'Full OpenClaw locally',
-    desc: 'Run the complete OpenClaw agent on your own machine — same power as the cloud version.',
+    icon: Box,
+    title: 'Powered by NemoClaw',
+    desc: 'NemoClaw provisions a full AI sandbox on your machine. Your own local Kubernetes cluster, managed automatically.',
+  },
+  {
+    icon: MousePointerClick,
+    title: 'Zero terminal interaction',
+    desc: 'Everything happens through the app. No commands to type, no config files to edit, no dependencies to install manually.',
   },
   {
     icon: Shield,
-    title: 'Private & secure',
-    desc: 'Everything stays on your computer. No data leaves your machine unless you want it to.',
-  },
-  {
-    icon: WifiOff,
-    title: 'Works offline',
-    desc: 'Use local models or cached responses without an internet connection.',
+    title: 'Private by default',
+    desc: 'Your data, conversations, and files stay on your computer. Nothing leaves your machine unless you choose to connect a channel.',
   },
   {
     icon: Brain,
     title: '20+ AI models',
-    desc: 'Connect to GPT-4o, Claude, Gemini, DeepSeek, and more via your own API keys.',
+    desc: 'Connect GPT-4o, Claude, Gemini, DeepSeek, and local models. Bring your own API keys or run fully offline.',
   },
   {
     icon: MessageSquare,
-    title: 'All messaging apps',
-    desc: 'Connect Telegram, Discord, Slack, and WhatsApp — your agent responds 24/7.',
+    title: 'Messaging channels',
+    desc: 'Connect Telegram, Discord, Slack, and WhatsApp. Your agent responds around the clock while the app is running.',
   },
   {
     icon: Globe,
-    title: 'Built-in browser',
-    desc: 'Your agent can browse the web, fill forms, and scrape data locally.',
+    title: 'Built-in browser agent',
+    desc: 'Your agent can browse websites, fill forms, take screenshots, and extract data using a real Chrome instance.',
   },
 ];
 
 const INCLUDED = [
-  'One-click install — no terminal needed',
-  'Automatic Node.js & OpenClaw setup',
-  'Built-in interactive terminal',
+  'One-click install with NemoClaw',
+  'No terminal or command line needed',
+  'Automatic sandbox provisioning',
+  'Built-in model provider setup',
   'Browser extension for web agent',
-  'All OpenClaw skills & tools',
+  'All OpenClaw skills and tools',
   'Automatic updates',
   '1-day free trial',
 ];
@@ -103,11 +105,11 @@ export default function DesktopPage() {
             Desktop App
           </div>
           <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
-            OpenClaw on your machine
+            Your AI agent, running locally
           </h1>
           <p className="mx-auto mt-5 max-w-xl text-lg leading-relaxed text-muted-foreground">
-            Download Valnaa Desktop and run a full AI agent locally.
-            Private, fast, and always available — no cloud server needed.
+            Valnaa Desktop gives you a full OpenClaw agent on your own computer.
+            Powered by NemoClaw, everything sets up automatically. No terminal, no config files, no hassle.
           </p>
         </div>
 
@@ -146,6 +148,48 @@ export default function DesktopPage() {
         </p>
       </section>
 
+      {/* How NemoClaw works */}
+      <section className="mx-auto max-w-5xl border-t border-border px-6 py-16">
+        <div className="mx-auto max-w-2xl text-center">
+          <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs text-muted-foreground">
+            <Box className="size-3" />
+            NemoClaw
+          </div>
+          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Setup that does everything for you</h2>
+          <p className="mt-3 text-sm text-muted-foreground">
+            NemoClaw handles the entire setup. You pick a name, choose your AI provider, and the app does the rest.
+          </p>
+        </div>
+
+        <div className="mt-12 grid grid-cols-1 gap-6 sm:grid-cols-3">
+          {[
+            {
+              step: '1',
+              title: 'Download and open',
+              desc: 'Install Valnaa, sign in with your account. NemoClaw detects your system and starts setup.',
+            },
+            {
+              step: '2',
+              title: 'Pick your sandbox name',
+              desc: 'Choose a name for your AI workspace. NemoClaw provisions a private sandbox on your machine.',
+            },
+            {
+              step: '3',
+              title: 'Select your AI model',
+              desc: 'Pick from available providers and paste your API key. Your agent is ready to use.',
+            },
+          ].map((item) => (
+            <div key={item.step} className="rounded-xl border border-border bg-card/30 p-6">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-foreground text-sm font-bold text-background">
+                {item.step}
+              </div>
+              <h3 className="mt-4 text-sm font-semibold">{item.title}</h3>
+              <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{item.desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
       {/* Pricing Card */}
       <section className="mx-auto max-w-5xl px-6 py-16">
         <div className="mx-auto max-w-lg">
@@ -160,7 +204,7 @@ export default function DesktopPage() {
             <div className="text-center">
               <h2 className="text-2xl font-bold">Valnaa Desktop</h2>
               <p className="mt-2 text-sm text-muted-foreground">
-                Run OpenClaw on your own computer
+                Full AI agent on your computer, powered by NemoClaw
               </p>
             </div>
 
@@ -203,7 +247,7 @@ export default function DesktopPage() {
                 </a>
               </div>
               <p className="text-center text-xs text-muted-foreground">
-                1-day free trial &mdash; no credit card needed. Separate from cloud VPS plans.
+                1-day free trial, no credit card needed. Separate from cloud plans.
               </p>
             </div>
           </div>
@@ -215,7 +259,7 @@ export default function DesktopPage() {
         <div className="mx-auto max-w-2xl text-center">
           <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Cloud vs Desktop</h2>
           <p className="mt-3 text-sm text-muted-foreground">
-            Choose what fits you — or use both. They are separate subscriptions.
+            Choose what fits you, or use both. They are separate subscriptions.
           </p>
         </div>
 
@@ -235,7 +279,7 @@ export default function DesktopPage() {
                 'Runs 24/7 on a dedicated server',
                 'Always-on messaging channels',
                 'No local resources needed',
-                'Managed & auto-updated',
+                'Managed and auto-updated',
                 'Includes AI credits',
               ].map((f) => (
                 <li key={f} className="flex items-start gap-2 text-sm text-foreground/70">
@@ -262,10 +306,10 @@ export default function DesktopPage() {
             <ul className="mt-5 space-y-2.5">
               {[
                 'Runs on your own computer',
-                'Full privacy — data stays local',
-                'Works offline with local models',
+                'NemoClaw handles all setup',
+                'No terminal interaction required',
+                'Full privacy, data stays local',
                 'Bring your own API keys',
-                'Interactive terminal & browser',
               ].map((f) => (
                 <li key={f} className="flex items-start gap-2 text-sm text-foreground/70">
                   <Check className="mt-0.5 h-4 w-4 shrink-0 text-green-400" />
@@ -274,7 +318,7 @@ export default function DesktopPage() {
               ))}
             </ul>
             <a href={DOWNLOAD_WIN} className="mt-6 block">
-              <Button className="w-full" size="sm">Download &amp; try free</Button>
+              <Button className="w-full" size="sm">Download and try free</Button>
             </a>
           </div>
         </div>
@@ -284,10 +328,10 @@ export default function DesktopPage() {
       <section className="mx-auto max-w-5xl border-t border-border px-6 py-16">
         <div className="mx-auto max-w-2xl text-center">
           <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs text-muted-foreground">
-            <Zap className="size-3" />
-            Features
+            <Layers className="size-3" />
+            What you get
           </div>
-          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Everything you need, locally</h2>
+          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Everything included, nothing to configure</h2>
         </div>
 
         <div className="mt-12 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -310,6 +354,14 @@ export default function DesktopPage() {
           <div className="mt-10 space-y-6">
             {[
               {
+                q: 'Do I need to use the terminal at all?',
+                a: 'No. Valnaa Desktop handles everything through the app interface. NemoClaw sets up your sandbox, installs dependencies, and configures your agent automatically. You never need to open a terminal.',
+              },
+              {
+                q: 'What is NemoClaw?',
+                a: 'NemoClaw is the engine that provisions and manages your local AI sandbox. It creates an isolated environment on your machine where your OpenClaw agent runs. Think of it as a one-click local cloud.',
+              },
+              {
                 q: 'Do I need a cloud subscription to use the desktop app?',
                 a: 'No. The desktop app has its own separate subscription. You don\'t need a cloud VPS plan, and a cloud plan doesn\'t include desktop access.',
               },
@@ -319,7 +371,7 @@ export default function DesktopPage() {
               },
               {
                 q: 'Do I need my own API keys?',
-                a: 'Yes. The desktop app runs OpenClaw locally, so you bring your own API keys from OpenAI, Anthropic, Google, or OpenRouter. You pay the AI providers directly.',
+                a: 'Yes. The desktop app runs your agent locally, so you bring your own API keys from OpenAI, Anthropic, Google, or other providers. You pay the AI providers directly.',
               },
               {
                 q: 'Can I use both cloud and desktop?',
@@ -327,7 +379,7 @@ export default function DesktopPage() {
               },
               {
                 q: 'What operating systems are supported?',
-                a: 'macOS (Intel & Apple Silicon) and Windows 10/11. Linux support is coming soon.',
+                a: 'macOS (Intel and Apple Silicon) and Windows 10/11. Linux support is planned.',
               },
             ].map((item) => (
               <div key={item.q} className="rounded-xl border border-border bg-card/30 p-5">
