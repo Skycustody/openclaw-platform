@@ -574,17 +574,26 @@ router.get('/desktop-users', async (req: AuthRequest, res: Response, next: NextF
       paramIdx++;
     }
 
+    // Check if desktop_usage table exists (migration may not have run yet)
+    const usageTableExists = await db.getOne<any>(
+      `SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'desktop_usage') as exists`
+    ).then(r => r?.exists === true || r?.exists === 't').catch(() => false);
+
+    const usageColumns = usageTableExists
+      ? `, (SELECT SUM(EXTRACT(EPOCH FROM (last_heartbeat - session_start))) FROM desktop_usage WHERE user_id = d.id) as total_use_seconds,
+                (SELECT MAX(last_heartbeat) FROM desktop_usage WHERE user_id = d.id) as last_seen,
+                (SELECT app_version FROM desktop_usage WHERE user_id = d.id ORDER BY last_heartbeat DESC LIMIT 1) as app_version,
+                (SELECT os FROM desktop_usage WHERE user_id = d.id ORDER BY last_heartbeat DESC LIMIT 1) as os`
+      : `, NULL as total_use_seconds, NULL as last_seen, NULL as app_version, NULL as os`;
+
     const [users, countResult, usageData] = await Promise.all([
       db.getMany<any>(
         `SELECT d.id, d.email, d.display_name, d.avatar_url,
                 d.stripe_customer_id, d.desktop_subscription_id,
                 d.desktop_trial_ends_at, d.created_at, d.updated_at,
                 (d.desktop_subscription_id IS NOT NULL) as has_paid,
-                (d.desktop_trial_ends_at IS NOT NULL AND d.desktop_trial_ends_at > NOW() AND d.desktop_subscription_id IS NULL) as has_active_trial,
-                (SELECT SUM(EXTRACT(EPOCH FROM (last_heartbeat - session_start))) FROM desktop_usage WHERE user_id = d.id) as total_use_seconds,
-                (SELECT MAX(last_heartbeat) FROM desktop_usage WHERE user_id = d.id) as last_seen,
-                (SELECT app_version FROM desktop_usage WHERE user_id = d.id ORDER BY last_heartbeat DESC LIMIT 1) as app_version,
-                (SELECT os FROM desktop_usage WHERE user_id = d.id ORDER BY last_heartbeat DESC LIMIT 1) as os
+                (d.desktop_trial_ends_at IS NOT NULL AND d.desktop_trial_ends_at > NOW() AND d.desktop_subscription_id IS NULL) as has_active_trial
+                ${usageColumns}
          FROM desktop_users d
          ${where}
          ORDER BY d.created_at DESC
@@ -595,13 +604,15 @@ router.get('/desktop-users', async (req: AuthRequest, res: Response, next: NextF
         `SELECT COUNT(*) as total FROM desktop_users d ${where}`,
         params
       ),
-      db.getOne<any>(
-        `SELECT
-           COUNT(DISTINCT user_id) FILTER (WHERE last_heartbeat > NOW() - INTERVAL '24 hours') as active_24h,
-           COUNT(DISTINCT user_id) FILTER (WHERE last_heartbeat > NOW() - INTERVAL '7 days') as active_7d,
-           SUM(EXTRACT(EPOCH FROM (last_heartbeat - session_start))) as total_use_seconds
-         FROM desktop_usage`
-      ).catch(() => ({ active_24h: '0', active_7d: '0', total_use_seconds: '0' })),
+      usageTableExists
+        ? db.getOne<any>(
+            `SELECT
+               COUNT(DISTINCT user_id) FILTER (WHERE last_heartbeat > NOW() - INTERVAL '24 hours') as active_24h,
+               COUNT(DISTINCT user_id) FILTER (WHERE last_heartbeat > NOW() - INTERVAL '7 days') as active_7d,
+               SUM(EXTRACT(EPOCH FROM (last_heartbeat - session_start))) as total_use_seconds
+             FROM desktop_usage`
+          ).catch(() => ({ active_24h: '0', active_7d: '0', total_use_seconds: '0' }))
+        : Promise.resolve({ active_24h: '0', active_7d: '0', total_use_seconds: '0' }),
     ]);
 
     res.json({
@@ -633,7 +644,7 @@ router.get('/desktop-usage/:userId', async (req: AuthRequest, res: Response, nex
        ORDER BY session_start DESC
        LIMIT 50`,
       [userId]
-    );
+    ).catch(() => []);
 
     res.json({ sessions });
   } catch (err) {
