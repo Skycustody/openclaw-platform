@@ -70,7 +70,7 @@ export function isOpenShellInstalled(): boolean {
 
 export function isOpenShellSidecarRunning(): boolean {
   try {
-    const result = execSyncSafe(`docker inspect ${OPENSHELL_SIDECAR} --format "{{.State.Running}}" 2>/dev/null`, 10000);
+    const result = execSyncSafe(`${dockerBin()} inspect ${OPENSHELL_SIDECAR} --format "{{.State.Running}}" 2>/dev/null`, 10000);
     return result === 'true';
   } catch {
     return false;
@@ -79,7 +79,7 @@ export function isOpenShellSidecarRunning(): boolean {
 
 function sidecarHasPort(port: number): boolean {
   try {
-    const out = execSyncSafe(`docker port ${OPENSHELL_SIDECAR} ${port} 2>/dev/null`, 5000);
+    const out = execSyncSafe(`${dockerBin()} port ${OPENSHELL_SIDECAR} ${port} 2>/dev/null`, 5000);
     return out.includes(String(port));
   } catch {
     return false;
@@ -88,7 +88,7 @@ function sidecarHasPort(port: number): boolean {
 
 function sidecarHasPidHost(): boolean {
   try {
-    const out = execSyncSafe(`docker inspect ${OPENSHELL_SIDECAR} --format "{{.HostConfig.PidMode}}" 2>/dev/null`, 5000);
+    const out = execSyncSafe(`${dockerBin()} inspect ${OPENSHELL_SIDECAR} --format "{{.HostConfig.PidMode}}" 2>/dev/null`, 5000);
     return out === 'host';
   } catch {
     return false;
@@ -97,7 +97,7 @@ function sidecarHasPidHost(): boolean {
 
 function sidecarHasInit(): boolean {
   try {
-    const out = execSyncSafe(`docker inspect ${OPENSHELL_SIDECAR} --format "{{.HostConfig.Init}}" 2>/dev/null`, 5000);
+    const out = execSyncSafe(`${dockerBin()} inspect ${OPENSHELL_SIDECAR} --format "{{.HostConfig.Init}}" 2>/dev/null`, 5000);
     return out === 'true';
   } catch {
     return false;
@@ -117,7 +117,7 @@ function sidecarHasNemoClawBlueprint(): boolean {
   try {
     const resolved = fs.realpathSync(pkg);
     const policyPath = path.join(resolved, 'nemoclaw-blueprint', 'policies', 'openclaw-sandbox.yaml');
-    execSyncSafe(`docker exec ${OPENSHELL_SIDECAR} test -f "${policyPath}"`, 5000);
+    execSyncSafe(`${dockerBin()} exec ${OPENSHELL_SIDECAR} test -f "${policyPath}"`, 5000);
     return true;
   } catch {
     return false;
@@ -136,6 +136,7 @@ export function isSidecarReady(): boolean {
 
 export async function setupOpenShellSidecar(onProgress?: (msg: string) => void): Promise<void> {
   const { execSync } = require('child_process');
+  const dk = dockerBin();
   const report = (msg: string) => { logApp('info', `[openshell-sidecar] ${msg}`); onProgress?.(msg); };
 
   if (!isIntelMac()) {
@@ -171,8 +172,8 @@ export async function setupOpenShellSidecar(onProgress?: (msg: string) => void):
   if (needsRecreate) {
     report('Setting up Docker sidecar...');
     for (let attempt = 0; attempt < 3; attempt++) {
-      try { execSync(`docker rm -f ${OPENSHELL_SIDECAR} 2>/dev/null`, { stdio: 'pipe', windowsHide: true, timeout: 15000 }); break; } catch {
-        try { execSync(`docker stop ${OPENSHELL_SIDECAR} 2>/dev/null && docker rm ${OPENSHELL_SIDECAR} 2>/dev/null`, { stdio: 'pipe', windowsHide: true, timeout: 15000 }); break; } catch { /* retry */ }
+      try { execSync(`${dk} rm -f ${OPENSHELL_SIDECAR} 2>/dev/null`, { stdio: 'pipe', windowsHide: true, timeout: 15000 }); break; } catch {
+        try { execSync(`${dk} stop ${OPENSHELL_SIDECAR} 2>/dev/null && ${dk} rm ${OPENSHELL_SIDECAR} 2>/dev/null`, { stdio: 'pipe', windowsHide: true, timeout: 15000 }); break; } catch { /* retry */ }
       }
     }
 
@@ -187,7 +188,7 @@ export async function setupOpenShellSidecar(onProgress?: (msg: string) => void):
       ? `-v "${resolvedPkg}:${nemoClawPkgRoot}:ro"` : '';
 
     execSync(
-      `docker create --name ${OPENSHELL_SIDECAR} --init ` +
+      `${dk} create --name ${OPENSHELL_SIDECAR} --init ` +
       `-v /var/run/docker.sock:/var/run/docker.sock ` +
       `-v "${OPENSHELL_CONFIG_DIR}:/root/.config/openshell" ` +
       `-v "${OPENSHELL_BIN}:/usr/local/bin/openshell:ro" ` +
@@ -198,10 +199,10 @@ export async function setupOpenShellSidecar(onProgress?: (msg: string) => void):
       `alpine:latest sleep infinity`,
       { timeout: 30000, stdio: 'pipe', windowsHide: true }
     );
-    execSync(`docker start ${OPENSHELL_SIDECAR}`, { timeout: 10000, stdio: 'pipe', windowsHide: true });
+    execSync(`${dk} start ${OPENSHELL_SIDECAR}`, { timeout: 10000, stdio: 'pipe', windowsHide: true });
 
     report('Installing networking tools...');
-    execSync(`docker exec ${OPENSHELL_SIDECAR} apk add --no-cache socat openssh-client`, { timeout: 60000, stdio: 'pipe', windowsHide: true });
+    execSync(`${dk} exec ${OPENSHELL_SIDECAR} apk add --no-cache socat openssh-client`, { timeout: 60000, stdio: 'pipe', windowsHide: true });
 
     report('Sidecar ready');
   }
@@ -210,21 +211,26 @@ export async function setupOpenShellSidecar(onProgress?: (msg: string) => void):
 
   // 4. Start socat forwarder (port 8080 inside sidecar → host gateway)
   try {
-    const listening = execSyncSafe(`docker exec ${OPENSHELL_SIDECAR} sh -c "ss -tln | grep :8080 || true"`, 5000);
+    const listening = execSyncSafe(`${dk} exec ${OPENSHELL_SIDECAR} sh -c "ss -tln | grep :8080 || true"`, 5000);
     if (!listening.includes(':8080')) {
-      execSync(`docker exec -d ${OPENSHELL_SIDECAR} socat TCP-LISTEN:8080,fork,reuseaddr TCP:host.docker.internal:8080`, { timeout: 5000, stdio: 'pipe', windowsHide: true });
+      execSync(`${dk} exec -d ${OPENSHELL_SIDECAR} socat TCP-LISTEN:8080,fork,reuseaddr TCP:host.docker.internal:8080`, { timeout: 5000, stdio: 'pipe', windowsHide: true });
     }
   } catch { /* socat may already be running */ }
 
   // 5. Create wrapper script at ~/.local/bin/openshell
+  //    The wrapper itself resolves docker at runtime via the patched PATH.
   const wrapperDir = path.dirname(OPENSHELL_WRAPPER);
   fs.mkdirSync(wrapperDir, { recursive: true });
+  const resolvedDockerForWrapper = findDockerBin() || 'docker';
   const wrapperScript = [
     '#!/bin/sh',
-    `if ! docker inspect ${OPENSHELL_SIDECAR} --format "{{.State.Running}}" 2>/dev/null | grep -q true; then`,
-    `  docker start ${OPENSHELL_SIDECAR} >/dev/null 2>&1`,
+    `DOCKER="${resolvedDockerForWrapper}"`,
+    `if ! "$DOCKER" inspect ${OPENSHELL_SIDECAR} --format "{{.State.Running}}" 2>/dev/null | grep -q true; then`,
+    `  "$DOCKER" start ${OPENSHELL_SIDECAR} >/dev/null 2>&1`,
     'fi',
-    `exec docker exec -i ${OPENSHELL_SIDECAR} /usr/local/bin/openshell "$@"`,
+    'DOCKER_FLAGS="-i"',
+    'if [ -t 0 ]; then DOCKER_FLAGS="-it"; fi',
+    `exec "$DOCKER" exec $DOCKER_FLAGS ${OPENSHELL_SIDECAR} /usr/local/bin/openshell "$@"`,
     '',
   ].join('\n');
   fs.writeFileSync(OPENSHELL_WRAPPER, wrapperScript, { mode: 0o755 });
@@ -241,14 +247,15 @@ export async function setupOpenShellSidecar(onProgress?: (msg: string) => void):
 export function ensureSidecarNetworking(): void {
   if (!isIntelMac() || !isOpenShellSidecarRunning()) return;
   const { execSync } = require('child_process');
+  const dk = dockerBin();
   try {
-    execSync(`docker network connect openshell-cluster-nemoclaw ${OPENSHELL_SIDECAR} 2>/dev/null`, { stdio: 'pipe', windowsHide: true, timeout: 5000 });
+    execSync(`${dk} network connect openshell-cluster-nemoclaw ${OPENSHELL_SIDECAR} 2>/dev/null`, { stdio: 'pipe', windowsHide: true, timeout: 5000 });
   } catch { /* already connected or network doesn't exist yet */ }
 
   try {
-    const listening = execSyncSafe(`docker exec ${OPENSHELL_SIDECAR} sh -c "ss -tln | grep :8080 || true"`, 5000);
+    const listening = execSyncSafe(`${dk} exec ${OPENSHELL_SIDECAR} sh -c "ss -tln | grep :8080 || true"`, 5000);
     if (!listening.includes(':8080')) {
-      execSync(`docker exec -d ${OPENSHELL_SIDECAR} socat TCP-LISTEN:8080,fork,reuseaddr TCP:host.docker.internal:8080`, { timeout: 5000, stdio: 'pipe', windowsHide: true });
+      execSync(`${dk} exec -d ${OPENSHELL_SIDECAR} socat TCP-LISTEN:8080,fork,reuseaddr TCP:host.docker.internal:8080`, { timeout: 5000, stdio: 'pipe', windowsHide: true });
     }
   } catch { /* ok */ }
 }
@@ -267,7 +274,7 @@ const PROVIDER_CONFIG: Record<InferenceProvider, { credentialKey: string; defaul
 
 function openshellExec(args: string, timeoutMs = 30000): string {
   if (isIntelMac() && isOpenShellSidecarRunning()) {
-    return execSyncSafe(`docker exec ${OPENSHELL_SIDECAR} /usr/local/bin/openshell ${args}`, timeoutMs);
+    return execSyncSafe(`${dockerBin()} exec ${OPENSHELL_SIDECAR} /usr/local/bin/openshell ${args}`, timeoutMs);
   }
   if (IS_WIN) {
     return execSyncSafe(`wsl openshell ${args}`, timeoutMs);
@@ -334,6 +341,20 @@ export function getOpenshellSandboxExec(): string {
   }
   logApp('info', `OpenShell sandbox exec (detected): ${openshellSandboxExecCached}`);
   return openshellSandboxExecCached;
+}
+
+const GATEWAY_CLUSTER_CONTAINER = `openshell-cluster-${GATEWAY_NAME}`;
+
+function isGatewayClusterContainerRunning(): boolean {
+  try {
+    const out = execSyncSafe(
+      `${dockerBin()} inspect ${GATEWAY_CLUSTER_CONTAINER} --format "{{.State.Running}}" 2>/dev/null`,
+      8000,
+    );
+    return out === 'true';
+  } catch {
+    return false;
+  }
 }
 
 export function isGatewayDeployed(): boolean {
@@ -503,6 +524,12 @@ export function isSandboxReady(): boolean {
  */
 export function isOnboardComplete(): boolean {
   if (!isGatewayDeployed()) return false;
+
+  // The k3d cluster container must actually be running; after a Docker restart
+  // the container disappears even though gateway metadata and sandboxes.json
+  // still exist on disk, causing the app to skip re-onboard.
+  if (!isGatewayClusterContainerRunning()) return false;
+
   try {
     const registryPath = path.join(os.homedir(), '.nemoclaw', 'sandboxes.json');
     const data = JSON.parse(fs.readFileSync(registryPath, 'utf-8'));
@@ -615,6 +642,11 @@ export function readSandboxGatewayToken(): string | null {
 export function readSandboxGatewayTokenFresh(): string | null {
   clearSandboxTokenCache();
   return readSandboxGatewayToken();
+}
+
+/** Return the cached sandbox token without any I/O — never blocks. */
+export function getCachedSandboxToken(): string | null {
+  return cachedSandboxToken;
 }
 
 /** Clear the cached sandbox token (call on reconnect/restart). */
@@ -776,6 +808,10 @@ function openshellInvokerForShell(): string {
 export function getOpenShellTermCommand(): { shell: string; args: string[] } {
   if (IS_WIN) {
     return { shell: 'wsl.exe', args: ['bash', '-lc', 'openshell term --gateway nemoclaw'] };
+  }
+  if (isIntelMac() && isOpenShellSidecarRunning()) {
+    const dk = findDockerBin() || 'docker';
+    return { shell: dk, args: ['exec', '-it', OPENSHELL_SIDECAR, '/usr/local/bin/openshell', 'term', '--gateway', GATEWAY_NAME] };
   }
   const w = path.join(os.homedir(), '.local', 'bin', 'openshell');
   const bin = fs.existsSync(w) ? w : 'openshell';
@@ -1181,6 +1217,12 @@ function findDockerBin(): string | null {
   } catch { return null; }
 }
 
+/** Resolved docker binary path, quoted for shell use. */
+export function dockerBin(): string {
+  const resolved = findDockerBin();
+  return resolved ? `"${resolved}"` : 'docker';
+}
+
 export function isDockerInstalled(): boolean {
   if (findDockerBin()) return true;
   try {
@@ -1439,7 +1481,7 @@ export function getNemoClawSandboxStatus(): NemoClawSandboxStatus {
 
   try {
     const { execSync } = require('child_process');
-    const out = execSync(`${prefix}docker ps --filter "name=openclaw" --format "{{.Ports}}"`, {
+    const out = execSync(`${prefix}${dockerBin()} ps --filter "name=openclaw" --format "{{.Ports}}"`, {
       encoding: 'utf-8',
       timeout: 10000,
       stdio: 'pipe',

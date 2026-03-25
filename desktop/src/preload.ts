@@ -30,6 +30,11 @@ contextBridge.exposeInMainWorld('openclaw', {
   copyGatewayToken: () => ipcRenderer.invoke('browser:copy-gateway-token'),
   saveChromeExtensionZip: () => ipcRenderer.invoke('browser:save-chrome-extension-zip'),
   copyChromeExtensionToDownloads: () => ipcRenderer.invoke('browser:copy-chrome-extension-to-downloads'),
+  onBrowserDeferredUpdate: (cb: (updates: any) => void) => {
+    const handler = (_: any, updates: any) => cb(updates);
+    ipcRenderer.on('browser:deferred-update', handler);
+    return () => ipcRenderer.removeListener('browser:deferred-update', handler);
+  },
   // OpenShell TUI
   openshellSpawn: (size?: { cols: number; rows: number }) => ipcRenderer.invoke('openshell:spawn', size),
   openshellInput: (data: string) => ipcRenderer.send('openshell:input', data),

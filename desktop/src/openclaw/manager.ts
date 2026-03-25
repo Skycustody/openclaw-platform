@@ -10,7 +10,7 @@ import { logApp, logOpenclaw } from './logger';
 import { findOpenClawBinary, findNemoClawBinary } from './installer';
 import { startHealthPolling, stopHealthPolling, HealthStatus } from './health';
 import { findAvailablePort, PortResult } from '../lib/ports';
-import { loadRuntime, RuntimeType, isSandboxReady, ensurePortForward, stopPortForward, OPENCLAW_PORT, readSandboxGatewayToken, clearSandboxTokenCache, clearSandboxNameCache } from '../lib/runtime';
+import { loadRuntime, RuntimeType, isSandboxReady, ensurePortForward, stopPortForward, OPENCLAW_PORT, readSandboxGatewayToken, clearSandboxTokenCache, clearSandboxNameCache, dockerBin } from '../lib/runtime';
 
 function checkPortReady(port: number): Promise<boolean> {
   return new Promise((resolve) => {
@@ -263,13 +263,14 @@ class OpenClawManager extends EventEmitter {
 
     try {
       // 1. Ensure the gateway cluster container is running
+      const dk = dockerBin();
       try {
         const state = execSync(
-          `docker inspect ${GATEWAY_CONTAINER} --format "{{.State.Status}}"`,
+          `${dk} inspect ${GATEWAY_CONTAINER} --format "{{.State.Status}}"`,
           { encoding: 'utf-8', timeout: 8000, stdio: 'pipe' }
         ).trim();
         if (state !== 'running') {
-          execSync(`docker start ${GATEWAY_CONTAINER}`, { timeout: 20000, stdio: 'pipe' });
+          execSync(`${dk} start ${GATEWAY_CONTAINER}`, { timeout: 20000, stdio: 'pipe' });
           logApp('info', 'Started gateway container');
         }
       } catch {

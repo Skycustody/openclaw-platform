@@ -9,7 +9,7 @@ import { manager, AgentStatus } from './openclaw/manager';
 import { installOpenClaw, findOpenClawBinary, isNodeInstalled, getInstallScriptCommand, findNemoClawBinary, getNemoClawInstallScriptCommand, getNemoClawSetupScriptCommand } from './openclaw/installer';
 import { readRecentLogs, getLogFilePath, getAppLogPath, logApp, closeStreams } from './openclaw/logger';
 import { loadSession, saveSession, clearSession, checkSubscription, fetchDesktopGatewayToken, startDesktopTrial, getStripePortalUrl, getDesktopCheckoutUrl, parseDeepLinkToken, parseDeepLinkEmail, isOfflineGraceValid, markLocalTrialClaimed, isLocalTrialClaimed } from './lib/session';
-import { loadRuntime, saveRuntime, clearRuntime, isNemoClawSupported, isDockerInstalled, isDockerRunning, canInstallDocker, getDockerInstallCommand, launchDockerDesktop, RuntimeType, isIntelMac, isOpenShellInstalled, isSidecarReady, setupOpenShellSidecar, ensureSidecarNetworking, isOnboardComplete, isGatewayDeployed, getNemoClawOnboardCommand, ensurePortForward, OPENCLAW_PORT, EXTENSION_RELAY_PORT, readSandboxGatewayTokenFresh, readHostOpenclawGatewayToken, writeHostOpenclawGatewayToken, clearHostOpenclawGatewayToken, writeSandboxGatewayToken, clearSandboxGatewayToken, getSandboxShellCommand, isSandboxReady, applySandboxSettings, findNemoClawPackageRoot, getDockerInfoError, ensureWslReady, isWslHealthy, hasUsableWslDistro, isDockerWslMountHealthy, repairDockerWslMount, getNemoClawSandboxName, getOpenShellTermCommand } from './lib/runtime';
+import { loadRuntime, saveRuntime, clearRuntime, isNemoClawSupported, isDockerInstalled, isDockerRunning, canInstallDocker, getDockerInstallCommand, launchDockerDesktop, RuntimeType, isIntelMac, isOpenShellInstalled, isSidecarReady, setupOpenShellSidecar, ensureSidecarNetworking, isOnboardComplete, isGatewayDeployed, getNemoClawOnboardCommand, ensurePortForward, OPENCLAW_PORT, EXTENSION_RELAY_PORT, readSandboxGatewayToken, readSandboxGatewayTokenFresh, getCachedSandboxToken, readHostOpenclawGatewayToken, writeHostOpenclawGatewayToken, clearHostOpenclawGatewayToken, writeSandboxGatewayToken, clearSandboxGatewayToken, getSandboxShellCommand, isSandboxReady, applySandboxSettings, findNemoClawPackageRoot, getDockerInfoError, ensureWslReady, isWslHealthy, hasUsableWslDistro, isDockerWslMountHealthy, repairDockerWslMount, getNemoClawSandboxName, getOpenShellTermCommand, clearSandboxNameCache } from './lib/runtime';
 import { getAppDataDir, getOpenClawDir, getLogsDir } from './lib/platform';
 import {
   getChromeExtensionDir,
@@ -24,6 +24,28 @@ import {
 } from './lib/browserSetup';
 
 const PROTOCOL = 'valnaa';
+
+// Electron launched from Finder inherits a minimal PATH that may not include
+// Docker, Homebrew, or user-installed binaries. Patch once at startup so every
+// child_process.execSync call finds them without per-call PATH hacks.
+(function patchProcessPath() {
+  const sep = process.platform === 'win32' ? ';' : ':';
+  const extra: string[] = [];
+  const dirs = [
+    path.join(os.homedir(), '.local', 'bin'),
+    '/usr/local/bin',
+    '/opt/homebrew/bin',
+    '/Applications/Docker.app/Contents/Resources/bin',
+  ];
+  const current = process.env.PATH || '';
+  for (const d of dirs) {
+    if (!current.includes(d)) extra.push(d);
+  }
+  if (extra.length) {
+    process.env.PATH = extra.join(sep) + sep + current;
+  }
+})();
+
 const gotLock = app.requestSingleInstanceLock();
 
 if (!gotLock) {
@@ -461,6 +483,10 @@ async function runNemoClawOnboardExternal(): Promise<void> {
   const exitCode = await runCommandInSetupPty(cmd);
   logApp('info', `NemoClaw onboard PTY exited with code ${exitCode}`);
 
+  // Onboard may have created a sandbox with a new name — drop the stale cache
+  // so getSandboxName() re-reads sandboxes.json with whatever the user chose.
+  clearSandboxNameCache();
+
   if (isOnboardComplete()) return;
 
   if (exitCode !== 0) {
@@ -867,18 +893,8 @@ async function runSetupFlow(runtime: RuntimeType): Promise<void> {
             step.detail = 'Running NemoClaw setup (this may take several minutes)...';
             sendSteps(steps);
 
-            // Optimization: if gateway is already deployed, create sandbox
-            // directly instead of running full onboard (which destroys the
-            // gateway and re-imports the 4GB image — ~30 min on Intel Mac).
-            if (isGatewayDeployed()) {
-              logApp('info', 'Gateway alive — trying direct sandbox creation (preserving gateway)');
-              const created = await tryDirectSandboxCreation();
-              if (created) {
-                logApp('info', 'Direct sandbox creation succeeded');
-                break;
-              }
-              logApp('info', 'Direct creation failed — falling back to full onboard');
-            }
+            // Always run full nemoclaw onboard so the user gets to choose
+            // their sandbox name, model, and provider interactively.
 
             // Full onboard path: recreate sidecar WITHOUT port mappings so
             // onboard can bind 18789 for its own gateway.
@@ -1371,36 +1387,18 @@ function setupIPC(): void {
     const status = manager.getStatus();
     const extDir = getChromeExtensionDir();
     const pref = loadRuntime();
-
-    let ensureWarning: string | undefined;
-    if (status.state === 'running' && status.port) {
-      try {
-        ensurePortForward();
-      } catch (err: any) {
-        logApp('warn', `ensurePortForward skipped: ${err?.message || err}`);
-      }
-      const ensured = ensureChromeExtensionFiles();
-      if (!ensured.ok) {
-        ensureWarning = ensured.error;
-      }
-    }
-
     const extensionReady = chromeExtensionIsReady();
 
-    let gatewayToken: string | null = null;
-    if (pref?.runtime === 'nemoclaw') {
-      gatewayToken = readSandboxGatewayTokenFresh();
-    } else {
-      gatewayToken = readHostOpenclawGatewayToken();
+    // Return fast with cached/local data; heavy sandbox I/O runs in background.
+    let gatewayToken: string | null = status.gatewayToken || null;
+    if (!gatewayToken) {
+      gatewayToken = pref?.runtime === 'nemoclaw'
+        ? getCachedSandboxToken()       // never blocks — null until background fills it
+        : readHostOpenclawGatewayToken();
     }
-    if (!gatewayToken && status.gatewayToken) {
-      gatewayToken = status.gatewayToken;
-    }
-    if (gatewayToken) {
-      gatewayToken = gatewayToken.trim();
-    }
+    if (gatewayToken) gatewayToken = gatewayToken.trim();
 
-    return {
+    const result = {
       ok: true,
       extensionPath: extDir,
       extensionReady,
@@ -1409,10 +1407,33 @@ function setupIPC(): void {
       relayPort: EXTENSION_RELAY_PORT,
       agentRunning: status.state === 'running' && !!status.port,
       docsUrl: BROWSER_DOCS_URL,
-      ensureWarning,
+      ensureWarning: undefined as string | undefined,
       downloadsFolderName: CHROME_EXTENSION_USER_FOLDER_NAME,
       zipFileName: CHROME_EXTENSION_ZIP_NAME,
     };
+
+    // Defer slow sandbox I/O so the IPC response goes back first and UI renders.
+    if (status.state === 'running' && status.port) {
+      setTimeout(() => {
+        try { ensurePortForward(); } catch (err: any) {
+          logApp('warn', `ensurePortForward skipped: ${err?.message || err}`);
+        }
+        try { ensureChromeExtensionFiles(); } catch (err: any) {
+          logApp('warn', `ensureChromeExtensionFiles skipped: ${err?.message || err}`);
+        }
+        const updates: Record<string, any> = {};
+        if (pref?.runtime === 'nemoclaw') {
+          try {
+            const freshToken = readSandboxGatewayTokenFresh();
+            if (freshToken) updates.gatewayToken = freshToken.trim();
+          } catch { /* ok */ }
+        }
+        updates.extensionReady = chromeExtensionIsReady();
+        mainWindow?.webContents.send('browser:deferred-update', updates);
+      }, 100);
+    }
+
+    return result;
   });
 
   ipcMain.handle('browser:reveal-extension-folder', () => {
@@ -1432,13 +1453,16 @@ function setupIPC(): void {
     return { ok: true };
   });
 
-  /** Copy gateway token (works best while the agent is running / sandbox is up). */
+  /** Copy gateway token — tries cached first, falls back to fast local read. */
   ipcMain.handle('browser:copy-gateway-token', async () => {
     const status = manager.getStatus();
     const pref = loadRuntime();
-    let token =
-      pref?.runtime === 'nemoclaw' ? readSandboxGatewayTokenFresh() : readHostOpenclawGatewayToken();
-    if (!token) token = status.gatewayToken ?? null;
+    let token = status.gatewayToken ?? null;
+    if (!token) {
+      token = pref?.runtime === 'nemoclaw'
+        ? (getCachedSandboxToken() || readSandboxGatewayToken())
+        : readHostOpenclawGatewayToken();
+    }
     if (!token) {
       return {
         ok: false,

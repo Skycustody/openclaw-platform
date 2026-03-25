@@ -3329,6 +3329,19 @@
       }
     }
 
+    oc.onBrowserDeferredUpdate?.((updates) => {
+      if (updates.gatewayToken) {
+        const tokenEl = document.getElementById('chrome-token');
+        if (tokenEl) tokenEl.value = updates.gatewayToken;
+      }
+      if (updates.extensionReady != null) {
+        const statusEl = document.getElementById('chrome-setup-status');
+        if (statusEl && updates.extensionReady) {
+          statusEl.innerHTML = '<span class="chrome-status-ok">✓ Extension files found on this computer.</span>';
+        }
+      }
+    });
+
     document.getElementById('chrome-btn-refresh')?.addEventListener('click', () => {
       void refreshChromeSetupPanel();
       showAppToast('Path & token refreshed.');
