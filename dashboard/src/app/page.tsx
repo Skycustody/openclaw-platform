@@ -350,11 +350,11 @@ function DesktopAppSection() {
                 Desktop App
               </div>
               <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
-                Your AI agent, running locally
+                OpenClaw + NemoClaw on your computer
               </h2>
               <p className="mx-auto mt-4 max-w-lg text-base leading-relaxed text-muted-foreground">
-                Valnaa Desktop gives you a full OpenClaw agent on your own computer.
-                Powered by NemoClaw, everything sets up automatically. No terminal, no config files, no hassle.
+                A full AI agent running locally, set up without touching a terminal.
+                Download, sign in, and NemoClaw handles the rest.
               </p>
 
               <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
@@ -385,9 +385,9 @@ function DesktopAppSection() {
 
               <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
                 {[
-                  { title: 'Powered by NemoClaw', desc: 'Provisions your AI sandbox automatically' },
-                  { title: 'No terminal needed', desc: 'Everything through the app, zero commands to type' },
-                  { title: 'Fully private', desc: 'Your data stays on your machine' },
+                  { title: 'No terminal', desc: 'Installs Node.js and OpenClaw automatically' },
+                  { title: 'Cloud auth', desc: 'Sign in with your Valnaa account, subscription synced' },
+                  { title: 'Runs locally', desc: 'Your agent on your machine — private and fast' },
                 ].map(item => (
                   <div key={item.title} className="rounded-lg border border-border bg-card/50 p-4 text-left">
                     <p className="text-sm font-semibold text-foreground">{item.title}</p>
@@ -397,9 +397,9 @@ function DesktopAppSection() {
               </div>
 
               <p className="mt-6 text-xs text-muted-foreground">
-                &euro;5/mo + VAT &middot; 1-day free trial &middot; Separate from cloud plans.{' '}
+                &euro;5/mo + VAT &middot; 3-day free trial &middot; Separate from cloud plans.{' '}
                 <Link href="/desktop" className="underline underline-offset-2 hover:text-foreground">
-                  See desktop pricing and details
+                  See desktop pricing &amp; details
                 </Link>
               </p>
             </div>
