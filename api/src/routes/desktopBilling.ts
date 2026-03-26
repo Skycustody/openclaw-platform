@@ -9,6 +9,26 @@ import { BadRequestError } from '../lib/errors';
 const router = Router();
 router.use(authenticateDesktop);
 
+/** Emails (lowercase) that get full desktop app access without Stripe/trial — set DESKTOP_UNLIMITED_EMAILS on the API. */
+function desktopUnlimitedEmails(): Set<string> {
+  const raw = process.env.DESKTOP_UNLIMITED_EMAILS || '';
+  const set = new Set<string>();
+  for (const part of raw.split(',')) {
+    const e = part.trim().toLowerCase();
+    if (e) set.add(e);
+  }
+  if (process.env.DESKTOP_UNLIMITED_INCLUDES_ADMIN === 'true') {
+    const admin = (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+    if (admin) set.add(admin);
+  }
+  return set;
+}
+
+function isDesktopUnlimited(email: string | null | undefined): boolean {
+  if (!email) return false;
+  return desktopUnlimitedEmails().has(email.trim().toLowerCase());
+}
+
 router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const user = await db.getOne<any>(
@@ -17,16 +37,17 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
     );
     if (!user) return res.status(404).json({ error: 'User not found' });
 
+    const unlimited = isDesktopUnlimited(user.email);
     const trialEndsAt = user.desktop_trial_ends_at ?? null;
     const trialActive = trialEndsAt && new Date(trialEndsAt) > new Date();
     const hasPaid = !!user.desktop_subscription_id;
 
     res.json({
       email: user.email,
-      hasDesktopPaid: hasPaid,
-      desktopSubscription: hasPaid || !!trialActive,
+      hasDesktopPaid: hasPaid || unlimited,
+      desktopSubscription: unlimited || hasPaid || !!trialActive,
       desktopTrialEndsAt: trialEndsAt ? new Date(trialEndsAt).toISOString() : null,
-      desktopTrialActive: !!trialActive,
+      desktopTrialActive: unlimited ? false : !!trialActive,
       stripeCustomerId: user.stripe_customer_id || null,
     });
   } catch (err) {
@@ -37,10 +58,14 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
 router.post('/trial', rateLimitSensitive, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const user = await db.getOne<any>(
-      'SELECT id, desktop_subscription_id, desktop_trial_ends_at FROM desktop_users WHERE id = $1',
+      'SELECT id, email, desktop_subscription_id, desktop_trial_ends_at FROM desktop_users WHERE id = $1',
       [req.userId]
     );
     if (!user) throw new BadRequestError('User not found');
+
+    if (isDesktopUnlimited(user.email)) {
+      return res.json({ ok: true, trialEndsAt: null, unlimited: true });
+    }
 
     if (user.desktop_subscription_id) {
       throw new BadRequestError('You already have an active desktop subscription');
@@ -84,14 +109,14 @@ router.post('/checkout', rateLimitSensitive, async (req: AuthRequest, res: Respo
 router.post('/gateway-token', rateLimitSensitive, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const user = await db.getOne<any>(
-      'SELECT id, desktop_subscription_id, desktop_trial_ends_at FROM desktop_users WHERE id = $1',
+      'SELECT id, email, desktop_subscription_id, desktop_trial_ends_at FROM desktop_users WHERE id = $1',
       [req.userId],
     );
     if (!user) throw new BadRequestError('User not found');
 
     const hasPaid = !!user.desktop_subscription_id;
     const trialActive = user.desktop_trial_ends_at && new Date(user.desktop_trial_ends_at) > new Date();
-    if (!hasPaid && !trialActive) {
+    if (!isDesktopUnlimited(user.email) && !hasPaid && !trialActive) {
       return res.status(403).json({ error: 'Active desktop subscription or trial required' });
     }
 
