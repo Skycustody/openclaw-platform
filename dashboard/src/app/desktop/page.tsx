@@ -4,6 +4,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
+import { TrackedDownloadLink } from '@/components/TrackedDownloadLink';
 import {
   Monitor,
   Download,
@@ -120,21 +121,21 @@ export default function DesktopPage() {
 
         {/* Download buttons */}
         <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
-          <a href={DOWNLOAD_MAC_ARM} className="group w-full sm:w-auto">
+          <TrackedDownloadLink href={DOWNLOAD_MAC_ARM} trackEvent="download_click_mac_arm" className="group w-full sm:w-auto">
             <Button size="lg" className="w-full gap-3 rounded-full sm:w-auto">
               <AppleLogo className="size-5" />
               Mac (Apple Silicon)
               <Download className="size-4 opacity-50 transition-opacity group-hover:opacity-100" />
             </Button>
-          </a>
-          <a href={DOWNLOAD_MAC_INTEL} className="group w-full sm:w-auto">
+          </TrackedDownloadLink>
+          <TrackedDownloadLink href={DOWNLOAD_MAC_INTEL} trackEvent="download_click_mac_intel" className="group w-full sm:w-auto">
             <Button size="lg" variant="outline" className="w-full gap-3 rounded-full sm:w-auto">
               <AppleLogo className="size-5" />
               Mac (Intel)
               <Download className="size-4 opacity-50 transition-opacity group-hover:opacity-100" />
             </Button>
-          </a>
-          <a href={DOWNLOAD_WIN} className="group w-full sm:w-auto">
+          </TrackedDownloadLink>
+          <TrackedDownloadLink href={DOWNLOAD_WIN} trackEvent="download_click_win" className="group w-full sm:w-auto">
             <Button size="lg" variant="outline" className="w-full gap-3 rounded-full sm:w-auto">
               <svg className="size-5" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801" />
@@ -142,7 +143,7 @@ export default function DesktopPage() {
               Windows
               <Download className="size-4 opacity-50 transition-opacity group-hover:opacity-100" />
             </Button>
-          </a>
+          </TrackedDownloadLink>
         </div>
 
         <p className="mt-4 text-center text-xs text-muted-foreground">
@@ -197,17 +198,17 @@ export default function DesktopPage() {
                 Download the app, sign in with Google, and your free trial starts automatically.
               </p>
               <div className="flex flex-col gap-2 sm:flex-row sm:justify-center">
-                <a href={DOWNLOAD_MAC_ARM}>
+                <TrackedDownloadLink href={DOWNLOAD_MAC_ARM} trackEvent="download_click_mac_arm">
                   <Button size="lg" className="w-full gap-2 sm:w-auto">
                     <AppleLogo className="size-4" /> Mac (Apple Silicon)
                   </Button>
-                </a>
-                <a href={DOWNLOAD_WIN}>
+                </TrackedDownloadLink>
+                <TrackedDownloadLink href={DOWNLOAD_WIN} trackEvent="download_click_win">
                   <Button size="lg" variant="outline" className="w-full gap-2 sm:w-auto">
                     <svg className="size-4" viewBox="0 0 24 24" fill="currentColor"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801" /></svg>
                     Windows
                   </Button>
-                </a>
+                </TrackedDownloadLink>
               </div>
               <p className="text-center text-xs text-muted-foreground">
                 1-day free trial &mdash; no credit card needed. Separate from cloud VPS plans.
@@ -280,9 +281,9 @@ export default function DesktopPage() {
                 </li>
               ))}
             </ul>
-            <a href={DOWNLOAD_WIN} className="mt-6 block">
+            <TrackedDownloadLink href={DOWNLOAD_WIN} trackEvent="download_click_win" className="mt-6 block">
               <Button className="w-full" size="sm">Download &amp; try free</Button>
-            </a>
+            </TrackedDownloadLink>
           </div>
         </div>
       </section>
@@ -354,17 +355,17 @@ export default function DesktopPage() {
             1-day free trial. &euro;{BASE_PRICE}/mo + VAT after that. Cancel anytime.
           </p>
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <a href={DOWNLOAD_MAC_ARM}>
+            <TrackedDownloadLink href={DOWNLOAD_MAC_ARM} trackEvent="download_click_mac_arm">
               <Button size="lg" className="rounded-full">
                 <AppleLogo className="mr-2 size-4" /> Download for Mac <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
-            </a>
-            <a href={DOWNLOAD_WIN}>
+            </TrackedDownloadLink>
+            <TrackedDownloadLink href={DOWNLOAD_WIN} trackEvent="download_click_win">
               <Button variant="outline" size="lg" className="rounded-full">
                 <svg className="mr-2 size-4" viewBox="0 0 24 24" fill="currentColor"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801" /></svg>
                 Download for Windows
               </Button>
-            </a>
+            </TrackedDownloadLink>
           </div>
         </div>
       </section>

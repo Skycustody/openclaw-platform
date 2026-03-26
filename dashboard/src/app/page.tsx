@@ -30,6 +30,7 @@ function AppleLogo({ className }: { className?: string }) {
     </svg>
   );
 }
+import { TrackedDownloadLink } from '@/components/TrackedDownloadLink';
 import { GlowingEffect } from '@/components/ui/glowing-effect';
 import Image from 'next/image';
 import dynamic from 'next/dynamic';
@@ -365,21 +366,21 @@ function DesktopAppSection() {
               </p>
 
               <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
-                <a href={DOWNLOAD_MAC_ARM} className="group w-full sm:w-auto">
+                <TrackedDownloadLink href={DOWNLOAD_MAC_ARM} trackEvent="download_click_mac_arm" className="group w-full sm:w-auto">
                   <Button size="lg" className="w-full gap-3 rounded-full sm:w-auto">
                     <AppleLogo className="size-5" />
                     Mac (Apple Silicon)
                     <Download className="size-4 opacity-50 transition-opacity group-hover:opacity-100" />
                   </Button>
-                </a>
-                <a href={DOWNLOAD_MAC_INTEL} className="group w-full sm:w-auto">
+                </TrackedDownloadLink>
+                <TrackedDownloadLink href={DOWNLOAD_MAC_INTEL} trackEvent="download_click_mac_intel" className="group w-full sm:w-auto">
                   <Button size="lg" variant="outline" className="w-full gap-3 rounded-full sm:w-auto">
                     <AppleLogo className="size-5" />
                     Mac (Intel)
                     <Download className="size-4 opacity-50 transition-opacity group-hover:opacity-100" />
                   </Button>
-                </a>
-                <a href={DOWNLOAD_WIN} className="group w-full sm:w-auto">
+                </TrackedDownloadLink>
+                <TrackedDownloadLink href={DOWNLOAD_WIN} trackEvent="download_click_win" className="group w-full sm:w-auto">
                   <Button size="lg" variant="outline" className="w-full gap-3 rounded-full sm:w-auto">
                     <svg className="size-5" viewBox="0 0 24 24" fill="currentColor">
                       <path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801" />
@@ -387,7 +388,7 @@ function DesktopAppSection() {
                     Windows
                     <Download className="size-4 opacity-50 transition-opacity group-hover:opacity-100" />
                   </Button>
-                </a>
+                </TrackedDownloadLink>
               </div>
 
               <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-3">

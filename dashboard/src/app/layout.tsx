@@ -1,8 +1,10 @@
 import type { Metadata, Viewport } from 'next';
+import { Suspense } from 'react';
 import { Inter } from 'next/font/google';
 import Script from 'next/script';
 import './globals.css';
 import { GlassFilter } from '@/components/ui/liquid-glass';
+import { SiteAnalytics } from '@/components/SiteAnalytics';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
@@ -65,6 +67,9 @@ export default function RootLayout({
         </noscript>
       </head>
       <body className="min-h-screen bg-background font-sans antialiased">
+        <Suspense fallback={null}>
+          <SiteAnalytics />
+        </Suspense>
         <GlassFilter />
         {children}
       </body>

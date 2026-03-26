@@ -260,6 +260,135 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
   }
 });
 
+// ── Website traffic & funnel (self-hosted analytics) ──
+router.get('/traffic', async (_req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const tables = await db.getOne<any>(
+      `SELECT
+         EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'page_views') as page_views,
+         EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'track_events') as track_events,
+         EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'desktop_usage') as desktop_usage`
+    ).catch(() => ({ page_views: false, track_events: false, desktop_usage: false }));
+
+    const hasPv = tables?.page_views === true || tables?.page_views === 't';
+    const hasTe = tables?.track_events === true || tables?.track_events === 't';
+    const hasDu = tables?.desktop_usage === true || tables?.desktop_usage === 't';
+
+    if (!hasPv || !hasTe) {
+      return res.json({
+        enabled: false,
+        message: 'Run migration 026_page_analytics.sql to enable traffic analytics.',
+        viewsToday: 0,
+        views7d: 0,
+        views30d: 0,
+        uniqueVisitors7d: 0,
+        uniqueVisitors30d: 0,
+        topPages: [] as any[],
+        topReferrers: [] as any[],
+        devices: [] as any[],
+        browsers: [] as any[],
+        countries: [] as any[],
+        funnel: {
+          homeLanding: 0,
+          desktopPage: 0,
+          downloadClick: 0,
+          appOpened: 0,
+          desktopSignups: 0,
+        },
+      });
+    }
+
+    const [
+      viewsToday,
+      views7d,
+      views30d,
+      unique7d,
+      unique30d,
+      topPages,
+      topReferrers,
+      devices,
+      browsers,
+      countries,
+      funnelHome,
+      funnelDesktop,
+      funnelDownload,
+      funnelApp,
+      funnelSignups,
+    ] = await Promise.all([
+      db.getOne<any>(`SELECT COUNT(*)::text as c FROM page_views WHERE created_at > NOW() - INTERVAL '1 day'`),
+      db.getOne<any>(`SELECT COUNT(*)::text as c FROM page_views WHERE created_at > NOW() - INTERVAL '7 days'`),
+      db.getOne<any>(`SELECT COUNT(*)::text as c FROM page_views WHERE created_at > NOW() - INTERVAL '30 days'`),
+      db.getOne<any>(`SELECT COUNT(DISTINCT visitor_id)::text as c FROM page_views WHERE created_at > NOW() - INTERVAL '7 days'`),
+      db.getOne<any>(`SELECT COUNT(DISTINCT visitor_id)::text as c FROM page_views WHERE created_at > NOW() - INTERVAL '30 days'`),
+      db.getMany<any>(`
+        SELECT path, COUNT(*)::text as views, COUNT(DISTINCT visitor_id)::text as uniques
+        FROM page_views WHERE created_at > NOW() - INTERVAL '30 days'
+        GROUP BY path ORDER BY COUNT(*) DESC LIMIT 20`),
+      db.getMany<any>(`
+        SELECT COALESCE(NULLIF(TRIM(referrer), ''), '(direct)') as ref, COUNT(*)::text as views
+        FROM page_views WHERE created_at > NOW() - INTERVAL '30 days'
+        GROUP BY 1 ORDER BY COUNT(*) DESC LIMIT 15`),
+      db.getMany<any>(`
+        SELECT device, COUNT(*)::text as views FROM page_views WHERE created_at > NOW() - INTERVAL '30 days'
+        GROUP BY device ORDER BY COUNT(*) DESC`),
+      db.getMany<any>(`
+        SELECT browser, COUNT(*)::text as views FROM page_views WHERE created_at > NOW() - INTERVAL '30 days'
+        GROUP BY browser ORDER BY COUNT(*) DESC`),
+      db.getMany<any>(`
+        SELECT COALESCE(country, 'unknown') as country, COUNT(*)::text as views
+        FROM page_views WHERE created_at > NOW() - INTERVAL '30 days'
+        GROUP BY country ORDER BY COUNT(*) DESC LIMIT 15`),
+      db.getOne<any>(`
+        SELECT COUNT(DISTINCT visitor_id)::text as c FROM page_views
+        WHERE created_at > NOW() - INTERVAL '30 days' AND (path = '/' OR path = '')`),
+      db.getOne<any>(`
+        SELECT COUNT(DISTINCT visitor_id)::text as c FROM page_views
+        WHERE created_at > NOW() - INTERVAL '30 days' AND path LIKE '/desktop%'`),
+      db.getOne<any>(`
+        SELECT COUNT(DISTINCT visitor_id)::text as c FROM track_events
+        WHERE created_at > NOW() - INTERVAL '30 days' AND event LIKE 'download_click%'`),
+      hasDu
+        ? db.getOne<any>(`
+            SELECT COUNT(DISTINCT user_id)::text as c FROM desktop_usage
+            WHERE last_heartbeat > NOW() - INTERVAL '30 days'`)
+        : Promise.resolve({ c: '0' }),
+      db.getOne<any>(`
+        SELECT COUNT(*)::text as c FROM desktop_users
+        WHERE created_at > NOW() - INTERVAL '30 days' AND LOWER(email) != $1`, [ADMIN_EMAIL]),
+    ]);
+
+    res.json({
+      enabled: true,
+      viewsToday: parseInt(viewsToday?.c || '0'),
+      views7d: parseInt(views7d?.c || '0'),
+      views30d: parseInt(views30d?.c || '0'),
+      uniqueVisitors7d: parseInt(unique7d?.c || '0'),
+      uniqueVisitors30d: parseInt(unique30d?.c || '0'),
+      topPages: topPages.map((r: any) => ({
+        path: r.path,
+        views: parseInt(r.views || '0'),
+        uniques: parseInt(r.uniques || '0'),
+      })),
+      topReferrers: topReferrers.map((r: any) => ({
+        referrer: r.ref,
+        views: parseInt(r.views || '0'),
+      })),
+      devices: devices.map((r: any) => ({ device: r.device, views: parseInt(r.views || '0') })),
+      browsers: browsers.map((r: any) => ({ browser: r.browser, views: parseInt(r.views || '0') })),
+      countries: countries.map((r: any) => ({ country: r.country, views: parseInt(r.views || '0') })),
+      funnel: {
+        homeLanding: parseInt(funnelHome?.c || '0'),
+        desktopPage: parseInt(funnelDesktop?.c || '0'),
+        downloadClick: parseInt(funnelDownload?.c || '0'),
+        appOpened: parseInt(funnelApp?.c || '0'),
+        desktopSignups: parseInt(funnelSignups?.c || '0'),
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ── Revenue & Billing Stats (USD) ──
 router.get('/revenue', async (_req: AuthRequest, res: Response, next: NextFunction) => {
   try {

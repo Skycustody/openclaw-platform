@@ -65,6 +65,7 @@ import agentsRoutes from './routes/agents';
 import skillsRoutes from './routes/skills';
 import proxyRoutes from './routes/proxy';
 import feedbackRoutes from './routes/feedback';
+import trackRoutes from './routes/track';
 
 import { startScheduler } from './jobs/scheduler';
 import redis from './lib/redis';
@@ -175,6 +176,7 @@ app.use('/agents', agentsRoutes);
 app.use('/skills', skillsRoutes);
 app.use('/proxy', proxyRoutes);
 app.use('/feedback', feedbackRoutes);
+app.use('/track', trackRoutes);
 
 // Health check
 app.get('/health', (_req, res) => {

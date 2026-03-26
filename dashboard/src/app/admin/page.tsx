@@ -6,7 +6,7 @@ import {
   Users, Server, Coins, TrendingUp, Activity, Search,
   Shield, Loader2, RefreshCw, AlertTriangle, Edit3,
   BarChart3, Zap, HardDrive, LogOut, ChevronLeft, ChevronRight,
-  DollarSign, MessageSquare, Star, X, Monitor, Download, Clock, Eye,
+  DollarSign, MessageSquare, Star, X, Monitor, Download, Clock, Eye, Globe2,
 } from 'lucide-react';
 
 interface PlanDetail {
@@ -151,7 +151,29 @@ interface ServerInfo {
   ram_used: number; status: string; user_count: number;
 }
 
-type Tab = 'overview' | 'users' | 'desktop' | 'revenue' | 'servers' | 'feedback';
+type Tab = 'overview' | 'users' | 'desktop' | 'traffic' | 'revenue' | 'servers' | 'feedback';
+
+interface TrafficData {
+  enabled: boolean;
+  message?: string;
+  viewsToday: number;
+  views7d: number;
+  views30d: number;
+  uniqueVisitors7d: number;
+  uniqueVisitors30d: number;
+  topPages: Array<{ path: string; views: number; uniques: number }>;
+  topReferrers: Array<{ referrer: string; views: number }>;
+  devices: Array<{ device: string; views: number }>;
+  browsers: Array<{ browser: string; views: number }>;
+  countries: Array<{ country: string; views: number }>;
+  funnel: {
+    homeLanding: number;
+    desktopPage: number;
+    downloadClick: number;
+    appOpened: number;
+    desktopSignups: number;
+  };
+}
 
 interface FeedbackEntry {
   id: string;
@@ -262,6 +284,7 @@ export default function AdminPanel() {
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
   const [userDetail, setUserDetail] = useState<UserDetail | null>(null);
   const [userDetailLoading, setUserDetailLoading] = useState(false);
+  const [trafficData, setTrafficData] = useState<TrafficData | null>(null);
 
   const showMsg = (type: 'success' | 'error', text: string) => {
     setActionMsg({ type, text });
@@ -387,16 +410,25 @@ export default function AdminPanel() {
     }
   }, []);
 
+  const fetchTraffic = useCallback(async () => {
+    try {
+      const data = await api.get<TrafficData>('/admin/traffic');
+      setTrafficData(data);
+    } catch (err: any) {
+      console.error('[admin] fetchTraffic failed:', err.message);
+    }
+  }, []);
+
   useEffect(() => {
     if (authState !== 'authed') return;
     setLoading(true);
-    Promise.all([fetchOverview(), fetchUsers(), fetchRevenue(), fetchFinancials(), fetchServers(), fetchDesktopUsers(), fetchDownloadStats(), fetchFeedback()])
+    Promise.all([fetchOverview(), fetchUsers(), fetchRevenue(), fetchFinancials(), fetchServers(), fetchDesktopUsers(), fetchDownloadStats(), fetchFeedback(), fetchTraffic()])
       .finally(() => setLoading(false));
-  }, [authState, fetchOverview, fetchUsers, fetchRevenue, fetchFinancials, fetchServers, fetchDesktopUsers, fetchDownloadStats, fetchFeedback]);
+  }, [authState, fetchOverview, fetchUsers, fetchRevenue, fetchFinancials, fetchServers, fetchDesktopUsers, fetchDownloadStats, fetchFeedback, fetchTraffic]);
 
   const refresh = async () => {
     setRefreshing(true);
-    await Promise.all([fetchOverview(), fetchUsers(userPage, userSearch, userFilter), fetchRevenue(), fetchFinancials(), fetchServers(), fetchDesktopUsers(desktopPage, desktopFilter, desktopSearch), fetchDownloadStats(), fetchFeedback()]);
+    await Promise.all([fetchOverview(), fetchUsers(userPage, userSearch, userFilter), fetchRevenue(), fetchFinancials(), fetchServers(), fetchDesktopUsers(desktopPage, desktopFilter, desktopSearch), fetchDownloadStats(), fetchFeedback(), fetchTraffic()]);
     setRefreshing(false);
   };
 
@@ -557,6 +589,7 @@ export default function AdminPanel() {
             { id: 'overview' as Tab, label: 'Overview', icon: BarChart3 },
             { id: 'users' as Tab, label: 'Users', icon: Users },
             { id: 'desktop' as Tab, label: 'Desktop', icon: Monitor },
+            { id: 'traffic' as Tab, label: 'Traffic', icon: Globe2 },
             { id: 'revenue' as Tab, label: 'Revenue & Costs', icon: DollarSign },
             { id: 'servers' as Tab, label: 'Servers', icon: Server },
             { id: 'feedback' as Tab, label: 'Feedback', icon: MessageSquare },
@@ -1328,6 +1361,160 @@ export default function AdminPanel() {
                 ))}
               </div>
             </div>
+          </div>
+        )}
+
+        {tab === 'traffic' && (
+          <div className="space-y-6">
+            {!trafficData ? (
+              <div className="flex items-center justify-center gap-2 py-16 text-white/40">
+                <Loader2 className="h-5 w-5 animate-spin" />
+                <span className="text-[13px]">Loading traffic…</span>
+              </div>
+            ) : (
+            <>
+            {!trafficData.enabled && (
+              <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 text-[13px] text-amber-200/90">
+                {trafficData.message || 'Run migration 026_page_analytics.sql on the database, then redeploy the API.'}
+              </div>
+            )}
+
+            <div className="grid grid-cols-5 gap-4">
+              <StatCard icon={Globe2} label="Views (24h)" value={String(trafficData.viewsToday)} sub="page views" color="cyan" />
+              <StatCard icon={Activity} label="Views (7d)" value={String(trafficData.views7d)} sub="last week" color="blue" />
+              <StatCard icon={BarChart3} label="Views (30d)" value={String(trafficData.views30d)} sub="last month" color="purple" />
+              <StatCard icon={Users} label="Unique (7d)" value={String(trafficData.uniqueVisitors7d)} sub="anonymous visitors" color="green" />
+              <StatCard icon={Users} label="Unique (30d)" value={String(trafficData.uniqueVisitors30d)} sub="anonymous visitors" color="amber" />
+            </div>
+
+            <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
+              <h3 className="text-[14px] font-semibold text-white mb-1">Conversion funnel (30 days)</h3>
+              <p className="text-[11px] text-white/30 mb-4">Approximate unique visitors per step. App &amp; signups are not linked to site visitors.</p>
+              {(() => {
+                const f = trafficData.funnel;
+                const steps: Array<{ label: string; count: number }> = [
+                  { label: 'Homepage', count: f.homeLanding },
+                  { label: '/desktop page', count: f.desktopPage },
+                  { label: 'Download click', count: f.downloadClick },
+                  { label: 'App opened (heartbeat)', count: f.appOpened },
+                  { label: 'Desktop signup', count: f.desktopSignups },
+                ];
+                const max = Math.max(...steps.map(s => s.count), 1);
+                return (
+                  <div className="space-y-3">
+                    {steps.map((s, i) => {
+                      const prev = i > 0 ? steps[i - 1].count : s.count;
+                      const pctOfPrev = prev > 0 ? Math.round((s.count / prev) * 100) : 0;
+                      const w = Math.round((s.count / max) * 100);
+                      return (
+                        <div key={s.label}>
+                          <div className="flex justify-between text-[12px] mb-1">
+                            <span className="text-white/70">{s.label}</span>
+                            <span className="text-white/40 tabular-nums">
+                              {s.count.toLocaleString()}
+                              {i > 0 && prev > 0 ? ` (${pctOfPrev}% of prev)` : ''}
+                            </span>
+                          </div>
+                          <div className="h-2 rounded-full bg-white/5 overflow-hidden">
+                            <div className="h-full rounded-full bg-cyan-500/60" style={{ width: `${Math.max(w, s.count > 0 ? 4 : 0)}%` }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <div className="rounded-xl border border-white/[0.06] overflow-hidden">
+                <div className="border-b border-white/[0.06] bg-white/[0.02] px-4 py-3">
+                  <h3 className="text-[13px] font-semibold text-white">Top pages (30d)</h3>
+                </div>
+                <table className="w-full text-[12px]">
+                  <thead>
+                    <tr className="border-b border-white/[0.06] text-left text-white/30">
+                      <th className="px-4 py-2">Path</th>
+                      <th className="px-4 py-2 text-right">Views</th>
+                      <th className="px-4 py-2 text-right">Uniques</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {trafficData.topPages.length === 0 ? (
+                      <tr><td colSpan={3} className="px-4 py-8 text-center text-white/25">No data yet</td></tr>
+                    ) : trafficData.topPages.map((p) => (
+                      <tr key={p.path} className="border-b border-white/[0.04]">
+                        <td className="px-4 py-2 text-white/60 font-mono text-[11px] truncate max-w-[200px]">{p.path}</td>
+                        <td className="px-4 py-2 text-right text-white/50 tabular-nums">{p.views}</td>
+                        <td className="px-4 py-2 text-right text-white/50 tabular-nums">{p.uniques}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="rounded-xl border border-white/[0.06] overflow-hidden">
+                <div className="border-b border-white/[0.06] bg-white/[0.02] px-4 py-3">
+                  <h3 className="text-[13px] font-semibold text-white">Top referrers (30d)</h3>
+                </div>
+                <table className="w-full text-[12px]">
+                  <thead>
+                    <tr className="border-b border-white/[0.06] text-left text-white/30">
+                      <th className="px-4 py-2">Source</th>
+                      <th className="px-4 py-2 text-right">Views</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {trafficData.topReferrers.length === 0 ? (
+                      <tr><td colSpan={2} className="px-4 py-8 text-center text-white/25">No data yet</td></tr>
+                    ) : trafficData.topReferrers.map((r) => (
+                      <tr key={r.referrer} className="border-b border-white/[0.04]">
+                        <td className="px-4 py-2 text-white/60 truncate max-w-[280px]" title={r.referrer}>{r.referrer}</td>
+                        <td className="px-4 py-2 text-right text-white/50 tabular-nums">{r.views}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                <h3 className="text-[12px] font-semibold text-white/80 mb-3">Device</h3>
+                <ul className="space-y-2 text-[12px]">
+                  {trafficData.devices.length === 0 ? <li className="text-white/25">No data</li> : trafficData.devices.map((d) => (
+                    <li key={d.device} className="flex justify-between text-white/50">
+                      <span className="capitalize">{d.device}</span>
+                      <span className="tabular-nums">{d.views}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                <h3 className="text-[12px] font-semibold text-white/80 mb-3">Browser</h3>
+                <ul className="space-y-2 text-[12px]">
+                  {trafficData.browsers.length === 0 ? <li className="text-white/25">No data</li> : trafficData.browsers.map((b) => (
+                    <li key={b.browser} className="flex justify-between text-white/50">
+                      <span className="capitalize">{b.browser}</span>
+                      <span className="tabular-nums">{b.views}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                <h3 className="text-[12px] font-semibold text-white/80 mb-3">Country</h3>
+                <ul className="space-y-2 text-[12px]">
+                  {trafficData.countries.length === 0 ? <li className="text-white/25">No data (enable CF-IPCountry)</li> : trafficData.countries.map((c) => (
+                    <li key={c.country} className="flex justify-between text-white/50">
+                      <span>{c.country}</span>
+                      <span className="tabular-nums">{c.views}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+            </>
+            )}
           </div>
         )}
 

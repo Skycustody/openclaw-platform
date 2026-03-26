@@ -146,3 +146,23 @@ export function rateLimitAdmin(req: Request, res: Response, next: NextFunction) 
       } else next();
     });
 }
+
+const trackLimiter = new RateLimiterRedis({
+  storeClient: redis,
+  keyPrefix: 'rl:track',
+  points: 120,
+  duration: 60,
+});
+
+/** Public analytics ingest — generous limit per IP */
+export function rateLimitTrack(req: Request, res: Response, next: NextFunction) {
+  const key = req.ip || 'unknown';
+  trackLimiter
+    .consume(key)
+    .then(() => next())
+    .catch((err) => {
+      if (isRateLimitRejection(err)) {
+        res.status(429).json({ error: { code: 'RATE_LIMIT', message: 'Too many requests' } });
+      } else next();
+    });
+}
