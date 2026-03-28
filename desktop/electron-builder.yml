@@ -49,6 +49,11 @@ win:
       arch:
         - x64
   icon: assets/icon.png
+  azureSignOptions:
+    publisherName: "Nana Zemkwe Mac-Bride"
+    endpoint: "https://neu.codesigning.azure.net/"
+    certificateProfileName: "valnaa-signing"
+    codeSigningAccountName: "Valnaa"
 
 nsis:
   oneClick: true

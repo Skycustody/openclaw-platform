@@ -4,6 +4,7 @@ import os from 'os';
 import { execSync, spawnSync } from 'child_process';
 import { getAppDataDir, IS_WIN, IS_MAC, getOpenClawDir } from './platform';
 import { logApp } from '../openclaw/logger';
+import { findAvailablePortPairSync } from './ports';
 
 export type RuntimeType = 'openclaw' | 'nemoclaw';
 
@@ -112,11 +113,12 @@ function sidecarHasInit(): boolean {
  * - NOT using --pid host (causes false port conflicts)
  */
 function sidecarHasNemoClawBlueprint(): boolean {
-  const pkg = findNemoClawPackageRoot();
-  if (!pkg) return false;
+  // The blueprint/policies live under ~/.nemoclaw/source (git-cloned by nemoclaw),
+  // NOT under the npm package root.
+  const sourceDir = path.join(os.homedir(), '.nemoclaw', 'source');
+  const policyPath = path.join(sourceDir, 'nemoclaw-blueprint', 'policies', 'openclaw-sandbox.yaml');
+  if (!fs.existsSync(policyPath)) return false;
   try {
-    const resolved = fs.realpathSync(pkg);
-    const policyPath = path.join(resolved, 'nemoclaw-blueprint', 'policies', 'openclaw-sandbox.yaml');
     execSyncSafe(`${dockerBin()} exec ${OPENSHELL_SIDECAR} test -f "${policyPath}"`, 5000);
     return true;
   } catch {
@@ -127,7 +129,8 @@ function sidecarHasNemoClawBlueprint(): boolean {
 export function isSidecarReady(): boolean {
   if (!isOpenShellInstalled()) return false;
   if (!isOpenShellSidecarRunning()) return false;
-  if (!sidecarHasPort(OPENCLAW_PORT)) return false;
+  if (!sidecarHasPort(_activeGatewayPort)) return false;
+  if (!sidecarHasPort(_activeRelayPort)) return false;
   if (sidecarHasPidHost()) return false;
   if (!sidecarHasInit()) return false;
   if (findNemoClawPackageRoot() && !sidecarHasNemoClawBlueprint()) return false;
@@ -160,13 +163,18 @@ export async function setupOpenShellSidecar(onProgress?: (msg: string) => void):
   fs.mkdirSync(OPENSHELL_CONFIG_DIR, { recursive: true });
 
   // 3. Create/ensure the sidecar container.
-  //    - Publish port 18789 so openshell forward is reachable from the host.
+  //    - Publish gateway + relay ports so openshell forward is reachable from the host.
   //    - NO --pid host: it causes openshell forward to see k3s pod ports as
   //      "in use" (false positive from the host PID namespace), blocking the
   //      port forward. openshell uses the Docker socket, not host PIDs.
+
+  // Resolve available host ports (tries to free defaults, falls back to alternatives).
+  const ports = findAvailablePortPairSync(true);
+  setActivePorts(ports.gateway, ports.relay);
+
   const needsRecreate = !isOpenShellSidecarRunning()
-    || !sidecarHasPort(OPENCLAW_PORT)
-    || !sidecarHasPort(EXTENSION_RELAY_PORT)
+    || !sidecarHasPort(_activeGatewayPort)
+    || !sidecarHasPort(_activeRelayPort)
     || sidecarHasPidHost()
     || !sidecarHasInit();
   if (needsRecreate) {
@@ -186,16 +194,23 @@ export async function setupOpenShellSidecar(onProgress?: (msg: string) => void):
     const sourceMount = resolvedPkg ? `-v "${resolvedPkg}:${resolvedPkg}:ro"` : '';
     const symlinkMount = (nemoClawPkgRoot && resolvedPkg && resolvedPkg !== nemoClawPkgRoot)
       ? `-v "${resolvedPkg}:${nemoClawPkgRoot}:ro"` : '';
+    const nemoClawDataDir = path.join(os.homedir(), '.nemoclaw');
+    fs.mkdirSync(nemoClawDataDir, { recursive: true });
+    const nemoClawMount = `-v "${nemoClawDataDir}:${nemoClawDataDir}"`;
+
+    if (ports.gateway !== OPENCLAW_PORT || ports.relay !== EXTENSION_RELAY_PORT) {
+      report(`Default ports busy; using ${ports.gateway}/${ports.relay}`);
+    }
 
     execSync(
       `${dk} create --name ${OPENSHELL_SIDECAR} --init ` +
       `-v /var/run/docker.sock:/var/run/docker.sock ` +
       `-v "${OPENSHELL_CONFIG_DIR}:/root/.config/openshell" ` +
       `-v "${OPENSHELL_BIN}:/usr/local/bin/openshell:ro" ` +
-      `${tmpMount} ${sourceMount} ${symlinkMount} ` +
+      `${tmpMount} ${sourceMount} ${symlinkMount} ${nemoClawMount} ` +
       `--add-host "host.docker.internal:host-gateway" ` +
-      `-p ${OPENCLAW_PORT}:${OPENCLAW_PORT} ` +
-      `-p ${EXTENSION_RELAY_PORT}:${EXTENSION_RELAY_PORT} ` +
+      `-p ${_activeGatewayPort}:${OPENCLAW_PORT} ` +
+      `-p ${_activeRelayPort}:${EXTENSION_RELAY_PORT} ` +
       `alpine:latest sleep infinity`,
       { timeout: 30000, stdio: 'pipe', windowsHide: true }
     );
@@ -345,7 +360,7 @@ export function getOpenshellSandboxExec(): string {
 
 const GATEWAY_CLUSTER_CONTAINER = `openshell-cluster-${GATEWAY_NAME}`;
 
-function isGatewayClusterContainerRunning(): boolean {
+export function isGatewayClusterContainerRunning(): boolean {
   try {
     const out = execSyncSafe(
       `${dockerBin()} inspect ${GATEWAY_CLUSTER_CONTAINER} --format "{{.State.Running}}" 2>/dev/null`,
@@ -410,6 +425,24 @@ const OPENCLAW_PORT = 18789;
 /** Extension relay port (gateway + 3) for Chrome extension to connect. */
 const EXTENSION_RELAY_PORT = 18792;
 
+/**
+ * Active port state — may differ from defaults when the default ports are busy.
+ * All sidecar, port forward, and manager code should use getActiveGatewayPort() / getActiveRelayPort().
+ */
+let _activeGatewayPort = OPENCLAW_PORT;
+let _activeRelayPort = EXTENSION_RELAY_PORT;
+
+export function getActiveGatewayPort(): number { return _activeGatewayPort; }
+export function getActiveRelayPort(): number { return _activeRelayPort; }
+
+export function setActivePorts(gateway: number, relay: number): void {
+  if (gateway !== _activeGatewayPort || relay !== _activeRelayPort) {
+    logApp('info', `Active ports changed: gateway ${_activeGatewayPort}→${gateway}, relay ${_activeRelayPort}→${relay}`);
+  }
+  _activeGatewayPort = gateway;
+  _activeRelayPort = relay;
+}
+
 /** Managed child processes for WSL port forwards (Windows only). */
 const wslForwardChildren: any[] = [];
 
@@ -420,8 +453,14 @@ const wslForwardChildren: any[] = [];
  */
 function resolveSandboxName(): string {
   try {
-    const registryPath = path.join(os.homedir(), '.nemoclaw', 'sandboxes.json');
-    const data = JSON.parse(fs.readFileSync(registryPath, 'utf-8'));
+    let data: any;
+    if (IS_WIN) {
+      const raw = execSyncSafe('wsl bash -c "cat ~/.nemoclaw/sandboxes.json 2>/dev/null"', 5000);
+      data = JSON.parse(raw);
+    } else {
+      const registryPath = path.join(os.homedir(), '.nemoclaw', 'sandboxes.json');
+      data = JSON.parse(fs.readFileSync(registryPath, 'utf-8'));
+    }
     if (data.defaultSandbox && data.sandboxes?.[data.defaultSandbox]) {
       return data.defaultSandbox;
     }
@@ -531,9 +570,16 @@ export function isOnboardComplete(): boolean {
   if (!isGatewayClusterContainerRunning()) return false;
 
   try {
-    const registryPath = path.join(os.homedir(), '.nemoclaw', 'sandboxes.json');
-    const data = JSON.parse(fs.readFileSync(registryPath, 'utf-8'));
-    if (Object.keys(data.sandboxes || {}).length > 0) return true;
+    if (IS_WIN) {
+      // On Windows, sandboxes.json lives inside WSL — read it via wsl
+      const wslData = execSyncSafe('wsl bash -c "cat ~/.nemoclaw/sandboxes.json 2>/dev/null"', 5000);
+      const data = JSON.parse(wslData);
+      if (Object.keys(data.sandboxes || {}).length > 0) return true;
+    } else {
+      const registryPath = path.join(os.homedir(), '.nemoclaw', 'sandboxes.json');
+      const data = JSON.parse(fs.readFileSync(registryPath, 'utf-8'));
+      if (Object.keys(data.sandboxes || {}).length > 0) return true;
+    }
   } catch { /* fall through to live check */ }
 
   // Fallback: check for a live sandbox even if the registry file is missing
@@ -563,11 +609,16 @@ function autoRegisterLiveSandbox(listOutput: string): string | null {
       const cols = line.split(/\s+/);
       if (cols.length >= 2 && cols.includes('Ready') && !cols.includes('NotReady') && cols[0] !== 'NAME') {
         const name = cols[0];
-        const registryPath = path.join(os.homedir(), '.nemoclaw', 'sandboxes.json');
-        const dir = path.dirname(registryPath);
-        fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
-        const data = { sandboxes: { [name]: { name, createdAt: new Date().toISOString(), model: null, gpuEnabled: false } }, defaultSandbox: name };
-        fs.writeFileSync(registryPath, JSON.stringify(data, null, 2), { mode: 0o600 });
+        const obj = { sandboxes: { [name]: { name, createdAt: new Date().toISOString(), model: null, gpuEnabled: false } }, defaultSandbox: name };
+        if (IS_WIN) {
+          const b64 = Buffer.from(JSON.stringify(obj, null, 2)).toString('base64');
+          execSyncSafe(`wsl bash -c "mkdir -p ~/.nemoclaw && echo '${b64}' | base64 -d > ~/.nemoclaw/sandboxes.json"`, 5000);
+        } else {
+          const registryPath = path.join(os.homedir(), '.nemoclaw', 'sandboxes.json');
+          const dir = path.dirname(registryPath);
+          fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+          fs.writeFileSync(registryPath, JSON.stringify(obj, null, 2), { mode: 0o600 });
+        }
         return name;
       }
     }
@@ -1033,13 +1084,14 @@ export function applySandboxSettings(settings: {
  * Returns true when an ssh process is listening on the port.
  */
 export function isPortForwardAlive(): boolean {
+  const gwPort = _activeGatewayPort;
   if (!isIntelMac() || !isOpenShellSidecarRunning()) {
     try {
       if (IS_WIN) {
-        const out = execSyncSafe(`powershell -Command "Get-NetTCPConnection -LocalPort ${OPENCLAW_PORT} -State Listen -ErrorAction SilentlyContinue"`, 5000);
+        const out = execSyncSafe(`powershell -Command "Get-NetTCPConnection -LocalPort ${gwPort} -State Listen -ErrorAction SilentlyContinue"`, 5000);
         return out.includes('Listen');
       }
-      execSyncSafe(`lsof -i :${OPENCLAW_PORT} -sTCP:LISTEN -t 2>/dev/null`, 5000);
+      execSyncSafe(`lsof -i :${gwPort} -sTCP:LISTEN -t 2>/dev/null`, 5000);
       return true;
     } catch {
       return false;
@@ -1088,7 +1140,7 @@ export function ensurePortForward(): void {
         { stdio: 'pipe', windowsHide: true, timeout: 5000 },
       );
 
-      // Start SSH tunnel: gateway + extension relay ports
+      // Start SSH tunnel: host active ports → sandbox internal ports (always 18789/18792 inside)
       execSync(
         `docker exec -d ${OPENSHELL_SIDECAR} ssh -N -o ExitOnForwardFailure=yes ` +
         `-L 0.0.0.0:${OPENCLAW_PORT}:127.0.0.1:${OPENCLAW_PORT} ` +
@@ -1101,11 +1153,11 @@ export function ensurePortForward(): void {
       for (let i = 0; i < 10; i++) {
         execSync('sleep 0.5', { stdio: 'pipe', windowsHide: true });
         if (isPortForwardAlive()) {
-          logApp('info', `SSH tunnel forwarding port ${OPENCLAW_PORT} to sandbox ${getSandboxName()}`);
+          logApp('info', `SSH tunnel forwarding port ${_activeGatewayPort} to sandbox ${getSandboxName()}`);
           return;
         }
       }
-      throw new Error(`SSH tunnel started but port ${OPENCLAW_PORT} not listening after 5s`);
+      throw new Error(`SSH tunnel started but port ${_activeGatewayPort} not listening after 5s`);
     } catch (err: any) {
       logApp('error', `Port forward failed: ${err.message}`);
       throw new Error(`Port forward to sandbox failed: ${err.message}. Tap Retry to try again.`);
@@ -1118,13 +1170,15 @@ export function ensurePortForward(): void {
     // foreground forwards as detached child processes of the Electron app.
     const { spawn } = require('child_process');
     const name = getSandboxName();
+    const gwPort = _activeGatewayPort;
+    const rlPort = _activeRelayPort;
 
     // Kill any stale SSH listeners on the ports inside WSL
     try {
-      execSync(`wsl bash -c "fuser -k ${OPENCLAW_PORT}/tcp 2>/dev/null; fuser -k ${EXTENSION_RELAY_PORT}/tcp 2>/dev/null"`, { stdio: 'pipe', windowsHide: true, timeout: 8000 });
+      execSync(`wsl bash -c "fuser -k ${gwPort}/tcp 2>/dev/null; fuser -k ${rlPort}/tcp 2>/dev/null"`, { stdio: 'pipe', windowsHide: true, timeout: 8000 });
     } catch { /* ok */ }
 
-    for (const port of [OPENCLAW_PORT, EXTENSION_RELAY_PORT]) {
+    for (const port of [gwPort, rlPort]) {
       const child = spawn('wsl', ['openshell', 'forward', 'start', String(port), name, '--gateway', GATEWAY_NAME], {
         stdio: 'ignore',
         windowsHide: true,
@@ -1137,7 +1191,7 @@ export function ensurePortForward(): void {
     for (let i = 0; i < 20; i++) {
       execSync('powershell -Command "Start-Sleep -Milliseconds 500"', { stdio: 'pipe', windowsHide: true, timeout: 3000 });
       if (isPortForwardAlive()) {
-        logApp('info', `Ports ${OPENCLAW_PORT}, ${EXTENSION_RELAY_PORT} forwarded to sandbox ${name} (managed child)`);
+        logApp('info', `Ports ${gwPort}, ${rlPort} forwarded to sandbox ${name} (managed child)`);
         return;
       }
     }
@@ -1145,15 +1199,17 @@ export function ensurePortForward(): void {
   }
 
   // ARM Mac / native: use openshell forward directly
+  const gwPort = _activeGatewayPort;
+  const rlPort = _activeRelayPort;
   try {
-    openshellExec(`forward stop ${OPENCLAW_PORT}`, 5000);
-    openshellExec(`forward stop ${EXTENSION_RELAY_PORT}`, 5000);
+    openshellExec(`forward stop ${gwPort}`, 5000);
+    openshellExec(`forward stop ${rlPort}`, 5000);
   } catch { /* ok */ }
 
   try {
-    openshellExec(`forward start --background ${OPENCLAW_PORT} ${getSandboxName()} --gateway ${GATEWAY_NAME}`, 15000);
-    openshellExec(`forward start --background ${EXTENSION_RELAY_PORT} ${getSandboxName()} --gateway ${GATEWAY_NAME}`, 15000);
-    logApp('info', `Ports ${OPENCLAW_PORT}, ${EXTENSION_RELAY_PORT} forwarded to sandbox ${getSandboxName()}`);
+    openshellExec(`forward start --background ${gwPort} ${getSandboxName()} --gateway ${GATEWAY_NAME}`, 15000);
+    openshellExec(`forward start --background ${rlPort} ${getSandboxName()} --gateway ${GATEWAY_NAME}`, 15000);
+    logApp('info', `Ports ${gwPort}, ${rlPort} forwarded to sandbox ${getSandboxName()}`);
   } catch (err: any) {
     logApp('error', `Port forward failed: ${err.message}`);
     throw new Error(`Port forward to sandbox failed: ${err.message}. Tap Retry to try again.`);
@@ -1177,11 +1233,11 @@ export function stopPortForward(): void {
       );
     } else if (IS_WIN) {
       try {
-        execSync(`wsl bash -c "fuser -k ${OPENCLAW_PORT}/tcp 2>/dev/null; fuser -k ${EXTENSION_RELAY_PORT}/tcp 2>/dev/null"`, { stdio: 'pipe', windowsHide: true, timeout: 8000 });
+        execSync(`wsl bash -c "fuser -k ${_activeGatewayPort}/tcp 2>/dev/null; fuser -k ${_activeRelayPort}/tcp 2>/dev/null"`, { stdio: 'pipe', windowsHide: true, timeout: 8000 });
       } catch { /* ok */ }
     } else {
-      try { openshellExec(`forward stop ${OPENCLAW_PORT}`, 5000); } catch { /* ok */ }
-      try { openshellExec(`forward stop ${EXTENSION_RELAY_PORT}`, 5000); } catch { /* ok */ }
+      try { openshellExec(`forward stop ${_activeGatewayPort}`, 5000); } catch { /* ok */ }
+      try { openshellExec(`forward stop ${_activeRelayPort}`, 5000); } catch { /* ok */ }
     }
     logApp('info', 'Stopped NemoClaw port forwards');
   } catch (err: any) {
@@ -1246,6 +1302,56 @@ export function isDockerRunning(): boolean {
 }
 
 /**
+ * On macOS, Docker Desktop stores its Unix socket at ~/.docker/run/docker.sock
+ * and /var/run/docker.sock is a symlink to it. If ~/.docker was deleted (clean
+ * installs, user cleanup), Docker runs but can't create the socket — `docker info`
+ * fails forever. Ensure the directory exists before (re)starting Docker.
+ */
+export function ensureDockerSocketDir(): void {
+  if (process.platform !== 'darwin') return;
+  const fs = require('fs');
+  const socketDir = path.join(os.homedir(), '.docker', 'run');
+  try {
+    if (!fs.existsSync(socketDir)) {
+      fs.mkdirSync(socketDir, { recursive: true });
+      logApp('info', `Created missing Docker socket directory: ${socketDir}`);
+    }
+  } catch (e: any) {
+    logApp('warn', `Failed to create Docker socket dir: ${e.message}`);
+  }
+}
+
+/**
+ * Detect Docker processes running with a broken/missing socket.
+ * Returns true if Docker needs a restart to fix the socket.
+ */
+export function isDockerSocketBroken(): boolean {
+  if (process.platform === 'win32') return false;
+  const { execSync } = require('child_process');
+  try {
+    const procs = execSync('pgrep -f com.docker.backend', { encoding: 'utf-8', timeout: 3000, stdio: 'pipe' }).trim();
+    if (!procs) return false;
+  } catch {
+    return false;
+  }
+  return !isDockerRunning();
+}
+
+/**
+ * Kill Docker Desktop processes so it can be relaunched cleanly.
+ */
+export function killDockerDesktop(): void {
+  const { execSync } = require('child_process');
+  if (process.platform === 'darwin') {
+    try { execSync('killall Docker', { timeout: 5000, stdio: 'pipe' }); } catch { /* ok */ }
+    try { execSync('killall com.docker.backend', { timeout: 5000, stdio: 'pipe' }); } catch { /* ok */ }
+    try { execSync('killall "Docker Desktop"', { timeout: 5000, stdio: 'pipe' }); } catch { /* ok */ }
+  } else if (IS_WIN) {
+    try { execSync('powershell -Command "Get-Process -Name \'Docker Desktop\', \'com.docker.backend\', \'com.docker.proxy\' -ErrorAction SilentlyContinue | Stop-Process -Force"', { stdio: 'pipe', timeout: 15000, windowsHide: true }); } catch { /* ok */ }
+  }
+}
+
+/**
  * Run `docker info` and return the daemon error string (if any).
  * Used to give actionable feedback when Docker fails to start.
  */
@@ -1269,6 +1375,20 @@ export function getDockerInfoError(): string {
     if (errorLines.length > 0) return errorLines[0].replace(/^ERROR:\s*/i, '').trim();
     return '';
   }
+}
+
+export function isHomebrewInstalled(): boolean {
+  if (process.platform !== 'darwin') return true;
+  try {
+    execSyncSafe('brew --version', 5000);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function getHomebrewInstallCommand(): string {
+  return '/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"';
 }
 
 export function canInstallDocker(): boolean {
@@ -1398,6 +1518,18 @@ export function findNemoClawPackageRoot(): string | null {
     '/usr/local/lib/node_modules/nemoclaw',
     path.join(os.homedir(), '.local', 'lib', 'node_modules', 'nemoclaw'),
   ];
+
+  // Also check nvm-managed Node paths
+  const nvmDir = path.join(os.homedir(), '.nvm', 'versions', 'node');
+  try {
+    for (const ver of fs.readdirSync(nvmDir)) {
+      candidates.push(path.join(nvmDir, ver, 'lib', 'node_modules', 'nemoclaw'));
+    }
+  } catch { /* nvm not installed */ }
+
+  // ~/.nemoclaw/source is the git-cloned source with blueprints/policies
+  candidates.push(path.join(os.homedir(), '.nemoclaw', 'source'));
+
   for (const c of candidates) {
     if (fs.existsSync(path.join(c, 'package.json'))) return c;
   }
@@ -1454,7 +1586,7 @@ export function getNemoClawSetupCommand(): string {
     return 'wsl bash -c "source \\"\\$HOME/.nvm/nvm.sh\\" 2>/dev/null; \\$HOME/.local/bin/nemoclaw setup"';
   }
   const pathPrefix = isIntelMac() ? `export PATH="$HOME/.local/bin:$PATH" && ` : '';
-  return `${pathPrefix}nemoclaw onboard`;
+  return `${pathPrefix}nemoclaw setup`;
 }
 
 export interface NemoClawSandboxStatus {

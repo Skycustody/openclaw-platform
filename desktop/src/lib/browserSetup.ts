@@ -5,11 +5,7 @@ import type { Shell } from 'electron';
 import { getOpenClawDir } from './platform';
 import { logApp } from '../openclaw/logger';
 import { findOpenClawBinary } from '../openclaw/installer';
-import { loadRuntime, syncSandboxChromeExtensionToHost, findNemoClawPackageRoot } from './runtime';
-
-/** Keep in sync with desktop/src/lib/runtime.ts */
-const OPENCLAW_PORT = 18789;
-const EXTENSION_RELAY_PORT = 18792;
+import { loadRuntime, syncSandboxChromeExtensionToHost, findNemoClawPackageRoot, getActiveGatewayPort, getActiveRelayPort } from './runtime';
 
 /** OpenClaw ships the loadable extension here after install / doctor. */
 export function getChromeExtensionDir(): string {
@@ -208,8 +204,8 @@ export function buildBrowserSetupClipboardBlock(gatewayToken: string, extensionD
     'Gateway token field: paste ONLY the next line (no label, no quotes, no spaces before/after):',
     tok,
     '',
-    `Gateway URL: http://127.0.0.1:${OPENCLAW_PORT}`,
-    `Browser relay URL: http://127.0.0.1:${EXTENSION_RELAY_PORT}`,
+    `Gateway URL: http://127.0.0.1:${getActiveGatewayPort()}`,
+    `Browser relay URL: http://127.0.0.1:${getActiveRelayPort()}`,
   ];
   return lines.join('\n');
 }

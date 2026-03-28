@@ -9,7 +9,8 @@ import { manager, AgentStatus } from './openclaw/manager';
 import { installOpenClaw, findOpenClawBinary, isNodeInstalled, getInstallScriptCommand, findNemoClawBinary, getNemoClawInstallScriptCommand, getNemoClawSetupScriptCommand } from './openclaw/installer';
 import { readRecentLogs, getLogFilePath, getAppLogPath, logApp, closeStreams } from './openclaw/logger';
 import { loadSession, saveSession, clearSession, checkSubscription, fetchDesktopGatewayToken, startDesktopTrial, getStripePortalUrl, getDesktopCheckoutUrl, parseDeepLinkToken, parseDeepLinkEmail, isOfflineGraceValid, markLocalTrialClaimed, isLocalTrialClaimed, startHeartbeat, stopHeartbeat } from './lib/session';
-import { loadRuntime, saveRuntime, clearRuntime, isNemoClawSupported, isDockerInstalled, isDockerRunning, canInstallDocker, getDockerInstallCommand, launchDockerDesktop, RuntimeType, isIntelMac, isOpenShellInstalled, isSidecarReady, setupOpenShellSidecar, ensureSidecarNetworking, isOnboardComplete, isGatewayDeployed, getNemoClawOnboardCommand, ensurePortForward, OPENCLAW_PORT, EXTENSION_RELAY_PORT, readSandboxGatewayToken, readSandboxGatewayTokenFresh, getCachedSandboxToken, readHostOpenclawGatewayToken, writeHostOpenclawGatewayToken, clearHostOpenclawGatewayToken, writeSandboxGatewayToken, clearSandboxGatewayToken, getSandboxShellCommand, isSandboxReady, applySandboxSettings, findNemoClawPackageRoot, getDockerInfoError, ensureWslReady, isWslHealthy, hasUsableWslDistro, isDockerWslMountHealthy, repairDockerWslMount, getNemoClawSandboxName, getOpenShellTermCommand, clearSandboxNameCache } from './lib/runtime';
+import { loadRuntime, saveRuntime, clearRuntime, isNemoClawSupported, isDockerInstalled, isDockerRunning, canInstallDocker, getDockerInstallCommand, launchDockerDesktop, RuntimeType, isIntelMac, isOpenShellInstalled, isSidecarReady, setupOpenShellSidecar, ensureSidecarNetworking, isOnboardComplete, isGatewayDeployed, isGatewayClusterContainerRunning, getNemoClawOnboardCommand, ensurePortForward, OPENCLAW_PORT, EXTENSION_RELAY_PORT, getActiveGatewayPort, getActiveRelayPort, readSandboxGatewayToken, readSandboxGatewayTokenFresh, getCachedSandboxToken, readHostOpenclawGatewayToken, writeHostOpenclawGatewayToken, clearHostOpenclawGatewayToken, writeSandboxGatewayToken, clearSandboxGatewayToken, getSandboxShellCommand, isSandboxReady, applySandboxSettings, findNemoClawPackageRoot, getDockerInfoError, ensureWslReady, isWslHealthy, hasUsableWslDistro, isDockerWslMountHealthy, repairDockerWslMount, getNemoClawSandboxName, getOpenShellTermCommand, clearSandboxNameCache, isHomebrewInstalled, getHomebrewInstallCommand, ensureDockerSocketDir, isDockerSocketBroken, killDockerDesktop } from './lib/runtime';
+import { freePort, freePorts } from './lib/ports';
 import { getAppDataDir, getOpenClawDir, getLogsDir } from './lib/platform';
 import {
   getChromeExtensionDir,
@@ -88,6 +89,9 @@ function buildSetupSteps(runtime: RuntimeType): SetupStep[] {
       const wslOk = isWslHealthy() && hasUsableWslDistro();
       steps.push({ id: 'wsl-setup', label: 'Set up WSL', status: wslOk ? 'done' : 'pending' });
     }
+    if (process.platform === 'darwin') {
+      steps.push({ id: 'homebrew-install', label: 'Install Homebrew', status: isHomebrewInstalled() ? 'done' : 'pending' });
+    }
     steps.push(
       { id: 'docker-install', label: 'Install Docker Desktop', status: isDockerInstalled() ? 'done' : 'pending' },
       { id: 'docker-start', label: 'Start Docker', status: isDockerRunning() ? 'done' : 'pending' },
@@ -149,6 +153,90 @@ function taskRunsInExternalTerminal(_task: SetupShellTask): boolean {
   return false;
 }
 
+/**
+ * Stop and remove NemoClaw-related Docker containers.
+ * Cross-platform: works on macOS, Linux, and Windows.
+ */
+function stopNemoClawContainers(): void {
+  const { execSync: exec } = require('child_process');
+  const containers = ['openshell-cli', 'openshell-cluster-nemoclaw'];
+  for (const c of containers) {
+    try { exec(`docker stop ${c}`, { stdio: 'pipe', timeout: 15000, windowsHide: true }); } catch { /* ok */ }
+    try { exec(`docker rm -f ${c}`, { stdio: 'pipe', timeout: 10000, windowsHide: true }); } catch { /* ok */ }
+  }
+}
+
+/**
+ * Ensure the openshell-cli sidecar container exists and is running for
+ * nemoclaw onboard. Without it, the `openshell` wrapper fails immediately
+ * with "No such container: openshell-cli".
+ *
+ * This recreates the container WITHOUT host port mappings to avoid conflicts
+ * with ports that nemoclaw onboard needs (18789, 8080).
+ */
+function ensureOpenShellCliForOnboard(force = false): void {
+  if (!isIntelMac()) return;
+  const { execSync: exec } = require('child_process');
+  if (!force) {
+    try {
+      const running = exec(
+        'docker inspect openshell-cli --format "{{.State.Running}}" 2>/dev/null',
+        { encoding: 'utf-8', timeout: 5000, stdio: 'pipe', windowsHide: true },
+      ).trim();
+      if (running === 'true') return;
+    } catch { /* container doesn't exist or can't be inspected */ }
+  }
+
+  logApp('info', 'Recreating openshell-cli sidecar for onboard');
+  try {
+    try { exec('docker rm -f openshell-cli', { stdio: 'pipe', timeout: 10000, windowsHide: true }); } catch { /* ok */ }
+
+    const configDir = path.join(os.homedir(), '.config', 'openshell');
+    const openshellBin = path.join(os.homedir(), '.local', 'lib', 'openshell', 'openshell-linux');
+    const tmpDir = os.tmpdir().replace(/\/+$/, '');
+    const tmpMount = tmpDir ? `-v "${tmpDir}:${tmpDir}"` : '';
+    const pkg = findNemoClawPackageRoot();
+    const resolvedPkg = pkg ? fs.realpathSync(pkg) : null;
+    const sourceMount = resolvedPkg ? `-v "${resolvedPkg}:${resolvedPkg}:ro"` : '';
+    const symlinkMount = (pkg && resolvedPkg && resolvedPkg !== pkg)
+      ? `-v "${resolvedPkg}:${pkg}:ro"` : '';
+
+    // nemoclaw stores cloned source, blueprints, and policies under ~/.nemoclaw.
+    // openshell commands (via docker exec) need this path accessible inside the container.
+    // Always create it so the bind mount works even on fresh installs where nemoclaw
+    // hasn't cloned the repo yet — files added on the host appear inside the container.
+    const nemoClawDataDir = path.join(os.homedir(), '.nemoclaw');
+    fs.mkdirSync(nemoClawDataDir, { recursive: true });
+    const nemoClawMount = `-v "${nemoClawDataDir}:${nemoClawDataDir}"`;
+
+    fs.mkdirSync(configDir, { recursive: true });
+
+    exec(
+      `docker create --name openshell-cli --init ` +
+      `-v /var/run/docker.sock:/var/run/docker.sock ` +
+      `-v "${configDir}:/root/.config/openshell" ` +
+      `-v "${openshellBin}:/usr/local/bin/openshell:ro" ` +
+      `${tmpMount} ${sourceMount} ${symlinkMount} ${nemoClawMount} ` +
+      `--add-host "host.docker.internal:host-gateway" ` +
+      `alpine:latest sleep infinity`,
+      { timeout: 15000, stdio: 'pipe', windowsHide: true },
+    );
+    exec('docker start openshell-cli', { timeout: 10000, stdio: 'pipe', windowsHide: true });
+    exec('docker exec openshell-cli apk add --no-cache socat openssh-client', { timeout: 60000, stdio: 'pipe', windowsHide: true });
+
+    // Start socat forwarder: 8080 inside container → host gateway.
+    // The gateway health check (`openshell status`) runs inside this container
+    // and needs to reach the gateway at 127.0.0.1:8080.
+    try {
+      exec('docker exec -d openshell-cli socat TCP-LISTEN:8080,fork,reuseaddr TCP:host.docker.internal:8080', { timeout: 5000, stdio: 'pipe', windowsHide: true });
+    } catch { /* socat may already be running or port not yet needed */ }
+
+    logApp('info', 'openshell-cli sidecar ready for onboard');
+  } catch (e: any) {
+    logApp('warn', `ensureOpenShellCliForOnboard failed: ${e.message}`);
+  }
+}
+
 // ════════════════════════════════════
 //  In-App Setup PTY (runs install/setup commands inside the app)
 // ════════════════════════════════════
@@ -164,73 +252,133 @@ function killSetupPty(): void {
 /** Cached terminal dimensions from the last setup fit. */
 let setupTermSize = { cols: 80, rows: 24 };
 
+function resolveSetupShell(command: string, isWin: boolean, extraEnv?: Record<string, string>): { shellName: string; shellArgs: string[] } {
+  const wslBashMatch = isWin ? command.match(/^wsl\s+bash\s+-c\s+"(.+)"$/) : null;
+  if (wslBashMatch) {
+    let inner = wslBashMatch[1];
+    if (extraEnv && Object.keys(extraEnv).length > 0) {
+      const exports = Object.entries(extraEnv)
+        .map(([k, v]) => `export ${k}='${v.replace(/'/g, "'\\''")}'`)
+        .join(' && ');
+      inner = `${exports} && ${inner}`;
+    }
+    return { shellName: 'wsl.exe', shellArgs: ['bash', '-c', inner] };
+  }
+  if (isWin && command.startsWith('wsl ')) {
+    return { shellName: 'wsl.exe', shellArgs: command.slice(4).trim().split(/\s+/) };
+  }
+  if (isWin) {
+    return { shellName: 'cmd.exe', shellArgs: ['/c', command] };
+  }
+  return { shellName: process.env.SHELL || '/bin/zsh', shellArgs: ['-c', command] };
+}
+
+function resolveSetupEnv(extraEnv?: Record<string, string>): Record<string, string> {
+  const isWin = process.platform === 'win32';
+  const sep = isWin ? ';' : ':';
+  const localBin = path.join(os.homedir(), '.local', 'bin');
+  const envPath = process.env.PATH || '';
+  let fullPath = envPath.includes(localBin) ? envPath : `${localBin}${sep}${envPath}`;
+  if (!isWin) {
+    const brewBin = process.arch === 'arm64' ? '/opt/homebrew/bin' : '/usr/local/bin';
+    if (!fullPath.includes(brewBin)) fullPath = `${brewBin}:${fullPath}`;
+  }
+  return {
+    ...process.env as Record<string, string>,
+    PATH: fullPath,
+    TERM: 'xterm-256color',
+    FORCE_COLOR: '1',
+    ...(extraEnv || {}),
+  };
+}
+
+/**
+ * Fallback when node-pty fails (posix_spawnp, native module mismatch, etc.).
+ * Runs the command via child_process.spawn and pipes output to the setup terminal.
+ */
+function runCommandInSetupFallback(command: string, extraEnv?: Record<string, string>): Promise<number> {
+  return new Promise((resolve) => {
+    const isWin = process.platform === 'win32';
+    const { shellName, shellArgs } = resolveSetupShell(command, isWin, extraEnv);
+    const env = resolveSetupEnv(extraEnv);
+
+    logApp('info', `Setup fallback (child_process) for command (shell=${shellName})`);
+    mainWindow?.webContents.send('setup:terminal-start');
+
+    const child = spawn(shellName, shellArgs, {
+      cwd: os.homedir(),
+      env: env as NodeJS.ProcessEnv,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      shell: false,
+      windowsHide: true,
+    });
+
+    const sendData = (data: Buffer) => {
+      mainWindow?.webContents.send('setup:terminal-data', data.toString());
+    };
+    child.stdout?.on('data', sendData);
+    child.stderr?.on('data', sendData);
+    child.on('error', (err) => {
+      logApp('error', `Setup fallback spawn failed: ${err.message}`);
+      mainWindow?.webContents.send('setup:terminal-data', `\r\nError: ${err.message}\r\n`);
+      mainWindow?.webContents.send('setup:terminal-exit', 1);
+      resolve(1);
+    });
+    child.on('close', (code) => {
+      mainWindow?.webContents.send('setup:terminal-exit', code ?? 1);
+      resolve(code ?? 1);
+    });
+  });
+}
+
+/** Ring buffer that keeps the last N lines of PTY output for diagnostic logging. */
+let _lastPtyOutput: string[] = [];
+const PTY_OUTPUT_RING_SIZE = 30;
+
 function runCommandInSetupPty(command: string, extraEnv?: Record<string, string>): Promise<number> {
   return new Promise((resolve) => {
     killSetupPty();
+    _lastPtyOutput = [];
 
     const isWin = process.platform === 'win32';
-    const sep = isWin ? ';' : ':';
-    const localBin = path.join(os.homedir(), '.local', 'bin');
-    const envPath = process.env.PATH || '';
-    let fullPath = envPath.includes(localBin) ? envPath : `${localBin}${sep}${envPath}`;
-    if (!isWin) {
-      const brewBin = process.arch === 'arm64' ? '/opt/homebrew/bin' : '/usr/local/bin';
-      if (!fullPath.includes(brewBin)) fullPath = `${brewBin}:${fullPath}`;
-    }
+    const { shellName, shellArgs } = resolveSetupShell(command, isWin, extraEnv);
+    const env = resolveSetupEnv(extraEnv);
 
-    let shellName: string;
-    let shellArgs: string[];
-    const wslBashMatch = isWin ? command.match(/^wsl\s+bash\s+-c\s+"(.+)"$/) : null;
-    if (wslBashMatch) {
-      let inner = wslBashMatch[1];
-      if (extraEnv && Object.keys(extraEnv).length > 0) {
-        const exports = Object.entries(extraEnv)
-          .map(([k, v]) => `export ${k}='${v.replace(/'/g, "'\\''")}'`)
-          .join(' && ');
-        inner = `${exports} && ${inner}`;
-      }
-      shellName = 'wsl.exe';
-      shellArgs = ['bash', '-c', inner];
-    } else if (isWin && command.startsWith('wsl ')) {
-      shellName = 'wsl.exe';
-      shellArgs = command.slice(4).trim().split(/\s+/);
-    } else if (isWin) {
-      shellName = 'cmd.exe';
-      shellArgs = ['/c', command];
-    } else {
-      shellName = process.env.SHELL || '/bin/zsh';
-      shellArgs = ['-c', command];
-    }
-
-    const env: Record<string, string> = {
-      ...process.env as Record<string, string>,
-      PATH: fullPath,
-      TERM: 'xterm-256color',
-      FORCE_COLOR: '1',
-      ...(extraEnv || {}),
-    };
-
-    // Tell the renderer to prepare the terminal FIRST, so fit()
-    // can report real dimensions before the PTY spawns.
     mainWindow?.webContents.send('setup:terminal-start');
 
-    // Small delay to let the renderer fit the terminal and send back real dims.
     setTimeout(() => {
       const { cols, rows } = setupTermSize;
 
-      setupPtyProc = pty.spawn(shellName, shellArgs, {
-        name: 'xterm-256color',
-        cols,
-        rows,
-        cwd: os.homedir(),
-        env,
-      });
+      try {
+        setupPtyProc = pty.spawn(shellName, shellArgs, {
+          name: 'xterm-256color',
+          cols,
+          rows,
+          cwd: os.homedir(),
+          env,
+        });
+      } catch (err: any) {
+        logApp('warn', `node-pty spawn failed (${err.message}) — falling back to child_process`);
+        resolve(runCommandInSetupFallback(command, extraEnv));
+        return;
+      }
 
       setupPtyProc.onData((data: string) => {
         mainWindow?.webContents.send('setup:terminal-data', data);
+        const stripped = data.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '').replace(/\r/g, '');
+        for (const line of stripped.split('\n')) {
+          const trimmed = line.trim();
+          if (trimmed) {
+            _lastPtyOutput.push(trimmed);
+            if (_lastPtyOutput.length > PTY_OUTPUT_RING_SIZE) _lastPtyOutput.shift();
+          }
+        }
       });
 
       setupPtyProc.onExit(({ exitCode }) => {
+        if (exitCode !== 0 && _lastPtyOutput.length > 0) {
+          logApp('info', `PTY output (last ${_lastPtyOutput.length} lines):\n${_lastPtyOutput.join('\n')}`);
+        }
         mainWindow?.webContents.send('setup:terminal-exit', exitCode ?? 1);
         setupPtyProc = null;
         resolve(exitCode ?? 1);
@@ -374,6 +522,52 @@ async function waitForExternalTask(task: SetupShellTask): Promise<void> {
   }
   if (task === 'onboard') {
     await waitUntil(() => !needsSetup(), longWait, 'OpenClaw setup timed out. Finish onboarding in Terminal, then tap Retry in Valnaa.');
+  }
+}
+
+/**
+ * Intel Macs use a shell-script wrapper at ~/.local/bin/openshell that runs
+ * `docker exec` into the openshell-cli sidecar. Env vars exported on the HOST
+ * don't reach the container. Patch the wrapper so it forwards NVIDIA_API_KEY
+ * through `docker exec -e`.
+ *
+ * Safe to call on any platform — early-exits on non-Intel-Mac (Apple Silicon
+ * uses a native binary; Windows/WSL forwards env vars via `wsl bash -c`).
+ */
+function patchOpenshellWrapperForEnvForwarding(): void {
+  if (process.platform === 'win32' || !isIntelMac()) return;
+
+  const wrapperPath = path.join(os.homedir(), '.local', 'bin', 'openshell');
+  try {
+    if (!fs.existsSync(wrapperPath)) return;
+
+    const wrapperContent = fs.readFileSync(wrapperPath, 'utf-8');
+
+    // Only patch shell-script wrappers, not native binaries.
+    if (!wrapperContent.startsWith('#!')) return;
+    if (wrapperContent.includes('NVIDIA_API_KEY')) return;
+
+    const patched = wrapperContent.replace(
+      /exec\s+"?\$DOCKER"?\s+exec\s+\$DOCKER_FLAGS/,
+      'ENVFLAGS=""\n' +
+      'if [ -n "$NVIDIA_API_KEY" ]; then ENVFLAGS="-e NVIDIA_API_KEY=$NVIDIA_API_KEY"; fi\n' +
+      'exec "$DOCKER" exec $DOCKER_FLAGS $ENVFLAGS',
+    );
+
+    if (patched === wrapperContent) {
+      logApp('warn', 'openshell wrapper format unrecognized — skipping env-forwarding patch');
+      return;
+    }
+
+    // Atomic write: temp file → rename prevents corruption on crash.
+    const tmpPath = `${wrapperPath}.tmp`;
+    fs.writeFileSync(tmpPath, patched, { mode: 0o755 });
+    fs.renameSync(tmpPath, wrapperPath);
+    logApp('info', 'Patched openshell wrapper to forward NVIDIA_API_KEY to container');
+  } catch (e: any) {
+    logApp('warn', `Failed to patch openshell wrapper: ${e.message}`);
+    // Clean up failed temp file if it exists.
+    try { fs.unlinkSync(`${wrapperPath}.tmp`); } catch { /* ok */ }
   }
 }
 
@@ -568,6 +762,35 @@ async function runSetupShellTaskAsync(task: SetupShellTask, extraEnv?: Record<st
 // ════════════════════════════════════
 //  Docker Polling Helpers
 // ════════════════════════════════════
+
+/**
+ * Ensure Docker is running before a step that needs it.
+ * If Docker is installed but not running, auto-start it and wait.
+ * Returns true if Docker is ready, false if it could not be started.
+ */
+async function ensureDockerReady(onProgress?: (msg: string) => void): Promise<boolean> {
+  if (isDockerRunning()) return true;
+
+  if (!isDockerInstalled()) {
+    logApp('warn', 'ensureDockerReady: Docker not installed');
+    return false;
+  }
+
+  logApp('info', 'ensureDockerReady: Docker not running — auto-starting');
+  onProgress?.('Starting Docker Desktop...');
+  launchDockerDesktop();
+
+  try {
+    await waitForDocker(90000);
+    logApp('info', 'ensureDockerReady: Docker started successfully');
+    return true;
+  } catch (err: any) {
+    logApp('warn', `ensureDockerReady: failed to start Docker — ${err.message}`);
+    onProgress?.('Docker did not start. Please start Docker Desktop manually.');
+    return false;
+  }
+}
+
 function waitForDocker(timeoutMs = process.platform === 'win32' ? 300000 : 120000): Promise<void> {
   return new Promise((resolve, reject) => {
     if (isDockerRunning()) { resolve(); return; }
@@ -731,13 +954,62 @@ async function runSetupFlow(runtime: RuntimeType): Promise<void> {
 
     mainWindow?.webContents.send('app:show-setup', steps);
 
+    // Goal-check functions: returns true if the step's objective is met regardless of errors.
+    const goalMet: Record<string, () => boolean> = {
+      'wsl-setup': () => isWslHealthy() && hasUsableWslDistro(),
+      'homebrew-install': () => isHomebrewInstalled(),
+      'docker-install': () => isDockerInstalled(),
+      'docker-start': () => isDockerRunning(),
+      'openshell-sidecar': () => isSidecarReady(),
+      'collect-api-key': () => !!loadPersistedApiKey() || isOnboardComplete(),
+      'nemoclaw-install': () => !!findNemoClawBinary(),
+      'nemoclaw-onboard': () => isOnboardComplete(),
+      'openclaw-install': () => !!findOpenClawBinary(),
+      'openclaw-setup': () => !needsSetup(),
+      'start': () => false,
+    };
+
+    // Auto-recovery between retries: free ports, restart Docker, ensure sidecar.
+    const autoRecover = async (stepId: string) => {
+      logApp('info', `Auto-recovery before retry of "${stepId}"`);
+      freePorts(OPENCLAW_PORT, EXTENSION_RELAY_PORT);
+      if (['nemoclaw-install', 'nemoclaw-onboard', 'openshell-sidecar', 'start'].includes(stepId)) {
+        await ensureDockerReady();
+      }
+      if (stepId === 'nemoclaw-onboard') {
+        freePort(8080);
+        ensureOpenShellCliForOnboard(true);
+      }
+    };
+
     for (const step of steps) {
       if (step.status === 'done') continue;
 
       step.status = 'running';
       sendSteps(steps);
 
-      try {
+      const MAX_STEP_ATTEMPTS = 2;
+      let lastErr: Error | null = null;
+
+      for (let attempt = 1; attempt <= MAX_STEP_ATTEMPTS; attempt++) {
+        lastErr = null;
+
+        // Before any retry, check if goal is already met
+        if (attempt > 1 && goalMet[step.id]?.()) {
+          logApp('info', `Step "${step.id}" goal met after auto-recovery — skipping`);
+          break;
+        }
+
+        if (attempt > 1) {
+          logApp('info', `Auto-retrying step "${step.id}" (attempt ${attempt}/${MAX_STEP_ATTEMPTS})`);
+          step.detail = 'Retrying...';
+          sendSteps(steps);
+          try { await autoRecover(step.id); } catch (e: any) {
+            logApp('warn', `Auto-recovery failed: ${e.message}`);
+          }
+        }
+
+        try {
         switch (step.id) {
           case 'wsl-setup': {
             if (isWslHealthy() && hasUsableWslDistro()) break;
@@ -750,7 +1022,6 @@ async function runSetupFlow(runtime: RuntimeType): Promise<void> {
                 'WSL setup failed. Please run "wsl --update" in an elevated PowerShell, then tap Retry.',
               );
             }
-            // After WSL fix, Docker Desktop may need a restart
             if (isDockerRunning()) {
               step.detail = 'Restarting Docker Desktop after WSL update...';
               sendSteps(steps);
@@ -763,13 +1034,112 @@ async function runSetupFlow(runtime: RuntimeType): Promise<void> {
             }
             break;
           }
+          case 'homebrew-install': {
+            if (isHomebrewInstalled()) break;
+
+            step.detail = 'Installing Homebrew (macOS package manager)...';
+            sendSteps(steps);
+
+            // Homebrew requires admin/sudo. In non-interactive mode (our PTY),
+            // we can't prompt for a password. Check if passwordless sudo works.
+            let hasSudo = false;
+            try {
+              const { execSync: exec } = require('child_process');
+              exec('sudo -n true', { timeout: 5000, stdio: 'pipe' });
+              hasSudo = true;
+            } catch {
+              // sudo -n failed — check if the user is an admin who COULD sudo
+              // (but would need a password prompt that we can't provide)
+              try {
+                const { execSync: exec } = require('child_process');
+                const groups = exec('id -Gn', { encoding: 'utf-8', timeout: 3000, stdio: 'pipe' }).trim();
+                if (/\b(admin|sudo|wheel)\b/.test(groups)) {
+                  logApp('info', 'User is admin but sudo needs a password — Homebrew may prompt in PTY');
+                  hasSudo = true;
+                }
+              } catch { /* can't determine */ }
+            }
+
+            if (!hasSudo) {
+              logApp('warn', 'Homebrew install skipped — user does not have sudo/admin access');
+              step.detail = 'Skipped (no admin access) — Docker DMG fallback available';
+              sendSteps(steps);
+              break;
+            }
+
+            try {
+              const brewCmd =
+                'curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh -o /tmp/brew-install.sh && ' +
+                'NONINTERACTIVE=1 /bin/bash /tmp/brew-install.sh && ' +
+                'rm -f /tmp/brew-install.sh';
+              const exitCode = await runCommandInSetupPty(brewCmd);
+              logApp('info', `Homebrew install script exited with code ${exitCode}`);
+            } catch (e: any) {
+              logApp('warn', `Homebrew install failed: ${e.message}`);
+            }
+
+            if (isHomebrewInstalled()) {
+              const brewBin = process.arch === 'arm64' ? '/opt/homebrew/bin' : '/usr/local/bin';
+              if (!process.env.PATH?.includes(brewBin)) {
+                process.env.PATH = `${brewBin}:${process.env.PATH || ''}`;
+              }
+              break;
+            }
+
+            logApp('warn', 'Homebrew install failed — continuing without it (Docker DMG fallback available)');
+            break;
+          }
           case 'docker-install': {
             if (isDockerInstalled()) break;
+
+            // Primary: package manager (brew / winget)
             if (canInstallDocker()) {
-              await runSetupShellTaskAsync('install-docker');
-            } else {
+              step.detail = 'Installing Docker via package manager...';
+              sendSteps(steps);
+              try {
+                await runSetupShellTaskAsync('install-docker');
+                if (isDockerInstalled()) break;
+              } catch (e: any) {
+                logApp('warn', `Primary Docker install failed: ${e.message}`);
+              }
+            }
+
+            // Fallback (macOS): direct DMG download via PTY so user sees progress
+            if (!isDockerInstalled() && process.platform === 'darwin') {
+              step.detail = 'Downloading Docker Desktop...';
+              sendSteps(steps);
+              try {
+                const arch = process.arch === 'arm64' ? 'arm64' : 'amd64';
+                const dmgUrl = `https://desktop.docker.com/mac/main/${arch}/Docker.dmg`;
+                const dmgPath = path.join(os.tmpdir(), 'Docker.dmg');
+                const dmgCmd = [
+                  `echo "Downloading Docker Desktop (this may take a few minutes)..."`,
+                  `curl -fSL --progress-bar -o "${dmgPath}" "${dmgUrl}"`,
+                  `echo "Mounting disk image..."`,
+                  `hdiutil attach "${dmgPath}" -nobrowse -quiet`,
+                  `echo "Installing Docker Desktop..."`,
+                  `cp -R "/Volumes/Docker/Docker.app" /Applications/`,
+                  `hdiutil detach "/Volumes/Docker" -quiet || true`,
+                  `rm -f "${dmgPath}"`,
+                  `echo "Docker Desktop installed."`,
+                ].join(' && ');
+                const exitCode = await runCommandInSetupPty(dmgCmd);
+                if (exitCode === 0) {
+                  logApp('info', 'Docker installed via direct DMG download');
+                } else {
+                  logApp('warn', `Direct DMG install PTY exited with code ${exitCode}`);
+                }
+              } catch (e: any) {
+                logApp('warn', `Direct DMG install failed: ${e.message}`);
+              }
+            }
+
+            // Final fallback: open browser + poll
+            if (!isDockerInstalled()) {
+              step.detail = 'Opening Docker download page...';
+              sendSteps(steps);
               shell.openExternal('https://www.docker.com/products/docker-desktop/');
-              step.detail = 'Install Docker from the page that opened...';
+              step.detail = 'Install Docker from the page that opened, then wait...';
               sendSteps(steps);
               await waitForDockerInstalled();
             }
@@ -777,7 +1147,6 @@ async function runSetupFlow(runtime: RuntimeType): Promise<void> {
           }
           case 'docker-start': {
             if (isDockerRunning()) {
-              // Docker is running — but on Windows, check the WSL mount is healthy
               if (process.platform === 'win32' && !isDockerWslMountHealthy()) {
                 logApp('info', 'Docker running but WSL mount is broken — repairing');
                 step.detail = 'Repairing Docker WSL integration...';
@@ -791,15 +1160,66 @@ async function runSetupFlow(runtime: RuntimeType): Promise<void> {
               }
               break;
             }
-            const launched = launchDockerDesktop();
-            logApp('info', `Docker Desktop launch: ${launched ? 'ok' : 'not found'}`);
-            step.detail = 'Waiting for Docker to be ready...';
-            sendSteps(steps);
-            try {
-              await waitForDocker();
-            } catch (dockerErr: any) {
-              // On Windows, Docker often fails because WSL is broken/outdated.
-              // Auto-fix WSL and retry once before giving up.
+
+            // macOS: Docker socket lives at ~/.docker/run/docker.sock.
+            // If ~/.docker was deleted, the socket dir is missing and Docker
+            // can never create it. Ensure it exists BEFORE launching Docker.
+            ensureDockerSocketDir();
+
+            // Detect Docker processes running with a broken/missing socket.
+            // This happens after ~/.docker cleanup or corrupt first install.
+            // Fix: kill Docker, ensure socket dir, relaunch.
+            if (isDockerSocketBroken()) {
+              logApp('info', 'Docker processes running but socket is broken — restarting Docker');
+              step.detail = 'Fixing Docker connection...';
+              sendSteps(steps);
+              killDockerDesktop();
+              await new Promise(r => setTimeout(r, 4000));
+              ensureDockerSocketDir();
+            }
+
+            let dockerStarted = false;
+            const isMac = process.platform === 'darwin';
+
+            for (let dockerAttempt = 1; dockerAttempt <= 3 && !dockerStarted; dockerAttempt++) {
+              const timeout = dockerAttempt === 1 ? 180000 : (dockerAttempt === 2 ? 120000 : 60000);
+
+              step.detail = dockerAttempt === 1
+                ? 'Starting Docker Desktop (first launch may take a few minutes)...'
+                : `Retrying Docker Desktop (attempt ${dockerAttempt}/3)...`;
+              sendSteps(steps);
+
+              if (dockerAttempt >= 2) {
+                killDockerDesktop();
+                await new Promise(r => setTimeout(r, 3000));
+                ensureDockerSocketDir();
+              }
+
+              if (isMac) {
+                try {
+                  const { execSync: exec } = require('child_process');
+                  exec('open /Applications/Docker.app', { timeout: 5000, stdio: 'pipe' });
+                  logApp('info', `Docker start attempt ${dockerAttempt}: opened /Applications/Docker.app`);
+                } catch {
+                  launchDockerDesktop();
+                }
+              } else {
+                launchDockerDesktop();
+              }
+
+              try {
+                await waitForDocker(timeout);
+                dockerStarted = true;
+              } catch (e: any) {
+                logApp('warn', `Docker start attempt ${dockerAttempt} failed: ${e.message}`);
+
+                // Between retries on macOS: check if socket dir disappeared again
+                if (isMac) ensureDockerSocketDir();
+              }
+            }
+
+            if (!dockerStarted) {
+              // Windows WSL auto-fix as last resort
               if (process.platform === 'win32' && (!isWslHealthy() || !hasUsableWslDistro())) {
                 logApp('info', 'Docker failed to start — attempting WSL auto-fix');
                 step.detail = 'Docker failed — fixing WSL...';
@@ -809,23 +1229,22 @@ async function runSetupFlow(runtime: RuntimeType): Promise<void> {
                   sendSteps(steps);
                 });
                 if (fixed) {
-                  step.detail = 'Restarting Docker Desktop...';
+                  step.detail = 'Restarting Docker Desktop after WSL fix...';
                   sendSteps(steps);
-                  try {
-                    const { execSync: exec } = require('child_process');
-                    exec('powershell -Command "Get-Process -Name \'Docker Desktop\', \'com.docker.backend\', \'com.docker.proxy\' -ErrorAction SilentlyContinue | Stop-Process -Force"', { stdio: 'pipe', timeout: 15000, windowsHide: true });
-                  } catch { /* ok */ }
+                  killDockerDesktop();
                   await new Promise(r => setTimeout(r, 5000));
                   launchDockerDesktop();
                   step.detail = 'Waiting for Docker to start after WSL fix...';
                   sendSteps(steps);
                   await waitForDocker();
-                  break;
+                  dockerStarted = true;
                 }
               }
-              throw dockerErr;
+              if (!dockerStarted) {
+                throw new Error('Docker Desktop did not start after multiple attempts. Start it manually, then tap Retry.');
+              }
             }
-            // After a fresh Docker start on Windows, verify the WSL mount
+
             if (process.platform === 'win32' && !isDockerWslMountHealthy()) {
               logApp('info', 'Docker started but WSL mount is broken — repairing');
               step.detail = 'Repairing Docker WSL integration...';
@@ -841,12 +1260,22 @@ async function runSetupFlow(runtime: RuntimeType): Promise<void> {
           }
           case 'openshell-sidecar': {
             if (isSidecarReady()) break;
+            if (!await ensureDockerReady((msg) => { step.detail = msg; sendSteps(steps); })) {
+              logApp('warn', 'Docker not available for sidecar — continuing without it');
+              break;
+            }
             step.detail = 'Setting up OpenShell via Docker...';
             sendSteps(steps);
-            await setupOpenShellSidecar((msg) => {
-              step.detail = msg;
+            try {
+              await setupOpenShellSidecar((msg) => {
+                step.detail = msg;
+                sendSteps(steps);
+              });
+            } catch (e: any) {
+              logApp('warn', `Sidecar setup failed (non-fatal): ${e.message}`);
+              step.detail = 'Sidecar setup had issues — continuing...';
               sendSteps(steps);
-            });
+            }
             break;
           }
           case 'collect-api-key': {
@@ -873,92 +1302,237 @@ async function runSetupFlow(runtime: RuntimeType): Promise<void> {
           }
           case 'nemoclaw-install': {
             if (findNemoClawBinary()) break;
-            if (isIntelMac()) {
-              ensureSidecarNetworking();
+            if (!await ensureDockerReady((msg) => { step.detail = msg; sendSteps(steps); })) {
+              throw new Error('Docker is not running. Start Docker Desktop, then tap Retry.');
             }
-            // Pass the API key as an env var so the broken raw-mode secret
-            // prompt is skipped, but keep everything else interactive so
-            // the user can pick their provider and model in the terminal.
+            freePorts(OPENCLAW_PORT, EXTENSION_RELAY_PORT);
+            if (isIntelMac()) {
+              try { ensureSidecarNetworking(); } catch { /* ok */ }
+            }
+
+            // The install script runs `nemoclaw onboard` internally. Patch
+            // the openshell wrapper NOW so NVIDIA_API_KEY reaches the container.
+            patchOpenshellWrapperForEnvForwarding();
+
             const saved = loadPersistedApiKey();
             const installEnv: Record<string, string> = {};
             if (saved?.key) {
               installEnv.NVIDIA_API_KEY = saved.key;
             }
-            await runSetupShellTaskAsync('install-nemoclaw', installEnv);
+            step.detail = 'Installing NemoClaw...';
+            sendSteps(steps);
+            try {
+              await runSetupShellTaskAsync('install-nemoclaw', installEnv);
+            } catch (e: any) {
+              logApp('warn', `Primary NemoClaw install failed: ${e.message}`);
+            }
+
+            // Check if binary exists despite script error (e.g. onboard phase failed but CLI installed)
+            if (findNemoClawBinary()) {
+              logApp('info', 'NemoClaw binary found after install script — proceeding');
+              break;
+            }
+
+            // Fallback: try npm install
+            step.detail = 'Trying npm install as fallback...';
+            sendSteps(steps);
+            try {
+              const npmCmd = `npm install -g nemoclaw@latest --prefix "${path.join(os.homedir(), '.local')}"`;
+              const exitCode = await runCommandInSetupPty(
+                isIntelMac() ? `export PATH="$HOME/.local/bin:$PATH" && ${npmCmd}` : npmCmd,
+                installEnv,
+              );
+              logApp('info', `npm fallback exited with code ${exitCode}`);
+            } catch (e: any) {
+              logApp('warn', `npm fallback failed: ${e.message}`);
+            }
+
+            if (findNemoClawBinary()) {
+              logApp('info', 'NemoClaw binary found after npm fallback');
+              break;
+            }
+
+            // Final fallback: wget instead of curl
+            step.detail = 'Trying alternative download method...';
+            sendSteps(steps);
+            try {
+              const wgetCmd = 'wget -qO /tmp/nemoclaw-install.sh https://nvidia.com/nemoclaw.sh && bash /tmp/nemoclaw-install.sh';
+              const exitCode = await runCommandInSetupPty(
+                isIntelMac() ? `export PATH="$HOME/.local/bin:$PATH" && ${wgetCmd}` : wgetCmd,
+                installEnv,
+              );
+              logApp('info', `wget fallback exited with code ${exitCode}`);
+            } catch (e: any) {
+              logApp('warn', `wget fallback failed: ${e.message}`);
+            }
+
+            if (!findNemoClawBinary()) {
+              throw new Error('NemoClaw installation failed after all attempts. Check your network connection, then tap Retry.');
+            }
             break;
           }
           case 'nemoclaw-onboard': {
             if (isOnboardComplete()) break;
 
+            if (!await ensureDockerReady((msg) => { step.detail = msg; sendSteps(steps); })) {
+              throw new Error('Docker is not running. Start Docker Desktop, then tap Retry.');
+            }
+
+            // Try direct sandbox creation first if gateway is actually healthy (faster).
+            // isGatewayDeployed() checks metadata, but the gateway itself may have stale
+            // certs or a missing volume. isOnboardComplete() also verifies the cluster
+            // container is running, which catches most stale-state scenarios.
+            if (isOnboardComplete() === false && isGatewayDeployed() && isGatewayClusterContainerRunning() && !isSandboxReady()) {
+              step.detail = 'Gateway found — creating sandbox directly...';
+              sendSteps(steps);
+              try {
+                const directOk = await tryDirectSandboxCreation();
+                if (directOk && isOnboardComplete()) {
+                  logApp('info', 'Direct sandbox creation succeeded — skipping full onboard');
+                  break;
+                }
+              } catch (e: any) {
+                logApp('warn', `Direct sandbox creation failed: ${e.message}`);
+              }
+            }
+
             step.detail = 'Running NemoClaw setup (this may take several minutes)...';
             sendSteps(steps);
 
-            // Always run full nemoclaw onboard so the user gets to choose
-            // their sandbox name, model, and provider interactively.
+            patchOpenshellWrapperForEnvForwarding();
 
-            // Full onboard path: recreate sidecar WITHOUT port mappings so
-            // onboard can bind 18789 for its own gateway.
-            if (isIntelMac()) {
-              try {
-                const { execSync: exec } = require('child_process');
-                logApp('info', 'Recreating openshell-cli without port mappings for onboard');
-                for (let attempt = 0; attempt < 3; attempt++) {
-                  try { exec('docker rm -f openshell-cli 2>/dev/null', { stdio: 'pipe', timeout: 15000 }); break; } catch {
-                    try { exec('docker stop openshell-cli 2>/dev/null && docker rm openshell-cli 2>/dev/null', { stdio: 'pipe', timeout: 15000 }); break; } catch { /* retry */ }
-                  }
-                }
-                await new Promise(r => setTimeout(r, 1500));
-                const configDir = path.join(os.homedir(), '.config', 'openshell');
-                const openshellBin = path.join(os.homedir(), '.local', 'lib', 'openshell', 'openshell-linux');
-                const tmpDir = os.tmpdir().replace(/\/+$/, '');
-                const tmpMount = tmpDir ? `-v "${tmpDir}:${tmpDir}"` : '';
-                const pkg = findNemoClawPackageRoot();
-                const resolvedPkg = pkg ? fs.realpathSync(pkg) : null;
-                const sourceMount = resolvedPkg ? `-v "${resolvedPkg}:${resolvedPkg}:ro"` : '';
-                const symlinkMount = (pkg && resolvedPkg && resolvedPkg !== pkg)
-                  ? `-v "${resolvedPkg}:${pkg}:ro"` : '';
-                exec(
-                  `docker create --name openshell-cli --init ` +
-                  `-v /var/run/docker.sock:/var/run/docker.sock ` +
-                  `-v "${configDir}:/root/.config/openshell" ` +
-                  `-v "${openshellBin}:/usr/local/bin/openshell:ro" ` +
-                  `${tmpMount} ${sourceMount} ${symlinkMount} ` +
-                  `--add-host "host.docker.internal:host-gateway" ` +
-                  `alpine:latest sleep infinity`,
-                  { timeout: 15000, stdio: 'pipe' }
-                );
-                exec('docker start openshell-cli', { timeout: 10000, stdio: 'pipe' });
-                exec('docker exec openshell-cli apk add --no-cache socat openssh-client 2>/dev/null', { timeout: 60000, stdio: 'pipe' });
-                try {
-                  exec('docker exec -d openshell-cli socat TCP-LISTEN:8080,fork,reuseaddr TCP:host.docker.internal:8080', { timeout: 5000, stdio: 'pipe' });
-                } catch { /* ok if socat not needed yet */ }
-                logApp('info', 'Sidecar recreated without port mappings (with source + pkg mounts)');
-              } catch (e: any) { logApp('warn', `Sidecar rebuild (no-ports) failed: ${e.message}`); }
-            }
+            // Prepare for onboard: clean slate matching the manually-verified flow.
+            // 1. Stop ALL nemoclaw/openshell containers
+            // 2. Remove the Docker volume (stale k3s state causes health check failures)
+            // 3. Free all relevant ports
+            // 4. Create openshell-cli fresh WITHOUT port mappings (with socat forwarder)
+            const prepareForOnboard = () => {
+              const { execSync: exec } = require('child_process');
+              // Stop and remove ALL containers (openshell-cli + cluster)
+              for (const c of ['openshell-cli', 'openshell-cluster-nemoclaw']) {
+                try { exec(`docker stop ${c}`, { stdio: 'pipe', timeout: 15000, windowsHide: true }); } catch { /* ok */ }
+                try { exec(`docker rm -f ${c}`, { stdio: 'pipe', timeout: 10000, windowsHide: true }); } catch { /* ok */ }
+              }
+              // Remove stale Docker volume
+              try { exec('docker volume rm openshell-cluster-nemoclaw', { stdio: 'pipe', timeout: 10000, windowsHide: true }); } catch { /* ok */ }
+              // Remove stale gateway config (certs can mismatch after destroy/recreate)
+              const gwDir = path.join(os.homedir(), '.config', 'openshell', 'gateways', 'nemoclaw');
+              try { fs.rmSync(gwDir, { recursive: true, force: true }); } catch { /* ok */ }
+              try { fs.unlinkSync(path.join(os.homedir(), '.config', 'openshell', 'active_gateway')); } catch { /* ok */ }
+              // On Windows, gateway config lives inside WSL, not on the Windows filesystem
+              if (process.platform === 'win32') {
+                try { exec('wsl bash -c "rm -rf ~/.config/openshell/gateways/nemoclaw ~/.config/openshell/active_gateway"', { stdio: 'pipe', timeout: 10000, windowsHide: true }); } catch { /* ok */ }
+              }
 
-            let onboardFailed = false;
+              freePorts(OPENCLAW_PORT, EXTENSION_RELAY_PORT);
+              freePort(8080);
+
+              // Force-create fresh openshell-cli (ignore running state)
+              ensureOpenShellCliForOnboard(true);
+              logApp('info', 'Prepared clean state for nemoclaw onboard');
+            };
+
+            // Attempt 1
+            prepareForOnboard();
+            let onboardOk = false;
             try {
               await runNemoClawOnboardExternal();
+              onboardOk = true;
             } catch (e: any) {
-              onboardFailed = true;
-              logApp('warn', `Onboard threw: ${e.message}`);
+              logApp('warn', `Onboard attempt 1 failed: ${e.message}`);
             }
-            // ALWAYS rebuild sidecar with full port mappings, even on failure.
+
+            // Attempt 2
+            if (!onboardOk && !isOnboardComplete()) {
+              await new Promise(r => setTimeout(r, 2000));
+              prepareForOnboard();
+              step.detail = 'Retrying NemoClaw setup...';
+              sendSteps(steps);
+              try {
+                await runNemoClawOnboardExternal();
+                onboardOk = true;
+              } catch (e: any) {
+                logApp('warn', `Onboard attempt 2 failed: ${e.message}`);
+              }
+            }
+
+            // Attempt 3: try `nemoclaw setup` as fallback
+            if (!onboardOk && !isOnboardComplete()) {
+              await new Promise(r => setTimeout(r, 2000));
+              prepareForOnboard();
+
+              // Patch setup.sh for Bash 3.2 compatibility: ${var,,} is Bash 4+ only
+              const setupSh = path.join(os.homedir(), '.nemoclaw', 'source', 'scripts', 'setup.sh');
+              try {
+                if (fs.existsSync(setupSh)) {
+                  let script = fs.readFileSync(setupSh, 'utf-8');
+                  if (script.includes('${OPEN_SHELL_VERSION_RAW,,}')) {
+                    script = script.replace(
+                      '${OPEN_SHELL_VERSION_RAW,,}',
+                      '$(echo "$OPEN_SHELL_VERSION_RAW" | tr "A-Z" "a-z")',
+                    );
+                    fs.writeFileSync(setupSh, script, 'utf-8');
+                    logApp('info', 'Patched setup.sh for Bash 3.2 compatibility');
+                  }
+                }
+              } catch (e: any) {
+                logApp('warn', `Failed to patch setup.sh: ${e.message}`);
+              }
+
+              step.detail = 'Trying alternative setup command...';
+              sendSteps(steps);
+              try {
+                const setupCmd = getNemoClawOnboardCommand().replace('onboard', 'setup');
+                const exitCode = await runCommandInSetupPty(setupCmd);
+                logApp('info', `nemoclaw setup exited with code ${exitCode}`);
+              } catch (e: any) {
+                logApp('warn', `nemoclaw setup fallback failed: ${e.message}`);
+              }
+            }
+
+            // ALWAYS rebuild sidecar with full port mappings for runtime use
             if (isIntelMac()) {
               try {
                 logApp('info', 'Re-creating openshell-cli sidecar after onboard');
                 await setupOpenShellSidecar((msg) => { logApp('info', `[sidecar-rebuild] ${msg}`); });
                 ensureSidecarNetworking();
-              } catch (e: any) { logApp('warn', `Sidecar rebuild failed: ${e.message}`); }
+              } catch (e: any) { logApp('warn', `Sidecar rebuild failed (non-fatal): ${e.message}`); }
             }
-            if (onboardFailed && !isOnboardComplete()) {
-              throw new Error('NemoClaw onboard did not complete. Tap Retry to try again.');
+
+            if (!isOnboardComplete()) {
+              throw new Error('NemoClaw onboard did not complete after multiple attempts. Tap Retry to try again.');
             }
             break;
           }
           case 'openclaw-install': {
             if (findOpenClawBinary()) break;
-            await runSetupShellTaskAsync('install');
+
+            // Primary: install script
+            step.detail = 'Installing OpenClaw...';
+            sendSteps(steps);
+            try {
+              await runSetupShellTaskAsync('install');
+            } catch (e: any) {
+              logApp('warn', `Primary OpenClaw install failed: ${e.message}`);
+            }
+
+            if (findOpenClawBinary()) break;
+
+            // Fallback: npm install
+            step.detail = 'Trying npm install as fallback...';
+            sendSteps(steps);
+            try {
+              const prefix = path.join(os.homedir(), '.local');
+              const npmCmd = `npm install -g openclaw@latest --prefix "${prefix}"`;
+              const exitCode = await runCommandInSetupPty(npmCmd);
+              logApp('info', `npm fallback exited with code ${exitCode}`);
+            } catch (e: any) {
+              logApp('warn', `npm fallback failed: ${e.message}`);
+            }
+
+            if (!findOpenClawBinary()) {
+              throw new Error('OpenClaw installation failed. Check your network connection, then tap Retry.');
+            }
             break;
           }
           case 'openclaw-setup': {
@@ -967,21 +1541,47 @@ async function runSetupFlow(runtime: RuntimeType): Promise<void> {
             break;
           }
           case 'start': {
+            if (runtime === 'nemoclaw') {
+              if (!await ensureDockerReady((msg) => { step.detail = msg; sendSteps(steps); })) {
+                throw new Error('Docker is not running. Start Docker Desktop, then tap Retry.');
+              }
+            }
+            // On Intel Mac the sidecar owns the ports — don't stop it.
+            if (!(isIntelMac() && isSidecarReady())) {
+              freePorts(OPENCLAW_PORT, EXTENSION_RELAY_PORT);
+            }
             applyGatewayToken();
             await manager.start();
             break;
           }
         }
 
-        step.status = 'done';
-        sendSteps(steps);
-      } catch (err: any) {
-        logApp('error', `Setup step "${step.id}" failed:`, err.message);
+        // Step succeeded — break out of retry loop
+        break;
+
+        } catch (err: any) {
+          lastErr = err;
+          logApp('warn', `Step "${step.id}" attempt ${attempt}/${MAX_STEP_ATTEMPTS} failed: ${err.message}`);
+
+          // If goal is already met despite the error, treat as success
+          if (goalMet[step.id]?.()) {
+            logApp('info', `Step "${step.id}" goal met despite error — treating as success`);
+            lastErr = null;
+            break;
+          }
+        }
+      } // end retry loop
+
+      if (lastErr) {
+        logApp('error', `Setup step "${step.id}" failed after all attempts:`, lastErr.message);
         step.status = 'error';
-        step.detail = err.message;
+        step.detail = lastErr.message;
         sendSteps(steps);
         return;
       }
+
+      step.status = 'done';
+      sendSteps(steps);
     }
   } finally {
     setupRunning = false;
@@ -1403,8 +2003,8 @@ function setupIPC(): void {
       extensionPath: extDir,
       extensionReady,
       gatewayToken,
-      gatewayPort: OPENCLAW_PORT,
-      relayPort: EXTENSION_RELAY_PORT,
+      gatewayPort: getActiveGatewayPort(),
+      relayPort: getActiveRelayPort(),
       agentRunning: status.state === 'running' && !!status.port,
       docsUrl: BROWSER_DOCS_URL,
       ensureWarning: undefined as string | undefined,
@@ -2102,7 +2702,22 @@ app.on('window-all-closed', () => {
 
 process.on('uncaughtException', (err) => {
   logApp('error', 'Uncaught exception in main process', err.stack || err.message);
-  dialog.showErrorBox('Valnaa Error', `An unexpected error occurred:\n\n${err.message}\n\nCheck logs for details.`);
+
+  const msg = err.message || '';
+  const isRecoverable =
+    /posix_spawnp/i.test(msg) ||
+    /EADDRINUSE/i.test(msg) ||
+    /ECONNREFUSED/i.test(msg) ||
+    /docker.*not running/i.test(msg) ||
+    /Cannot connect to the Docker daemon/i.test(msg) ||
+    /spawn.*ENOENT/i.test(msg);
+
+  if (isRecoverable) {
+    logApp('warn', `Recoverable uncaught error (suppressed dialog): ${msg}`);
+    return;
+  }
+
+  dialog.showErrorBox('Valnaa Error', `An unexpected error occurred:\n\n${msg}\n\nCheck logs for details.`);
 });
 
 process.on('unhandledRejection', (reason: any) => {

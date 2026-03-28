@@ -1751,7 +1751,7 @@
               <h4 id="browser-step2-title" class="browser-card-title">Path &amp; gateway token</h4>
               <p class="browser-card-sub">Advanced: exact folder Chrome should load. Token must match your running gateway (paste in the extension’s Options).</p>
             </div>
-          </div>
+        </div>
         <div class="chrome-field">
             <label>Extension folder on this computer</label>
           <div class="chrome-row">
@@ -3316,6 +3316,16 @@
         tokenEl.placeholder = info.agentRunning
           ? 'No token — check gateway config'
           : 'Start the agent to load token';
+        // Update port pills to reflect actual active ports
+        const pills = document.querySelectorAll('.browser-pill');
+        pills.forEach(pill => {
+          if (pill.textContent.includes('Gateway') && info.gatewayPort) {
+            pill.innerHTML = 'Gateway <code>' + info.gatewayPort + '</code>';
+          }
+          if (pill.textContent.includes('Relay') && info.relayPort) {
+            pill.innerHTML = 'Relay <code>' + info.relayPort + '</code>';
+          }
+        });
         let status = '';
         if (info.extensionReady) {
           status += '<span class="chrome-status-ok">✓ Extension files found on this computer.</span> ';
@@ -3488,11 +3498,17 @@
         const connector = i < steps.length - 1
           ? `<div class="step-connector ${s.status === 'done' ? 'done' : ''}"></div>` : '';
         return `
-        <div class="setup-step ${s.status}">
+        <div class="setup-step ${s.status}" data-step-status="${s.status}">
           <div class="step-icon ${s.status}">${icons[s.status]}</div>
             <div class="step-info"><div class="step-label">${escapeHtml(s.label)}</div></div>
           </div>${connector}`;
       }).join('');
+
+      // Auto-scroll the active (running/error) step into view
+      const activeStep = list.querySelector('.setup-step.running') || list.querySelector('.setup-step.error');
+      if (activeStep) {
+        activeStep.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+      }
 
       const running = steps.find(s => s.status === 'running');
       const error = steps.find(s => s.status === 'error');

@@ -10,7 +10,8 @@ import { logApp, logOpenclaw } from './logger';
 import { findOpenClawBinary, findNemoClawBinary } from './installer';
 import { startHealthPolling, stopHealthPolling, HealthStatus } from './health';
 import { findAvailablePort, PortResult } from '../lib/ports';
-import { loadRuntime, RuntimeType, isSandboxReady, ensurePortForward, stopPortForward, OPENCLAW_PORT, readSandboxGatewayToken, clearSandboxTokenCache, clearSandboxNameCache, dockerBin } from '../lib/runtime';
+import { loadRuntime, RuntimeType, isSandboxReady, ensurePortForward, stopPortForward, OPENCLAW_PORT, getActiveGatewayPort, readSandboxGatewayToken, clearSandboxTokenCache, clearSandboxNameCache, dockerBin, isIntelMac, isSidecarReady } from '../lib/runtime';
+import { freePort } from '../lib/ports';
 
 function checkPortReady(port: number): Promise<boolean> {
   return new Promise((resolve) => {
@@ -286,16 +287,21 @@ class OpenClawManager extends EventEmitter {
         return;
       }
 
-      // 3. Ensure port forward is active (never let a throw leave us stuck in "starting")
+      // 3. Free the gateway port if something stale is on it, then ensure port forward.
+      //    On Intel Mac the sidecar owns the port via Docker port mapping —
+      //    stopping it would destroy the forwarding mechanism we need.
+      if (!(isIntelMac() && isSidecarReady())) {
+        freePort(getActiveGatewayPort());
+      }
       try {
         ensurePortForward();
       } catch (e: any) {
         logApp('warn', `ensurePortForward: ${e?.message || e}`);
       }
 
-      // 4. Poll for the OpenClaw gateway on port 18789
-      this.port = OPENCLAW_PORT;
-      logApp('info', `Waiting for OpenClaw gateway on port ${OPENCLAW_PORT}...`);
+      // 4. Poll for the OpenClaw gateway on the active port
+      this.port = getActiveGatewayPort();
+      logApp('info', `Waiting for OpenClaw gateway on port ${this.port}...`);
 
       /** Sandbox / Docker can exceed 60s after sleep or heavy load */
       const SANDBOX_CONNECT_TIMEOUT = 120000;
@@ -330,7 +336,7 @@ class OpenClawManager extends EventEmitter {
           } catch (e: any) {
             logApp('warn', `ensurePortForward (timeout): ${e?.message || e}`);
           }
-          logApp('warn', `OpenClaw gateway not responding on port ${OPENCLAW_PORT} after ${SANDBOX_CONNECT_TIMEOUT}ms`);
+          logApp('warn', `OpenClaw gateway not responding on port ${this.port} after ${SANDBOX_CONNECT_TIMEOUT}ms`);
           this.lastError = 'OpenClaw gateway inside sandbox is not responding. The sandbox may still be starting up — try again in a moment.';
           this.setState('crashed');
         }
