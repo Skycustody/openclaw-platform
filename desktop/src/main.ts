@@ -1018,9 +1018,14 @@ async function runSetupFlow(runtime: RuntimeType): Promise<void> {
               step.detail = msg;
               sendSteps(steps);
             });
+            if (wslOk === 'reboot') {
+              throw new Error(
+                'Windows features for WSL have been enabled. Please restart your computer, then open Valnaa again — setup will continue automatically.',
+              );
+            }
             if (!wslOk) {
               throw new Error(
-                'WSL setup failed. If a Windows permission dialog appeared behind this window, please approve it and tap Retry. If the problem persists, restart your computer and try again.',
+                'WSL setup failed. Please click "Retry" — a Windows permission prompt may appear behind this window. If the problem persists after approving it, restart your computer and try again.',
               );
             }
             if (isDockerRunning()) {

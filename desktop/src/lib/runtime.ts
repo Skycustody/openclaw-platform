@@ -1723,67 +1723,88 @@ export function getWslMsiUrl(): string {
   return 'https://github.com/microsoft/WSL/releases/latest/download/wsl.2.6.3.0.x64.msi';
 }
 
-/**
- * Enable the Windows Optional Features required by WSL 2 (elevated).
- * Silently succeeds if already enabled.
- */
-function enableWslWindowsFeatures(onProgress?: (msg: string) => void): void {
-  const features = ['Microsoft-Windows-Subsystem-Linux', 'VirtualMachinePlatform'];
-  for (const feat of features) {
-    try {
-      onProgress?.(`Enabling Windows feature: ${feat}...`);
-      execSync(
-        `powershell -Command "Start-Process powershell -ArgumentList '-Command', 'Enable-WindowsOptionalFeature -Online -FeatureName ${feat} -NoRestart -All' -Verb RunAs -Wait"`,
-        { timeout: 120000, stdio: 'pipe', windowsHide: true },
-      );
-      logApp('info', `Windows feature enabled: ${feat}`);
-    } catch (e: any) {
-      logApp('warn', `Could not enable ${feat}: ${e.message}`);
-    }
+/** Check whether a Windows Optional Feature is enabled. */
+function isWindowsFeatureEnabled(featureName: string): boolean {
+  try {
+    const out = execSync(
+      `powershell -Command "(Get-WindowsOptionalFeature -Online -FeatureName ${featureName}).State"`,
+      { encoding: 'utf-8', timeout: 15000, stdio: 'pipe', windowsHide: true },
+    ).trim();
+    return /enabled/i.test(out);
+  } catch {
+    return false;
   }
 }
 
 /**
  * Download and install the latest WSL MSI. Requires UAC elevation.
- * Falls back to `wsl --install --no-launch` if the MSI approach fails.
- * Returns true on success.
+ * On fresh PCs, enables required Windows features and installs WSL in a
+ * single elevated script (one UAC prompt). If features were just enabled,
+ * returns 'reboot' to signal the caller that a restart is needed.
  */
-export async function updateWsl(onProgress?: (msg: string) => void): Promise<boolean> {
+export async function updateWsl(onProgress?: (msg: string) => void): Promise<boolean | 'reboot'> {
   if (!IS_WIN) return true;
 
-  // Step 0: enable required Windows features (VirtualMachinePlatform, WSL)
-  onProgress?.('Enabling Windows features for WSL...');
-  enableWslWindowsFeatures(onProgress);
+  const wslFeatureOn = isWindowsFeatureEnabled('Microsoft-Windows-Subsystem-Linux');
+  const vmFeatureOn = isWindowsFeatureEnabled('VirtualMachinePlatform');
+  const featuresAlreadyEnabled = wslFeatureOn && vmFeatureOn;
 
-  // Step 1: try `wsl --install --no-launch` first (handles everything on modern Windows 10/11)
-  try {
-    onProgress?.('Installing WSL (this may take a few minutes)...');
-    logApp('info', 'Trying wsl --install --no-launch (elevated)');
-    execSync(
-      `powershell -Command "Start-Process wsl.exe -ArgumentList '--install', '--no-launch' -Verb RunAs -Wait"`,
-      { timeout: 600000, stdio: 'pipe', windowsHide: true },
-    );
-    // Check if it worked
-    const ver = execSyncSafe('wsl --version', 10000);
-    if (ver) {
-      logApp('info', `WSL installed via wsl --install: ${ver.split('\n')[0]?.trim()}`);
-      onProgress?.('WSL installed successfully');
-      return true;
+  logApp('info', `Windows features — WSL: ${wslFeatureOn}, VM Platform: ${vmFeatureOn}`);
+
+  // Build a single elevated PowerShell script that does everything in one UAC prompt
+  const scriptLines: string[] = [];
+
+  if (!wslFeatureOn) {
+    scriptLines.push("Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux -NoRestart -All -ErrorAction SilentlyContinue");
+  }
+  if (!vmFeatureOn) {
+    scriptLines.push("Enable-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform -NoRestart -All -ErrorAction SilentlyContinue");
+  }
+  scriptLines.push("wsl --install --no-launch 2>&1 | Out-Null");
+
+  if (scriptLines.length > 0) {
+    onProgress?.('Setting up WSL (an admin permission prompt will appear)...');
+    const joined = scriptLines.join('; ');
+    try {
+      logApp('info', `Running elevated WSL setup: ${joined}`);
+      execSync(
+        `powershell -Command "Start-Process powershell -ArgumentList '-Command', '${joined.replace(/'/g, "''")}' -Verb RunAs -Wait"`,
+        { timeout: 600000, stdio: 'pipe', windowsHide: true },
+      );
+      logApp('info', 'Elevated WSL setup script completed');
+    } catch (e: any) {
+      logApp('warn', `Elevated WSL setup failed: ${e.message}`);
     }
-  } catch (e: any) {
-    logApp('warn', `wsl --install failed, falling back to MSI: ${e.message}`);
   }
 
-  // Step 2: fallback to MSI download + install
+  // If features weren't enabled before, a reboot is almost certainly required
+  if (!featuresAlreadyEnabled) {
+    const nowWsl = isWindowsFeatureEnabled('Microsoft-Windows-Subsystem-Linux');
+    const nowVm = isWindowsFeatureEnabled('VirtualMachinePlatform');
+    if (nowWsl && nowVm) {
+      logApp('info', 'Windows features enabled — reboot required for WSL to work');
+      onProgress?.('Windows features enabled — a restart is required.');
+      return 'reboot';
+    }
+  }
+
+  // Check if wsl --version works now
+  const ver = execSyncSafe('wsl --version', 10000);
+  if (ver) {
+    logApp('info', `WSL ready: ${ver.split('\n')[0]?.trim()}`);
+    onProgress?.('WSL installed successfully');
+    return true;
+  }
+
+  // Fallback: MSI download + install
   const tmpDir = os.tmpdir();
   const msiPath = path.join(tmpDir, 'wsl_latest.msi');
 
   try {
-    onProgress?.('Finding latest WSL version...');
+    onProgress?.('Downloading WSL update...');
     const url = getWslMsiUrl();
     logApp('info', `WSL MSI URL: ${url}`);
 
-    onProgress?.('Downloading WSL update (this may take a few minutes)...');
     execSync(
       `curl.exe -L -o "${msiPath}" "${url}" --progress-bar`,
       { timeout: 600000, stdio: 'pipe', windowsHide: true },
@@ -1802,9 +1823,8 @@ export async function updateWsl(onProgress?: (msg: string) => void): Promise<boo
       { timeout: 300000, stdio: 'pipe', windowsHide: true },
     );
 
-    // Verify installation
-    const ver = execSync('wsl --version', { encoding: 'utf-8', timeout: 10000, stdio: 'pipe', windowsHide: true }).replace(/\0/g, '');
-    logApp('info', `WSL updated successfully: ${ver.split('\n')[0]?.trim()}`);
+    const verAfter = execSync('wsl --version', { encoding: 'utf-8', timeout: 10000, stdio: 'pipe', windowsHide: true }).replace(/\0/g, '');
+    logApp('info', `WSL updated successfully: ${verAfter.split('\n')[0]?.trim()}`);
     onProgress?.('WSL updated successfully');
     return true;
   } catch (e: any) {
@@ -1853,13 +1873,14 @@ export async function installWslDistro(onProgress?: (msg: string) => void): Prom
  * 3. Restart Docker Desktop if it was affected
  * Returns true if WSL is healthy after repairs.
  */
-export async function ensureWslReady(onProgress?: (msg: string) => void): Promise<boolean> {
+export async function ensureWslReady(onProgress?: (msg: string) => void): Promise<boolean | 'reboot'> {
   if (!IS_WIN) return true;
 
   // Step 1: ensure WSL itself is installed and current
   if (wslNeedsUpdate() || !isWslHealthy()) {
     logApp('info', 'WSL needs update — starting auto-fix');
     const updated = await updateWsl(onProgress);
+    if (updated === 'reboot') return 'reboot';
     if (!updated) {
       logApp('error', 'WSL auto-update failed');
       return false;
