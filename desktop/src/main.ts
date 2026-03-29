@@ -1071,8 +1071,10 @@ async function runSetupFlow(runtime: RuntimeType): Promise<void> {
             try {
               const brewCmd =
                 'curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh -o /tmp/brew-install.sh && ' +
-                'NONINTERACTIVE=1 /bin/bash /tmp/brew-install.sh && ' +
+                '/bin/bash /tmp/brew-install.sh && ' +
                 'rm -f /tmp/brew-install.sh';
+              step.detail = 'Installing Homebrew — you may need to enter your password...';
+              sendSteps(steps);
               const exitCode = await runCommandInSetupPty(brewCmd);
               logApp('info', `Homebrew install script exited with code ${exitCode}`);
             } catch (e: any) {

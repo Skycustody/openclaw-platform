@@ -1239,11 +1239,9 @@
       gap: 10px;
     }
     .runtime-card:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.15); }
-    .runtime-card.disabled {
-      opacity: 0.35;
-      cursor: not-allowed;
+    .runtime-card.needs-setup .runtime-req {
+      color: rgba(255,255,255,0.5);
     }
-    .runtime-card.disabled:hover { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.08); }
     .runtime-card-icon {
       font-size: 28px;
       line-height: 1;
@@ -2785,15 +2783,13 @@
         const nemoReq = document.getElementById('nemoclaw-req');
 
         if (!info.dockerInstalled) {
-          nemoReq.textContent = info.canInstallDocker
-            ? 'Docker not installed — click to install'
-            : 'Docker not installed — click for options';
-          nemoCard.classList.toggle('disabled', !info.canInstallDocker);
+          nemoReq.textContent = 'Docker not installed — click to set up';
+          nemoCard.classList.add('needs-setup');
         } else if (!info.dockerRunning) {
-          nemoCard.classList.add('disabled');
           nemoReq.textContent = 'Docker installed but not running — click to start';
+          nemoCard.classList.add('needs-setup');
         } else {
-          nemoCard.classList.remove('disabled');
+          nemoCard.classList.remove('needs-setup');
           nemoReq.textContent = 'Requires: Docker Desktop (detected and running)';
         }
       });
