@@ -25,11 +25,12 @@
     "concurrently": "^9.1.2",
     "electron": "^33.0.0",
     "electron-builder": "^26.0.0",
+    "sharp": "^0.33.5",
     "typescript": "^5.7.0",
-    "wait-on": "^8.0.1",
-    "sharp": "^0.33.5"
+    "wait-on": "^8.0.1"
   },
   "dependencies": {
+    "@vscode/sudo-prompt": "^9.3.2",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
     "electron-updater": "^6.3.0",

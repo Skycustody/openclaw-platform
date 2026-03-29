@@ -1765,41 +1765,29 @@ export async function updateWsl(onProgress?: (msg: string) => void): Promise<boo
   if (scriptLines.length > 0) {
     onProgress?.('Setting up WSL — an admin permission prompt will appear...');
 
-    // Write the elevated commands to a temp .ps1 file so the elevated
-    // PowerShell window can run hidden (no flashing windows).
-    // Output goes to a log file so we can read the result.
-    const tmpDir = os.tmpdir();
-    const scriptPath = path.join(tmpDir, 'valnaa_wsl_setup.ps1');
-    const logPath = path.join(tmpDir, 'valnaa_wsl_setup.log');
-    const doneMarker = path.join(tmpDir, 'valnaa_wsl_setup.done');
-    try { fs.unlinkSync(doneMarker); } catch {}
-    try { fs.unlinkSync(logPath); } catch {}
-
-    const scriptContent = [
-      ...scriptLines,
-      `'DONE' | Out-File -FilePath '${doneMarker.replace(/\\/g, '\\\\')}' -Encoding utf8`,
-    ].join('\r\n');
-    fs.writeFileSync(scriptPath, scriptContent, 'utf-8');
+    // Use @vscode/sudo-prompt to run elevated commands entirely inside the app.
+    // Only the native Windows UAC dialog is shown — no PowerShell windows flash.
+    const sudo = require('@vscode/sudo-prompt');
+    const psCmd = scriptLines.join('; ');
+    const elevatedCmd = `powershell -ExecutionPolicy Bypass -WindowStyle Hidden -Command "${psCmd.replace(/"/g, '\\"')}"`;
+    logApp('info', `Running elevated WSL setup: ${psCmd}`);
 
     try {
-      logApp('info', `Running elevated WSL setup script: ${scriptPath}`);
-      // Start-Process with -Verb RunAs triggers UAC, -Wait blocks until complete,
-      // -WindowStyle Hidden prevents the PowerShell window from flashing
-      execSync(
-        `powershell -Command "Start-Process powershell -ArgumentList '-ExecutionPolicy Bypass -WindowStyle Hidden -File \\\"${scriptPath.replace(/\\/g, '\\\\')}\\\"' -Verb RunAs -Wait"`,
-        { timeout: 600000, stdio: 'pipe', windowsHide: true },
-      );
-
-      if (fs.existsSync(doneMarker)) {
-        logApp('info', 'Elevated WSL setup script completed successfully');
-      } else {
-        logApp('warn', 'Elevated WSL setup script did not write done marker — may have been cancelled');
-      }
+      const { stdout, stderr } = await new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+        sudo.exec(elevatedCmd, { name: 'Valnaa' }, (error: Error | null, stdout?: string | Buffer, stderr?: string | Buffer) => {
+          if (error) return reject(error);
+          resolve({ stdout: String(stdout || ''), stderr: String(stderr || '') });
+        });
+      });
+      logApp('info', `Elevated WSL setup completed. stdout: ${stdout.slice(0, 500)}`);
+      if (stderr) logApp('warn', `Elevated WSL setup stderr: ${stderr.slice(0, 500)}`);
     } catch (e: any) {
+      if (/permission|denied|cancel/i.test(e.message)) {
+        logApp('warn', `User denied UAC prompt: ${e.message}`);
+        onProgress?.('Admin permission is required to install WSL. Please tap Retry and approve the prompt.');
+        return false;
+      }
       logApp('warn', `Elevated WSL setup failed: ${e.message}`);
-    } finally {
-      try { fs.unlinkSync(scriptPath); } catch {}
-      try { fs.unlinkSync(doneMarker); } catch {}
     }
 
     // Give Windows a moment to finalize feature changes
@@ -1858,10 +1846,13 @@ export async function updateWsl(onProgress?: (msg: string) => void): Promise<boo
     logApp('info', `WSL MSI downloaded: ${Math.round(stat.size / 1048576)} MB`);
 
     onProgress?.('Installing WSL update...');
-    execSync(
-      `powershell -Command "Start-Process msiexec.exe -ArgumentList '/i \\\"${msiPath}\\\" /quiet /norestart' -Verb RunAs -Wait"`,
-      { timeout: 300000, stdio: 'pipe', windowsHide: true },
-    );
+    const sudo = require('@vscode/sudo-prompt');
+    await new Promise<void>((resolve, reject) => {
+      sudo.exec(`msiexec.exe /i "${msiPath}" /quiet /norestart`, { name: 'Valnaa' }, (error: Error | null) => {
+        if (error) return reject(error);
+        resolve();
+      });
+    });
 
     const verAfter = execSync('wsl --version', { encoding: 'utf-8', timeout: 10000, stdio: 'pipe', windowsHide: true }).replace(/\0/g, '');
     logApp('info', `WSL updated successfully: ${verAfter.split('\n')[0]?.trim()}`);
