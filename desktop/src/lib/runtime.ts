@@ -1255,7 +1255,8 @@ function findDockerBin(): string | null {
   const knownPaths = IS_WIN
     ? [
         path.join(process.env.ProgramFiles || 'C:\\Program Files', 'Docker', 'Docker', 'resources', 'bin', 'docker.exe'),
-        path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Docker', 'Docker', 'resources', 'bin', 'docker.exe'),
+        path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'Programs', 'Docker', 'Docker', 'resources', 'bin', 'docker.exe'),
+        path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'Docker', 'Docker', 'resources', 'bin', 'docker.exe'),
       ]
     : [
         '/usr/local/bin/docker',
@@ -1426,9 +1427,12 @@ export function launchDockerDesktop(): boolean {
       return true;
     }
     if (IS_WIN) {
+      const localAppData = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
       const paths = [
-        process.env['ProgramFiles'] + '\\Docker\\Docker\\Docker Desktop.exe',
-        process.env['ProgramFiles(x86)'] + '\\Docker\\Docker\\Docker Desktop.exe',
+        process.env['ProgramFiles'] ? process.env['ProgramFiles'] + '\\Docker\\Docker\\Docker Desktop.exe' : '',
+        process.env['ProgramFiles(x86)'] ? process.env['ProgramFiles(x86)'] + '\\Docker\\Docker\\Docker Desktop.exe' : '',
+        localAppData + '\\Programs\\Docker\\Docker\\Docker Desktop.exe',
+        localAppData + '\\Docker\\Docker\\Docker Desktop.exe',
       ].filter(Boolean);
       for (const p of paths) {
         try {
@@ -1455,8 +1459,10 @@ export function launchDockerDesktop(): boolean {
 export function isDockerWslMountHealthy(): boolean {
   if (!IS_WIN) return true;
   try {
+    const distro = getWslDefaultDistro();
+    if (!distro) return false;
     const result = execSync(
-      'wsl -d Ubuntu -u root -e stat -c "%s %a" /mnt/wsl/docker-desktop/docker-desktop-user-distro',
+      `wsl -d ${distro} -u root -e stat -c "%s %a" /mnt/wsl/docker-desktop/docker-desktop-user-distro`,
       { encoding: 'utf-8', timeout: 8000, stdio: 'pipe', windowsHide: true },
     ).replace(/\0/g, '').trim();
     const [sizeStr, perms] = result.split(' ');
@@ -1784,26 +1790,18 @@ export async function updateWsl(onProgress?: (msg: string) => void): Promise<boo
     await new Promise(r => setTimeout(r, 3000));
   }
 
-  // Check if wsl --version works now
-  const ver = execSyncSafe('wsl --version', 10000);
-  if (ver) {
+  // Check if wsl --version works now (use try/catch — execSyncSafe throws on failure)
+  let ver = '';
+  try { ver = execSyncSafe('wsl --version', 10000); } catch { /* expected on fresh PCs */ }
+  if (ver && /WSL version/i.test(ver.replace(/\0/g, ''))) {
     logApp('info', `WSL ready: ${ver.split('\n')[0]?.trim()}`);
     onProgress?.('WSL installed successfully');
     return true;
   }
 
-  // WSL still not working after the elevated script ran.
-  // The most likely cause: features were just enabled for the first time and
-  // Windows needs a reboot to activate the kernel components.
-  // Per Microsoft docs: "Changes will not be effective until the system is rebooted."
-  logApp('info', 'WSL still not functional after elevated setup — reboot likely required');
-  onProgress?.('Windows needs a restart to finish setting up WSL.');
-  return 'reboot';
-
-  // Fallback: MSI download + install
+  // Try MSI fallback before giving up — wsl --install may have failed silently
   const tmpDir = os.tmpdir();
   const msiPath = path.join(tmpDir, 'wsl_latest.msi');
-
   try {
     onProgress?.('Downloading WSL update...');
     const url = getWslMsiUrl();
@@ -1817,28 +1815,34 @@ export async function updateWsl(onProgress?: (msg: string) => void): Promise<boo
     const stat = fs.statSync(msiPath);
     if (stat.size < 10_000_000) {
       logApp('warn', `WSL MSI suspiciously small (${stat.size} bytes)`);
-      return false;
-    }
-    logApp('info', `WSL MSI downloaded: ${Math.round(stat.size / 1048576)} MB`);
-
-    onProgress?.('Installing WSL update...');
-    const sudo = require('@vscode/sudo-prompt');
-    await new Promise<void>((resolve, reject) => {
-      sudo.exec(`msiexec.exe /i "${msiPath}" /quiet /norestart`, { name: 'Valnaa' }, (error: Error | null) => {
-        if (error) return reject(error);
-        resolve();
+    } else {
+      logApp('info', `WSL MSI downloaded: ${Math.round(stat.size / 1048576)} MB`);
+      onProgress?.('Installing WSL update...');
+      const sudo2 = require('@vscode/sudo-prompt');
+      await new Promise<void>((resolve, reject) => {
+        sudo2.exec(`msiexec.exe /i "${msiPath}" /quiet /norestart`, { name: 'Valnaa' }, (error: Error | null) => {
+          if (error) return reject(error);
+          resolve();
+        });
       });
-    });
 
-    const verAfter = execSync('wsl --version', { encoding: 'utf-8', timeout: 10000, stdio: 'pipe', windowsHide: true }).replace(/\0/g, '');
-    logApp('info', `WSL updated successfully: ${verAfter.split('\n')[0]?.trim()}`);
-    onProgress?.('WSL updated successfully');
-    return true;
+      let verAfter = '';
+      try { verAfter = execSyncSafe('wsl --version', 10000); } catch { /* still may need reboot */ }
+      if (verAfter && /WSL version/i.test(verAfter.replace(/\0/g, ''))) {
+        logApp('info', `WSL updated successfully: ${verAfter.split('\n')[0]?.trim()}`);
+        onProgress?.('WSL updated successfully');
+        return true;
+      }
+    }
   } catch (e: any) {
-    logApp('error', `WSL update failed: ${e.message}`);
-    onProgress?.(`WSL update failed: ${e.message}`);
-    return false;
+    logApp('warn', `WSL MSI fallback failed: ${e.message}`);
   }
+
+  // WSL still not working after elevated setup + MSI fallback.
+  // Features were likely just enabled and Windows needs a reboot.
+  logApp('info', 'WSL still not functional after setup — reboot likely required');
+  onProgress?.('Windows needs a restart to finish setting up WSL.');
+  return 'reboot';
 }
 
 /**
@@ -1852,19 +1856,42 @@ export async function installWslDistro(onProgress?: (msg: string) => void): Prom
   try {
     onProgress?.('Installing Ubuntu in WSL (this may take a few minutes)...');
     logApp('info', 'Installing Ubuntu WSL distro');
-    execSync('wsl --install Ubuntu --no-launch', { timeout: 600000, stdio: 'pipe', windowsHide: true });
 
-    onProgress?.('Setting Ubuntu as default WSL distro...');
-    execSync('wsl --set-default Ubuntu', { timeout: 15000, stdio: 'pipe', windowsHide: true });
+    // Use sudo-prompt for elevation — wsl --install requires admin on Windows 10
+    const sudo = require('@vscode/sudo-prompt');
+    await new Promise<void>((resolve, reject) => {
+      sudo.exec('wsl --install Ubuntu --no-launch', { name: 'Valnaa' }, (error: Error | null) => {
+        if (error) return reject(error);
+        resolve();
+      });
+    });
 
-    // Verify bash is accessible
-    const check = execSync('wsl bash -c "echo ok"', { encoding: 'utf-8', timeout: 30000, stdio: 'pipe', windowsHide: true }).replace(/\0/g, '').trim();
-    if (check.includes('ok')) {
-      logApp('info', 'Ubuntu WSL distro installed and set as default');
-      onProgress?.('Ubuntu installed successfully');
-      return true;
+    // Detect the actual distro name (might be "Ubuntu", "Ubuntu-24.04", etc.)
+    await new Promise(r => setTimeout(r, 3000));
+    const distro = getWslDefaultDistro();
+    if (distro) {
+      logApp('info', `Installed distro detected as: ${distro}`);
+      try {
+        execSync(`wsl --set-default ${distro}`, { timeout: 15000, stdio: 'pipe', windowsHide: true });
+      } catch { /* best effort — may already be default */ }
     }
-    logApp('warn', `WSL bash check returned unexpected: ${check}`);
+
+    // Verify bash is accessible (retry a few times — first boot can be slow)
+    onProgress?.('Verifying WSL installation...');
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const check = execSync('wsl bash -c "echo ok"', { encoding: 'utf-8', timeout: 60000, stdio: 'pipe', windowsHide: true }).replace(/\0/g, '').trim();
+        if (check.includes('ok')) {
+          logApp('info', 'WSL distro installed and verified');
+          onProgress?.('Ubuntu installed successfully');
+          return true;
+        }
+      } catch (e: any) {
+        logApp('warn', `WSL bash check attempt ${attempt + 1} failed: ${e.message}`);
+        await new Promise(r => setTimeout(r, 5000));
+      }
+    }
+    logApp('warn', 'WSL bash check failed after retries');
     return false;
   } catch (e: any) {
     logApp('error', `WSL distro install failed: ${e.message}`);

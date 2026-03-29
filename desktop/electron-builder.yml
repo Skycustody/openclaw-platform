@@ -12,6 +12,9 @@ files:
   - "!src/**/*"
   - "!node_modules/.cache/**/*"
 
+asarUnpack:
+  - "node_modules/@vscode/sudo-prompt/**/*"
+
 protocols:
   - name: Valnaa
     schemes:
