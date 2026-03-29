@@ -31,8 +31,7 @@ mac:
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
   gatekeeperAssess: false
-  notarize:
-    teamId: "3K5P6R49A5"
+  notarize: true
 
 dmg:
   title: Valnaa
