@@ -1763,17 +1763,43 @@ export async function updateWsl(onProgress?: (msg: string) => void): Promise<boo
   scriptLines.push("wsl --install --no-launch 2>&1 | Out-Null");
 
   if (scriptLines.length > 0) {
-    onProgress?.('Setting up WSL — please approve the admin permission prompt...');
-    const joined = scriptLines.join('; ');
+    onProgress?.('Setting up WSL — an admin permission prompt will appear...');
+
+    // Write the elevated commands to a temp .ps1 file so the elevated
+    // PowerShell window can run hidden (no flashing windows).
+    // Output goes to a log file so we can read the result.
+    const tmpDir = os.tmpdir();
+    const scriptPath = path.join(tmpDir, 'valnaa_wsl_setup.ps1');
+    const logPath = path.join(tmpDir, 'valnaa_wsl_setup.log');
+    const doneMarker = path.join(tmpDir, 'valnaa_wsl_setup.done');
+    try { fs.unlinkSync(doneMarker); } catch {}
+    try { fs.unlinkSync(logPath); } catch {}
+
+    const scriptContent = [
+      ...scriptLines,
+      `'DONE' | Out-File -FilePath '${doneMarker.replace(/\\/g, '\\\\')}' -Encoding utf8`,
+    ].join('\r\n');
+    fs.writeFileSync(scriptPath, scriptContent, 'utf-8');
+
     try {
-      logApp('info', `Running elevated WSL setup: ${joined}`);
+      logApp('info', `Running elevated WSL setup script: ${scriptPath}`);
+      // Start-Process with -Verb RunAs triggers UAC, -Wait blocks until complete,
+      // -WindowStyle Hidden prevents the PowerShell window from flashing
       execSync(
-        `powershell -Command "Start-Process powershell -ArgumentList '-Command', '${joined.replace(/'/g, "''")}' -Verb RunAs -Wait"`,
+        `powershell -Command "Start-Process powershell -ArgumentList '-ExecutionPolicy Bypass -WindowStyle Hidden -File \\\"${scriptPath.replace(/\\/g, '\\\\')}\\\"' -Verb RunAs -Wait"`,
         { timeout: 600000, stdio: 'pipe', windowsHide: true },
       );
-      logApp('info', 'Elevated WSL setup script completed');
+
+      if (fs.existsSync(doneMarker)) {
+        logApp('info', 'Elevated WSL setup script completed successfully');
+      } else {
+        logApp('warn', 'Elevated WSL setup script did not write done marker — may have been cancelled');
+      }
     } catch (e: any) {
       logApp('warn', `Elevated WSL setup failed: ${e.message}`);
+    } finally {
+      try { fs.unlinkSync(scriptPath); } catch {}
+      try { fs.unlinkSync(doneMarker); } catch {}
     }
 
     // Give Windows a moment to finalize feature changes
