@@ -1763,7 +1763,7 @@ export async function updateWsl(onProgress?: (msg: string) => void): Promise<boo
   scriptLines.push("wsl --install --no-launch 2>&1 | Out-Null");
 
   if (scriptLines.length > 0) {
-    onProgress?.('Setting up WSL (an admin permission prompt will appear)...');
+    onProgress?.('Setting up WSL — please approve the admin permission prompt...');
     const joined = scriptLines.join('; ');
     try {
       logApp('info', `Running elevated WSL setup: ${joined}`);
@@ -1775,6 +1775,9 @@ export async function updateWsl(onProgress?: (msg: string) => void): Promise<boo
     } catch (e: any) {
       logApp('warn', `Elevated WSL setup failed: ${e.message}`);
     }
+
+    // Give Windows a moment to finalize feature changes
+    await new Promise(r => setTimeout(r, 3000));
   }
 
   // Check if wsl --version works now
@@ -1785,14 +1788,25 @@ export async function updateWsl(onProgress?: (msg: string) => void): Promise<boo
     return true;
   }
 
-  // WSL still not working — if features were just freshly enabled, a reboot is needed
+  // WSL still not working — check what happened
   if (!featuresAlreadyEnabled) {
     const nowWsl = isWindowsFeatureEnabled('Microsoft-Windows-Subsystem-Linux');
     const nowVm = isWindowsFeatureEnabled('VirtualMachinePlatform');
+    logApp('info', `After setup — WSL feature: ${nowWsl}, VM Platform: ${nowVm}`);
+
     if (nowWsl && nowVm) {
+      // Features were enabled successfully but WSL needs a reboot to take effect
+      // This is expected per Microsoft docs: "Changes will not be effective until the system is rebooted"
       logApp('info', 'Windows features freshly enabled but WSL not ready — reboot required');
       onProgress?.('Windows features enabled — a restart is required.');
       return 'reboot';
+    }
+
+    if (!nowWsl || !nowVm) {
+      // Features still not enabled — the user likely denied the UAC prompt
+      logApp('error', 'Windows features still not enabled — UAC prompt was likely denied');
+      onProgress?.('Admin permission is required to install WSL. Please tap Retry and approve the prompt.');
+      return false;
     }
   }
 
