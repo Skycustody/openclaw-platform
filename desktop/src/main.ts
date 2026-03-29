@@ -1020,7 +1020,7 @@ async function runSetupFlow(runtime: RuntimeType): Promise<void> {
             });
             if (!wslOk) {
               throw new Error(
-                'WSL setup failed. Please run "wsl --update" in an elevated PowerShell, then tap Retry.',
+                'WSL setup failed. If a Windows permission dialog appeared behind this window, please approve it and tap Retry. If the problem persists, restart your computer and try again.',
               );
             }
             if (isDockerRunning()) {

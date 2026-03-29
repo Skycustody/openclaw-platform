@@ -1724,11 +1724,57 @@ export function getWslMsiUrl(): string {
 }
 
 /**
+ * Enable the Windows Optional Features required by WSL 2 (elevated).
+ * Silently succeeds if already enabled.
+ */
+function enableWslWindowsFeatures(onProgress?: (msg: string) => void): void {
+  const features = ['Microsoft-Windows-Subsystem-Linux', 'VirtualMachinePlatform'];
+  for (const feat of features) {
+    try {
+      onProgress?.(`Enabling Windows feature: ${feat}...`);
+      execSync(
+        `powershell -Command "Start-Process powershell -ArgumentList '-Command', 'Enable-WindowsOptionalFeature -Online -FeatureName ${feat} -NoRestart -All' -Verb RunAs -Wait"`,
+        { timeout: 120000, stdio: 'pipe', windowsHide: true },
+      );
+      logApp('info', `Windows feature enabled: ${feat}`);
+    } catch (e: any) {
+      logApp('warn', `Could not enable ${feat}: ${e.message}`);
+    }
+  }
+}
+
+/**
  * Download and install the latest WSL MSI. Requires UAC elevation.
+ * Falls back to `wsl --install --no-launch` if the MSI approach fails.
  * Returns true on success.
  */
 export async function updateWsl(onProgress?: (msg: string) => void): Promise<boolean> {
   if (!IS_WIN) return true;
+
+  // Step 0: enable required Windows features (VirtualMachinePlatform, WSL)
+  onProgress?.('Enabling Windows features for WSL...');
+  enableWslWindowsFeatures(onProgress);
+
+  // Step 1: try `wsl --install --no-launch` first (handles everything on modern Windows 10/11)
+  try {
+    onProgress?.('Installing WSL (this may take a few minutes)...');
+    logApp('info', 'Trying wsl --install --no-launch (elevated)');
+    execSync(
+      `powershell -Command "Start-Process wsl.exe -ArgumentList '--install', '--no-launch' -Verb RunAs -Wait"`,
+      { timeout: 600000, stdio: 'pipe', windowsHide: true },
+    );
+    // Check if it worked
+    const ver = execSyncSafe('wsl --version', 10000);
+    if (ver) {
+      logApp('info', `WSL installed via wsl --install: ${ver.split('\n')[0]?.trim()}`);
+      onProgress?.('WSL installed successfully');
+      return true;
+    }
+  } catch (e: any) {
+    logApp('warn', `wsl --install failed, falling back to MSI: ${e.message}`);
+  }
+
+  // Step 2: fallback to MSI download + install
   const tmpDir = os.tmpdir();
   const msiPath = path.join(tmpDir, 'wsl_latest.msi');
 
@@ -1750,7 +1796,7 @@ export async function updateWsl(onProgress?: (msg: string) => void): Promise<boo
     }
     logApp('info', `WSL MSI downloaded: ${Math.round(stat.size / 1048576)} MB`);
 
-    onProgress?.('Installing WSL update (admin permission required)...');
+    onProgress?.('Installing WSL update...');
     execSync(
       `powershell -Command "Start-Process msiexec.exe -ArgumentList '/i \\\"${msiPath}\\\" /quiet /norestart' -Verb RunAs -Wait"`,
       { timeout: 300000, stdio: 'pipe', windowsHide: true },
