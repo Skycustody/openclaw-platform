@@ -1777,23 +1777,23 @@ export async function updateWsl(onProgress?: (msg: string) => void): Promise<boo
     }
   }
 
-  // If features weren't enabled before, a reboot is almost certainly required
-  if (!featuresAlreadyEnabled) {
-    const nowWsl = isWindowsFeatureEnabled('Microsoft-Windows-Subsystem-Linux');
-    const nowVm = isWindowsFeatureEnabled('VirtualMachinePlatform');
-    if (nowWsl && nowVm) {
-      logApp('info', 'Windows features enabled — reboot required for WSL to work');
-      onProgress?.('Windows features enabled — a restart is required.');
-      return 'reboot';
-    }
-  }
-
   // Check if wsl --version works now
   const ver = execSyncSafe('wsl --version', 10000);
   if (ver) {
     logApp('info', `WSL ready: ${ver.split('\n')[0]?.trim()}`);
     onProgress?.('WSL installed successfully');
     return true;
+  }
+
+  // WSL still not working — if features were just freshly enabled, a reboot is needed
+  if (!featuresAlreadyEnabled) {
+    const nowWsl = isWindowsFeatureEnabled('Microsoft-Windows-Subsystem-Linux');
+    const nowVm = isWindowsFeatureEnabled('VirtualMachinePlatform');
+    if (nowWsl && nowVm) {
+      logApp('info', 'Windows features freshly enabled but WSL not ready — reboot required');
+      onProgress?.('Windows features enabled — a restart is required.');
+      return 'reboot';
+    }
   }
 
   // Fallback: MSI download + install
