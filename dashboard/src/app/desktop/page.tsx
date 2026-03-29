@@ -11,6 +11,8 @@ import {
   Check,
   ArrowRight,
   Shield,
+  ShieldCheck,
+  BadgeCheck,
   Wifi,
   WifiOff,
   Terminal,
@@ -146,7 +148,21 @@ export default function DesktopPage() {
           </TrackedDownloadLink>
         </div>
 
-        <p className="mt-4 text-center text-xs text-muted-foreground">
+        <div className="mt-6 flex items-center justify-center gap-6">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <ShieldCheck className="size-3.5 text-green-400" />
+            <span>Apple Notarized</span>
+          </div>
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <ShieldCheck className="size-3.5 text-blue-400" />
+            <span>Microsoft Signed</span>
+          </div>
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <BadgeCheck className="size-3.5 text-muted-foreground" />
+            <span>Verified Safe</span>
+          </div>
+        </div>
+        <p className="mt-3 text-center text-xs text-muted-foreground">
           Requires a Desktop subscription or active trial.{' '}
           <a href={DOWNLOAD_BASE} className="underline underline-offset-2 hover:text-foreground" target="_blank" rel="noopener noreferrer">
             All releases
@@ -311,6 +327,97 @@ export default function DesktopPage() {
         </div>
       </section>
 
+      {/* Signed & Notarized */}
+      <section className="mx-auto max-w-5xl border-t border-border px-6 py-16">
+        <div className="mx-auto max-w-2xl text-center">
+          <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-green-500/20 bg-green-500/5 px-3 py-1 text-xs text-green-400">
+            <ShieldCheck className="size-3" />
+            Signed &amp; Notarized
+          </div>
+          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Trusted by Apple &amp; Microsoft</h2>
+          <p className="mt-3 text-sm text-muted-foreground">
+            Every Valnaa release is cryptographically signed and verified — your OS trusts it out of the box.
+          </p>
+        </div>
+
+        <div className="mt-12 grid grid-cols-1 gap-6 sm:grid-cols-2">
+          <div className="rounded-xl border border-border bg-card/30 p-6">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-background">
+                <AppleLogo className="h-5 w-5 text-muted-foreground" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold">Apple Notarized</h3>
+                <p className="text-xs text-muted-foreground">macOS Gatekeeper trusted</p>
+              </div>
+            </div>
+            <ul className="mt-5 space-y-2.5">
+              {[
+                'Signed with Developer ID certificate',
+                'Submitted to Apple\'s notary service',
+                'Scanned for malware by Apple',
+                'No "unidentified developer" warning',
+                'Installs cleanly — just drag & drop',
+              ].map((item) => (
+                <li key={item} className="flex items-start gap-2 text-sm text-foreground/70">
+                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-green-400" />
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-5 rounded-lg border border-border bg-background/50 p-3">
+              <p className="font-mono text-[11px] leading-relaxed text-muted-foreground">
+                <span className="text-green-400">&#10004; accepted</span><br />
+                source=Notarized Developer ID<br />
+                origin=Developer ID Application:<br />
+                Mac-Bride Nana Zemkwe (3K5P6R49A5)
+              </p>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-border bg-card/30 p-6">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-background">
+                <svg className="h-5 w-5 text-muted-foreground" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold">Microsoft Signed</h3>
+                <p className="text-xs text-muted-foreground">Azure Trusted Signing</p>
+              </div>
+            </div>
+            <ul className="mt-5 space-y-2.5">
+              {[
+                'Signed via Azure Trusted Signing',
+                'Verified publisher identity',
+                'No SmartScreen warning',
+                'Trusted by Windows Defender',
+                'Clean install — no security blocks',
+              ].map((item) => (
+                <li key={item} className="flex items-start gap-2 text-sm text-foreground/70">
+                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-400" />
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-5 rounded-lg border border-border bg-background/50 p-3">
+              <p className="font-mono text-[11px] leading-relaxed text-muted-foreground">
+                <span className="text-blue-400">&#10004; signed</span><br />
+                publisher=Nana Zemkwe Mac-Bride<br />
+                method=Azure Trusted Signing<br />
+                profile=valnaa-signing
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <p className="mt-8 text-center text-xs text-muted-foreground">
+          You can verify signing yourself:{' '}
+          <span className="font-mono text-[11px]">codesign -dvv Valnaa.app</span> on Mac or right-click → Properties → Digital Signatures on Windows.
+        </p>
+      </section>
+
       {/* FAQ */}
       <section className="mx-auto max-w-5xl border-t border-border px-6 py-16">
         <div className="mx-auto max-w-2xl">
@@ -336,6 +443,10 @@ export default function DesktopPage() {
               {
                 q: 'What operating systems are supported?',
                 a: 'macOS (Intel & Apple Silicon) and Windows 10/11. Linux support is coming soon.',
+              },
+              {
+                q: 'Is the app safe to install?',
+                a: 'Yes. The macOS app is signed with an Apple Developer ID certificate and notarized by Apple — Gatekeeper trusts it on download. The Windows installer is signed via Azure Trusted Signing. You\'ll never see an "unidentified developer" or SmartScreen warning.',
               },
             ].map((item) => (
               <div key={item.q} className="rounded-xl border border-border bg-card/30 p-5">
