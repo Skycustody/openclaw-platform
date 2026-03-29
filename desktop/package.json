@@ -1,6 +1,6 @@
 {
   "name": "valnaa",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "description": "Valnaa — your personal AI agent, powered by OpenClaw",
   "main": "dist/main.js",
   "private": true,

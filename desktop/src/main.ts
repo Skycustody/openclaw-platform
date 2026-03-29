@@ -1338,9 +1338,10 @@ async function runSetupFlow(runtime: RuntimeType): Promise<void> {
             step.detail = 'Trying npm install as fallback...';
             sendSteps(steps);
             try {
-              const npmCmd = `npm install -g nemoclaw@latest --prefix "${path.join(os.homedir(), '.local')}"`;
+              const nvmSource = 'source "$HOME/.nvm/nvm.sh" 2>/dev/null; ';
+              const npmCmd = `${nvmSource}npm install -g nemoclaw@latest --prefix "${path.join(os.homedir(), '.local')}"`;
               const exitCode = await runCommandInSetupPty(
-                isIntelMac() ? `export PATH="$HOME/.local/bin:$PATH" && ${npmCmd}` : npmCmd,
+                isIntelMac() ? `export PATH="$HOME/.local/bin:/usr/local/bin:$PATH" && ${npmCmd}` : npmCmd,
                 installEnv,
               );
               logApp('info', `npm fallback exited with code ${exitCode}`);
@@ -1353,18 +1354,19 @@ async function runSetupFlow(runtime: RuntimeType): Promise<void> {
               break;
             }
 
-            // Final fallback: wget instead of curl
-            step.detail = 'Trying alternative download method...';
+            // Final fallback: pipe curl directly to bash (avoids temp file issues)
+            step.detail = 'Trying alternative install method...';
             sendSteps(steps);
             try {
-              const wgetCmd = 'wget -qO /tmp/nemoclaw-install.sh https://nvidia.com/nemoclaw.sh && bash /tmp/nemoclaw-install.sh';
+              const nvmSource = 'source "$HOME/.nvm/nvm.sh" 2>/dev/null; ';
+              const pipeCmd = `${nvmSource}curl -fsSL https://nvidia.com/nemoclaw.sh | bash`;
               const exitCode = await runCommandInSetupPty(
-                isIntelMac() ? `export PATH="$HOME/.local/bin:$PATH" && ${wgetCmd}` : wgetCmd,
+                isIntelMac() ? `export PATH="$HOME/.local/bin:/usr/local/bin:$PATH" && ${pipeCmd}` : pipeCmd,
                 installEnv,
               );
-              logApp('info', `wget fallback exited with code ${exitCode}`);
+              logApp('info', `Pipe-to-bash fallback exited with code ${exitCode}`);
             } catch (e: any) {
-              logApp('warn', `wget fallback failed: ${e.message}`);
+              logApp('warn', `Pipe-to-bash fallback failed: ${e.message}`);
             }
 
             if (!findNemoClawBinary()) {

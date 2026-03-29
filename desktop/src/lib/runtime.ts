@@ -1569,8 +1569,9 @@ export function getNemoClawInstallCommand(): string {
   if (IS_WIN) {
     return 'wsl bash -c "curl -fsSL https://nvidia.com/nemoclaw.sh -o /tmp/nemoclaw-install.sh && bash /tmp/nemoclaw-install.sh"';
   }
-  const pathPrefix = isIntelMac() ? `export PATH="$HOME/.local/bin:$PATH" && ` : '';
-  return `${pathPrefix}curl -fsSL https://nvidia.com/nemoclaw.sh -o /tmp/nemoclaw-install.sh && bash /tmp/nemoclaw-install.sh`;
+  const pathPrefix = isIntelMac() ? `export PATH="$HOME/.local/bin:/usr/local/bin:$PATH" && ` : '';
+  const nvmSource = 'source "$HOME/.nvm/nvm.sh" 2>/dev/null; ';
+  return `${pathPrefix}${nvmSource}curl -fsSL https://nvidia.com/nemoclaw.sh -o /tmp/nemoclaw-install.sh && bash /tmp/nemoclaw-install.sh`;
 }
 
 export function getNemoClawOnboardCommand(): string {
