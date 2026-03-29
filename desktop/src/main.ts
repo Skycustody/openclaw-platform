@@ -1,4 +1,5 @@
-import { app, BrowserWindow, ipcMain, Tray, Menu, shell, nativeImage, dialog, safeStorage, clipboard } from 'electron';
+import { app, BrowserWindow, ipcMain, Tray, Menu, shell, nativeImage, dialog, clipboard } from 'electron';
+import crypto from 'crypto';
 import path from 'path';
 import os from 'os';
 import fs from 'fs';
@@ -864,29 +865,29 @@ function waitForApiKeySubmission(timeoutMs = 600_000): Promise<{ provider: strin
 
 const API_KEY_FILE = path.join(getAppDataDir(), 'inference-key.enc');
 
+function deriveEncryptionKey(): Buffer {
+  const seed = `${os.hostname()}:${os.userInfo().username}:valnaa-local-key`;
+  return crypto.createHash('sha256').update(seed).digest();
+}
+
 function persistApiKey(provider: string, apiKey: string): void {
-  const fs = require('fs');
   const dir = path.dirname(API_KEY_FILE);
   fs.mkdirSync(dir, { recursive: true });
   const payload = JSON.stringify({ provider, key: apiKey });
-  if (safeStorage.isEncryptionAvailable()) {
-    const encrypted = safeStorage.encryptString(payload);
-    fs.writeFileSync(API_KEY_FILE, encrypted);
-  } else {
-    fs.writeFileSync(API_KEY_FILE, payload);
-  }
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv('aes-256-cbc', deriveEncryptionKey(), iv);
+  const encrypted = Buffer.concat([iv, cipher.update(payload, 'utf-8'), cipher.final()]);
+  fs.writeFileSync(API_KEY_FILE, encrypted);
 }
 
 function loadPersistedApiKey(): { provider: string; key: string } | null {
-  const fs = require('fs');
   try {
     const buf = fs.readFileSync(API_KEY_FILE);
-    let payload: string;
-    if (safeStorage.isEncryptionAvailable()) {
-      payload = safeStorage.decryptString(buf);
-    } else {
-      payload = buf.toString('utf-8');
-    }
+    if (buf.length < 17) return null;
+    const iv = buf.subarray(0, 16);
+    const data = buf.subarray(16);
+    const decipher = crypto.createDecipheriv('aes-256-cbc', deriveEncryptionKey(), iv);
+    const payload = decipher.update(data, undefined, 'utf-8') + decipher.final('utf-8');
     return JSON.parse(payload);
   } catch {
     return null;
