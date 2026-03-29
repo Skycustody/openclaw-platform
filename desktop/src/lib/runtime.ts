@@ -1683,26 +1683,38 @@ export function hasUsableWslDistro(): boolean {
   return getWslDefaultDistro() !== null;
 }
 
-/** Check if WSL is installed and its version is recent enough for Docker Desktop. */
+/**
+ * Check if WSL is truly functional — not just whether wsl.exe exists.
+ * wsl.exe is an inbox Windows binary that responds to --version even when
+ * the underlying features are disabled, so we verify by trying to list distros.
+ */
 export function isWslHealthy(): boolean {
   if (!IS_WIN) return true;
   try {
-    const out = execSync('wsl --version', { encoding: 'utf-8', timeout: 10000, stdio: 'pipe', windowsHide: true });
-    return /WSL version/i.test(out.replace(/\0/g, ''));
-  } catch {
-    return false;
+    // wsl --status will fail with a meaningful error if the VM platform isn't ready
+    const out = execSync('wsl --status', { encoding: 'utf-8', timeout: 10000, stdio: 'pipe', windowsHide: true });
+    const clean = out.replace(/\0/g, '');
+    // If it mentions "enable Virtual Machine" or similar, WSL isn't functional
+    if (/enable.*virtual|not.*enabled|reboot/i.test(clean)) return false;
+    return true;
+  } catch (err: any) {
+    const msg = `${err.stderr || ''} ${err.stdout || ''} ${err.message || ''}`.replace(/\0/g, '');
+    // "class not registered" or similar means WSL is completely absent
+    if (/class not registered|REGDB_E_CLASSNOTREG|not recognized/i.test(msg)) return false;
+    // Other errors (e.g. "no installed distributions") still mean WSL itself works
+    return true;
   }
 }
 
 /**
  * Detect if WSL needs updating (the error that blocks Docker Desktop).
- * Returns true if `wsl --update` or `wsl --version` signals a problem.
+ * Returns true if `wsl --version` signals a problem.
  */
 export function wslNeedsUpdate(): boolean {
   if (!IS_WIN) return false;
   try {
-    const out = execSync('wsl --version', { encoding: 'utf-8', timeout: 10000, stdio: 'pipe', windowsHide: true });
-    return false; // version command works, WSL is fine
+    execSync('wsl --version', { encoding: 'utf-8', timeout: 10000, stdio: 'pipe', windowsHide: true });
+    return false;
   } catch (err: any) {
     const msg = `${err.stderr || ''} ${err.stdout || ''} ${err.message || ''}`.replace(/\0/g, '');
     return /class not registered|REGDB_E_CLASSNOTREG|not recognized|is not a valid/i.test(msg);
@@ -1723,44 +1735,22 @@ export function getWslMsiUrl(): string {
   return 'https://github.com/microsoft/WSL/releases/latest/download/wsl.2.6.3.0.x64.msi';
 }
 
-/** Check whether a Windows Optional Feature is enabled. */
-function isWindowsFeatureEnabled(featureName: string): boolean {
-  try {
-    const out = execSync(
-      `powershell -Command "(Get-WindowsOptionalFeature -Online -FeatureName ${featureName}).State"`,
-      { encoding: 'utf-8', timeout: 15000, stdio: 'pipe', windowsHide: true },
-    ).trim();
-    return /enabled/i.test(out);
-  } catch {
-    return false;
-  }
-}
-
 /**
  * Download and install the latest WSL MSI. Requires UAC elevation.
  * On fresh PCs, enables required Windows features and installs WSL in a
- * single elevated script (one UAC prompt). If features were just enabled,
- * returns 'reboot' to signal the caller that a restart is needed.
+ * single elevated script (one UAC prompt). If WSL still doesn't work
+ * afterward, returns 'reboot' (features need a restart to activate).
  */
 export async function updateWsl(onProgress?: (msg: string) => void): Promise<boolean | 'reboot'> {
   if (!IS_WIN) return true;
 
-  const wslFeatureOn = isWindowsFeatureEnabled('Microsoft-Windows-Subsystem-Linux');
-  const vmFeatureOn = isWindowsFeatureEnabled('VirtualMachinePlatform');
-  const featuresAlreadyEnabled = wslFeatureOn && vmFeatureOn;
-
-  logApp('info', `Windows features — WSL: ${wslFeatureOn}, VM Platform: ${vmFeatureOn}`);
-
-  // Build a single elevated PowerShell script that does everything in one UAC prompt
-  const scriptLines: string[] = [];
-
-  if (!wslFeatureOn) {
-    scriptLines.push("Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux -NoRestart -All -ErrorAction SilentlyContinue");
-  }
-  if (!vmFeatureOn) {
-    scriptLines.push("Enable-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform -NoRestart -All -ErrorAction SilentlyContinue");
-  }
-  scriptLines.push("wsl --install --no-launch 2>&1 | Out-Null");
+  // Always include both feature-enable commands. They're no-ops if already
+  // enabled, so there's no need for a pre-check (which would require admin).
+  const scriptLines: string[] = [
+    "Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux -NoRestart -All -ErrorAction SilentlyContinue",
+    "Enable-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform -NoRestart -All -ErrorAction SilentlyContinue",
+    "wsl --install --no-launch 2>&1 | Out-Null",
+  ];
 
   if (scriptLines.length > 0) {
     onProgress?.('Setting up WSL — an admin permission prompt will appear...');
@@ -1802,27 +1792,13 @@ export async function updateWsl(onProgress?: (msg: string) => void): Promise<boo
     return true;
   }
 
-  // WSL still not working — check what happened
-  if (!featuresAlreadyEnabled) {
-    const nowWsl = isWindowsFeatureEnabled('Microsoft-Windows-Subsystem-Linux');
-    const nowVm = isWindowsFeatureEnabled('VirtualMachinePlatform');
-    logApp('info', `After setup — WSL feature: ${nowWsl}, VM Platform: ${nowVm}`);
-
-    if (nowWsl && nowVm) {
-      // Features were enabled successfully but WSL needs a reboot to take effect
-      // This is expected per Microsoft docs: "Changes will not be effective until the system is rebooted"
-      logApp('info', 'Windows features freshly enabled but WSL not ready — reboot required');
-      onProgress?.('Windows features enabled — a restart is required.');
-      return 'reboot';
-    }
-
-    if (!nowWsl || !nowVm) {
-      // Features still not enabled — the user likely denied the UAC prompt
-      logApp('error', 'Windows features still not enabled — UAC prompt was likely denied');
-      onProgress?.('Admin permission is required to install WSL. Please tap Retry and approve the prompt.');
-      return false;
-    }
-  }
+  // WSL still not working after the elevated script ran.
+  // The most likely cause: features were just enabled for the first time and
+  // Windows needs a reboot to activate the kernel components.
+  // Per Microsoft docs: "Changes will not be effective until the system is rebooted."
+  logApp('info', 'WSL still not functional after elevated setup — reboot likely required');
+  onProgress?.('Windows needs a restart to finish setting up WSL.');
+  return 'reboot';
 
   // Fallback: MSI download + install
   const tmpDir = os.tmpdir();
