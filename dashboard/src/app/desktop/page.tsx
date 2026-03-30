@@ -8,6 +8,7 @@
 import { useState, useEffect, type SVGProps } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TrackedDownloadLink } from '@/components/TrackedDownloadLink';
 import {
@@ -22,6 +23,17 @@ import {
   BookOpen,
   ChevronRight,
   ExternalLink,
+  LayoutDashboard,
+  Radio,
+  Server,
+  MessagesSquare,
+  BarChart3,
+  Clock,
+  Bot,
+  Sparkles,
+  Network,
+  Settings,
+  Menu,
 } from 'lucide-react';
 
 const BG = '#14120b';
@@ -181,62 +193,157 @@ const FEATURE_ROWS = [
   },
 ];
 
-const APP_TABS = [
-  { key: 'chat', label: 'Chat', icon: MessageSquare, src: '/app-screenshots/chat.png' },
-  { key: 'dashboard', label: 'Dashboard', icon: Monitor, src: '/app-screenshots/dashboard.png' },
-  { key: 'browser', label: 'Browser', icon: Globe, src: '/app-screenshots/browser.png' },
-  { key: 'terminal', label: 'Terminal', icon: Terminal, src: '/app-screenshots/terminal.png' },
-] as const;
+/** Landing preview: PNG per tab in `public/app-screenshots/{key}.png`. Chat ships with a real capture; add the rest anytime. */
+const GATEWAY_PREVIEW_TABS: { key: string; label: string; src: string; icon: LucideIcon }[] = [
+  { key: 'chat', label: 'Chat', src: '/app-screenshots/chat.png', icon: MessageSquare },
+  { key: 'overview', label: 'Overview', src: '/app-screenshots/dashboard.png', icon: LayoutDashboard },
+  { key: 'channels', label: 'Channels', src: '/app-screenshots/channels.png', icon: Radio },
+  { key: 'instances', label: 'Instances', src: '/app-screenshots/instances.png', icon: Server },
+  { key: 'sessions', label: 'Sessions', src: '/app-screenshots/sessions.png', icon: MessagesSquare },
+  { key: 'usage', label: 'Usage', src: '/app-screenshots/usage.png', icon: BarChart3 },
+  { key: 'cron', label: 'Cron jobs', src: '/app-screenshots/cron.png', icon: Clock },
+  { key: 'agents', label: 'Agents', src: '/app-screenshots/agents.png', icon: Bot },
+  { key: 'skills', label: 'Skills', src: '/app-screenshots/skills.png', icon: Sparkles },
+  { key: 'nodes', label: 'Nodes', src: '/app-screenshots/nodes.png', icon: Network },
+  { key: 'settings', label: 'Settings', src: '/app-screenshots/settings.png', icon: Settings },
+];
+
+const PREVIEW_RED = '#ef4444';
+const PREVIEW_GREEN = '#22c55e';
+
+function GatewayScreenshot({ src, label }: { src: string; label: string }) {
+  const [broken, setBroken] = useState(false);
+
+  return (
+    <div className="relative aspect-[16/10] w-full bg-[#0d0d0d]">
+      {!broken ? (
+        // eslint-disable-next-line @next/next/no-img-element -- user-supplied PNGs in /public; need reliable onError
+        <img
+          src={src}
+          alt={`OpenClaw Control UI: ${label}`}
+          className="h-full w-full object-cover object-top"
+          loading="lazy"
+          decoding="async"
+          onError={() => setBroken(true)}
+        />
+      ) : (
+        <div
+          className="flex h-full min-h-[220px] flex-col items-center justify-center gap-3 px-6 text-center text-[13px]"
+          style={{ color: TEXT_SEC }}
+        >
+          <p className="font-medium text-[#c8c6c0]">{label}</p>
+          <p className="max-w-md text-[12px] leading-relaxed opacity-85">
+            Drop a screenshot into the dashboard as{' '}
+            <code className="rounded bg-white/[0.06] px-1.5 py-0.5 font-mono text-[11px] text-[#d4d2cc]">public{src}</code>
+            , then refresh. Each tab above maps to that file.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function AppPreview({ className }: { className?: string }) {
   const [activeTab, setActiveTab] = useState<string>('chat');
-  const current = APP_TABS.find((t) => t.key === activeTab) ?? APP_TABS[0];
+  const current = GATEWAY_PREVIEW_TABS.find((t) => t.key === activeTab) ?? GATEWAY_PREVIEW_TABS[0];
 
   return (
-    <div className={cn('relative mx-auto w-full max-w-[1040px] select-none', className)}>
+    <div className={cn('relative mx-auto w-full max-w-[1040px]', className)}>
       <div
-        className="overflow-hidden rounded-[10px] border border-white/[0.12] bg-[#1a1916] shadow-[0_28px_70px_rgba(0,0,0,0.45),0_0_0_1px_rgba(255,255,255,0.06)]"
+        className="overflow-hidden rounded-[10px] border border-white/[0.12] bg-[#141414] shadow-[0_28px_70px_rgba(0,0,0,0.45),0_0_0_1px_rgba(255,255,255,0.06)]"
         style={{ boxShadow: '0 28px 70px rgba(0,0,0,0.35), 0 14px 32px rgba(0,0,0,0.2), 0 0 0 1px rgba(255,255,255,0.08)' }}
       >
-        <div className="relative flex h-7 items-center justify-between border-b border-white/[0.08] px-2">
+        {/* macOS shell */}
+        <div className="relative flex h-8 items-center justify-between border-b border-white/[0.08] bg-[#1a1a1a] px-2">
           <div className="flex items-center gap-1.5 pl-1">
-            <span className="inline-block size-2.5 rounded-full bg-[#3d3c38]" />
-            <span className="inline-block size-2.5 rounded-full bg-[#3d3c38]" />
-            <span className="inline-block size-2.5 rounded-full bg-[#3d3c38]" />
+            <span className="inline-block size-2.5 rounded-full bg-[#ff5f57]" />
+            <span className="inline-block size-2.5 rounded-full bg-[#febc2e]" />
+            <span className="inline-block size-2.5 rounded-full bg-[#28c840]" />
           </div>
-          <span className="pointer-events-none absolute top-1/2 left-1/2 max-w-[70%] -translate-x-1/2 -translate-y-1/2 truncate text-center text-[11px] opacity-60" style={{ color: TEXT }}>
+          <span className="pointer-events-none absolute top-1/2 left-1/2 max-w-[70%] -translate-x-1/2 -translate-y-1/2 truncate text-center text-[11px] text-[#8a8884]">
             Valnaa Desktop
           </span>
           <div className="w-14 shrink-0" />
         </div>
-        <div className="flex flex-wrap gap-0.5 border-b border-white/[0.06] bg-[#141312] px-2 py-1.5">
-          {APP_TABS.map((tab) => (
+
+        {/* In-app title bar (OpenClaw gateway chrome) */}
+        <div className="relative flex min-h-[38px] items-center gap-2 border-b border-white/[0.06] bg-[#0d0d0d] px-2 py-1.5 sm:gap-3 sm:px-3">
+          <div className="z-10 flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
             <button
-              key={tab.key}
               type="button"
-              onClick={() => setActiveTab(tab.key)}
-              className={cn(
-                'flex items-center gap-1 rounded-md px-2.5 py-1.5 text-[12px] font-medium transition-colors',
-                activeTab === tab.key ? 'bg-white/[0.08] text-[#f0efea]' : 'text-[#6f6d68] hover:bg-white/[0.04] hover:text-[#b0aea8]'
-              )}
+              className="rounded p-1 text-[#6f6d68] hover:bg-white/[0.05] hover:text-[#b0aea8]"
+              aria-label="Menu (preview)"
             >
-              <tab.icon className="size-3 opacity-80" />
-              {tab.label}
+              <Menu className="size-4 shrink-0" />
             </button>
-          ))}
+            <div
+              className="flex size-6 shrink-0 items-center justify-center rounded-full"
+              style={{ backgroundColor: PREVIEW_RED }}
+            >
+              <span className="text-[9px] font-bold text-white">V</span>
+            </div>
+            <span className="hidden min-w-0 truncate text-[10px] font-semibold uppercase tracking-wide text-[#e8e6e1] sm:inline sm:text-[11px]">
+              OpenClaw gateway
+            </span>
+          </div>
+          <span className="pointer-events-none absolute left-1/2 top-1/2 max-w-[42%] -translate-x-1/2 -translate-y-1/2 truncate text-center text-[11px] font-medium text-[#c8c6c0]">
+            NemoClaw
+          </span>
+          <div className="z-10 flex flex-1 justify-end">
+            <span className="hidden items-center gap-1 rounded-full border border-white/[0.08] bg-[#141414] px-2 py-0.5 text-[9px] text-[#9c9a94] sm:inline-flex">
+              <span className="size-1.5 rounded-full" style={{ backgroundColor: PREVIEW_GREEN }} />
+              Health OK
+            </span>
+          </div>
         </div>
-        <div className="relative aspect-[16/10] w-full bg-black">
-          <Image
-            src={current.src}
-            alt={`Valnaa Desktop, ${current.label}`}
-            fill
-            className="object-cover object-top"
-            priority
-          />
+
+        {/* Clickable gateway tabs */}
+        <div
+          role="tablist"
+          aria-label="Gateway views"
+          className="flex gap-0.5 overflow-x-auto border-b border-white/[0.08] bg-[#0d0d0d] px-1 py-1 [scrollbar-width:thin]"
+        >
+          {GATEWAY_PREVIEW_TABS.map((tab) => {
+            const selected = activeTab === tab.key;
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                id={`gateway-tab-${tab.key}`}
+                aria-controls={`gateway-panel-${tab.key}`}
+                onClick={() => setActiveTab(tab.key)}
+                className={cn(
+                  'flex shrink-0 items-center gap-1 rounded-md px-2 py-1.5 text-[11px] font-medium transition-colors sm:gap-1.5 sm:px-2.5 sm:text-[12px]',
+                  selected
+                    ? 'bg-[#1a1a1a] text-[#f5f4ef]'
+                    : 'text-[#6f6d68] hover:bg-white/[0.04] hover:text-[#b0aea8]'
+                )}
+                style={
+                  selected
+                    ? { boxShadow: `inset 0 0 0 1px ${PREVIEW_RED}` }
+                    : undefined
+                }
+              >
+                <tab.icon className="size-3 shrink-0 opacity-90 sm:size-3.5" />
+                <span className="whitespace-nowrap">{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div
+          role="tabpanel"
+          id={`gateway-panel-${current.key}`}
+          aria-labelledby={`gateway-tab-${current.key}`}
+        >
+          <GatewayScreenshot src={current.src} label={current.label} />
         </div>
       </div>
       <p className="mt-4 text-center text-[12px]" style={{ color: TEXT_SEC }}>
-        Interactive preview. Gateway, sandbox, browser relay, and terminal after one click install.
+        Click a tab to preview each Control UI screen. Add PNGs under{' '}
+        <code className="rounded bg-white/[0.06] px-1 font-mono text-[11px]">public/app-screenshots/</code>.
       </p>
     </div>
   );
