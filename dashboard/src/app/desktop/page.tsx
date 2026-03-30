@@ -21,6 +21,14 @@ import {
   Monitor,
   Zap,
   Sparkles,
+  Play,
+  Bot,
+  Clock,
+  FileText,
+  Search,
+  Code,
+  Send,
+  ChevronRight,
 } from 'lucide-react';
 
 function AppleLogo({ className }: { className?: string }) {
@@ -83,6 +91,60 @@ const INCLUDED = [
   '1-day free trial',
 ];
 
+const AGENT_TASKS = [
+  {
+    title: 'Research competitor pricing',
+    status: 'Completed',
+    time: '3m 12s',
+    steps: ['Searched 8 websites', 'Extracted pricing tables', 'Generated comparison spreadsheet'],
+    model: 'GPT-4o',
+  },
+  {
+    title: 'Monitor Hacker News for mentions',
+    status: 'Running',
+    time: '24/7',
+    steps: ['Watching front page', 'Filtering for keywords', 'Sending Telegram alerts'],
+    model: 'Claude Sonnet',
+  },
+  {
+    title: 'Summarize daily emails',
+    status: 'Scheduled',
+    time: 'Every 8am',
+    steps: ['Read inbox via IMAP', 'Categorize by priority', 'Send digest to Slack'],
+    model: 'Gemini Pro',
+  },
+];
+
+const TESTIMONIALS = [
+  {
+    quote: "I replaced three different tools with Valnaa Desktop. The local agent handles my Telegram bot, does research, and manages files — all from one app.",
+    name: 'Marcus R.',
+    role: 'Indie Developer',
+  },
+  {
+    quote: "The zero-setup experience is real. Downloaded, signed in, and had an AI agent running on my Mac in under 2 minutes. No terminal, no Docker, nothing.",
+    name: 'Sarah K.',
+    role: 'Product Manager',
+  },
+  {
+    quote: "Being able to use my own API keys and run everything locally means my client data never touches anyone else's servers. That's a dealbreaker for consulting.",
+    name: 'James L.',
+    role: 'Security Consultant',
+  },
+  {
+    quote: "The built-in browser automation is incredibly powerful. My agent scrapes data, fills forms, and navigates complex workflows — all running privately on my laptop.",
+    name: 'Elena M.',
+    role: 'Data Analyst',
+  },
+];
+
+const CHANGELOG = [
+  { date: 'Mar 25, 2026', title: 'WSL auto-setup improvements', desc: 'Better detection, no UAC flash' },
+  { date: 'Mar 19, 2026', title: 'Browser automation v2', desc: 'Faster page loads, form filling' },
+  { date: 'Mar 11, 2026', title: 'Multi-model support', desc: 'Switch models mid-conversation' },
+  { date: 'Mar 5, 2026', title: 'Scheduled tasks', desc: 'Cron-style recurring agent runs' },
+];
+
 export default function DesktopPage() {
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -110,7 +172,7 @@ export default function DesktopPage() {
       {/* Hero */}
       <section className="relative mx-auto max-w-5xl overflow-hidden">
         <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(250,250,250,0.04),transparent_60%)]" />
-        <div className="relative flex flex-col items-center justify-center gap-6 px-4 pt-28 pb-24 sm:pt-36 sm:pb-32">
+        <div className="relative flex flex-col items-center justify-center gap-6 px-4 pt-28 pb-20 sm:pt-36 sm:pb-24">
           <div
             className={cn(
               'mx-auto flex w-fit items-center gap-2 rounded-full border bg-card px-3 py-1 shadow',
@@ -166,6 +228,114 @@ export default function DesktopPage() {
         </div>
       </section>
 
+      {/* Product demo / App preview */}
+      <section className="relative mx-auto max-w-5xl px-6 pb-24">
+        <div className="fade-in animate-in fill-mode-backwards delay-700 duration-700 ease-out">
+          <div className="relative rounded-[1.25rem] border-[0.75px] border-border p-2 md:rounded-[1.5rem] md:p-3">
+            <GlowingEffect spread={60} glow={true} disabled={false} proximity={80} inactiveZone={0.01} borderWidth={2} />
+            <div className="relative overflow-hidden rounded-xl border-[0.75px] border-border bg-[#0a0a0a]">
+              {/* Window chrome */}
+              <div className="flex items-center gap-2 border-b border-border/50 bg-[#111] px-4 py-3">
+                <div className="flex gap-1.5">
+                  <div className="h-3 w-3 rounded-full bg-[#ff5f57]" />
+                  <div className="h-3 w-3 rounded-full bg-[#febc2e]" />
+                  <div className="h-3 w-3 rounded-full bg-[#28c840]" />
+                </div>
+                <div className="ml-4 flex-1 rounded-md bg-[#1a1a1a] px-3 py-1">
+                  <span className="text-xs text-muted-foreground/60">Valnaa Desktop</span>
+                </div>
+              </div>
+              {/* App mockup content */}
+              <div className="grid grid-cols-1 md:grid-cols-[240px_1fr]">
+                {/* Sidebar */}
+                <div className="hidden border-r border-border/30 bg-[#0d0d0d] p-4 md:block">
+                  <div className="mb-6 flex items-center gap-2">
+                    <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-foreground/20 to-foreground/5" />
+                    <div>
+                      <p className="text-xs font-medium text-foreground/80">My Agent</p>
+                      <p className="text-[10px] text-muted-foreground">Running · GPT-4o</p>
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    {['Chat', 'Skills', 'Channels', 'Browser', 'Terminal', 'Settings'].map((item, i) => (
+                      <div
+                        key={item}
+                        className={cn(
+                          'flex items-center gap-2 rounded-md px-2.5 py-1.5 text-xs',
+                          i === 0 ? 'bg-foreground/10 text-foreground' : 'text-muted-foreground'
+                        )}
+                      >
+                        {i === 0 && <MessageSquare className="size-3" />}
+                        {i === 1 && <Zap className="size-3" />}
+                        {i === 2 && <Send className="size-3" />}
+                        {i === 3 && <Globe className="size-3" />}
+                        {i === 4 && <Terminal className="size-3" />}
+                        {i === 5 && <Code className="size-3" />}
+                        {item}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-6 rounded-lg border border-border/30 bg-[#111] p-3">
+                    <p className="text-[10px] font-medium text-muted-foreground">Connected</p>
+                    <div className="mt-2 space-y-1.5">
+                      {['Telegram', 'Discord', 'Slack'].map((ch) => (
+                        <div key={ch} className="flex items-center gap-1.5">
+                          <div className="h-1.5 w-1.5 rounded-full bg-green-400" />
+                          <span className="text-[10px] text-foreground/60">{ch}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                {/* Main chat area */}
+                <div className="flex flex-col p-6">
+                  <div className="space-y-4">
+                    <div className="flex gap-3">
+                      <div className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-foreground/10">
+                        <Bot className="size-3.5 text-foreground/60" />
+                      </div>
+                      <div className="space-y-2">
+                        <p className="text-sm text-foreground/80">I&apos;ll research competitor pricing for you. Let me browse their websites and compile the data.</p>
+                        <div className="rounded-lg border border-border/30 bg-[#111] p-3">
+                          <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                            <Search className="size-3" />
+                            <span>Browsing competitor-a.com/pricing...</span>
+                          </div>
+                          <div className="mt-2 flex items-center gap-2 text-[10px] text-muted-foreground">
+                            <Search className="size-3" />
+                            <span>Browsing competitor-b.com/pricing...</span>
+                          </div>
+                          <div className="mt-2 flex items-center gap-2 text-[10px] text-green-400/70">
+                            <Check className="size-3" />
+                            <span>Found pricing data from 5 competitors</span>
+                          </div>
+                        </div>
+                        <div className="rounded-lg border border-border/30 bg-[#111] p-3">
+                          <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                            <FileText className="size-3" />
+                            <span>Generated comparison_report.csv</span>
+                          </div>
+                        </div>
+                        <p className="text-sm text-foreground/80">Done! I found pricing from 5 competitors. Here&apos;s the breakdown — Competitor A is 40% more expensive for the same features.</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-8 flex items-center gap-2 rounded-xl border border-border/30 bg-[#111] px-4 py-3">
+                    <span className="flex-1 text-sm text-muted-foreground/40">Ask your agent anything...</span>
+                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-foreground/10">
+                      <ArrowRight className="size-3.5 text-foreground/40" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p className="mt-4 text-center text-xs text-muted-foreground/50">
+          Valnaa Desktop running an OpenClaw agent locally
+        </p>
+      </section>
+
       {/* Trust badges */}
       <section className="border-t border-border">
         <div className="mx-auto grid max-w-4xl grid-cols-1 gap-0 divide-border sm:grid-cols-3 sm:divide-x">
@@ -177,6 +347,69 @@ export default function DesktopPage() {
             <div key={item.title} className="px-8 py-8 text-center">
               <p className="text-sm font-semibold text-foreground">{item.title}</p>
               <p className="mt-1.5 text-sm text-muted-foreground">{item.desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Agent workflows — like Cursor's agent task cards */}
+      <section className="relative mx-auto max-w-5xl border-t border-border px-6 py-24">
+        <div className="mx-auto max-w-2xl text-center">
+          <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs text-muted-foreground">
+            <Bot className="size-3" />
+            Agent in action
+          </div>
+          <h2 className="text-3xl font-bold tracking-tight md:text-4xl">Runs tasks autonomously</h2>
+          <p className="mt-3 text-base text-muted-foreground">
+            Give your agent a task and it handles everything — browsing, files, messaging, scheduling.
+          </p>
+        </div>
+
+        <div className="mt-16 grid grid-cols-1 gap-4 md:grid-cols-3">
+          {AGENT_TASKS.map((task) => (
+            <div key={task.title} className="min-h-[16rem]">
+              <div className="relative h-full rounded-[1.25rem] border-[0.75px] border-border p-2 md:rounded-[1.5rem] md:p-3">
+                <GlowingEffect spread={40} glow={true} disabled={false} proximity={64} inactiveZone={0.01} borderWidth={3} />
+                <div className="relative flex h-full flex-col overflow-hidden rounded-xl border-[0.75px] border-border bg-background p-5">
+                  <div className="flex items-center justify-between">
+                    <span className={cn(
+                      'rounded-full px-2 py-0.5 text-[10px] font-medium',
+                      task.status === 'Completed' && 'bg-green-500/10 text-green-400',
+                      task.status === 'Running' && 'bg-blue-500/10 text-blue-400',
+                      task.status === 'Scheduled' && 'bg-amber-500/10 text-amber-400',
+                    )}>
+                      {task.status}
+                    </span>
+                    <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                      <Clock className="size-2.5" />
+                      {task.time}
+                    </span>
+                  </div>
+
+                  <h3 className="mt-3 text-sm font-semibold leading-snug">{task.title}</h3>
+
+                  <div className="mt-4 flex-1 space-y-2">
+                    {task.steps.map((step, i) => (
+                      <div key={step} className="flex items-start gap-2">
+                        <div className={cn(
+                          'mt-1 h-1.5 w-1.5 shrink-0 rounded-full',
+                          task.status === 'Completed' ? 'bg-green-400/60' :
+                          task.status === 'Running' && i < 2 ? 'bg-blue-400/60' : 'bg-muted-foreground/30'
+                        )} />
+                        <span className="text-xs text-muted-foreground">{step}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-4 flex items-center justify-between border-t border-border/50 pt-3">
+                    <span className="text-[10px] text-muted-foreground">{task.model}</span>
+                    <div className="flex items-center gap-1 text-[10px] text-foreground/40">
+                      <span>View details</span>
+                      <ChevronRight className="size-2.5" />
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           ))}
         </div>
@@ -213,6 +446,38 @@ export default function DesktopPage() {
                         {f.desc}
                       </p>
                     </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Testimonials — like Cursor's quote carousel */}
+      <section className="relative mx-auto max-w-5xl border-t border-border px-6 py-24">
+        <div className="mx-auto max-w-2xl text-center">
+          <h2 className="text-3xl font-bold tracking-tight md:text-4xl">Loved by developers</h2>
+          <p className="mt-3 text-base text-muted-foreground">
+            Real people running real agents on their own machines.
+          </p>
+        </div>
+
+        <div className="mt-16 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {TESTIMONIALS.map((t) => (
+            <div key={t.name} className="relative rounded-[1.25rem] border-[0.75px] border-border p-2 md:rounded-[1.5rem] md:p-3">
+              <GlowingEffect spread={40} glow={true} disabled={false} proximity={64} inactiveZone={0.01} borderWidth={2} />
+              <div className="relative flex h-full flex-col rounded-xl border-[0.75px] border-border bg-background p-6">
+                <p className="flex-1 text-sm leading-relaxed text-foreground/70 italic">
+                  &ldquo;{t.quote}&rdquo;
+                </p>
+                <div className="mt-5 flex items-center gap-3 border-t border-border/50 pt-4">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-foreground/10 text-xs font-semibold text-foreground/60">
+                    {t.name.split(' ').map((n) => n[0]).join('')}
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-foreground/80">{t.name}</p>
+                    <p className="text-[10px] text-muted-foreground">{t.role}</p>
                   </div>
                 </div>
               </div>
@@ -370,6 +635,47 @@ export default function DesktopPage() {
               </div>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* Changelog */}
+      <section className="relative mx-auto max-w-5xl border-t border-border px-6 py-24">
+        <div className="mx-auto max-w-2xl text-center">
+          <h2 className="text-3xl font-bold tracking-tight md:text-4xl">Changelog</h2>
+          <p className="mt-3 text-base text-muted-foreground">
+            We ship fast. Here&apos;s what&apos;s new.
+          </p>
+        </div>
+
+        <div className="mx-auto mt-12 max-w-2xl space-y-0">
+          {CHANGELOG.map((entry, i) => (
+            <div key={entry.title} className="group relative flex gap-6 pb-8">
+              {/* Timeline line */}
+              {i < CHANGELOG.length - 1 && (
+                <div className="absolute top-5 left-[7px] h-full w-px bg-border" />
+              )}
+              {/* Dot */}
+              <div className="relative mt-1.5 h-[15px] w-[15px] shrink-0">
+                <div className="absolute inset-0 rounded-full border border-border bg-background" />
+                <div className={cn(
+                  'absolute inset-[3px] rounded-full',
+                  i === 0 ? 'bg-foreground' : 'bg-muted-foreground/30'
+                )} />
+              </div>
+              {/* Content */}
+              <div className="flex-1 pb-4">
+                <p className="text-xs text-muted-foreground">{entry.date}</p>
+                <h3 className="mt-1 text-sm font-semibold">{entry.title}</h3>
+                <p className="mt-0.5 text-sm text-muted-foreground">{entry.desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-4 text-center">
+          <Link href="https://github.com/Skycustody/valnaa-desktop/releases" className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground">
+            See all releases <ArrowRight className="size-3" />
+          </Link>
         </div>
       </section>
 
