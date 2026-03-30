@@ -25,9 +25,6 @@ import {
   ExternalLink,
   FileText,
   Settings,
-  LayoutGrid,
-  Code2,
-  ScrollText,
 } from 'lucide-react';
 
 const BG = '#14120b';
@@ -187,184 +184,127 @@ const FEATURE_ROWS = [
   },
 ];
 
-/**
- * Valnaa Desktop shell preview. Screenshots in capture order (full PNGs, no repo recompression).
- * Files: public/app-screenshots/01-gateway-chat.png … 07-settings.png
- */
-const DESKTOP_SHELL_TABS: { key: string; label: string; src: string; icon: LucideIcon }[] = [
-  { key: 'gateway', label: 'Gateway chat', src: '/app-screenshots/01-gateway-chat.png', icon: MessageSquare },
-  { key: 'sandbox', label: 'NemoClaw dashboard', src: '/app-screenshots/02-nemoclaw-dashboard.png', icon: LayoutGrid },
-  { key: 'relay', label: 'Browser relay', src: '/app-screenshots/03-browser-relay.png', icon: Globe },
+/** All seven screens mapped to left view tabs (3) + right toolbar buttons (4). */
+const ALL_SCREENS: { key: string; label: string; src: string; icon: LucideIcon }[] = [
+  { key: 'chat', label: 'Gateway chat', src: '/app-screenshots/01-gateway-chat.png', icon: MessageSquare },
+  { key: 'dashboard', label: 'NemoClaw dashboard', src: '/app-screenshots/02-nemoclaw-dashboard.png', icon: Monitor },
+  { key: 'browser', label: 'Browser relay', src: '/app-screenshots/03-browser-relay.png', icon: Globe },
   { key: 'terminal', label: 'Terminal', src: '/app-screenshots/04-terminal.png', icon: Terminal },
-  { key: 'commands', label: 'Command reference', src: '/app-screenshots/05-command-reference.png', icon: Code2 },
-  { key: 'logs', label: 'Gateway logs', src: '/app-screenshots/06-gateway-logs.png', icon: ScrollText },
+  { key: 'commands', label: 'Command reference', src: '/app-screenshots/05-command-reference.png', icon: Monitor },
+  { key: 'logs', label: 'Gateway logs', src: '/app-screenshots/06-gateway-logs.png', icon: FileText },
   { key: 'settings', label: 'Settings', src: '/app-screenshots/07-settings.png', icon: Settings },
 ];
 
-const SHELL_BAR_BG = '#121212';
-const SHELL_CONTENT_BG = '#0d0d0d';
-const SHELL_FOOTER_BG = '#1a1a1a';
-const SHELL_ACCENT_GREEN = '#22c55e';
-
-function DesktopShellScreenshot({ src, label, fetchPriority }: { src: string; label: string; fetchPriority?: 'high' | 'low' | 'auto' }) {
-  const [broken, setBroken] = useState(false);
-
-  return (
-    <div className="relative w-full bg-[#0a0a0a]">
-      {!broken ? (
-        // eslint-disable-next-line @next/next/no-img-element -- serve original PNG bytes; avoid Next/Image resize
-        <img
-          src={src}
-          alt={`Valnaa Desktop — ${label}`}
-          className="block h-auto w-full max-w-full"
-          width={undefined}
-          height={undefined}
-          loading={fetchPriority === 'high' ? 'eager' : 'lazy'}
-          decoding="async"
-          fetchPriority={fetchPriority}
-          onError={() => setBroken(true)}
-        />
-      ) : (
-        <div
-          className="flex min-h-[220px] flex-col items-center justify-center gap-3 px-6 py-16 text-center text-[13px]"
-          style={{ color: TEXT_SEC }}
-        >
-          <p className="font-medium text-[#c8c6c0]">{label}</p>
-          <p className="max-w-md text-[12px] leading-relaxed opacity-85">
-            Add{' '}
-            <code className="rounded bg-white/[0.06] px-1.5 py-0.5 font-mono text-[11px] text-[#d4d2cc]">public{src}</code>
-            , then refresh.
-          </p>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ShellToolbarIcon({ icon: Icon, label }: { icon: LucideIcon; label: string }) {
-  return (
-    <span className="flex size-8 items-center justify-center rounded-md text-[#8a8884]" aria-hidden title={label}>
-      <Icon className="size-[18px]" strokeWidth={1.5} />
-    </span>
-  );
-}
+const LEFT_TABS = ALL_SCREENS.slice(0, 3);
+const RIGHT_TABS = ALL_SCREENS.slice(3);
 
 function AppPreview({ className }: { className?: string }) {
-  const [activeTab, setActiveTab] = useState<string>('gateway');
-  const current = DESKTOP_SHELL_TABS.find((t) => t.key === activeTab) ?? DESKTOP_SHELL_TABS[0];
+  const [activeKey, setActiveKey] = useState<string>('chat');
+  const current = ALL_SCREENS.find((s) => s.key === activeKey) ?? ALL_SCREENS[0];
+  const [broken, setBroken] = useState<Record<string, boolean>>({});
+
+  function tabBtn(screen: typeof ALL_SCREENS[number]) {
+    const selected = activeKey === screen.key;
+    return (
+      <button
+        key={screen.key}
+        type="button"
+        role="tab"
+        aria-selected={selected}
+        aria-label={screen.label}
+        title={screen.label}
+        onClick={() => setActiveKey(screen.key)}
+        className={cn(
+          'flex size-9 items-center justify-center rounded-md transition-colors',
+          selected ? 'bg-white/[0.08] text-[#e8e6e1]' : 'text-[#6f6d68] hover:text-[#a8a6a0]'
+        )}
+      >
+        <screen.icon className="size-[17px]" strokeWidth={1.6} />
+      </button>
+    );
+  }
 
   return (
-    <div className={cn('relative mx-auto w-full max-w-[1040px]', className)}>
+    <div className={cn('relative mx-auto w-full max-w-[1024px]', className)}>
       <div
-        className="overflow-hidden rounded-[10px] border border-white/[0.1] bg-[#121212] shadow-[0_28px_70px_rgba(0,0,0,0.45),0_0_0_1px_rgba(255,255,255,0.06)]"
-        style={{ boxShadow: '0 28px 70px rgba(0,0,0,0.35), 0 14px 32px rgba(0,0,0,0.2), 0 0 0 1px rgba(255,255,255,0.08)' }}
+        className="overflow-hidden rounded-[10px] border border-white/[0.1] bg-[#111]"
+        style={{ boxShadow: '0 28px 70px rgba(0,0,0,0.4), 0 14px 32px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.06)' }}
       >
+        {/* Top bar: traffic lights | 3 left tabs | NemoClaw | 4 right tabs */}
         <div
-          className="relative flex h-11 shrink-0 items-center border-b border-[#2a2a2a] pl-2 pr-1.5"
-          style={{ backgroundColor: SHELL_BAR_BG }}
+          className="relative flex h-11 items-center border-b border-[#2a2a2a] px-2.5"
+          style={{ backgroundColor: '#111' }}
         >
-          <div className="flex shrink-0 items-center gap-1.5 pr-2">
-            <span className="inline-block size-2.5 rounded-full bg-[#ff5f57]" />
-            <span className="inline-block size-2.5 rounded-full bg-[#febc2e]" />
-            <span className="inline-block size-2.5 rounded-full bg-[#28c840]" />
+          <div className="flex shrink-0 items-center gap-[6px] pr-3">
+            <span className="inline-block size-[11px] rounded-full bg-[#ff5f57]" />
+            <span className="inline-block size-[11px] rounded-full bg-[#febc2e]" />
+            <span className="inline-block size-[11px] rounded-full bg-[#28c840]" />
           </div>
 
-          <div
-            role="tablist"
-            aria-label="Screenshots in app order"
-            className="mx-1 flex min-w-0 max-w-[42%] flex-1 items-center gap-0.5 overflow-x-auto [scrollbar-width:thin] sm:max-w-none sm:flex-none"
-          >
-            {DESKTOP_SHELL_TABS.map((tab) => {
-              const selected = activeTab === tab.key;
-              return (
-                <button
-                  key={tab.key}
-                  type="button"
-                  role="tab"
-                  aria-selected={selected}
-                  aria-label={tab.label}
-                  title={tab.label}
-                  id={`shell-tab-${tab.key}`}
-                  aria-controls={`shell-panel-${tab.key}`}
-                  onClick={() => setActiveTab(tab.key)}
-                  className={cn(
-                    'flex size-8 shrink-0 items-center justify-center rounded-md text-[#737370] transition-colors sm:size-9',
-                    selected && 'bg-white/[0.08] text-[#f0efea] shadow-[inset_0_-2px_0_0_rgba(255,255,255,0.95)]'
-                  )}
-                >
-                  <tab.icon className="size-[16px] sm:size-[18px]" strokeWidth={1.5} />
-                </button>
-              );
-            })}
+          <div role="tablist" aria-label="Left views" className="flex shrink-0 items-center">
+            {LEFT_TABS.map(tabBtn)}
           </div>
 
-          <span className="pointer-events-none absolute left-1/2 top-1/2 max-w-[22%] -translate-x-1/2 -translate-y-1/2 truncate text-center text-[11px] font-semibold tracking-tight text-[#b8b6b1] sm:max-w-[32%] sm:text-[13px]">
+          <span className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-[13px] font-semibold tracking-tight text-[#b8b6b1]">
             NemoClaw
           </span>
 
-          <div className="ml-auto flex shrink-0 items-center gap-0.5">
-            <ShellToolbarIcon icon={Terminal} label="Terminal" />
-            <ShellToolbarIcon icon={BookOpen} label="Command guide" />
-            <ShellToolbarIcon icon={FileText} label="Docs" />
-            <ShellToolbarIcon icon={Settings} label="Settings" />
+          <div role="tablist" aria-label="Right views" className="ml-auto flex shrink-0 items-center">
+            {RIGHT_TABS.map(tabBtn)}
           </div>
         </div>
 
-        <div
-          role="tabpanel"
-          id={`shell-panel-${current.key}`}
-          aria-labelledby={`shell-tab-${current.key}`}
-          style={{ backgroundColor: SHELL_CONTENT_BG }}
-        >
-          <DesktopShellScreenshot
-            src={current.src}
-            label={current.label}
-            fetchPriority={activeTab === 'gateway' ? 'high' : 'auto'}
-          />
+        {/* Screenshot */}
+        <div style={{ backgroundColor: '#0a0a0a' }}>
+          {!broken[current.key] ? (
+            // eslint-disable-next-line @next/next/no-img-element -- original PNGs, no recompression
+            <img
+              key={current.key}
+              src={current.src}
+              alt={`Valnaa Desktop — ${current.label}`}
+              width={1024}
+              height={624}
+              className="block w-full"
+              style={{ imageRendering: 'auto', height: 'auto' }}
+              loading={current.key === 'chat' ? 'eager' : 'lazy'}
+              decoding="async"
+              onError={() => setBroken((prev) => ({ ...prev, [current.key]: true }))}
+            />
+          ) : (
+            <div className="flex h-[400px] items-center justify-center text-[13px]" style={{ color: TEXT_SEC }}>
+              {current.label}
+            </div>
+          )}
         </div>
 
+        {/* Footer */}
         <div
-          className="flex h-9 items-center justify-between gap-2 border-t border-[#2a2a2a] px-3 text-[11px]"
-          style={{ backgroundColor: SHELL_FOOTER_BG, color: TEXT_SEC }}
+          className="flex h-9 items-center justify-between border-t border-[#2a2a2a] px-3 text-[11px]"
+          style={{ backgroundColor: '#161616', color: TEXT_SEC }}
         >
-          <span className="flex min-w-0 items-center gap-2 truncate">
-            <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: SHELL_ACCENT_GREEN }} />
-            <span className="truncate text-[#b0aea8]">Running on :18789</span>
+          <span className="flex items-center gap-2">
+            <span className="size-2 rounded-full bg-[#22c55e]" />
+            <span className="text-[#b0aea8]">Running on :18789</span>
           </span>
-          <div className="flex shrink-0 items-center gap-1.5">
-            <span
-              className="rounded border border-white/[0.08] bg-[#141414] px-2 py-0.5 text-[10px] text-[#5c5a55]"
-              aria-hidden
-            >
-              Start
-            </span>
-            <span
-              className="rounded border border-white/[0.1] bg-[#222] px-2 py-0.5 text-[10px] text-[#c8c6c0]"
-              aria-hidden
-            >
-              Stop
-            </span>
-            <span
-              className="rounded border border-white/[0.1] bg-[#222] px-2 py-0.5 text-[10px] text-[#c8c6c0]"
-              aria-hidden
-            >
-              Restart
-            </span>
-            <span
-              className="rounded border border-white/[0.1] bg-[#222] px-2 py-0.5 text-[10px] text-[#c8c6c0]"
-              aria-hidden
-            >
-              Refresh
-            </span>
+          <div className="flex items-center gap-1.5">
+            {['Start', 'Stop', 'Restart', 'Refresh'].map((label) => (
+              <span
+                key={label}
+                className={cn(
+                  'rounded border px-2 py-0.5 text-[10px]',
+                  label === 'Start'
+                    ? 'border-white/[0.06] bg-[#141414] text-[#5c5a55]'
+                    : 'border-white/[0.1] bg-[#222] text-[#c8c6c0]'
+                )}
+                aria-hidden
+              >
+                {label}
+              </span>
+            ))}
             <span className="pl-1 text-[10px] text-[#5c5a55] tabular-nums">v33.4.11</span>
           </div>
         </div>
       </div>
-      <p className="mt-4 text-center text-[12px]" style={{ color: TEXT_SEC }}>
-        Seven full resolution captures in app order. Tap an icon to switch. Replace PNGs in{' '}
-        <code className="rounded bg-white/[0.06] px-1 font-mono text-[11px]">public/app-screenshots/</code>{' '}
-        (01–07) anytime.
-      </p>
     </div>
   );
 }
