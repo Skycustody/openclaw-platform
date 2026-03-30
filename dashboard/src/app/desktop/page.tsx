@@ -11,7 +11,6 @@ import Image from 'next/image';
 import { cn } from '@/lib/utils';
 import { TrackedDownloadLink } from '@/components/TrackedDownloadLink';
 import {
-  Download,
   Check,
   ArrowRight,
   ShieldCheck,
@@ -28,6 +27,14 @@ import {
 const BG = '#14120b';
 const TEXT = '#f0efea';
 const TEXT_SEC = '#9c9a94';
+
+function WindowsLogo({ className, ...props }: SVGProps<SVGSVGElement>) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden {...props}>
+      <path d="M3 3h9v9H3V3zm9 0h9v9h-9V3zM3 12h9v9H3v-9zm9 0h9v9h-9v-9z" />
+    </svg>
+  );
+}
 
 function AppleLogo({ className, ...props }: SVGProps<SVGSVGElement>) {
   return (
@@ -276,6 +283,13 @@ function btnPrimaryClass(extra?: string) {
   );
 }
 
+function btnWindowsOutlineClass(extra?: string) {
+  return cn(
+    'inline-flex items-center justify-center gap-2 rounded-full border border-white/20 bg-transparent px-5 py-2.5 text-[15px] font-medium text-[#f0efea] transition-colors hover:border-white/30 hover:bg-white/[0.06]',
+    extra
+  );
+}
+
 function btnGhostNavClass() {
   return 'rounded-md px-3 py-2 text-[14px] text-[#9c9a94] transition-colors hover:bg-white/[0.04] hover:text-white';
 }
@@ -329,7 +343,7 @@ export default function DesktopPage() {
               <h1 className="mb-5 max-w-[34rem] text-balance text-[clamp(1rem,1.35vw,1.3125rem)] font-medium leading-snug tracking-[-0.02em] text-[#f5f4ef]">
                 Built to make AI simple, Valnaa is the best way to install and use OpenClaw and NemoClaw.
               </h1>
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <TrackedDownloadLink href={macUrl} trackEvent="download_click_mac" className={btnPrimaryClass()}>
                   <AppleLogo className="size-[18px]" />
                   Download for macOS
@@ -337,36 +351,37 @@ export default function DesktopPage() {
                     ⤓
                   </span>
                 </TrackedDownloadLink>
-                <Link
-                  href="/#pricing"
-                  className="inline-flex items-center gap-1 text-[15px] transition-colors hover:text-white"
-                  style={{ color: TEXT_SEC }}
-                >
-                  Try Valnaa cloud
-                  <span aria-hidden>→</span>
-                </Link>
-                <TrackedDownloadLink
-                  href={DOWNLOAD_WIN}
-                  trackEvent="download_click_win"
-                  className="inline-flex items-center gap-1 text-[15px] text-[#9c9a94] transition-colors hover:text-white"
-                >
+                <TrackedDownloadLink href={DOWNLOAD_WIN} trackEvent="download_click_win" className={btnWindowsOutlineClass()}>
+                  <WindowsLogo className="size-[18px]" />
                   Download for Windows
-                  <span aria-hidden>→</span>
+                  <span className="text-lg leading-none" aria-hidden>
+                    ⤓
+                  </span>
                 </TrackedDownloadLink>
               </div>
-              <div className="mt-6 flex flex-wrap gap-x-6 gap-y-2 text-[12px]" style={{ color: TEXT_SEC }}>
-                <span className="inline-flex items-center gap-1.5">
-                  <ShieldCheck className="size-3.5 text-emerald-500/70" />
-                  Apple Notarized
-                </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <ShieldCheck className="size-3.5 text-sky-500/70" />
-                  Microsoft signed
-                </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <BadgeCheck className="size-3.5 opacity-70" />
-                  Free trial
-                </span>
+              <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
+                <Image
+                  src="/valnaa-app-icon.png"
+                  alt="Valnaa Desktop app icon"
+                  width={56}
+                  height={56}
+                  className="size-14 shrink-0 rounded-[12px] shadow-[0_8px_24px_rgba(0,0,0,0.35)] ring-1 ring-white/10"
+                  priority
+                />
+                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-6 sm:gap-y-2 text-[12px]" style={{ color: TEXT_SEC }}>
+                  <span className="inline-flex items-center gap-1.5">
+                    <ShieldCheck className="size-3.5 shrink-0 text-emerald-500/70" />
+                    Apple signed and notarized
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <ShieldCheck className="size-3.5 shrink-0 text-sky-500/70" />
+                    Microsoft Azure Trusted Signing
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <BadgeCheck className="size-3.5 shrink-0 opacity-70" />
+                    Free trial
+                  </span>
+                </div>
               </div>
             </div>
           </div>
