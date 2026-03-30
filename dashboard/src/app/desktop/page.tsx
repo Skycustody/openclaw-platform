@@ -225,7 +225,7 @@ function AppPreview({ className }: { className?: string }) {
   }
 
   return (
-    <div className={cn('relative mx-auto w-full max-w-[1024px]', className)}>
+    <div className={cn('relative mx-auto w-full max-w-[820px]', className)}>
       <div
         className="overflow-hidden rounded-[10px] border border-white/[0.1] bg-[#111]"
         style={{ boxShadow: '0 28px 70px rgba(0,0,0,0.4), 0 14px 32px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.06)' }}
@@ -265,7 +265,7 @@ function AppPreview({ className }: { className?: string }) {
               width={1024}
               height={624}
               className="block w-full"
-              style={{ imageRendering: 'auto', height: 'auto' }}
+              style={{ imageRendering: '-webkit-optimize-contrast', height: 'auto' }}
               loading={current.key === 'chat' ? 'eager' : 'lazy'}
               decoding="async"
               onError={() => setBroken((prev) => ({ ...prev, [current.key]: true }))}
