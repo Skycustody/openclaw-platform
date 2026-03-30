@@ -23,17 +23,8 @@ import {
   BookOpen,
   ChevronRight,
   ExternalLink,
-  LayoutDashboard,
-  Radio,
-  Server,
-  MessagesSquare,
-  BarChart3,
-  Clock,
-  Bot,
-  Sparkles,
-  Network,
+  FileText,
   Settings,
-  Menu,
 } from 'lucide-react';
 
 const BG = '#14120b';
@@ -193,49 +184,43 @@ const FEATURE_ROWS = [
   },
 ];
 
-/** Landing preview: PNG per tab in `public/app-screenshots/{key}.png`. Chat ships with a real capture; add the rest anytime. */
-const GATEWAY_PREVIEW_TABS: { key: string; label: string; src: string; icon: LucideIcon }[] = [
+/** Valnaa Desktop shell (matches app top bar + footer). PNGs: public/app-screenshots/{chat|dashboard|browser}.png */
+const DESKTOP_SHELL_TABS: { key: string; label: string; src: string; icon: LucideIcon }[] = [
   { key: 'chat', label: 'Chat', src: '/app-screenshots/chat.png', icon: MessageSquare },
-  { key: 'overview', label: 'Overview', src: '/app-screenshots/dashboard.png', icon: LayoutDashboard },
-  { key: 'channels', label: 'Channels', src: '/app-screenshots/channels.png', icon: Radio },
-  { key: 'instances', label: 'Instances', src: '/app-screenshots/instances.png', icon: Server },
-  { key: 'sessions', label: 'Sessions', src: '/app-screenshots/sessions.png', icon: MessagesSquare },
-  { key: 'usage', label: 'Usage', src: '/app-screenshots/usage.png', icon: BarChart3 },
-  { key: 'cron', label: 'Cron jobs', src: '/app-screenshots/cron.png', icon: Clock },
-  { key: 'agents', label: 'Agents', src: '/app-screenshots/agents.png', icon: Bot },
-  { key: 'skills', label: 'Skills', src: '/app-screenshots/skills.png', icon: Sparkles },
-  { key: 'nodes', label: 'Nodes', src: '/app-screenshots/nodes.png', icon: Network },
-  { key: 'settings', label: 'Settings', src: '/app-screenshots/settings.png', icon: Settings },
+  { key: 'dashboard', label: 'Dashboard', src: '/app-screenshots/dashboard.png', icon: Monitor },
+  { key: 'browser', label: 'Browser', src: '/app-screenshots/browser.png', icon: Globe },
 ];
 
-const PREVIEW_RED = '#ef4444';
-const PREVIEW_GREEN = '#22c55e';
+const SHELL_BAR_BG = '#121212';
+const SHELL_CONTENT_BG = '#0d0d0d';
+const SHELL_FOOTER_BG = '#1a1a1a';
+const SHELL_ACCENT_GREEN = '#22c55e';
 
-function GatewayScreenshot({ src, label }: { src: string; label: string }) {
+function DesktopShellScreenshot({ src, label }: { src: string; label: string }) {
   const [broken, setBroken] = useState(false);
 
   return (
-    <div className="relative aspect-[16/10] w-full bg-[#0d0d0d]">
+    <div className="relative min-h-[280px] w-full bg-[#0a0a0a] sm:aspect-[16/10] sm:min-h-0">
       {!broken ? (
-        // eslint-disable-next-line @next/next/no-img-element -- user-supplied PNGs in /public; need reliable onError
+        // eslint-disable-next-line @next/next/no-img-element -- PNGs in /public; onError for missing files
         <img
           src={src}
-          alt={`OpenClaw Control UI: ${label}`}
-          className="h-full w-full object-cover object-top"
+          alt={`Valnaa Desktop — ${label}`}
+          className="h-full min-h-[280px] w-full object-cover object-top sm:min-h-0"
           loading="lazy"
           decoding="async"
           onError={() => setBroken(true)}
         />
       ) : (
         <div
-          className="flex h-full min-h-[220px] flex-col items-center justify-center gap-3 px-6 text-center text-[13px]"
+          className="flex h-full min-h-[280px] flex-col items-center justify-center gap-3 px-6 text-center text-[13px]"
           style={{ color: TEXT_SEC }}
         >
           <p className="font-medium text-[#c8c6c0]">{label}</p>
           <p className="max-w-md text-[12px] leading-relaxed opacity-85">
-            Drop a screenshot into the dashboard as{' '}
+            Add{' '}
             <code className="rounded bg-white/[0.06] px-1.5 py-0.5 font-mono text-[11px] text-[#d4d2cc]">public{src}</code>
-            , then refresh. Each tab above maps to that file.
+            , then refresh.
           </p>
         </div>
       )}
@@ -243,106 +228,118 @@ function GatewayScreenshot({ src, label }: { src: string; label: string }) {
   );
 }
 
+function ShellToolbarIcon({ icon: Icon, label }: { icon: LucideIcon; label: string }) {
+  return (
+    <span className="flex size-8 items-center justify-center rounded-md text-[#8a8884]" aria-hidden title={label}>
+      <Icon className="size-[18px]" strokeWidth={1.5} />
+    </span>
+  );
+}
+
 function AppPreview({ className }: { className?: string }) {
   const [activeTab, setActiveTab] = useState<string>('chat');
-  const current = GATEWAY_PREVIEW_TABS.find((t) => t.key === activeTab) ?? GATEWAY_PREVIEW_TABS[0];
+  const current = DESKTOP_SHELL_TABS.find((t) => t.key === activeTab) ?? DESKTOP_SHELL_TABS[0];
 
   return (
     <div className={cn('relative mx-auto w-full max-w-[1040px]', className)}>
       <div
-        className="overflow-hidden rounded-[10px] border border-white/[0.12] bg-[#141414] shadow-[0_28px_70px_rgba(0,0,0,0.45),0_0_0_1px_rgba(255,255,255,0.06)]"
+        className="overflow-hidden rounded-[10px] border border-white/[0.1] bg-[#121212] shadow-[0_28px_70px_rgba(0,0,0,0.45),0_0_0_1px_rgba(255,255,255,0.06)]"
         style={{ boxShadow: '0 28px 70px rgba(0,0,0,0.35), 0 14px 32px rgba(0,0,0,0.2), 0 0 0 1px rgba(255,255,255,0.08)' }}
       >
-        {/* macOS shell */}
-        <div className="relative flex h-8 items-center justify-between border-b border-white/[0.08] bg-[#1a1a1a] px-2">
-          <div className="flex items-center gap-1.5 pl-1">
+        <div
+          className="relative flex h-11 shrink-0 items-center border-b border-[#2a2a2a] pl-2 pr-1.5"
+          style={{ backgroundColor: SHELL_BAR_BG }}
+        >
+          <div className="flex shrink-0 items-center gap-1.5 pr-2">
             <span className="inline-block size-2.5 rounded-full bg-[#ff5f57]" />
             <span className="inline-block size-2.5 rounded-full bg-[#febc2e]" />
             <span className="inline-block size-2.5 rounded-full bg-[#28c840]" />
           </div>
-          <span className="pointer-events-none absolute top-1/2 left-1/2 max-w-[70%] -translate-x-1/2 -translate-y-1/2 truncate text-center text-[11px] text-[#8a8884]">
-            Valnaa Desktop
-          </span>
-          <div className="w-14 shrink-0" />
-        </div>
 
-        {/* In-app title bar (OpenClaw gateway chrome) */}
-        <div className="relative flex min-h-[38px] items-center gap-2 border-b border-white/[0.06] bg-[#0d0d0d] px-2 py-1.5 sm:gap-3 sm:px-3">
-          <div className="z-10 flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
-            <button
-              type="button"
-              className="rounded p-1 text-[#6f6d68] hover:bg-white/[0.05] hover:text-[#b0aea8]"
-              aria-label="Menu (preview)"
-            >
-              <Menu className="size-4 shrink-0" />
-            </button>
-            <div
-              className="flex size-6 shrink-0 items-center justify-center rounded-full"
-              style={{ backgroundColor: PREVIEW_RED }}
-            >
-              <span className="text-[9px] font-bold text-white">V</span>
-            </div>
-            <span className="hidden min-w-0 truncate text-[10px] font-semibold uppercase tracking-wide text-[#e8e6e1] sm:inline sm:text-[11px]">
-              OpenClaw gateway
-            </span>
+          <div role="tablist" aria-label="Main views" className="flex shrink-0 items-center gap-0.5">
+            {DESKTOP_SHELL_TABS.map((tab) => {
+              const selected = activeTab === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  aria-label={tab.label}
+                  id={`shell-tab-${tab.key}`}
+                  aria-controls={`shell-panel-${tab.key}`}
+                  onClick={() => setActiveTab(tab.key)}
+                  className={cn(
+                    'flex size-9 items-center justify-center rounded-md text-[#737370] transition-colors',
+                    selected && 'bg-white/[0.08] text-[#f0efea] shadow-[inset_0_-2px_0_0_rgba(255,255,255,0.95)]'
+                  )}
+                >
+                  <tab.icon className="size-[18px]" strokeWidth={1.5} />
+                </button>
+              );
+            })}
           </div>
-          <span className="pointer-events-none absolute left-1/2 top-1/2 max-w-[42%] -translate-x-1/2 -translate-y-1/2 truncate text-center text-[11px] font-medium text-[#c8c6c0]">
+
+          <span className="pointer-events-none absolute left-1/2 top-1/2 max-w-[46%] -translate-x-1/2 -translate-y-1/2 truncate text-center text-[13px] font-semibold tracking-tight text-[#b8b6b1]">
             NemoClaw
           </span>
-          <div className="z-10 flex flex-1 justify-end">
-            <span className="hidden items-center gap-1 rounded-full border border-white/[0.08] bg-[#141414] px-2 py-0.5 text-[9px] text-[#9c9a94] sm:inline-flex">
-              <span className="size-1.5 rounded-full" style={{ backgroundColor: PREVIEW_GREEN }} />
-              Health OK
-            </span>
-          </div>
-        </div>
 
-        {/* Clickable gateway tabs */}
-        <div
-          role="tablist"
-          aria-label="Gateway views"
-          className="flex gap-0.5 overflow-x-auto border-b border-white/[0.08] bg-[#0d0d0d] px-1 py-1 [scrollbar-width:thin]"
-        >
-          {GATEWAY_PREVIEW_TABS.map((tab) => {
-            const selected = activeTab === tab.key;
-            return (
-              <button
-                key={tab.key}
-                type="button"
-                role="tab"
-                aria-selected={selected}
-                id={`gateway-tab-${tab.key}`}
-                aria-controls={`gateway-panel-${tab.key}`}
-                onClick={() => setActiveTab(tab.key)}
-                className={cn(
-                  'flex shrink-0 items-center gap-1 rounded-md px-2 py-1.5 text-[11px] font-medium transition-colors sm:gap-1.5 sm:px-2.5 sm:text-[12px]',
-                  selected
-                    ? 'bg-[#1a1a1a] text-[#f5f4ef]'
-                    : 'text-[#6f6d68] hover:bg-white/[0.04] hover:text-[#b0aea8]'
-                )}
-                style={
-                  selected
-                    ? { boxShadow: `inset 0 0 0 1px ${PREVIEW_RED}` }
-                    : undefined
-                }
-              >
-                <tab.icon className="size-3 shrink-0 opacity-90 sm:size-3.5" />
-                <span className="whitespace-nowrap">{tab.label}</span>
-              </button>
-            );
-          })}
+          <div className="ml-auto flex shrink-0 items-center gap-0.5">
+            <ShellToolbarIcon icon={Terminal} label="Terminal" />
+            <ShellToolbarIcon icon={BookOpen} label="Command guide" />
+            <ShellToolbarIcon icon={FileText} label="Docs" />
+            <ShellToolbarIcon icon={Settings} label="Settings" />
+          </div>
         </div>
 
         <div
           role="tabpanel"
-          id={`gateway-panel-${current.key}`}
-          aria-labelledby={`gateway-tab-${current.key}`}
+          id={`shell-panel-${current.key}`}
+          aria-labelledby={`shell-tab-${current.key}`}
+          style={{ backgroundColor: SHELL_CONTENT_BG }}
         >
-          <GatewayScreenshot src={current.src} label={current.label} />
+          <DesktopShellScreenshot src={current.src} label={current.label} />
+        </div>
+
+        <div
+          className="flex h-9 items-center justify-between gap-2 border-t border-[#2a2a2a] px-3 text-[11px]"
+          style={{ backgroundColor: SHELL_FOOTER_BG, color: TEXT_SEC }}
+        >
+          <span className="flex min-w-0 items-center gap-2 truncate">
+            <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: SHELL_ACCENT_GREEN }} />
+            <span className="truncate text-[#b0aea8]">Running on :18789</span>
+          </span>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <span
+              className="rounded border border-white/[0.08] bg-[#141414] px-2 py-0.5 text-[10px] text-[#5c5a55]"
+              aria-hidden
+            >
+              Start
+            </span>
+            <span
+              className="rounded border border-white/[0.1] bg-[#222] px-2 py-0.5 text-[10px] text-[#c8c6c0]"
+              aria-hidden
+            >
+              Stop
+            </span>
+            <span
+              className="rounded border border-white/[0.1] bg-[#222] px-2 py-0.5 text-[10px] text-[#c8c6c0]"
+              aria-hidden
+            >
+              Restart
+            </span>
+            <span
+              className="rounded border border-white/[0.1] bg-[#222] px-2 py-0.5 text-[10px] text-[#c8c6c0]"
+              aria-hidden
+            >
+              Refresh
+            </span>
+            <span className="pl-1 text-[10px] text-[#5c5a55] tabular-nums">v33.4.11</span>
+          </div>
         </div>
       </div>
       <p className="mt-4 text-center text-[12px]" style={{ color: TEXT_SEC }}>
-        Click a tab to preview each Control UI screen. Add PNGs under{' '}
+        Preview matches Valnaa Desktop chrome. Use Chat, Dashboard, and Browser to swap shots — files in{' '}
         <code className="rounded bg-white/[0.06] px-1 font-mono text-[11px]">public/app-screenshots/</code>.
       </p>
     </div>
