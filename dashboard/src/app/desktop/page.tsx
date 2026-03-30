@@ -44,20 +44,6 @@ function AppleLogo({ className, ...props }: SVGProps<SVGSVGElement>) {
   );
 }
 
-function CursorCubeLogo({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path
-        d="M12 2l8 4.5v11L12 22l-8-4.5v-11L12 2z"
-        stroke="currentColor"
-        strokeWidth="1.25"
-        strokeLinejoin="round"
-      />
-      <path d="M12 22V12M12 12L4 7.5M12 12l8-4.5" stroke="currentColor" strokeWidth="1.25" />
-    </svg>
-  );
-}
-
 const DOWNLOAD_BASE = 'https://github.com/Skycustody/valnaa-desktop/releases/latest';
 const DOWNLOAD_MAC_ARM = `${DOWNLOAD_BASE}/download/Valnaa-arm64.dmg`;
 const DOWNLOAD_MAC_INTEL = `${DOWNLOAD_BASE}/download/Valnaa-x64.dmg`;
@@ -301,8 +287,18 @@ export default function DesktopPage() {
     <div className="min-h-screen antialiased" style={{ backgroundColor: BG, color: TEXT }}>
       <header className="fixed top-0 z-50 h-14 w-full border-b border-white/[0.06] bg-[#14120b]/90 backdrop-blur-md">
         <div className="relative mx-auto flex h-full max-w-[1280px] items-center justify-between px-5">
-          <Link href="/" className="flex items-center gap-2 text-[15px] font-semibold tracking-tight text-[#f0efea] hover:opacity-90">
-            <CursorCubeLogo className="size-5 shrink-0 text-[#f0efea]" />
+          <Link
+            href="/"
+            className="inline-flex items-center gap-1.5 text-[15px] font-semibold tracking-tight text-[#f0efea] hover:opacity-90"
+          >
+            <Image
+              src="/valnaa-app-icon.png"
+              alt=""
+              width={20}
+              height={20}
+              className="size-5 shrink-0 rounded-[5px] object-cover"
+              priority
+            />
             <span>Valnaa</span>
           </Link>
 
@@ -359,29 +355,19 @@ export default function DesktopPage() {
                   </span>
                 </TrackedDownloadLink>
               </div>
-              <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
-                <Image
-                  src="/valnaa-app-icon.png"
-                  alt="Valnaa Desktop app icon"
-                  width={56}
-                  height={56}
-                  className="size-14 shrink-0 rounded-[12px] shadow-[0_8px_24px_rgba(0,0,0,0.35)] ring-1 ring-white/10"
-                  priority
-                />
-                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-6 sm:gap-y-2 text-[12px]" style={{ color: TEXT_SEC }}>
-                  <span className="inline-flex items-center gap-1.5">
-                    <ShieldCheck className="size-3.5 shrink-0 text-emerald-500/70" />
-                    Apple signed and notarized
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <ShieldCheck className="size-3.5 shrink-0 text-sky-500/70" />
-                    Microsoft Azure Trusted Signing
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <BadgeCheck className="size-3.5 shrink-0 opacity-70" />
-                    Free trial
-                  </span>
-                </div>
+              <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-2 text-[12px]" style={{ color: TEXT_SEC }}>
+                <span className="inline-flex items-center gap-1.5">
+                  <ShieldCheck className="size-3.5 shrink-0 text-emerald-500/70" />
+                  Apple signed and notarized
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <ShieldCheck className="size-3.5 shrink-0 text-sky-500/70" />
+                  Microsoft Azure Trusted Signing
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <BadgeCheck className="size-3.5 shrink-0 opacity-70" />
+                  Free trial
+                </span>
               </div>
             </div>
           </div>
@@ -794,8 +780,14 @@ export default function DesktopPage() {
         <footer className="border-t border-white/[0.06] px-5 py-16" style={{ backgroundColor: BG }}>
           <div className="mx-auto grid max-w-[1280px] gap-12 sm:grid-cols-2 lg:grid-cols-5">
             <div className="lg:col-span-2">
-              <div className="flex items-center gap-2">
-                <CursorCubeLogo className="size-5 text-[#f0efea]" />
+              <div className="inline-flex items-center gap-1.5">
+                <Image
+                  src="/valnaa-app-icon.png"
+                  alt=""
+                  width={20}
+                  height={20}
+                  className="size-5 shrink-0 rounded-[5px] object-cover"
+                />
                 <span className="font-semibold text-[#f0efea]">Valnaa</span>
               </div>
               <p className="mt-3 max-w-xs text-[13px] leading-relaxed" style={{ color: TEXT_SEC }}>
