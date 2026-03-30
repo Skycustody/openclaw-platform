@@ -59,9 +59,13 @@ function getProcessNameOnPort(port: number): string {
  * without killing Docker's engine process.
  * Works on macOS, Linux, and Windows (Docker Desktop).
  */
+const PROTECTED_CONTAINERS = ['openshell-cli'];
+
 function stopDockerContainerOnPort(port: number): boolean {
   try {
-    const fmt = process.platform === 'win32' ? '{{.ID}} {{.Ports}}' : "'{{.ID}} {{.Ports}}'";
+    const fmt = process.platform === 'win32'
+      ? '{{.ID}} {{.Names}} {{.Ports}}'
+      : "'{{.ID}} {{.Names}} {{.Ports}}'";
     const out = execSync(
       `docker ps --format ${fmt}`,
       { encoding: 'utf-8', timeout: 10000, stdio: 'pipe', windowsHide: true },
@@ -69,8 +73,16 @@ function stopDockerContainerOnPort(port: number): boolean {
     const pattern = new RegExp(`0\\.0\\.0\\.0:${port}->`);
     for (const line of out.split('\n')) {
       if (pattern.test(line)) {
-        const cid = line.split(' ')[0];
-        logApp('info', `Stopping Docker container ${cid} that holds port ${port}`);
+        const parts = line.split(' ');
+        const cid = parts[0];
+        const name = parts[1] || '';
+
+        if (PROTECTED_CONTAINERS.includes(name)) {
+          logApp('info', `Port ${port} held by protected container "${name}" — skipping destruction`);
+          return false;
+        }
+
+        logApp('info', `Stopping Docker container ${cid} (${name}) that holds port ${port}`);
         try { execSync(`docker stop ${cid}`, { timeout: 15000, stdio: 'pipe', windowsHide: true }); } catch { /* ok */ }
         try { execSync(`docker rm -f ${cid}`, { timeout: 10000, stdio: 'pipe', windowsHide: true }); } catch { /* ok */ }
         return true;

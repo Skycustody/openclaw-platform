@@ -10,7 +10,7 @@ import { logApp, logOpenclaw } from './logger';
 import { findOpenClawBinary, findNemoClawBinary } from './installer';
 import { startHealthPolling, stopHealthPolling, HealthStatus } from './health';
 import { findAvailablePort, PortResult } from '../lib/ports';
-import { loadRuntime, RuntimeType, isSandboxReady, ensurePortForward, stopPortForward, OPENCLAW_PORT, getActiveGatewayPort, readSandboxGatewayToken, clearSandboxTokenCache, clearSandboxNameCache, dockerBin, isIntelMac, isSidecarReady } from '../lib/runtime';
+import { loadRuntime, RuntimeType, isSandboxReady, waitForSandboxReady, ensurePortForward, stopPortForward, OPENCLAW_PORT, getActiveGatewayPort, readSandboxGatewayToken, clearSandboxTokenCache, clearSandboxNameCache, dockerBin, isIntelMac, isSidecarReady, setupOpenShellSidecar, ensureSidecarNetworking } from '../lib/runtime';
 import { freePort } from '../lib/ports';
 
 function checkPortReady(port: number): Promise<boolean> {
@@ -98,6 +98,11 @@ class OpenClawManager extends EventEmitter {
     this.activeRuntime = runtime;
 
     if (runtime === 'nemoclaw') {
+      if (this.switchingRuntime) {
+        logApp('info', 'Post-switch: force-freeing gateway port before NemoClaw start');
+        try { freePort(OPENCLAW_PORT); } catch { /* ok */ }
+        this.switchingRuntime = false;
+      }
       const nemoBin = findNemoClawBinary();
       if (!nemoBin) {
         this.setState('installing');
@@ -106,11 +111,19 @@ class OpenClawManager extends EventEmitter {
         return;
       }
       this.restartCount = 0;
-      this.connectToNemoClawSandbox();
+      await this.connectToNemoClawSandbox();
       return;
     }
 
     // OpenClaw flow: allocate port and spawn gateway
+    // After a runtime switch, the old runtime's gateway may still hold the
+    // port. Force-free it so we don't "reuse" the wrong gateway.
+    if (this.switchingRuntime) {
+      logApp('info', 'Post-switch: force-freeing gateway port before OpenClaw start');
+      try { freePort(OPENCLAW_PORT); } catch { /* ok */ }
+      this.switchingRuntime = false;
+    }
+
     let portResult: PortResult;
     try {
       portResult = await findAvailablePort();
@@ -240,7 +253,7 @@ class OpenClawManager extends EventEmitter {
    * The OpenClaw gateway runs on port 18789 inside the sandbox, forwarded
    * to localhost via `openshell forward`.
    */
-  private connectToNemoClawSandbox(): void {
+  private async connectToNemoClawSandbox(): Promise<void> {
     this.clearStartupTimer();
     this.clearReadinessPoll();
     this.setState('starting');
@@ -280,9 +293,30 @@ class OpenClawManager extends EventEmitter {
         return;
       }
 
-      // 2. Check that the sandbox exists
+      // 1b. On Intel Mac, ensure the openshell-cli sidecar is ready.
+      //     A runtime switch may have left it stopped/removed/disconnected.
+      if (isIntelMac()) {
+        if (!isSidecarReady()) {
+          logApp('info', 'Sidecar not ready — rebuilding before sandbox check');
+          try {
+            await setupOpenShellSidecar((msg) => logApp('info', `[sidecar-reconnect] ${msg}`));
+          } catch (e: any) {
+            logApp('warn', `Sidecar rebuild failed: ${e.message}`);
+          }
+        }
+        try { ensureSidecarNetworking(); } catch { /* ok */ }
+      }
+
+      // 2. Wait for a Ready sandbox (setup may complete from sandboxes.json first)
       if (!isSandboxReady()) {
-        this.lastError = 'NemoClaw sandbox not found. Run setup again.';
+        logApp('info', 'Waiting for NemoClaw sandbox to become Ready (up to ~3 min)...');
+        this.emitStatus();
+      }
+      const sandboxUp = isSandboxReady() || (await waitForSandboxReady(180_000, 2000));
+      if (!sandboxUp) {
+        this.lastError =
+          'NemoClaw sandbox did not become ready in time. The cluster may still be starting — try Start again in a minute. ' +
+          'If it keeps failing: Docker → confirm openshell-cluster-nemoclaw is running, then run `nemoclaw status` in Terminal, or run setup again.';
         this.setState('crashed');
         return;
       }
@@ -422,6 +456,16 @@ class OpenClawManager extends EventEmitter {
     if (wasNemoClaw) {
       logApp('info', 'Tearing down NemoClaw port forwards');
       try { stopPortForward(); } catch { /* ok */ }
+    }
+
+    // When switching runtimes, free the gateway port so the new runtime
+    // doesn't accidentally reuse the old runtime's gateway process.
+    if (this.switchingRuntime) {
+      const portToFree = this.port || OPENCLAW_PORT;
+      logApp('info', `Runtime switch — freeing port ${portToFree}`);
+      try { freePort(portToFree); } catch { /* ok */ }
+      clearSandboxTokenCache();
+      clearSandboxNameCache();
     }
 
     this.port = null;

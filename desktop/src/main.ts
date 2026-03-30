@@ -688,16 +688,21 @@ async function runNemoClawOnboardExternal(): Promise<void> {
     throw new Error(`NemoClaw onboard failed (exit code ${exitCode}). Check the output above, then tap Retry.`);
   }
 
-  // Exit code 0 but not detected yet — poll briefly, then do a live sandbox
-  // check. On Intel Mac, node-pty can mis-report exit codes after SIGKILL.
+  // Exit code 0 but not detected yet — poll for a while. isOnboardComplete()
+  // requires the gateway, a Running openshell-cluster-nemoclaw container, and
+  // sandboxes.json or a Ready sandbox — the cluster often stays "starting" for
+  // minutes after the onboard script exits. On Intel Mac, node-pty can also
+  // mis-report exit codes after SIGKILL.
+  const onboardVerifyMs = 180_000;
   try {
-    await waitUntil(() => isOnboardComplete(), 15_000, '');
+    await waitUntil(() => isOnboardComplete(), onboardVerifyMs, '');
     return;
   } catch {
-    // isOnboardComplete's fallback already checks openshell sandbox list.
-    // If that also failed, the sandbox truly doesn't exist.
     if (isOnboardComplete()) return;
-    throw new Error('NemoClaw onboard appeared to succeed but no sandbox was found. Tap Retry to try again.');
+    throw new Error(
+      'NemoClaw finished but Valnaa could not confirm the cluster/sandbox yet (Docker/k3s may still be starting). ' +
+        'Wait a minute, tap Retry, or run `nemoclaw status` in Terminal.',
+    );
   }
 }
 

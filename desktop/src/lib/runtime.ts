@@ -545,6 +545,122 @@ export function getSandboxShellCommand(): { shell: string; args: string[] } | nu
   };
 }
 
+/**
+ * After onboard, check if the "policies" step failed and apply the selected
+ * presets directly via `openshell policy set`. NemoClaw's onboard tries to
+ * apply policy presets in step [7/7], but if the sandbox wasn't ready yet it
+ * exits with an error — leaving npm/pypi/etc blocked by the firewall.
+ *
+ * This reads the baseline policy + preset YAMLs from the NemoClaw source tree,
+ * merges them, and applies the combined policy to the running sandbox.
+ */
+export function applyFailedPolicyPresets(): boolean {
+  try {
+    const sessionPath = IS_WIN
+      ? null
+      : path.join(os.homedir(), '.nemoclaw', 'onboard-session.json');
+    if (!sessionPath || !fs.existsSync(sessionPath)) return false;
+
+    const session = JSON.parse(fs.readFileSync(sessionPath, 'utf-8'));
+    const presets: string[] = session.policyPresets || [];
+    if (presets.length === 0) return false;
+
+    const policiesStep = session.steps?.policies;
+    if (policiesStep?.status === 'complete') {
+      logApp('info', 'Policy presets already applied (session shows complete)');
+      return true;
+    }
+
+    const sourceDir = path.join(os.homedir(), '.nemoclaw', 'source');
+    const baselinePath = path.join(sourceDir, 'nemoclaw-blueprint', 'policies', 'openclaw-sandbox.yaml');
+    if (!fs.existsSync(baselinePath)) {
+      logApp('warn', `Cannot apply policy presets — baseline not found: ${baselinePath}`);
+      return false;
+    }
+
+    let merged = fs.readFileSync(baselinePath, 'utf-8');
+    const presetsDir = path.join(sourceDir, 'nemoclaw-blueprint', 'policies', 'presets');
+
+    for (const preset of presets) {
+      const presetPath = path.join(presetsDir, `${preset}.yaml`);
+      if (!fs.existsSync(presetPath)) {
+        logApp('warn', `Policy preset file not found, skipping: ${presetPath}`);
+        continue;
+      }
+      const raw = fs.readFileSync(presetPath, 'utf-8');
+      const lines = raw.split('\n');
+      const npIdx = lines.findIndex(l => /^network_policies:\s*$/.test(l));
+      if (npIdx < 0) {
+        logApp('warn', `No network_policies section in preset ${preset}, skipping`);
+        continue;
+      }
+      // Everything after the `network_policies:` header belongs to the preset's policies
+      const policyLines = lines.slice(npIdx + 1);
+      merged += '\n' + policyLines.join('\n');
+      logApp('info', `Merged policy preset: ${preset}`);
+    }
+
+    // Use the sandbox name from the onboard session — it may differ from
+    // the defaultSandbox in sandboxes.json (e.g. old "cd" vs new "df").
+    const sandboxName = session.sandboxName || getSandboxName();
+    logApp('info', `Applying policy presets to sandbox: ${sandboxName}`);
+    const tmpPolicy = path.join(os.tmpdir(), `nemoclaw-merged-policy-${Date.now()}.yaml`);
+    fs.writeFileSync(tmpPolicy, merged, 'utf-8');
+
+    try {
+      let policyPathForCli = tmpPolicy;
+
+      // On Intel Mac the openshell CLI runs inside the Docker sidecar;
+      // the host's /tmp is not mounted. Copy the file in and reference
+      // the container-internal path.
+      if (isIntelMac() && isOpenShellSidecarRunning()) {
+        const containerPath = '/tmp/merged-policy.yaml';
+        execSyncSafe(`${dockerBin()} cp "${tmpPolicy}" ${OPENSHELL_SIDECAR}:${containerPath}`, 10000);
+        policyPathForCli = containerPath;
+      }
+
+      const out = openshellExec(
+        `policy set --gateway ${GATEWAY_NAME} --policy ${policyPathForCli} ${sandboxName} --wait --timeout 30`,
+        60000,
+      );
+      logApp('info', `Policy presets applied successfully: ${out.trim()}`);
+
+      // Mark the session as having completed policies so we don't retry
+      try {
+        session.steps.policies = { status: 'complete', completedAt: new Date().toISOString(), error: null };
+        session.lastCompletedStep = 'policies';
+        session.status = 'complete';
+        delete session.failure;
+        fs.writeFileSync(sessionPath, JSON.stringify(session, null, 2), 'utf-8');
+      } catch { /* non-fatal */ }
+
+      // Sync defaultSandbox so the rest of the app uses the right one
+      if (session.sandboxName) {
+        try {
+          const regPath = path.join(os.homedir(), '.nemoclaw', 'sandboxes.json');
+          const reg = JSON.parse(fs.readFileSync(regPath, 'utf-8'));
+          if (reg.defaultSandbox !== session.sandboxName && reg.sandboxes?.[session.sandboxName]) {
+            reg.defaultSandbox = session.sandboxName;
+            fs.writeFileSync(regPath, JSON.stringify(reg, null, 2), 'utf-8');
+            clearSandboxNameCache();
+            logApp('info', `Updated defaultSandbox to "${session.sandboxName}"`);
+          }
+        } catch { /* non-fatal */ }
+      }
+
+      return true;
+    } catch (e: any) {
+      logApp('warn', `openshell policy set failed: ${e.message}`);
+      return false;
+    } finally {
+      try { fs.unlinkSync(tmpPolicy); } catch { /* ok */ }
+    }
+  } catch (e: any) {
+    logApp('warn', `applyFailedPolicyPresets error: ${e.message}`);
+    return false;
+  }
+}
+
 /** Check if a sandbox exists and is Ready inside the openshell gateway. */
 export function isSandboxReady(): boolean {
   try {
@@ -556,10 +672,38 @@ export function isSandboxReady(): boolean {
 }
 
 /**
+ * Poll until `isSandboxReady()` is true or timeout.
+ * `isOnboardComplete()` can be true from `sandboxes.json` alone while the
+ * cluster is still booting; the agent must not fail immediately on Start.
+ */
+export async function waitForSandboxReady(timeoutMs = 180_000, intervalMs = 2000): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      if (isIntelMac()) {
+        ensureSidecarNetworking();
+      }
+    } catch {
+      /* ok */
+    }
+    if (isSandboxReady()) {
+      return true;
+    }
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  return false;
+}
+
+/**
  * Check if `nemoclaw onboard` has been completed:
  * - Gateway deployed
+ * - Cluster container running
  * - At least one sandbox registered in ~/.nemoclaw/sandboxes.json
- *   OR a live sandbox visible via `openshell sandbox list`
+ *   OR a live sandbox visible via `openshell sandbox list` as Ready
+ *
+ * Note: sandboxes.json can be populated before the sandbox reaches Ready in
+ * the cluster; `waitForSandboxReady` / `isSandboxReady` gate actually starting
+ * the agent.
  */
 export function isOnboardComplete(): boolean {
   if (!isGatewayDeployed()) return false;
