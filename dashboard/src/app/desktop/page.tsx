@@ -11,17 +11,13 @@ import {
   Download,
   Check,
   ArrowRight,
-  Shield,
   ShieldCheck,
   BadgeCheck,
-  WifiOff,
   Terminal,
-  Brain,
   MessageSquare,
   Globe,
   Monitor,
   Zap,
-  Sparkles,
   Bot,
   Clock,
   ChevronRight,
@@ -43,39 +39,6 @@ const DOWNLOAD_WIN = `${DOWNLOAD_BASE}/download/Valnaa-Setup.exe`;
 const BASE_PRICE = 5;
 const VAT_RATE = 0.25;
 const TOTAL_PRICE = BASE_PRICE + BASE_PRICE * VAT_RATE;
-
-const FEATURES = [
-  {
-    icon: Terminal,
-    title: 'Full OpenClaw locally',
-    desc: 'Run the complete OpenClaw agent on your own machine — same power as the cloud version.',
-  },
-  {
-    icon: Shield,
-    title: 'Private & secure',
-    desc: 'Everything stays on your computer. No data leaves your machine unless you want it to.',
-  },
-  {
-    icon: WifiOff,
-    title: 'Works offline',
-    desc: 'Use local models or cached responses without an internet connection.',
-  },
-  {
-    icon: Brain,
-    title: '20+ AI models',
-    desc: 'Connect to GPT-4o, Claude, Gemini, DeepSeek, and more via your own API keys.',
-  },
-  {
-    icon: MessageSquare,
-    title: 'All messaging apps',
-    desc: 'Connect Telegram, Discord, Slack, and WhatsApp — your agent responds 24/7.',
-  },
-  {
-    icon: Globe,
-    title: 'Built-in browser',
-    desc: 'Your agent can browse the web, fill forms, and scrape data locally.',
-  },
-];
 
 const INCLUDED = [
   'One-click install — no terminal needed',
@@ -374,45 +337,6 @@ export default function DesktopPage() {
                     <div className="flex items-center gap-1 text-[10px] text-foreground/40">
                       <span>View details</span>
                       <ChevronRight className="size-2.5" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* Features grid */}
-      <section className="relative mx-auto max-w-5xl border-t border-border px-6 py-24">
-        <div className="mx-auto max-w-2xl text-center">
-          <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs text-muted-foreground">
-            <Sparkles className="size-3" />
-            Capabilities
-          </div>
-          <h2 className="text-3xl font-bold tracking-tight md:text-4xl">Everything you need, locally</h2>
-          <p className="mt-3 text-base text-muted-foreground">
-            Full OpenClaw power on your own machine. No server, no Docker, no config files.
-          </p>
-        </div>
-
-        <div className="mt-16 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {FEATURES.map((f) => (
-            <div key={f.title} className="min-h-[14rem] list-none">
-              <div className="relative h-full rounded-[1.25rem] border-[0.75px] border-border p-2 md:rounded-[1.5rem] md:p-3">
-                <GlowingEffect spread={40} glow={true} disabled={false} proximity={64} inactiveZone={0.01} borderWidth={3} />
-                <div className="relative flex h-full flex-col justify-between gap-6 overflow-hidden rounded-xl border-[0.75px] bg-background p-6 shadow-sm dark:shadow-[0px_0px_27px_0px_rgba(45,45,45,0.3)]">
-                  <div className="relative flex flex-1 flex-col justify-between gap-3">
-                    <div className="w-fit rounded-lg border-[0.75px] border-border bg-muted p-2">
-                      <f.icon className="h-4 w-4" />
-                    </div>
-                    <div className="space-y-3">
-                      <h3 className="pt-0.5 text-xl font-semibold leading-[1.375rem] tracking-[-0.04em] text-balance text-foreground md:text-2xl md:leading-[1.875rem]">
-                        {f.title}
-                      </h3>
-                      <p className="text-sm leading-[1.125rem] text-muted-foreground md:text-base md:leading-[1.375rem]">
-                        {f.desc}
-                      </p>
                     </div>
                   </div>
                 </div>
