@@ -247,7 +247,8 @@ export default function DesktopPage() {
         />
         <div className="relative mx-auto max-w-[820px] text-center">
           <h1 className="text-balance text-[2.25rem] font-medium leading-[1.12] tracking-[-0.03em] text-white sm:text-5xl sm:leading-[1.08] md:text-6xl md:leading-[1.05]">
-            Install OpenClaw and NemoClaw on your computer in one click — then keep gateway, sandbox, terminal, and browser relay in a single app.
+            OpenClaw and NemoClaw install in one click.
+            <span className="mt-3 block">One app keeps gateway, sandbox, terminal, and browser relay open.</span>
           </h1>
           <p className="mx-auto mt-6 max-w-lg text-[17px] leading-relaxed text-zinc-400">
             Nothing extra on top: the desktop app is the installer and native shell. Integrated terminal stays open for NemoClaw permissions, logs, and errors. Apple Notarized and Microsoft signed. Free trial — no card.
