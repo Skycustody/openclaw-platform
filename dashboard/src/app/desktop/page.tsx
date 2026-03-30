@@ -28,10 +28,11 @@ const BG = '#14120b';
 const TEXT = '#f0efea';
 const TEXT_SEC = '#9c9a94';
 
+/** Windows four-pane mark (geometric; not an official Microsoft asset file). */
 function WindowsLogo({ className, ...props }: SVGProps<SVGSVGElement>) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden {...props}>
-      <path d="M3 3h9v9H3V3zm9 0h9v9h-9V3zM3 12h9v9H3v-9zm9 0h9v9h-9v-9z" />
+    <svg className={className} viewBox="0 0 88 88" fill="currentColor" aria-hidden {...props}>
+      <path d="M0 0h42v42H0V0zm46 0h42v42H46V0zM0 46h42v42H0V46zm46 0h42v42H46V46z" />
     </svg>
   );
 }
@@ -336,7 +337,7 @@ export default function DesktopPage() {
         <section style={{ backgroundColor: BG }}>
           <div className="mx-auto max-w-[1280px] px-5 pt-10 pb-4 md:pt-14 md:pb-2">
             <div className="max-w-[min(36rem,100%)] text-left">
-              <h1 className="mb-5 max-w-[34rem] text-balance text-[clamp(1rem,1.35vw,1.3125rem)] font-medium leading-snug tracking-[-0.02em] text-[#f5f4ef]">
+              <h1 className="mb-5 max-w-[40rem] text-balance text-[clamp(1.25rem,2.15vw,1.875rem)] font-medium leading-[1.2] tracking-[-0.025em] text-[#f5f4ef]">
                 Built to make AI simple, Valnaa is the best way to install and use OpenClaw and NemoClaw.
               </h1>
               <div className="flex flex-wrap items-center gap-3">
@@ -355,7 +356,7 @@ export default function DesktopPage() {
                   </span>
                 </TrackedDownloadLink>
               </div>
-              <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-2 text-[12px]" style={{ color: TEXT_SEC }}>
+              <div className="mt-2.5 flex flex-wrap items-center gap-x-6 gap-y-2 text-[12px]" style={{ color: TEXT_SEC }}>
                 <span className="inline-flex items-center gap-1.5">
                   <ShieldCheck className="size-3.5 shrink-0 text-emerald-500/70" />
                   Apple signed and notarized
