@@ -147,13 +147,13 @@ const APP_TABS = [
   { key: 'terminal', label: 'Terminal', icon: Terminal, src: '/app-screenshots/terminal.png' },
 ] as const;
 
-function AppPreview() {
+function AppPreview({ className }: { className?: string }) {
   const [activeTab, setActiveTab] = useState<string>('chat');
   const current = APP_TABS.find((t) => t.key === activeTab) ?? APP_TABS[0];
 
   return (
-    <div className="mx-auto w-full max-w-[1100px] px-6">
-      <div className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0c0c0c] shadow-[0_0_0_1px_rgba(255,255,255,0.04),0_24px_80px_-20px_rgba(0,0,0,0.7)]">
+    <div className={cn('relative mx-auto w-full max-w-[1100px]', className)}>
+      <div className="overflow-hidden rounded-2xl border border-white/[0.12] bg-[#0a0a0a] shadow-[0_32px_120px_-24px_rgba(0,0,0,0.9)] ring-1 ring-white/[0.06]">
         <div className="flex flex-wrap items-center gap-1 border-b border-white/[0.06] bg-[#111] px-3 py-2 sm:px-4">
           {APP_TABS.map((tab) => (
             <button
@@ -213,25 +213,33 @@ function useMacDownloadUrl() {
 export default function DesktopPage() {
   const macUrl = useMacDownloadUrl();
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-zinc-100 antialiased">
-      <header className="sticky top-0 z-50 border-b border-white/[0.06] bg-[#0a0a0a]/80 backdrop-blur-xl">
-        <nav className="mx-auto flex h-14 max-w-[1200px] items-center justify-between px-6">
-          <Link href="/" className="flex items-center gap-2 text-[15px] font-medium text-zinc-100 hover:text-white">
+    <div className="min-h-screen bg-black text-zinc-100 antialiased">
+      <header className="sticky top-0 z-50 border-b border-white/[0.08] bg-black/75 backdrop-blur-xl">
+        <nav className="relative mx-auto grid h-14 max-w-[1400px] grid-cols-2 items-center px-6 md:grid-cols-3 md:h-16">
+          <Link
+            href="/"
+            className="flex items-center gap-2 justify-self-start text-[13px] font-semibold uppercase tracking-[0.2em] text-white hover:text-zinc-200"
+          >
             <Image src="/favicon.png" alt="" width={22} height={22} className="rounded-md" />
             Valnaa
           </Link>
-          <div className="flex items-center gap-1 sm:gap-2">
-            <Link
-              href="/#pricing"
-              className="hidden px-3 py-2 text-[14px] text-zinc-400 transition-colors hover:text-white sm:inline"
-            >
+          <div className="hidden items-center justify-center gap-10 text-[14px] text-zinc-500 md:flex">
+            <Link href="/#pricing" className="transition-colors hover:text-white">
               Cloud
             </Link>
-            <Link href="/auth/login" className="px-3 py-2 text-[14px] text-zinc-400 transition-colors hover:text-white">
+            <Link href="/pricing" className="transition-colors hover:text-white">
+              Pricing
+            </Link>
+            <Link href="/help" className="transition-colors hover:text-white">
+              Help
+            </Link>
+          </div>
+          <div className="flex items-center justify-end gap-1 sm:gap-2">
+            <Link href="/auth/login" className="px-2 py-2 text-[14px] text-zinc-400 transition-colors hover:text-white sm:px-3">
               Sign in
             </Link>
             <TrackedDownloadLink href={macUrl} trackEvent="download_click_nav">
-              <Button size="sm" className="h-9 rounded-full bg-white px-4 text-[14px] font-medium text-black hover:bg-zinc-200">
+              <Button size="sm" className="h-9 rounded-full bg-white px-5 text-[14px] font-medium text-black hover:bg-zinc-200">
                 Download
               </Button>
             </TrackedDownloadLink>
@@ -239,68 +247,70 @@ export default function DesktopPage() {
         </nav>
       </header>
 
-      {/* Hero */}
-      <section className="relative border-b border-white/[0.06] px-6 pb-16 pt-20 sm:pb-24 sm:pt-28">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_45%_at_50%_-10%,rgba(255,255,255,0.06),transparent_55%)]"
-        />
-        <div className="relative mx-auto max-w-[820px] text-center">
-          <h1 className="text-balance text-[2.25rem] font-medium leading-[1.12] tracking-[-0.03em] text-white sm:text-5xl sm:leading-[1.08] md:text-6xl md:leading-[1.05]">
-            Valnaa Desktop installs OpenClaw and NemoClaw in one click.
-          </h1>
-          <p className="mx-auto mt-6 max-w-lg text-[17px] leading-relaxed text-zinc-400">
-            Gateway, sandbox, terminal, and browser relay in one window. Nothing extra on top. Terminal stays open for NemoClaw permissions, logs, and errors. Apple Notarized and Microsoft signed. Free trial, no card.
-          </p>
-          <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row sm:gap-4">
-            <TrackedDownloadLink href={macUrl} trackEvent="download_click_mac" className="group w-full sm:w-auto">
-              <Button className="h-12 w-full rounded-full bg-white px-6 text-[15px] font-medium text-black hover:bg-zinc-200 sm:w-auto">
-                <AppleLogo className="size-[18px]" />
-                Download for macOS
-                <Download className="size-4 opacity-60 group-hover:opacity-100" />
-              </Button>
-            </TrackedDownloadLink>
-            <TrackedDownloadLink href={DOWNLOAD_WIN} trackEvent="download_click_win" className="w-full sm:w-auto">
-              <Button
-                variant="outline"
-                className="h-12 w-full rounded-full border-white/15 bg-transparent px-6 text-[15px] font-medium text-white hover:bg-white/[0.06] sm:w-auto"
-              >
-                <svg className="size-[18px]" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801" />
-                </svg>
-                Download for Windows
-              </Button>
-            </TrackedDownloadLink>
+      {/* Hero: Cursor style left aligned copy, large preview below */}
+      <section className="relative border-b border-white/[0.08] pb-20 pt-12 sm:pb-28 sm:pt-16 md:pt-20">
+        <div className="relative mx-auto max-w-[1400px] px-6">
+          <div className="max-w-[min(100%,42rem)] text-left">
+            <h1 className="text-[2rem] font-medium leading-[1.08] tracking-[-0.035em] text-white sm:text-[2.75rem] sm:leading-[1.06] md:text-5xl lg:text-[3.25rem] lg:leading-[1.05]">
+              Built to install OpenClaw and NemoClaw in one click, Valnaa Desktop is your native gateway shell.
+            </h1>
+            <p className="mt-6 max-w-xl text-[15px] leading-relaxed text-zinc-500 sm:text-base">
+              Gateway, sandbox, terminal, and browser relay in one window. Terminal stays open for NemoClaw permissions and logs. Apple Notarized and Microsoft signed. Free trial, no card.
+            </p>
+            <div className="mt-8 flex flex-col gap-3 sm:mt-10 sm:flex-row sm:items-center sm:gap-4">
+              <TrackedDownloadLink href={macUrl} trackEvent="download_click_mac" className="group w-fit">
+                <Button className="h-11 rounded-full bg-white px-6 text-[15px] font-medium text-black hover:bg-zinc-200">
+                  <AppleLogo className="size-[18px]" />
+                  Download for macOS
+                  <Download className="size-4 opacity-60 group-hover:opacity-100" />
+                </Button>
+              </TrackedDownloadLink>
+              <TrackedDownloadLink href={DOWNLOAD_WIN} trackEvent="download_click_win" className="w-fit">
+                <Button
+                  variant="outline"
+                  className="h-11 rounded-full border-white/20 bg-transparent px-6 text-[15px] font-medium text-white hover:bg-white/[0.06]"
+                >
+                  <svg className="size-[18px]" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801" />
+                  </svg>
+                  Download for Windows
+                </Button>
+              </TrackedDownloadLink>
+            </div>
+            <Link
+              href="/#pricing"
+              className="mt-6 inline-flex items-center gap-1 text-[14px] text-zinc-500 transition-colors hover:text-zinc-300"
+            >
+              Try hosted OpenClaw instead <ArrowRight className="size-4" />
+            </Link>
+            <div className="mt-8 flex flex-wrap gap-x-8 gap-y-2 text-[13px] text-zinc-600">
+              <span className="flex items-center gap-1.5">
+                <ShieldCheck className="size-3.5 text-emerald-500/80" />
+                Apple Notarized
+              </span>
+              <span className="flex items-center gap-1.5">
+                <ShieldCheck className="size-3.5 text-sky-500/80" />
+                Microsoft signed
+              </span>
+              <span className="flex items-center gap-1.5">
+                <BadgeCheck className="size-3.5" />
+                Free trial
+              </span>
+            </div>
           </div>
-          <Link
-            href="/#pricing"
-            className="mt-6 inline-flex items-center gap-1 text-[15px] text-zinc-500 transition-colors hover:text-zinc-300"
-          >
-            Try hosted OpenClaw instead <ArrowRight className="size-4" />
-          </Link>
-          <div className="mt-10 flex flex-wrap items-center justify-center gap-x-8 gap-y-2 text-[13px] text-zinc-500">
-            <span className="flex items-center gap-1.5">
-              <ShieldCheck className="size-3.5 text-emerald-500/80" />
-              Apple Notarized
-            </span>
-            <span className="flex items-center gap-1.5">
-              <ShieldCheck className="size-3.5 text-sky-500/80" />
-              Microsoft signed
-            </span>
-            <span className="flex items-center gap-1.5">
-              <BadgeCheck className="size-3.5" />
-              Free trial
-            </span>
-          </div>
-        </div>
 
-        <div className="relative mx-auto mt-20 max-w-[900px]">
-          <AppPreview />
+          <div className="relative mx-auto mt-14 max-w-[1200px] md:mt-20">
+            <div
+              aria-hidden
+              className="pointer-events-none absolute left-1/2 top-1/2 h-[min(90vw,720px)] w-[min(95vw,1100px)] -translate-x-1/2 -translate-y-1/2 rounded-[50%] bg-[radial-gradient(ellipse_at_center,rgba(59,130,246,0.12),rgba(139,92,246,0.06)_40%,transparent_70%)] blur-3xl"
+            />
+            <AppPreview className="relative z-10" />
+          </div>
         </div>
 
         {/* Research table */}
-        <div className="mx-auto mt-20 max-w-[640px] px-2">
-          <p className="mb-6 text-center text-[15px] leading-relaxed text-zinc-500">
+        <div className="mx-auto mt-24 max-w-[640px] px-6">
+          <p className="mb-6 text-left text-[15px] leading-relaxed text-zinc-500 sm:text-center">
             We focus on packaging, signing, and a stable window around the stack so you spend time in OpenClaw and NemoClaw, not fighting setup.
           </p>
           <div className="overflow-hidden rounded-xl border border-white/[0.08]">
