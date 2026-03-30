@@ -150,7 +150,7 @@ function useMacDownloadUrl() {
   useEffect(() => {
     async function detect() {
       try {
-        const ua = navigator.userAgentData;
+        const ua = (navigator as any).userAgentData;
         if (ua?.getHighEntropyValues) {
           const { architecture } = await ua.getHighEntropyValues(['architecture']);
           if (architecture === 'x86') setUrl(DOWNLOAD_MAC_INTEL);
