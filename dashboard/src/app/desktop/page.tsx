@@ -24,10 +24,6 @@ import {
   Sparkles,
   Bot,
   Clock,
-  FileText,
-  Search,
-  Code,
-  Send,
   ChevronRight,
 } from 'lucide-react';
 
@@ -145,6 +141,61 @@ const CHANGELOG = [
   { date: 'Mar 5, 2026', title: 'Scheduled tasks', desc: 'Cron-style recurring agent runs' },
 ];
 
+const APP_TABS = [
+  { key: 'chat', label: 'Chat', icon: MessageSquare, src: '/app-screenshots/chat.png' },
+  { key: 'dashboard', label: 'Dashboard', icon: Monitor, src: '/app-screenshots/dashboard.png' },
+  { key: 'browser', label: 'Browser', icon: Globe, src: '/app-screenshots/browser.png' },
+  { key: 'terminal', label: 'Terminal', icon: Terminal, src: '/app-screenshots/terminal.png' },
+] as const;
+
+function AppPreview() {
+  const [activeTab, setActiveTab] = useState<string>('chat');
+  const current = APP_TABS.find((t) => t.key === activeTab) ?? APP_TABS[0];
+
+  return (
+    <section className="relative mx-auto max-w-5xl px-6 pb-24">
+      <div className="fade-in animate-in fill-mode-backwards delay-700 duration-700 ease-out">
+        <div className="relative rounded-[1.25rem] border-[0.75px] border-border p-2 md:rounded-[1.5rem] md:p-3">
+          <GlowingEffect spread={60} glow={true} disabled={false} proximity={80} inactiveZone={0.01} borderWidth={2} />
+          <div className="relative overflow-hidden rounded-xl border-[0.75px] border-border bg-[#0a0a0a]">
+            {/* Tab bar */}
+            <div className="flex items-center gap-1 border-b border-border/50 bg-[#111] px-4 py-2">
+              {APP_TABS.map((tab) => (
+                <button
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key)}
+                  className={cn(
+                    'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all',
+                    activeTab === tab.key
+                      ? 'bg-foreground/10 text-foreground'
+                      : 'text-muted-foreground hover:bg-foreground/5 hover:text-foreground/80'
+                  )}
+                >
+                  <tab.icon className="size-3" />
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            {/* Screenshot */}
+            <div className="relative aspect-[16/10] w-full">
+              <Image
+                src={current.src}
+                alt={`Valnaa Desktop — ${current.label}`}
+                fill
+                className="object-cover object-top"
+                priority
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+      <p className="mt-4 text-center text-xs text-muted-foreground/50">
+        Valnaa Desktop running OpenClaw &amp; NemoClaw locally
+      </p>
+    </section>
+  );
+}
+
 function useMacDownloadUrl() {
   const [url, setUrl] = useState(DOWNLOAD_MAC_ARM);
   useEffect(() => {
@@ -251,112 +302,7 @@ export default function DesktopPage() {
       </section>
 
       {/* Product demo / App preview */}
-      <section className="relative mx-auto max-w-5xl px-6 pb-24">
-        <div className="fade-in animate-in fill-mode-backwards delay-700 duration-700 ease-out">
-          <div className="relative rounded-[1.25rem] border-[0.75px] border-border p-2 md:rounded-[1.5rem] md:p-3">
-            <GlowingEffect spread={60} glow={true} disabled={false} proximity={80} inactiveZone={0.01} borderWidth={2} />
-            <div className="relative overflow-hidden rounded-xl border-[0.75px] border-border bg-[#0a0a0a]">
-              {/* Window chrome */}
-              <div className="flex items-center gap-2 border-b border-border/50 bg-[#111] px-4 py-3">
-                <div className="flex gap-1.5">
-                  <div className="h-3 w-3 rounded-full bg-[#ff5f57]" />
-                  <div className="h-3 w-3 rounded-full bg-[#febc2e]" />
-                  <div className="h-3 w-3 rounded-full bg-[#28c840]" />
-                </div>
-                <div className="ml-4 flex-1 rounded-md bg-[#1a1a1a] px-3 py-1">
-                  <span className="text-xs text-muted-foreground/60">Valnaa Desktop</span>
-                </div>
-              </div>
-              {/* App mockup content */}
-              <div className="grid grid-cols-1 md:grid-cols-[240px_1fr]">
-                {/* Sidebar */}
-                <div className="hidden border-r border-border/30 bg-[#0d0d0d] p-4 md:block">
-                  <div className="mb-6 flex items-center gap-2">
-                    <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-foreground/20 to-foreground/5" />
-                    <div>
-                      <p className="text-xs font-medium text-foreground/80">My Agent</p>
-                      <p className="text-[10px] text-muted-foreground">Running · GPT-4o</p>
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    {['Chat', 'Skills', 'Channels', 'Browser', 'Terminal', 'Settings'].map((item, i) => (
-                      <div
-                        key={item}
-                        className={cn(
-                          'flex items-center gap-2 rounded-md px-2.5 py-1.5 text-xs',
-                          i === 0 ? 'bg-foreground/10 text-foreground' : 'text-muted-foreground'
-                        )}
-                      >
-                        {i === 0 && <MessageSquare className="size-3" />}
-                        {i === 1 && <Zap className="size-3" />}
-                        {i === 2 && <Send className="size-3" />}
-                        {i === 3 && <Globe className="size-3" />}
-                        {i === 4 && <Terminal className="size-3" />}
-                        {i === 5 && <Code className="size-3" />}
-                        {item}
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-6 rounded-lg border border-border/30 bg-[#111] p-3">
-                    <p className="text-[10px] font-medium text-muted-foreground">Connected</p>
-                    <div className="mt-2 space-y-1.5">
-                      {['Telegram', 'Discord', 'Slack'].map((ch) => (
-                        <div key={ch} className="flex items-center gap-1.5">
-                          <div className="h-1.5 w-1.5 rounded-full bg-green-400" />
-                          <span className="text-[10px] text-foreground/60">{ch}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                {/* Main chat area */}
-                <div className="flex flex-col p-6">
-                  <div className="space-y-4">
-                    <div className="flex gap-3">
-                      <div className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-foreground/10">
-                        <Bot className="size-3.5 text-foreground/60" />
-                      </div>
-                      <div className="space-y-2">
-                        <p className="text-sm text-foreground/80">I&apos;ll research competitor pricing for you. Let me browse their websites and compile the data.</p>
-                        <div className="rounded-lg border border-border/30 bg-[#111] p-3">
-                          <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-                            <Search className="size-3" />
-                            <span>Browsing competitor-a.com/pricing...</span>
-                          </div>
-                          <div className="mt-2 flex items-center gap-2 text-[10px] text-muted-foreground">
-                            <Search className="size-3" />
-                            <span>Browsing competitor-b.com/pricing...</span>
-                          </div>
-                          <div className="mt-2 flex items-center gap-2 text-[10px] text-green-400/70">
-                            <Check className="size-3" />
-                            <span>Found pricing data from 5 competitors</span>
-                          </div>
-                        </div>
-                        <div className="rounded-lg border border-border/30 bg-[#111] p-3">
-                          <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-                            <FileText className="size-3" />
-                            <span>Generated comparison_report.csv</span>
-                          </div>
-                        </div>
-                        <p className="text-sm text-foreground/80">Done! I found pricing from 5 competitors. Here&apos;s the breakdown — Competitor A is 40% more expensive for the same features.</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="mt-8 flex items-center gap-2 rounded-xl border border-border/30 bg-[#111] px-4 py-3">
-                    <span className="flex-1 text-sm text-muted-foreground/40">Ask your agent anything...</span>
-                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-foreground/10">
-                      <ArrowRight className="size-3.5 text-foreground/40" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <p className="mt-4 text-center text-xs text-muted-foreground/50">
-          Valnaa Desktop running an OpenClaw agent locally
-        </p>
-      </section>
+      <AppPreview />
 
       {/* Trust badges */}
       <section className="border-t border-border">
