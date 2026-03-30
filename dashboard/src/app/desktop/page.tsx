@@ -325,9 +325,9 @@ export default function DesktopPage() {
         {/* Hero + media stack (cursor.com homepage structure) */}
         <section style={{ backgroundColor: BG }}>
           <div className="mx-auto max-w-[1280px] px-5 pt-10 pb-4 md:pt-14 md:pb-2">
-            <div className="max-w-prose text-left">
-              <h1 className="mb-6 text-balance text-[clamp(1.5rem,2.6vw,2.5rem)] font-medium leading-[1.08] tracking-[-0.03em] text-[#f5f4ef]">
-                Built to install OpenClaw and NemoClaw in one click, Valnaa Desktop is the best way to run them locally.
+            <div className="max-w-[min(36rem,100%)] text-left">
+              <h1 className="mb-5 max-w-[34rem] text-balance text-[clamp(1rem,1.35vw,1.3125rem)] font-medium leading-snug tracking-[-0.02em] text-[#f5f4ef]">
+                Built to make AI simple, Valnaa is the best way to install and use OpenClaw and NemoClaw.
               </h1>
               <div className="flex flex-wrap items-center gap-x-3 gap-y-3">
                 <TrackedDownloadLink href={macUrl} trackEvent="download_click_mac" className={btnPrimaryClass()}>

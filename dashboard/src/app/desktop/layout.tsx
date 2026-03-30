@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 export const metadata: Metadata = {
   title: 'Valnaa Desktop',
   description:
-    'Built to install OpenClaw and NemoClaw in one click. Native shell for gateway, sandbox, terminal, and browser relay.',
+    'Built to make AI simple. Valnaa is the best way to install and use OpenClaw and NemoClaw. Gateway, sandbox, terminal, and browser relay in one app.',
 };
 
 export default function DesktopLayout({ children }: { children: React.ReactNode }) {
