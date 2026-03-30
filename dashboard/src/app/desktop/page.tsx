@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Button } from '@/components/ui/Button';
@@ -21,7 +22,6 @@ import {
   Monitor,
   Zap,
   Sparkles,
-  Play,
   Bot,
   Clock,
   FileText,
@@ -145,7 +145,29 @@ const CHANGELOG = [
   { date: 'Mar 5, 2026', title: 'Scheduled tasks', desc: 'Cron-style recurring agent runs' },
 ];
 
+function useMacDownloadUrl() {
+  const [url, setUrl] = useState(DOWNLOAD_MAC_ARM);
+  useEffect(() => {
+    async function detect() {
+      try {
+        const ua = navigator.userAgentData;
+        if (ua?.getHighEntropyValues) {
+          const { architecture } = await ua.getHighEntropyValues(['architecture']);
+          if (architecture === 'x86') setUrl(DOWNLOAD_MAC_INTEL);
+          return;
+        }
+      } catch {}
+      if (/Intel Mac/i.test(navigator.userAgent)) {
+        setUrl(DOWNLOAD_MAC_INTEL);
+      }
+    }
+    if (/Mac/i.test(navigator.userAgent)) detect();
+  }, []);
+  return url;
+}
+
 export default function DesktopPage() {
+  const macUrl = useMacDownloadUrl();
   return (
     <div className="min-h-screen bg-background text-foreground">
       {/* Nav */}
@@ -162,7 +184,7 @@ export default function DesktopPage() {
             <Link href="/auth/login">
               <Button variant="outline" size="sm">Sign In</Button>
             </Link>
-            <TrackedDownloadLink href={DOWNLOAD_MAC_ARM} trackEvent="download_click_nav">
+            <TrackedDownloadLink href={macUrl} trackEvent="download_click_nav">
               <Button size="sm">Download</Button>
             </TrackedDownloadLink>
           </div>
@@ -184,17 +206,17 @@ export default function DesktopPage() {
           </div>
 
           <h1 className="fade-in slide-in-from-bottom-10 animate-in max-w-3xl text-balance fill-mode-backwards text-center text-4xl font-bold tracking-tight delay-100 duration-500 ease-out sm:text-5xl lg:text-[3.5rem] lg:leading-[1.1]">
-            Your AI agent,{' '}
+            OpenClaw + NemoClaw,{' '}
             <span className="text-muted-foreground">running on your computer</span>
           </h1>
 
           <p className="fade-in slide-in-from-bottom-10 mx-auto max-w-xl animate-in fill-mode-backwards text-center text-base leading-relaxed tracking-wide text-foreground/60 delay-200 duration-500 ease-out sm:text-lg">
-            Install OpenClaw and NemoClaw locally. Private, fast, and always available.
+            One-click install. Private, fast, and always available.
             No terminal needed — everything is automatic.
           </p>
 
           <div className="fade-in slide-in-from-bottom-10 flex animate-in flex-row flex-wrap items-center justify-center gap-3 fill-mode-backwards pt-2 delay-300 duration-500 ease-out">
-            <TrackedDownloadLink href={DOWNLOAD_MAC_ARM} trackEvent="download_click_mac_arm" className="group">
+            <TrackedDownloadLink href={macUrl} trackEvent="download_click_mac" className="group">
               <Button className="rounded-full" size="lg">
                 <AppleLogo className="size-5" />
                 Download for Mac
@@ -530,20 +552,15 @@ export default function DesktopPage() {
                   Download the app, sign in with Google, and your free trial starts automatically.
                 </p>
                 <div className="flex flex-col gap-2 sm:flex-row sm:justify-center">
-                  <TrackedDownloadLink href={DOWNLOAD_MAC_ARM} trackEvent="download_click_mac_arm">
+                  <TrackedDownloadLink href={macUrl} trackEvent="download_click_mac">
                     <Button size="lg" className="w-full gap-2 sm:w-auto">
-                      <AppleLogo className="size-4" /> Mac (Apple Silicon)
-                    </Button>
-                  </TrackedDownloadLink>
-                  <TrackedDownloadLink href={DOWNLOAD_MAC_INTEL} trackEvent="download_click_mac_intel">
-                    <Button size="lg" variant="outline" className="w-full gap-2 sm:w-auto">
-                      <AppleLogo className="size-4" /> Mac (Intel)
+                      <AppleLogo className="size-4" /> Download for Mac
                     </Button>
                   </TrackedDownloadLink>
                   <TrackedDownloadLink href={DOWNLOAD_WIN} trackEvent="download_click_win">
                     <Button size="lg" variant="outline" className="w-full gap-2 sm:w-auto">
                       <svg className="size-4" viewBox="0 0 24 24" fill="currentColor"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801" /></svg>
-                      Windows
+                      Download for Windows
                     </Button>
                   </TrackedDownloadLink>
                 </div>
@@ -591,7 +608,7 @@ export default function DesktopPage() {
                 'Bring your own API keys',
                 'Interactive terminal & browser',
               ],
-              cta: { label: 'Download & try free', href: DOWNLOAD_MAC_ARM, download: true },
+              cta: { label: 'Download & try free', href: '__MAC__', download: true },
             },
           ].map((col) => (
             <div key={col.title} className="min-h-[20rem]">
@@ -619,7 +636,7 @@ export default function DesktopPage() {
                     ))}
                   </ul>
                   {col.cta.download ? (
-                    <TrackedDownloadLink href={col.cta.href} trackEvent="download_click_comparison" className="mt-8">
+                    <TrackedDownloadLink href={col.cta.href === '__MAC__' ? macUrl : col.cta.href} trackEvent="download_click_comparison" className="mt-8">
                       <Button variant={col.highlight ? 'default' : 'outline'} className="w-full" size="lg">
                         {col.cta.label} <ArrowRight className="h-4 w-4" />
                       </Button>
@@ -821,7 +838,7 @@ export default function DesktopPage() {
                 1-day free trial. &euro;{BASE_PRICE}/mo + VAT after that. Cancel anytime.
               </p>
               <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-                <TrackedDownloadLink href={DOWNLOAD_MAC_ARM} trackEvent="download_click_cta_mac">
+                <TrackedDownloadLink href={macUrl} trackEvent="download_click_cta_mac">
                   <Button size="lg" className="rounded-full">
                     <AppleLogo className="size-4" /> Download for Mac <ArrowRight className="h-4 w-4" />
                   </Button>
