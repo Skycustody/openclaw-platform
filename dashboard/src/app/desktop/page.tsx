@@ -39,14 +39,14 @@ const VAT_RATE = 0.25;
 const TOTAL_PRICE = BASE_PRICE + BASE_PRICE * VAT_RATE;
 
 const INCLUDED = [
-  'One-click install of OpenClaw and NemoClaw on your machine',
-  'Dependencies (e.g. Node) handled for you — no manual terminal setup',
+  'One click install of OpenClaw and NemoClaw on your machine',
+  'Dependencies (e.g. Node) handled for you, no manual terminal setup',
   'Gateway and Control UI always available in the app',
   'Sandbox and NemoClaw views (dashboard, providers, sandboxes)',
-  'Integrated terminal / OpenTerm / shell — stays open for NemoClaw permission prompts and log output',
+  'Integrated terminal, OpenTerm, and shell stay open for NemoClaw permission prompts and log output',
   'Browser relay setup for Chrome and the agent',
-  'In-app command guide for OpenClaw and NemoClaw',
-  'Sign in with Valnaa, updates, 1-day free trial',
+  'In app command guide for OpenClaw and NemoClaw',
+  'Sign in with Valnaa, updates, 1 day free trial',
 ];
 
 const ALWAYS_OPEN_PANELS = [
@@ -70,7 +70,7 @@ const ALWAYS_OPEN_PANELS = [
     title: 'Terminal, shell & logs',
     icon: Terminal,
     points: [
-      'Integrated terminal / OpenTerm / shell always available',
+      'Integrated terminal, OpenTerm, and shell always available',
       'Where NemoClaw surfaces permission prompts',
       'Watch stdout and errors for setup and runtime issues',
     ],
@@ -87,7 +87,7 @@ const ALWAYS_OPEN_PANELS = [
 
 const TESTIMONIALS = [
   {
-    quote: "It really is one click. OpenClaw and NemoClaw were on my machine without me opening Terminal once — the app did the boring parts.",
+    quote: "It really is one click. OpenClaw and NemoClaw were on my machine without me opening Terminal once. The app did the boring parts.",
     name: 'Marcus R.',
     role: 'Indie Developer',
   },
@@ -102,39 +102,39 @@ const TESTIMONIALS = [
     role: 'Security Consultant',
   },
   {
-    quote: "The command guide saves me from tabbing to docs. Gateway, sandbox, terminal — one app, no extra layer pretending to be the agent.",
+    quote: "The command guide saves me from tabbing to docs. Gateway, sandbox, terminal: one app, no extra layer pretending to be the agent.",
     name: 'Elena M.',
     role: 'Platform Engineer',
   },
 ];
 
 const CHANGELOG = [
-  { date: 'Mar 25, 2026', title: 'WSL auto-setup improvements', desc: 'Better detection, fewer UAC flashes' },
+  { date: 'Mar 25, 2026', title: 'WSL auto setup improvements', desc: 'Better detection, fewer UAC flashes' },
   { date: 'Mar 19, 2026', title: 'Browser relay setup polish', desc: 'Clearer steps for Chrome extension and policy' },
   { date: 'Mar 11, 2026', title: 'Terminal & log focus', desc: 'Easier to keep shell open for NemoClaw prompts' },
-  { date: 'Mar 5, 2026', title: 'One-click install path', desc: 'OpenClaw + NemoClaw dependency fixes' },
+  { date: 'Mar 5, 2026', title: 'One click install path', desc: 'OpenClaw + NemoClaw dependency fixes' },
 ];
 
 const RESEARCH_ROWS = [
   { year: '2026', item: 'Signed macOS & Windows desktop installers', status: 'Shipped' },
-  { year: '2026', item: 'Always-on terminal for permissions & log tailing', status: 'Shipped' },
-  { year: '2025', item: 'One-click OpenClaw + NemoClaw local install', status: 'Shipped' },
-  { year: '2025', item: 'In-app browser relay setup flow', status: 'Shipped' },
-  { year: '2025', item: 'OpenClaw / NemoClaw command guide in the shell', status: 'Shipped' },
+  { year: '2026', item: 'Always on terminal for permissions & log tailing', status: 'Shipped' },
+  { year: '2025', item: 'One click OpenClaw + NemoClaw local install', status: 'Shipped' },
+  { year: '2025', item: 'In app browser relay setup flow', status: 'Shipped' },
+  { year: '2025', item: 'OpenClaw and NemoClaw command guide in the shell', status: 'Shipped' },
 ];
 
 const FEATURE_ROWS = [
   {
     kicker: 'Install',
     title: 'One click. OpenClaw and NemoClaw on your computer.',
-    body: 'Valnaa Desktop does not replace OpenClaw or NemoClaw — it installs them, wires dependencies, and opens the tools you need. No separate product on top; no pretending the app is the agent.',
+    body: 'Valnaa Desktop does not replace OpenClaw or NemoClaw. It installs them, wires dependencies, and opens the tools you need. No separate product on top; no pretending the app is the agent.',
     link: { href: 'https://github.com/Skycustody/valnaa-desktop/releases', label: 'Release notes' },
     reverse: false,
   },
   {
     kicker: 'Operate',
-    title: 'Gateway, sandbox, terminal, relay — always in one window.',
-    body: 'Keep the Control UI, NemoClaw sandbox views, integrated shell (OpenTerm / terminal), and browser relay instructions available while you work. The terminal stays open so NemoClaw permission prompts and error logs are visible when something needs attention.',
+    title: 'Gateway, sandbox, terminal, relay, always in one window.',
+    body: 'Keep the Control UI, NemoClaw sandbox views, integrated shell (OpenTerm and terminal), and browser relay instructions available while you work. The terminal stays open so NemoClaw permission prompts and error logs are visible when something needs attention.',
     link: { href: '/', label: 'Valnaa cloud (optional)' },
     reverse: true,
   },
@@ -175,7 +175,7 @@ function AppPreview() {
         <div className="relative aspect-[16/10] w-full">
           <Image
             src={current.src}
-            alt={`Valnaa Desktop — ${current.label}`}
+            alt={`Valnaa Desktop, ${current.label}`}
             fill
             className="object-cover object-top"
             priority
@@ -183,7 +183,7 @@ function AppPreview() {
         </div>
       </div>
       <p className="mt-5 text-center text-[13px] text-zinc-500">
-        Gateway, sandbox, browser relay, and terminal — same app you get after one-click install
+        Gateway, sandbox, browser relay, and terminal: same app you get after one click install
       </p>
     </div>
   );
@@ -239,7 +239,7 @@ export default function DesktopPage() {
         </nav>
       </header>
 
-      {/* Hero — Cursor-style large headline + primary / secondary CTAs */}
+      {/* Hero */}
       <section className="relative border-b border-white/[0.06] px-6 pb-16 pt-20 sm:pb-24 sm:pt-28">
         <div
           aria-hidden
@@ -247,10 +247,10 @@ export default function DesktopPage() {
         />
         <div className="relative mx-auto max-w-[820px] text-center">
           <h1 className="text-balance text-[2.25rem] font-medium leading-[1.12] tracking-[-0.03em] text-white sm:text-5xl sm:leading-[1.08] md:text-6xl md:leading-[1.05]">
-            Built to install OpenClaw and NemoClaw on your computer in one click, Valnaa Desktop is the best way to run them locally.
+            Valnaa Desktop installs OpenClaw and NemoClaw in one click.
           </h1>
           <p className="mx-auto mt-6 max-w-lg text-[17px] leading-relaxed text-zinc-400">
-            Gateway, sandbox, terminal, and browser relay in one window — nothing extra on top. Terminal stays open for NemoClaw permissions, logs, and errors. Apple Notarized and Microsoft signed. Free trial — no card.
+            Gateway, sandbox, terminal, and browser relay in one window. Nothing extra on top. Terminal stays open for NemoClaw permissions, logs, and errors. Apple Notarized and Microsoft signed. Free trial, no card.
           </p>
           <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row sm:gap-4">
             <TrackedDownloadLink href={macUrl} trackEvent="download_click_mac" className="group w-full sm:w-auto">
@@ -298,10 +298,10 @@ export default function DesktopPage() {
           <AppPreview />
         </div>
 
-        {/* Research table — Cursor homepage rhythm */}
+        {/* Research table */}
         <div className="mx-auto mt-20 max-w-[640px] px-2">
           <p className="mb-6 text-center text-[15px] leading-relaxed text-zinc-500">
-            We focus on packaging, signing, and a stable window around the stack — so you spend time in OpenClaw and NemoClaw, not fighting setup.
+            We focus on packaging, signing, and a stable window around the stack so you spend time in OpenClaw and NemoClaw, not fighting setup.
           </p>
           <div className="overflow-hidden rounded-xl border border-white/[0.08]">
             <table className="w-full text-left text-[13px]">
@@ -323,9 +323,9 @@ export default function DesktopPage() {
       <section className="border-b border-white/[0.06]">
         <div className="mx-auto grid max-w-[1200px] grid-cols-1 gap-0 md:grid-cols-3">
           {[
-            { title: 'One-click install', desc: 'OpenClaw and NemoClaw land on your machine with dependencies handled' },
-            { title: 'Valnaa sign-in', desc: 'Unlock the app with your account; updates ship through the same channel' },
-            { title: 'Always-open tools', desc: 'Gateway, sandbox views, shell, relay setup — not a separate browser-only workflow' },
+            { title: 'One click install', desc: 'OpenClaw and NemoClaw land on your machine with dependencies handled' },
+            { title: 'Valnaa sign in', desc: 'Unlock the app with your account; updates ship through the same channel' },
+            { title: 'Always open tools', desc: 'Gateway, sandbox views, shell, relay setup, not a separate browser only workflow' },
           ].map((item, i) => (
             <div
               key={item.title}
@@ -345,7 +345,7 @@ export default function DesktopPage() {
             Install once. Everything you need stays in one window.
           </h2>
           <p className="mx-auto mt-5 max-w-xl text-center text-[16px] text-zinc-500">
-            After install, the app is the frame around OpenClaw and NemoClaw: Control UI, sandboxes, terminal for permissions and logs, and browser relay setup — plus a command guide.
+            After install, the app is the frame around OpenClaw and NemoClaw: Control UI, sandboxes, terminal for permissions and logs, browser relay setup, and a command guide.
           </p>
 
           <div className="mt-20 space-y-28 md:mt-28 md:space-y-36">
@@ -384,7 +384,7 @@ export default function DesktopPage() {
                         <p className="text-zinc-400">Tabs</p>
                         <p>→ Control UI · Sandbox · Terminal</p>
                         <p>→ Browser relay · Command guide</p>
-                        <p>→ Shell tail for <span className="text-sky-500/90">permissions / errors</span></p>
+                        <p>→ Shell tail for <span className="text-sky-500/90">permissions and errors</span></p>
                         <p className="pt-2 text-zinc-600">// terminal stays open on purpose</p>
                       </>
                     )}
@@ -403,7 +403,7 @@ export default function DesktopPage() {
             Always available after install
           </h2>
           <p className="mx-auto mt-4 max-w-2xl text-center text-[16px] text-zinc-500">
-            The desktop app keeps OpenClaw and NemoClaw surfaces in reach: gateway UI, sandbox management, a terminal for permissions and logs, and browser relay setup — not a separate &ldquo;AI product&rdquo; layer.
+            The desktop app keeps OpenClaw and NemoClaw surfaces in reach: gateway UI, sandbox management, a terminal for permissions and logs, and browser relay setup. Not a separate &ldquo;AI product&rdquo; layer.
           </p>
           <div className="mt-16 grid gap-4 sm:grid-cols-2">
             {ALWAYS_OPEN_PANELS.map((panel) => (
@@ -451,15 +451,15 @@ export default function DesktopPage() {
         </div>
       </section>
 
-      {/* Stay on the frontier — models */}
+      {/* Keys and models */}
       <section className="border-b border-white/[0.06] px-6 py-24 md:py-32">
         <div className="mx-auto max-w-[720px] text-center">
           <h2 className="text-3xl font-medium tracking-[-0.02em] text-white md:text-4xl">Keys and models stay in OpenClaw</h2>
           <p className="mt-4 text-[16px] leading-relaxed text-zinc-500">
-            Valnaa Desktop installs and hosts the shell around OpenClaw and NemoClaw. Provider keys, models, and agent behavior are configured in OpenClaw / NemoClaw as usual — this app does not replace or proxy that layer.
+            Valnaa Desktop installs and hosts the shell around OpenClaw and NemoClaw. Provider keys, models, and agent behavior are configured in OpenClaw and NemoClaw as usual. This app does not replace or proxy that layer.
           </p>
           <p className="mt-6 text-[14px] text-zinc-600">
-            Examples you configure in OpenClaw: OpenAI, Anthropic, Google, OpenRouter, local endpoints — same as upstream docs.
+            Examples you configure in OpenClaw: OpenAI, Anthropic, Google, OpenRouter, local endpoints, same as upstream docs.
           </p>
         </div>
       </section>
@@ -470,7 +470,7 @@ export default function DesktopPage() {
           <div className="rounded-2xl border border-white/[0.1] bg-[#0c0c0c] p-8 md:p-10">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Desktop license</p>
             <h2 className="mt-2 text-2xl font-medium text-white">Valnaa Desktop</h2>
-            <p className="mt-2 text-[14px] text-zinc-500">One-click installer + gateway, sandbox, terminal, relay, and guides</p>
+            <p className="mt-2 text-[14px] text-zinc-500">One click installer plus gateway, sandbox, terminal, relay, and guides</p>
             <div className="mt-8 flex items-baseline gap-1">
               <span className="text-5xl font-medium tracking-tight text-white">&euro;{BASE_PRICE}</span>
               <span className="text-lg text-zinc-500">/mo</span>
@@ -501,7 +501,7 @@ export default function DesktopPage() {
                 </Button>
               </TrackedDownloadLink>
             </div>
-            <p className="mt-4 text-center text-[12px] text-zinc-600">1-day trial — no card</p>
+            <p className="mt-4 text-center text-[12px] text-zinc-600">1 day trial, no card</p>
           </div>
         </div>
       </section>
@@ -518,7 +518,7 @@ export default function DesktopPage() {
                 price: 'From $15/mo',
                 features: [
                   'Runs 24/7 on a server',
-                  'Always-on channels',
+                  'Always on channels',
                   'Managed updates',
                   'Includes AI credits',
                 ],
@@ -529,7 +529,7 @@ export default function DesktopPage() {
                 title: 'Desktop',
                 price: `€${TOTAL_PRICE.toFixed(2)}/mo incl. VAT`,
                 features: [
-                  'One-click OpenClaw + NemoClaw install',
+                  'One click OpenClaw + NemoClaw install',
                   'Gateway & sandbox UI in the app',
                   'Terminal for permissions & logs',
                   'Browser relay setup & command guide',
@@ -639,7 +639,7 @@ export default function DesktopPage() {
             {[
               {
                 q: 'What does Valnaa Desktop actually do?',
-                a: 'It installs OpenClaw and NemoClaw on your computer in one click and keeps the gateway, sandbox views, integrated terminal (for NemoClaw permissions and log output), browser relay setup, and an OpenClaw/NemoClaw command guide in one native app. It is not a separate AI product on top.',
+                a: 'It installs OpenClaw and NemoClaw on your computer in one click and keeps the gateway, sandbox views, integrated terminal (for NemoClaw permissions and log output), browser relay setup, and an OpenClaw and NemoClaw command guide in one native app. It is not a separate AI product on top.',
               },
               {
                 q: 'Do I need a cloud subscription?',
@@ -651,7 +651,7 @@ export default function DesktopPage() {
               },
               {
                 q: 'Where do API keys and models live?',
-                a: 'In your OpenClaw / NemoClaw configuration as always. The desktop app does not replace that.',
+                a: 'In your OpenClaw and NemoClaw configuration as always. The desktop app does not replace that.',
               },
               {
                 q: 'Both cloud and desktop?',
@@ -675,7 +675,7 @@ export default function DesktopPage() {
       <section className="px-6 py-24">
         <div className="mx-auto max-w-[640px] text-center">
           <h2 className="text-3xl font-medium text-white md:text-4xl">Try Valnaa Desktop</h2>
-          <p className="mt-4 text-zinc-500">1-day free trial. Then €{BASE_PRICE}/mo + VAT.</p>
+          <p className="mt-4 text-zinc-500">1 day free trial. Then €{BASE_PRICE}/mo + VAT.</p>
           <div className="mt-10 flex flex-col justify-center gap-3 sm:flex-row">
             <TrackedDownloadLink href={macUrl} trackEvent="download_click_cta_mac">
               <Button className="h-12 rounded-full bg-white px-8 font-medium text-black hover:bg-zinc-200">
@@ -701,7 +701,7 @@ export default function DesktopPage() {
               <Image src="/favicon.png" alt="" width={20} height={20} className="rounded-md" />
               <span className="font-medium text-white">Valnaa</span>
             </div>
-            <p className="mt-3 text-[13px] text-zinc-500">Hosted OpenClaw plus a one-click local installer shell.</p>
+            <p className="mt-3 text-[13px] text-zinc-500">Hosted OpenClaw plus a one click local installer shell.</p>
           </div>
           <div>
             <p className="text-[12px] font-semibold uppercase tracking-wider text-zinc-500">Product</p>
