@@ -25,6 +25,9 @@ import {
   ExternalLink,
   FileText,
   Settings,
+  LayoutGrid,
+  Code2,
+  ScrollText,
 } from 'lucide-react';
 
 const BG = '#14120b';
@@ -184,11 +187,18 @@ const FEATURE_ROWS = [
   },
 ];
 
-/** Valnaa Desktop shell (matches app top bar + footer). PNGs: public/app-screenshots/{chat|dashboard|browser}.png */
+/**
+ * Valnaa Desktop shell preview. Screenshots in capture order (full PNGs, no repo recompression).
+ * Files: public/app-screenshots/01-gateway-chat.png … 07-settings.png
+ */
 const DESKTOP_SHELL_TABS: { key: string; label: string; src: string; icon: LucideIcon }[] = [
-  { key: 'chat', label: 'Chat', src: '/app-screenshots/chat.png', icon: MessageSquare },
-  { key: 'dashboard', label: 'Dashboard', src: '/app-screenshots/dashboard.png', icon: Monitor },
-  { key: 'browser', label: 'Browser', src: '/app-screenshots/browser.png', icon: Globe },
+  { key: 'gateway', label: 'Gateway chat', src: '/app-screenshots/01-gateway-chat.png', icon: MessageSquare },
+  { key: 'sandbox', label: 'NemoClaw dashboard', src: '/app-screenshots/02-nemoclaw-dashboard.png', icon: LayoutGrid },
+  { key: 'relay', label: 'Browser relay', src: '/app-screenshots/03-browser-relay.png', icon: Globe },
+  { key: 'terminal', label: 'Terminal', src: '/app-screenshots/04-terminal.png', icon: Terminal },
+  { key: 'commands', label: 'Command reference', src: '/app-screenshots/05-command-reference.png', icon: Code2 },
+  { key: 'logs', label: 'Gateway logs', src: '/app-screenshots/06-gateway-logs.png', icon: ScrollText },
+  { key: 'settings', label: 'Settings', src: '/app-screenshots/07-settings.png', icon: Settings },
 ];
 
 const SHELL_BAR_BG = '#121212';
@@ -196,24 +206,27 @@ const SHELL_CONTENT_BG = '#0d0d0d';
 const SHELL_FOOTER_BG = '#1a1a1a';
 const SHELL_ACCENT_GREEN = '#22c55e';
 
-function DesktopShellScreenshot({ src, label }: { src: string; label: string }) {
+function DesktopShellScreenshot({ src, label, fetchPriority }: { src: string; label: string; fetchPriority?: 'high' | 'low' | 'auto' }) {
   const [broken, setBroken] = useState(false);
 
   return (
-    <div className="relative min-h-[280px] w-full bg-[#0a0a0a] sm:aspect-[16/10] sm:min-h-0">
+    <div className="relative w-full bg-[#0a0a0a]">
       {!broken ? (
-        // eslint-disable-next-line @next/next/no-img-element -- PNGs in /public; onError for missing files
+        // eslint-disable-next-line @next/next/no-img-element -- serve original PNG bytes; avoid Next/Image resize
         <img
           src={src}
           alt={`Valnaa Desktop — ${label}`}
-          className="h-full min-h-[280px] w-full object-cover object-top sm:min-h-0"
-          loading="lazy"
+          className="block h-auto w-full max-w-full"
+          width={undefined}
+          height={undefined}
+          loading={fetchPriority === 'high' ? 'eager' : 'lazy'}
           decoding="async"
+          fetchPriority={fetchPriority}
           onError={() => setBroken(true)}
         />
       ) : (
         <div
-          className="flex h-full min-h-[280px] flex-col items-center justify-center gap-3 px-6 text-center text-[13px]"
+          className="flex min-h-[220px] flex-col items-center justify-center gap-3 px-6 py-16 text-center text-[13px]"
           style={{ color: TEXT_SEC }}
         >
           <p className="font-medium text-[#c8c6c0]">{label}</p>
@@ -237,7 +250,7 @@ function ShellToolbarIcon({ icon: Icon, label }: { icon: LucideIcon; label: stri
 }
 
 function AppPreview({ className }: { className?: string }) {
-  const [activeTab, setActiveTab] = useState<string>('chat');
+  const [activeTab, setActiveTab] = useState<string>('gateway');
   const current = DESKTOP_SHELL_TABS.find((t) => t.key === activeTab) ?? DESKTOP_SHELL_TABS[0];
 
   return (
@@ -256,7 +269,11 @@ function AppPreview({ className }: { className?: string }) {
             <span className="inline-block size-2.5 rounded-full bg-[#28c840]" />
           </div>
 
-          <div role="tablist" aria-label="Main views" className="flex shrink-0 items-center gap-0.5">
+          <div
+            role="tablist"
+            aria-label="Screenshots in app order"
+            className="mx-1 flex min-w-0 max-w-[42%] flex-1 items-center gap-0.5 overflow-x-auto [scrollbar-width:thin] sm:max-w-none sm:flex-none"
+          >
             {DESKTOP_SHELL_TABS.map((tab) => {
               const selected = activeTab === tab.key;
               return (
@@ -266,21 +283,22 @@ function AppPreview({ className }: { className?: string }) {
                   role="tab"
                   aria-selected={selected}
                   aria-label={tab.label}
+                  title={tab.label}
                   id={`shell-tab-${tab.key}`}
                   aria-controls={`shell-panel-${tab.key}`}
                   onClick={() => setActiveTab(tab.key)}
                   className={cn(
-                    'flex size-9 items-center justify-center rounded-md text-[#737370] transition-colors',
+                    'flex size-8 shrink-0 items-center justify-center rounded-md text-[#737370] transition-colors sm:size-9',
                     selected && 'bg-white/[0.08] text-[#f0efea] shadow-[inset_0_-2px_0_0_rgba(255,255,255,0.95)]'
                   )}
                 >
-                  <tab.icon className="size-[18px]" strokeWidth={1.5} />
+                  <tab.icon className="size-[16px] sm:size-[18px]" strokeWidth={1.5} />
                 </button>
               );
             })}
           </div>
 
-          <span className="pointer-events-none absolute left-1/2 top-1/2 max-w-[46%] -translate-x-1/2 -translate-y-1/2 truncate text-center text-[13px] font-semibold tracking-tight text-[#b8b6b1]">
+          <span className="pointer-events-none absolute left-1/2 top-1/2 max-w-[22%] -translate-x-1/2 -translate-y-1/2 truncate text-center text-[11px] font-semibold tracking-tight text-[#b8b6b1] sm:max-w-[32%] sm:text-[13px]">
             NemoClaw
           </span>
 
@@ -298,7 +316,11 @@ function AppPreview({ className }: { className?: string }) {
           aria-labelledby={`shell-tab-${current.key}`}
           style={{ backgroundColor: SHELL_CONTENT_BG }}
         >
-          <DesktopShellScreenshot src={current.src} label={current.label} />
+          <DesktopShellScreenshot
+            src={current.src}
+            label={current.label}
+            fetchPriority={activeTab === 'gateway' ? 'high' : 'auto'}
+          />
         </div>
 
         <div
@@ -339,8 +361,9 @@ function AppPreview({ className }: { className?: string }) {
         </div>
       </div>
       <p className="mt-4 text-center text-[12px]" style={{ color: TEXT_SEC }}>
-        Preview matches Valnaa Desktop chrome. Use Chat, Dashboard, and Browser to swap shots — files in{' '}
-        <code className="rounded bg-white/[0.06] px-1 font-mono text-[11px]">public/app-screenshots/</code>.
+        Seven full resolution captures in app order. Tap an icon to switch. Replace PNGs in{' '}
+        <code className="rounded bg-white/[0.06] px-1 font-mono text-[11px]">public/app-screenshots/</code>{' '}
+        (01–07) anytime.
       </p>
     </div>
   );
