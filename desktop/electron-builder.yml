@@ -38,11 +38,14 @@ mac:
 
 dmg:
   title: Valnaa
+  window:
+    width: 540
+    height: 380
   contents:
-    - x: 130
-      y: 220
-    - x: 410
-      y: 220
+    - x: 140
+      y: 190
+    - x: 400
+      y: 190
       type: link
       path: /Applications
 
