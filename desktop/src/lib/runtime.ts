@@ -804,9 +804,9 @@ export function isOnboardComplete(): boolean {
         try {
           const dk = dockerBin();
           execSyncSafe(`${dk} start ${GATEWAY_CLUSTER_CONTAINER}`, 20000);
-          // Give it a moment to come up
+          // Give it a moment to come up (node busy-wait, works on all platforms)
           for (let i = 0; i < 10; i++) {
-            execSyncSafe('sleep 1', 2000);
+            Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000);
             if (isGatewayClusterContainerRunning()) {
               logApp('info', 'Gateway container restarted successfully');
               return true;
