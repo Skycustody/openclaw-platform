@@ -22,7 +22,9 @@ export function isNodeInstalled(): boolean {
 /** Get the install command for the official OpenClaw install script (skips onboard since we do it separately). */
 export function getInstallScriptCommand(): string {
   if (IS_WIN) {
-    return 'powershell -Command "& ([scriptblock]::Create((iwr -useb https://openclaw.ai/install.ps1))) -NoOnboard"';
+    // Use powershell.exe with .exe extension — some Windows configs don't
+    // resolve bare 'powershell' when Electron has an incomplete PATH.
+    return 'powershell.exe -ExecutionPolicy Bypass -Command "& ([scriptblock]::Create((iwr -useb https://openclaw.ai/install.ps1))) -NoOnboard"';
   }
   return 'curl -fsSL https://openclaw.ai/install.sh | bash -s -- --no-onboard';
 }

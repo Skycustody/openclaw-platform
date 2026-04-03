@@ -277,7 +277,9 @@ function resolveSetupShell(command: string, isWin: boolean, extraEnv?: Record<st
     return { shellName: 'wsl.exe', shellArgs: command.slice(4).trim().split(/\s+/) };
   }
   if (isWin) {
-    return { shellName: 'cmd.exe', shellArgs: ['/c', command] };
+    // Use full path to cmd.exe — Electron may have incomplete PATH
+    const windir = process.env.SystemRoot || 'C:\\Windows';
+    return { shellName: `${windir}\\System32\\cmd.exe`, shellArgs: ['/c', command] };
   }
   return { shellName: process.env.SHELL || '/bin/zsh', shellArgs: ['-c', command] };
 }
@@ -288,7 +290,23 @@ function resolveSetupEnv(extraEnv?: Record<string, string>): Record<string, stri
   const localBin = path.join(os.homedir(), '.local', 'bin');
   const envPath = process.env.PATH || '';
   let fullPath = envPath.includes(localBin) ? envPath : `${localBin}${sep}${envPath}`;
-  if (!isWin) {
+  if (isWin) {
+    // Electron on Windows may not inherit the full system PATH when launched
+    // from a shortcut, Start Menu, or installer. Ensure critical system dirs
+    // are always present so powershell.exe, wsl.exe, cmd.exe are findable.
+    const windir = process.env.SystemRoot || 'C:\\Windows';
+    const requiredDirs = [
+      `${windir}\\System32`,
+      `${windir}\\System32\\WindowsPowerShell\\v1.0`,
+      `${windir}\\System32\\Wbem`,
+      `${windir}`,
+    ];
+    for (const dir of requiredDirs) {
+      if (!fullPath.toLowerCase().includes(dir.toLowerCase())) {
+        fullPath = `${fullPath}${sep}${dir}`;
+      }
+    }
+  } else {
     const brewBin = process.arch === 'arm64' ? '/opt/homebrew/bin' : '/usr/local/bin';
     if (!fullPath.includes(brewBin)) fullPath = `${brewBin}:${fullPath}`;
   }
@@ -753,11 +771,17 @@ async function runSetupShellTaskAsync(task: SetupShellTask, extraEnv?: Record<st
   }
 
   const isWin = process.platform === 'win32';
-  const shellName = isWin ? 'cmd.exe' : '/bin/zsh';
+  const windir = process.env.SystemRoot || 'C:\\Windows';
+  const shellName = isWin ? `${windir}\\System32\\cmd.exe` : '/bin/zsh';
   const sep = isWin ? ';' : ':';
   const localBin = path.join(os.homedir(), '.local', 'bin');
   const envPath = process.env.PATH || '';
-  const patchedPath = envPath.includes(localBin) ? envPath : `${localBin}${sep}${envPath}`;
+  let patchedPath = envPath.includes(localBin) ? envPath : `${localBin}${sep}${envPath}`;
+  if (isWin) {
+    for (const dir of [`${windir}\\System32`, `${windir}\\System32\\WindowsPowerShell\\v1.0`]) {
+      if (!patchedPath.toLowerCase().includes(dir.toLowerCase())) patchedPath = `${patchedPath}${sep}${dir}`;
+    }
+  }
   logApp('info', `Headless setup "${task}" via ${shellName}`);
 
   await new Promise<void>((resolve, reject) => {
