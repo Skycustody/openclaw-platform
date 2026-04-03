@@ -810,11 +810,17 @@ export default function DesktopPage() {
                   q: 'What computers does it run on?',
                   a: 'macOS with Intel or Apple Silicon, and Windows 10 or 11.',
                 },
+                {
+                  q: 'Need help?',
+                  a: 'Email us at hello@valnaa.com and we will get back to you.',
+                },
               ].map((item) => (
                 <div key={item.q} className="py-8 first:pt-0">
                   <h3 className="text-[15px] font-medium text-[#f0efea]">{item.q}</h3>
                   <p className="mt-2 text-[14px] leading-relaxed" style={{ color: TEXT_SEC }}>
-                    {item.a}
+                    {item.a.includes('hello@valnaa.com') ? (
+                      <>Email us at <a href="mailto:hello@valnaa.com" className="text-[#f0efea] underline">hello@valnaa.com</a> and we will get back to you.</>
+                    ) : item.a}
                   </p>
                 </div>
               ))}
