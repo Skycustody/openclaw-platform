@@ -787,20 +787,29 @@ export default function DesktopPage() {
             <div className="mt-10 divide-y divide-white/[0.06]">
               {[
                 {
-                  q: 'What does Valnaa Desktop actually do?',
-                  a: 'It installs OpenClaw and NemoClaw on your computer in one click and keeps the gateway, sandbox views, integrated terminal (for NemoClaw permissions and log output), browser relay setup, and an OpenClaw and NemoClaw command guide in one native app. It is not a separate AI product on top.',
-                },
-                { q: 'Do I need a cloud subscription?', a: 'No. Desktop billing is separate from hosted Valnaa.' },
-                { q: 'After the trial?', a: '€5/mo + VAT. Cancel anytime.' },
-                {
-                  q: 'Where do API keys and models live?',
-                  a: 'In your OpenClaw and NemoClaw configuration as always. The desktop app does not replace that.',
+                  q: 'What is Valnaa Desktop?',
+                  a: 'An app that installs OpenClaw or NemoClaw on your computer and puts everything you need in one window. The gateway, a terminal, sandbox views, browser relay setup, and a command reference. You pick a runtime, the app sets it up, and you start using the agent.',
                 },
                 {
-                  q: 'Both cloud and desktop?',
-                  a: 'Yes. Use cloud for a managed gateway; use desktop when you want the stack on your own hardware.',
+                  q: 'Does it change how OpenClaw or NemoClaw works?',
+                  a: 'No. Your agent, your models, your API keys, your config. Valnaa just installs them and gives you a place to use them. Everything works the same as if you set it up yourself in the terminal.',
                 },
-                { q: 'Platforms?', a: 'macOS (Intel & Apple Silicon) and Windows 10/11.' },
+                {
+                  q: 'What does it cost?',
+                  a: 'Free trial to start. After that it is 5 euros a month plus VAT. You can cancel anytime.',
+                },
+                {
+                  q: 'Do I need a cloud account?',
+                  a: 'No. The desktop app is a separate subscription. You do not need Valnaa cloud to use it.',
+                },
+                {
+                  q: 'Can I use both OpenClaw and NemoClaw?',
+                  a: 'Yes. You pick one when you start, and you can switch between them anytime from the settings page. The app handles the setup for both.',
+                },
+                {
+                  q: 'What computers does it run on?',
+                  a: 'macOS with Intel or Apple Silicon, and Windows 10 or 11.',
+                },
               ].map((item) => (
                 <div key={item.q} className="py-8 first:pt-0">
                   <h3 className="text-[15px] font-medium text-[#f0efea]">{item.q}</h3>
