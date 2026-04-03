@@ -541,17 +541,14 @@ export default function DesktopPage() {
                     </Link>
                   </div>
                   {row.kicker === 'Install' ? (
-                    <div
-                      className="overflow-hidden rounded-[10px] border border-white/[0.1] bg-[#111]"
-                      style={{ boxShadow: '0 28px 70px rgba(0,0,0,0.4), 0 14px 32px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.06)' }}
-                    >
+                    <div className="overflow-hidden rounded-[10px]" style={{ boxShadow: '0 28px 70px rgba(0,0,0,0.4), 0 14px 32px rgba(0,0,0,0.25)' }}>
                       <video
                         autoPlay
                         muted
                         loop
                         playsInline
                         poster="/app-screenshots/install-poster.png"
-                        className="block w-full"
+                        className="block w-full rounded-[10px]"
                         style={{ height: 'auto' }}
                       >
                         <source src="/app-screenshots/install-video.mp4" type="video/mp4" />
