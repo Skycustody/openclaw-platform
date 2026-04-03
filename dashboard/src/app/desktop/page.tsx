@@ -106,19 +106,19 @@ const ALWAYS_OPEN_PANELS = [
 
 const TESTIMONIALS = [
   {
-    quote: "Picked NemoClaw, clicked install, and the app handled Docker, OpenShell, the sandbox, everything. I never opened a terminal.",
+    quote: "Spent two hours trying to get NemoClaw running manually. k3d kept failing, ports were conflicting, Docker was eating all my RAM. Downloaded Valnaa, clicked NemoClaw, went to make coffee, came back and it was running.",
     name: '',
   },
   {
-    quote: "The OpenShell terminal is always open right there. When the sandbox needs a permission approved I see it instantly and type y. No more missed prompts.",
+    quote: "I wanted to try NemoClaw but the setup has like six steps and I kept getting stuck on the OpenShell sidecar part. The app just did all of it. Docker, OpenShell, the sandbox, the gateway. I did nothing.",
     name: '',
   },
   {
-    quote: "OpenClaw install took under two minutes. It picked the model, set up the gateway, and I was chatting with the agent. That was it.",
+    quote: "Every time I updated something the sandbox would break and I would have to redo the whole onboard. Valnaa handles all of that now. I just open the app and it connects.",
     name: '',
   },
   {
-    quote: "I use the OpenShell dashboard tab to check sandbox health and providers. Used to need a separate browser window for that. Now it is just a tab.",
+    quote: "The OpenShell terminal tab is where I live now. NemoClaw asks for permissions constantly and I used to miss them because they were in some other window. Now I see them right away and just hit y.",
     name: '',
   },
 ];
