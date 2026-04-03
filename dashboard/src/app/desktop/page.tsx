@@ -545,13 +545,6 @@ export default function DesktopPage() {
                       className="overflow-hidden rounded-[10px] border border-white/[0.1] bg-[#111]"
                       style={{ boxShadow: '0 28px 70px rgba(0,0,0,0.4), 0 14px 32px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.06)' }}
                     >
-                      {/* Window chrome bar */}
-                      <div className="flex h-10 items-center gap-[6px] border-b border-[#2a2a2a] px-3.5" style={{ backgroundColor: '#111' }}>
-                        <span className="inline-block size-[10px] rounded-full bg-[#ff5f57]" />
-                        <span className="inline-block size-[10px] rounded-full bg-[#febc2e]" />
-                        <span className="inline-block size-[10px] rounded-full bg-[#28c840]" />
-                        <span className="ml-auto text-[11px] font-medium text-[#777]">Valnaa</span>
-                      </div>
                       <video
                         autoPlay
                         muted
