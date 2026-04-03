@@ -519,11 +519,12 @@ export default function DesktopPage() {
                 <div
                   key={row.title}
                   className={cn(
-                    'grid items-center gap-12 md:grid-cols-2 md:gap-20',
+                    'grid items-start gap-12 md:gap-16',
+                    row.kicker === 'Install' ? 'md:grid-cols-[1fr_1.4fr]' : 'md:grid-cols-2',
                     row.reverse && 'md:[&>div:first-child]:order-2'
                   )}
                 >
-                  <div>
+                  <div className="flex flex-col justify-center md:py-10">
                     <p className="text-[12px] font-medium uppercase tracking-[0.12em]" style={{ color: TEXT_SEC }}>
                       {row.kicker}
                     </p>
@@ -539,8 +540,18 @@ export default function DesktopPage() {
                       <ExternalLink className="size-3.5 opacity-70" />
                     </Link>
                   </div>
-                  <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-[#0a0a0a]">
-                    {row.kicker === 'Install' ? (
+                  {row.kicker === 'Install' ? (
+                    <div
+                      className="overflow-hidden rounded-[10px] border border-white/[0.1] bg-[#111]"
+                      style={{ boxShadow: '0 28px 70px rgba(0,0,0,0.4), 0 14px 32px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.06)' }}
+                    >
+                      {/* Window chrome bar */}
+                      <div className="flex h-10 items-center gap-[6px] border-b border-[#2a2a2a] px-3.5" style={{ backgroundColor: '#111' }}>
+                        <span className="inline-block size-[10px] rounded-full bg-[#ff5f57]" />
+                        <span className="inline-block size-[10px] rounded-full bg-[#febc2e]" />
+                        <span className="inline-block size-[10px] rounded-full bg-[#28c840]" />
+                        <span className="ml-auto text-[11px] font-medium text-[#777]">Valnaa</span>
+                      </div>
                       <video
                         autoPlay
                         muted
@@ -552,8 +563,10 @@ export default function DesktopPage() {
                       >
                         <source src="/app-screenshots/install-video.mp4" type="video/mp4" />
                       </video>
-                    ) : (
-                      <div className="space-y-3 p-8 font-mono text-[12px] leading-relaxed md:p-10" style={{ color: TEXT_SEC }}>
+                    </div>
+                  ) : (
+                    <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-[#1a1916] p-8 md:p-10">
+                      <div className="space-y-3 font-mono text-[12px] leading-relaxed" style={{ color: TEXT_SEC }}>
                         <p className="text-[#c8c6c0]">Tabs</p>
                         <p>→ Control UI · Sandbox · Terminal</p>
                         <p>→ Browser relay · Command guide</p>
@@ -562,8 +575,8 @@ export default function DesktopPage() {
                         </p>
                         <p className="pt-2 text-[#5c5a55]">// terminal stays open on purpose</p>
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
