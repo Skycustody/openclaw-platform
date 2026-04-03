@@ -520,7 +520,7 @@ export default function DesktopPage() {
                   key={row.title}
                   className={cn(
                     'grid items-start gap-12 md:gap-16',
-                    'md:grid-cols-[1fr_1.4fr]',
+                    row.reverse ? 'md:grid-cols-[1.4fr_1fr]' : 'md:grid-cols-[1fr_1.4fr]',
                     row.reverse && 'md:[&>div:first-child]:order-2'
                   )}
                 >
