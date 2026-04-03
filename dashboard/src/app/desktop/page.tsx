@@ -520,7 +520,7 @@ export default function DesktopPage() {
                   key={row.title}
                   className={cn(
                     'grid items-start gap-12 md:gap-16',
-                    row.kicker === 'Install' ? 'md:grid-cols-[1fr_1.4fr]' : 'md:grid-cols-2',
+                    'md:grid-cols-[1fr_1.4fr]',
                     row.reverse && 'md:[&>div:first-child]:order-2'
                   )}
                 >
@@ -554,16 +554,17 @@ export default function DesktopPage() {
                       </video>
                     </div>
                   ) : (
-                    <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-[#1a1916] p-8 md:p-10">
-                      <div className="space-y-3 font-mono text-[12px] leading-relaxed" style={{ color: TEXT_SEC }}>
-                        <p className="text-[#c8c6c0]">Tabs</p>
-                        <p>→ Control UI · Sandbox · Terminal</p>
-                        <p>→ Browser relay · Command guide</p>
-                        <p>
-                          → Shell tail for <span className="text-sky-500/80">permissions and errors</span>
-                        </p>
-                        <p className="pt-2 text-[#5c5a55]">// terminal stays open on purpose</p>
-                      </div>
+                    <div className="overflow-hidden rounded-[10px]" style={{ boxShadow: '0 28px 70px rgba(0,0,0,0.4), 0 14px 32px rgba(0,0,0,0.25)' }}>
+                      <video
+                        autoPlay
+                        muted
+                        loop
+                        playsInline
+                        className="block w-full rounded-[10px]"
+                        style={{ height: 'auto' }}
+                      >
+                        <source src="/app-screenshots/operate-video.mp4" type="video/mp4" />
+                      </video>
                     </div>
                   )}
                 </div>
