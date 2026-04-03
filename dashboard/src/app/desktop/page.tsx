@@ -106,20 +106,20 @@ const ALWAYS_OPEN_PANELS = [
 
 const TESTIMONIALS = [
   {
-    quote: "I was spending 20 minutes every time just getting NemoClaw running. Now I open the app and it works. Saved me so much time.",
-    name: 'User',
+    quote: "Picked NemoClaw, clicked install, and the app handled Docker, OpenShell, the sandbox, everything. I never opened a terminal.",
+    name: '',
   },
   {
-    quote: "The terminal inside the app is the reason I use it. When NemoClaw needs a permission approved I see it right away instead of missing it.",
-    name: 'User',
+    quote: "The OpenShell terminal is always open right there. When the sandbox needs a permission approved I see it instantly and type y. No more missed prompts.",
+    name: '',
   },
   {
-    quote: "Setting up the browser relay used to take me forever. The app walks you through it and the token is right there. Took two minutes.",
-    name: 'User',
+    quote: "OpenClaw install took under two minutes. It picked the model, set up the gateway, and I was chatting with the agent. That was it.",
+    name: '',
   },
   {
-    quote: "I switched from OpenClaw to NemoClaw and back in the same session. No reinstalling anything. Just picked the runtime and it started.",
-    name: 'User',
+    quote: "I use the OpenShell dashboard tab to check sandbox health and providers. Used to need a separate browser window for that. Now it is just a tab.",
+    name: '',
   },
 ];
 
@@ -603,7 +603,7 @@ export default function DesktopPage() {
                 <blockquote key={t.name}>
                   <p className="text-[17px] leading-relaxed text-[#d4d2cc] md:text-lg">&ldquo;{t.quote}&rdquo;</p>
                   <footer className="mt-6">
-                    <p className="text-[13px]" style={{ color: TEXT_SEC }}>{t.name}</p>
+                    {t.name && <p className="text-[13px]" style={{ color: TEXT_SEC }}>{t.name}</p>}
                   </footer>
                 </blockquote>
               ))}
