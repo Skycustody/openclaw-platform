@@ -596,7 +596,7 @@ export default function DesktopPage() {
         <section className="border-t border-white/[0.06] px-5 py-20 md:py-28" style={{ backgroundColor: BG }}>
           <div className="mx-auto max-w-[1280px]">
             <h2 className="text-center text-[clamp(1.5rem,2.2vw,2.25rem)] font-medium tracking-[-0.02em] text-[#f0efea]">
-              The new way to run local agents
+              The new way to install your agent
             </h2>
             <div className="mt-14 grid gap-14 sm:grid-cols-2 sm:gap-x-12 sm:gap-y-16">
               {TESTIMONIALS.map((t) => (
