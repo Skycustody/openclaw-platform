@@ -70,36 +70,36 @@ const INCLUDED = [
 
 const ALWAYS_OPEN_PANELS = [
   {
-    title: 'Gateway & Control UI',
+    title: 'Chat with your agent',
     icon: MessageSquare,
     points: [
-      'OpenClaw gateway stays reachable from the app',
-      'Control UI tabs: chat, overview, channels, instances, sessions, usage, cron, agents, skills, nodes',
+      'Talk to your AI agent directly through the built-in gateway chat',
+      'Manage sessions, switch models, and monitor conversations in real time',
     ],
   },
   {
-    title: 'Sandbox & NemoClaw',
+    title: 'Manage your sandbox',
     icon: Monitor,
     points: [
-      'NemoClaw dashboard: gateways, providers, sandboxes',
-      'Health and status without juggling extra windows',
+      'See gateway health, providers, and sandbox status at a glance',
+      'Everything in one window — no switching between browser tabs',
     ],
   },
   {
-    title: 'Terminal, shell & logs',
+    title: 'Built-in terminal',
     icon: Terminal,
     points: [
-      'Integrated terminal, OpenTerm, and shell always available',
-      'Where NemoClaw surfaces permission prompts',
-      'Watch stdout and errors for setup and runtime issues',
+      'SSH into the sandbox or run local commands without leaving the app',
+      'Approve NemoClaw permission requests as they appear',
+      'Live logs so you catch errors the moment they happen',
     ],
   },
   {
-    title: 'Browser relay & command guide',
+    title: 'Browser relay & commands',
     icon: BookOpen,
     points: [
-      'Browser relay walkthrough (Chrome extension, policy, localhost)',
-      'Quick reference for OpenClaw and NemoClaw commands in one place',
+      'Set up the Chrome extension to give your agent a browser — step by step',
+      'Every OpenClaw and NemoClaw CLI command in a searchable reference',
     ],
   },
 ];
