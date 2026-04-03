@@ -659,9 +659,9 @@ export default function DesktopPage() {
                 <TrackedDownloadLink
                   href={DOWNLOAD_WIN}
                   trackEvent="download_click_win"
-                  className="inline-flex h-11 w-full items-center justify-center rounded-full border border-white/15 text-[15px] font-medium text-[#f0efea] hover:bg-white/[0.06]"
+                  className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full border border-white/15 text-[15px] font-medium text-[#f0efea] hover:bg-white/[0.06]"
                 >
-                  Windows
+                  <WindowsLogo className="size-4" /> Windows
                 </TrackedDownloadLink>
               </div>
               <p className="mt-4 text-center text-[12px]" style={{ color: '#6f6d68' }}>
