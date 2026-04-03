@@ -106,24 +106,20 @@ const ALWAYS_OPEN_PANELS = [
 
 const TESTIMONIALS = [
   {
-    quote: "It really is one click. OpenClaw and NemoClaw were on my machine without me opening Terminal once. The app did the boring parts.",
-    name: 'Marcus R.',
-    role: 'Indie Developer',
+    quote: "I was spending 20 minutes every time just getting NemoClaw running. Now I open the app and it works. Saved me so much time.",
+    name: 'User',
   },
   {
-    quote: "I live in the integrated terminal when NemoClaw asks for permissions or something fails. Logs are right there instead of hunting through folders.",
-    name: 'Sarah K.',
-    role: 'Product Manager',
+    quote: "The terminal inside the app is the reason I use it. When NemoClaw needs a permission approved I see it right away instead of missing it.",
+    name: 'User',
   },
   {
-    quote: "Browser relay setup was the part I always messed up. Having it guided inside the same window as the gateway sold me.",
-    name: 'James L.',
-    role: 'Security Consultant',
+    quote: "Setting up the browser relay used to take me forever. The app walks you through it and the token is right there. Took two minutes.",
+    name: 'User',
   },
   {
-    quote: "The command guide saves me from tabbing to docs. Gateway, sandbox, terminal: one app, no extra layer pretending to be the agent.",
-    name: 'Elena M.',
-    role: 'Platform Engineer',
+    quote: "I switched from OpenClaw to NemoClaw and back in the same session. No reinstalling anything. Just picked the runtime and it started.",
+    name: 'User',
   },
 ];
 
@@ -607,10 +603,7 @@ export default function DesktopPage() {
                 <blockquote key={t.name}>
                   <p className="text-[17px] leading-relaxed text-[#d4d2cc] md:text-lg">&ldquo;{t.quote}&rdquo;</p>
                   <footer className="mt-6">
-                    <p className="text-[14px] font-medium text-[#f0efea]">{t.name}</p>
-                    <p className="text-[13px]" style={{ color: TEXT_SEC }}>
-                      {t.role}
-                    </p>
+                    <p className="text-[13px]" style={{ color: TEXT_SEC }}>{t.name}</p>
                   </footer>
                 </blockquote>
               ))}
