@@ -135,9 +135,9 @@ const CHANGELOG = [
 const RESEARCH_ROWS = [
   { year: '2026', item: 'Signed macOS & Windows desktop installers', status: 'Shipped' },
   { year: '2026', item: 'Always on terminal for permissions & log tailing', status: 'Shipped' },
-  { year: '2025', item: 'One click OpenClaw + NemoClaw local install', status: 'Shipped' },
-  { year: '2025', item: 'In app browser relay setup flow', status: 'Shipped' },
-  { year: '2025', item: 'OpenClaw and NemoClaw command guide in the shell', status: 'Shipped' },
+  { year: '2026', item: 'One click OpenClaw + NemoClaw local install', status: 'Shipped' },
+  { year: '2026', item: 'In app browser relay setup flow', status: 'Shipped' },
+  { year: '2026', item: 'OpenClaw and NemoClaw command guide in the shell', status: 'Shipped' },
 ];
 
 const CLOUD_DESKTOP_COMPARISON = [
