@@ -376,10 +376,10 @@ export default function DesktopPage() {
             <Link href="/#pricing" className="transition-colors hover:text-white">
               Cloud
             </Link>
-            <Link href="/pricing" className="transition-colors hover:text-white">
+            <Link href="#pricing" className="transition-colors hover:text-white">
               Pricing
             </Link>
-            <Link href="/help" className="transition-colors hover:text-white">
+            <Link href="#faq" className="transition-colors hover:text-white">
               Resources
             </Link>
           </nav>
@@ -625,7 +625,7 @@ export default function DesktopPage() {
           </div>
         </section>
 
-        <section className="border-t border-white/[0.06] px-5 py-20" style={{ backgroundColor: BG }}>
+        <section id="pricing" className="border-t border-white/[0.06] px-5 py-20" style={{ backgroundColor: BG }}>
           <div className="mx-auto max-w-md">
             <div className="rounded-xl border border-white/[0.1] bg-[#1a1916] p-8 md:p-10">
               <p className="text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ color: TEXT_SEC }}>
@@ -783,7 +783,7 @@ export default function DesktopPage() {
 
         <section className="border-t border-white/[0.06] px-5 py-20" style={{ backgroundColor: BG }}>
           <div className="mx-auto max-w-xl">
-            <h2 className="text-center text-2xl font-medium text-[#f0efea]">Questions</h2>
+            <h2 id="faq" className="text-center text-2xl font-medium text-[#f0efea]">Questions</h2>
             <div className="mt-10 divide-y divide-white/[0.06]">
               {[
                 {
