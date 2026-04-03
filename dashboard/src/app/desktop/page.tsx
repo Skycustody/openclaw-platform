@@ -540,7 +540,10 @@ export default function DesktopPage() {
                       <ExternalLink className="size-3.5 opacity-70" />
                     </Link>
                   </div>
-                  {row.kicker === 'Install' ? (
+                  <div>
+                    <p className="mb-3 text-center text-[11px] font-medium uppercase tracking-[0.15em] text-white/[0.25]">
+                      {row.kicker === 'Install' ? 'NemoClaw' : 'OpenClaw'}
+                    </p>
                     <div className="overflow-hidden rounded-[10px]" style={{ boxShadow: '0 28px 70px rgba(0,0,0,0.4), 0 14px 32px rgba(0,0,0,0.25)' }}>
                       <video
                         autoPlay
@@ -550,23 +553,10 @@ export default function DesktopPage() {
                         className="block w-full rounded-[10px]"
                         style={{ height: 'auto' }}
                       >
-                        <source src="/app-screenshots/install-video.mp4" type="video/mp4" />
+                        <source src={`/app-screenshots/${row.kicker === 'Install' ? 'install' : 'operate'}-video.mp4`} type="video/mp4" />
                       </video>
                     </div>
-                  ) : (
-                    <div className="overflow-hidden rounded-[10px]" style={{ boxShadow: '0 28px 70px rgba(0,0,0,0.4), 0 14px 32px rgba(0,0,0,0.25)' }}>
-                      <video
-                        autoPlay
-                        muted
-                        loop
-                        playsInline
-                        className="block w-full rounded-[10px]"
-                        style={{ height: 'auto' }}
-                      >
-                        <source src="/app-screenshots/operate-video.mp4" type="video/mp4" />
-                      </video>
-                    </div>
-                  )}
+                  </div>
                 </div>
               ))}
             </div>
