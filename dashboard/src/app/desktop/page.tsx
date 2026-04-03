@@ -539,30 +539,30 @@ export default function DesktopPage() {
                       <ExternalLink className="size-3.5 opacity-70" />
                     </Link>
                   </div>
-                  <div className="rounded-xl border border-white/[0.08] bg-[#1a1916] p-8 md:p-10">
-                    <div className="space-y-3 font-mono text-[12px] leading-relaxed" style={{ color: TEXT_SEC }}>
-                      {row.kicker === 'Install' ? (
-                        <>
-                          <p className="text-[#c8c6c0]">Valnaa Desktop</p>
-                          <p>→ Install OpenClaw … OK</p>
-                          <p>→ Install NemoClaw … OK</p>
-                          <p>
-                            → Open gateway <span className="text-emerald-500/80">:18789</span>
-                          </p>
-                          <p className="pt-2 text-[#5c5a55]">// no extra runtime beyond the stack</p>
-                        </>
-                      ) : (
-                        <>
-                          <p className="text-[#c8c6c0]">Tabs</p>
-                          <p>→ Control UI · Sandbox · Terminal</p>
-                          <p>→ Browser relay · Command guide</p>
-                          <p>
-                            → Shell tail for <span className="text-sky-500/80">permissions and errors</span>
-                          </p>
-                          <p className="pt-2 text-[#5c5a55]">// terminal stays open on purpose</p>
-                        </>
-                      )}
-                    </div>
+                  <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-[#0a0a0a]">
+                    {row.kicker === 'Install' ? (
+                      <video
+                        autoPlay
+                        muted
+                        loop
+                        playsInline
+                        poster="/app-screenshots/install-poster.png"
+                        className="block w-full"
+                        style={{ height: 'auto' }}
+                      >
+                        <source src="/app-screenshots/install-video.mp4" type="video/mp4" />
+                      </video>
+                    ) : (
+                      <div className="space-y-3 p-8 font-mono text-[12px] leading-relaxed md:p-10" style={{ color: TEXT_SEC }}>
+                        <p className="text-[#c8c6c0]">Tabs</p>
+                        <p>→ Control UI · Sandbox · Terminal</p>
+                        <p>→ Browser relay · Command guide</p>
+                        <p>
+                          → Shell tail for <span className="text-sky-500/80">permissions and errors</span>
+                        </p>
+                        <p className="pt-2 text-[#5c5a55]">// terminal stays open on purpose</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
