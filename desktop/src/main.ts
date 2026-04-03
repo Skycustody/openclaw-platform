@@ -3,14 +3,16 @@ import crypto from 'crypto';
 import path from 'path';
 import os from 'os';
 import fs from 'fs';
-import { spawn } from 'child_process';
+import { spawn, exec as execCb } from 'child_process';
+import { promisify } from 'util';
+const execAsync = promisify(execCb);
 import * as pty from 'node-pty';
 import { autoUpdater } from 'electron-updater';
 import { manager, AgentStatus } from './openclaw/manager';
 import { installOpenClaw, findOpenClawBinary, isNodeInstalled, getInstallScriptCommand, findNemoClawBinary, getNemoClawInstallScriptCommand, getNemoClawSetupScriptCommand } from './openclaw/installer';
 import { readRecentLogs, getLogFilePath, getAppLogPath, logApp, closeStreams } from './openclaw/logger';
 import { loadSession, saveSession, clearSession, checkSubscription, fetchDesktopGatewayToken, startDesktopTrial, getStripePortalUrl, getDesktopCheckoutUrl, parseDeepLinkToken, parseDeepLinkEmail, isOfflineGraceValid, markLocalTrialClaimed, isLocalTrialClaimed, startHeartbeat, stopHeartbeat } from './lib/session';
-import { loadRuntime, saveRuntime, clearRuntime, isNemoClawSupported, isDockerInstalled, isDockerRunning, canInstallDocker, getDockerInstallCommand, launchDockerDesktop, RuntimeType, isIntelMac, isOpenShellInstalled, isSidecarReady, setupOpenShellSidecar, ensureSidecarNetworking, isOnboardComplete, isGatewayDeployed, isGatewayClusterContainerRunning, getNemoClawOnboardCommand, ensurePortForward, OPENCLAW_PORT, EXTENSION_RELAY_PORT, getActiveGatewayPort, getActiveRelayPort, readSandboxGatewayToken, readSandboxGatewayTokenFresh, getCachedSandboxToken, readHostOpenclawGatewayToken, writeHostOpenclawGatewayToken, clearHostOpenclawGatewayToken, writeSandboxGatewayToken, clearSandboxGatewayToken, getSandboxShellCommand, isSandboxReady, applySandboxSettings, findNemoClawPackageRoot, getDockerInfoError, ensureWslReady, isWslHealthy, hasUsableWslDistro, isDockerWslMountHealthy, repairDockerWslMount, getNemoClawSandboxName, getOpenShellTermCommand, clearSandboxNameCache, isHomebrewInstalled, getHomebrewInstallCommand, ensureDockerSocketDir, isDockerSocketBroken, killDockerDesktop } from './lib/runtime';
+import { loadRuntime, saveRuntime, clearRuntime, isNemoClawSupported, isDockerInstalled, isDockerRunning, canInstallDocker, getDockerInstallCommand, launchDockerDesktop, RuntimeType, isIntelMac, isOpenShellInstalled, isSidecarReady, setupOpenShellSidecar, ensureSidecarNetworking, isOnboardComplete, isGatewayDeployed, isGatewayClusterContainerRunning, getNemoClawOnboardCommand, ensurePortForward, OPENCLAW_PORT, EXTENSION_RELAY_PORT, getActiveGatewayPort, getActiveRelayPort, readSandboxGatewayToken, readSandboxGatewayTokenFresh, getCachedSandboxToken, readHostOpenclawGatewayToken, writeHostOpenclawGatewayToken, clearHostOpenclawGatewayToken, writeSandboxGatewayToken, clearSandboxGatewayToken, getSandboxShellCommand, isSandboxReady, applySandboxSettings, findNemoClawPackageRoot, getDockerInfoError, ensureWslReady, isWslHealthy, hasUsableWslDistro, isDockerWslMountHealthy, repairDockerWslMount, getNemoClawSandboxName, getOpenShellTermCommand, clearSandboxNameCache, isHomebrewInstalled, getHomebrewInstallCommand, ensureDockerSocketDir, isDockerSocketBroken, killDockerDesktop, applyFailedPolicyPresets, ensureSandboxGatewayRunning } from './lib/runtime';
 import { freePort, freePorts } from './lib/ports';
 import { getAppDataDir, getOpenClawDir, getLogsDir } from './lib/platform';
 import {
@@ -126,13 +128,10 @@ type SetupShellTask = 'install' | 'onboard' | 'install-nemoclaw' | 'setup-nemocl
 
 function getTaskCommand(task: SetupShellTask): string | null {
   if (task === 'install') {
-    const hasNode = isNodeInstalled();
-    if (!hasNode) {
-      return getInstallScriptCommand();
-    } else {
-      const prefix = path.join(os.homedir(), '.local');
-      return `npm install -g openclaw@latest --prefix ${prefix}`;
-    }
+    // Always use the install script — it handles Node/npm detection and
+    // installation itself. Skipping it when Node exists but npm is not on
+    // PATH (common on Windows) causes "npm not found" errors.
+    return getInstallScriptCommand();
   } else if (task === 'install-nemoclaw') {
     return getNemoClawInstallScriptCommand();
   } else if (task === 'setup-nemoclaw') {
@@ -212,17 +211,26 @@ function ensureOpenShellCliForOnboard(force = false): void {
 
     fs.mkdirSync(configDir, { recursive: true });
 
+    // Do NOT bind-mount the openshell binary — bind mounts become "(deleted)"
+    // when the container is recreated while onboard is still running via
+    // `docker exec`. Instead, create the container without the binary and
+    // copy it in after start. The copied file is independent of the host
+    // inode, so it survives container recreation.
     exec(
       `docker create --name openshell-cli --init ` +
       `-v /var/run/docker.sock:/var/run/docker.sock ` +
       `-v "${configDir}:/root/.config/openshell" ` +
-      `-v "${openshellBin}:/usr/local/bin/openshell:ro" ` +
       `${tmpMount} ${sourceMount} ${symlinkMount} ${nemoClawMount} ` +
       `--add-host "host.docker.internal:host-gateway" ` +
       `alpine:latest sleep infinity`,
       { timeout: 15000, stdio: 'pipe', windowsHide: true },
     );
     exec('docker start openshell-cli', { timeout: 10000, stdio: 'pipe', windowsHide: true });
+
+    // Copy openshell binary into the container (not bind-mount)
+    exec(`docker cp "${openshellBin}" openshell-cli:/usr/local/bin/openshell`, { timeout: 10000, stdio: 'pipe', windowsHide: true });
+    exec('docker exec openshell-cli chmod 755 /usr/local/bin/openshell', { timeout: 5000, stdio: 'pipe', windowsHide: true });
+
     exec('docker exec openshell-cli apk add --no-cache socat openssh-client', { timeout: 60000, stdio: 'pipe', windowsHide: true });
 
     // Start socat forwarder: 8080 inside container → host gateway.
@@ -576,16 +584,24 @@ function nemoclawOnboardShellBlock(): string {
   const saved = loadPersistedApiKey();
   const isWin = process.platform === 'win32';
 
+  // Map provider to the correct env var name
+  const envVarMap: Record<string, string> = {
+    nvidia: 'NVIDIA_API_KEY',
+    openai: 'OPENAI_API_KEY',
+    anthropic: 'ANTHROPIC_API_KEY',
+  };
+  const envVar = saved?.provider ? envVarMap[saved.provider] || 'NVIDIA_API_KEY' : 'NVIDIA_API_KEY';
+
   if (isWin) {
     const parts: string[] = [
       'source "$HOME/.nvm/nvm.sh" 2>/dev/null',
     ];
-    if (saved?.key) parts.push(`export NVIDIA_API_KEY='${shEscapeSq(saved.key)}'`);
+    if (saved?.key) parts.push(`export ${envVar}='${shEscapeSq(saved.key)}'`);
     parts.push('$HOME/.local/bin/nemoclaw onboard');
     return `wsl bash -c "${parts.join(' && ')}"`;
   }
 
-  const keyLine = saved?.key ? `export NVIDIA_API_KEY='${shEscapeSq(saved.key)}'\n` : '';
+  const keyLine = saved?.key ? `export ${envVar}='${shEscapeSq(saved.key)}'\n` : '';
   return `${keyLine}${getNemoClawOnboardCommand()}`;
 }
 
@@ -1394,9 +1410,6 @@ async function runSetupFlow(runtime: RuntimeType): Promise<void> {
             }
 
             // Try direct sandbox creation first if gateway is actually healthy (faster).
-            // isGatewayDeployed() checks metadata, but the gateway itself may have stale
-            // certs or a missing volume. isOnboardComplete() also verifies the cluster
-            // container is running, which catches most stale-state scenarios.
             if (isOnboardComplete() === false && isGatewayDeployed() && isGatewayClusterContainerRunning() && !isSandboxReady()) {
               step.detail = 'Gateway found — creating sandbox directly...';
               sendSteps(steps);
@@ -1517,6 +1530,18 @@ async function runSetupFlow(runtime: RuntimeType): Promise<void> {
             if (!isOnboardComplete()) {
               throw new Error('NemoClaw onboard did not complete after multiple attempts. Tap Retry to try again.');
             }
+
+            // Apply policy presets that may have failed during onboard step [7/7].
+            // If the sandbox wasn't ready when onboard tried to apply policies, they
+            // get skipped silently — leaving integrations like Discord/Slack blocked.
+            try {
+              const policiesApplied = applyFailedPolicyPresets();
+              if (policiesApplied) {
+                logApp('info', 'Policy presets applied successfully after onboard');
+              }
+            } catch (e: any) {
+              logApp('warn', `Policy preset application failed (non-fatal): ${e.message}`);
+            }
             break;
           }
           case 'openclaw-install': {
@@ -1538,7 +1563,8 @@ async function runSetupFlow(runtime: RuntimeType): Promise<void> {
             sendSteps(steps);
             try {
               const prefix = path.join(os.homedir(), '.local');
-              const npmCmd = `npm install -g openclaw@latest --prefix "${prefix}"`;
+              const nvmSource = 'source "$HOME/.nvm/nvm.sh" 2>/dev/null; ';
+              const npmCmd = `${nvmSource}npm install -g openclaw@latest --prefix "${prefix}"`;
               const exitCode = await runCommandInSetupPty(npmCmd);
               logApp('info', `npm fallback exited with code ${exitCode}`);
             } catch (e: any) {
@@ -1855,7 +1881,43 @@ function setupIPC(): void {
   });
   ipcMain.handle('agent:stop', () => manager.stop());
   ipcMain.handle('agent:restart', () => manager.restart());
-  ipcMain.handle('agent:logs', () => readRecentLogs());
+  ipcMain.handle('agent:logs', async () => {
+    const pref = loadRuntime();
+    if (pref?.runtime === 'nemoclaw') {
+      try {
+        const sandboxName = getNemoClawSandboxName();
+        let cmd: string;
+        if (isIntelMac()) {
+          cmd = `docker exec openshell-cli openshell logs ${sandboxName} -n 100 --source sandbox --gateway nemoclaw`;
+        } else if (process.platform === 'win32') {
+          cmd = `wsl openshell logs ${sandboxName} -n 100 --source sandbox --gateway nemoclaw`;
+        } else {
+          cmd = `openshell logs ${sandboxName} -n 100 --source sandbox --gateway nemoclaw`;
+        }
+
+        let sandboxLogs = '';
+        try {
+          const { stdout } = await execAsync(cmd, { timeout: 15000, windowsHide: true });
+          sandboxLogs = stdout;
+        } catch { sandboxLogs = '(Could not fetch sandbox logs)'; }
+
+        sandboxLogs = sandboxLogs.replace(/\x1b\[[0-9;]*m/g, '');
+
+        let appLogs = '';
+        try {
+          const appLogPath = getAppLogPath();
+          const content = await fs.promises.readFile(appLogPath, 'utf-8');
+          const lines = content.split('\n');
+          appLogs = lines.slice(-50).join('\n');
+        } catch { appLogs = ''; }
+
+        return `── Sandbox Logs ──\n${sandboxLogs}\n\n── App Logs (last 50 lines) ──\n${appLogs}`;
+      } catch (e: any) {
+        return `Failed to fetch logs: ${e.message}\n\n${readRecentLogs()}`;
+      }
+    }
+    return readRecentLogs();
+  });
   ipcMain.handle('agent:log-path', () => getLogFilePath());
   ipcMain.handle('agent:open-log-file', () => shell.openPath(getLogFilePath()));
   ipcMain.handle('app:version', () => app.getVersion());
@@ -2027,9 +2089,11 @@ function setupIPC(): void {
       zipFileName: CHROME_EXTENSION_ZIP_NAME,
     };
 
-    // Defer slow sandbox I/O so the IPC response goes back first and UI renders.
+    // Defer slow sandbox I/O to an async task so it never blocks the main thread.
     if (status.state === 'running' && status.port) {
-      setTimeout(() => {
+      (async () => {
+        // Yield to event loop before starting heavy work
+        await new Promise(r => setTimeout(r, 50));
         try { ensurePortForward(); } catch (err: any) {
           logApp('warn', `ensurePortForward skipped: ${err?.message || err}`);
         }
@@ -2045,7 +2109,7 @@ function setupIPC(): void {
         }
         updates.extensionReady = chromeExtensionIsReady();
         mainWindow?.webContents.send('browser:deferred-update', updates);
-      }, 100);
+      })();
     }
 
     return result;
@@ -2282,24 +2346,124 @@ function setupIPC(): void {
   /** OpenAI / Anthropic in addition to NVIDIA (NemoClaw) or local OpenClaw config. */
   ipcMain.handle(
     'settings:set-optional-model-keys',
-    async (_e, body: { openai?: string; anthropic?: string }) => {
+    async (_e, body: { openai?: string; anthropic?: string; activeProvider?: string; activeModel?: string }) => {
       const openai = typeof body?.openai === 'string' ? body.openai.trim() : '';
       const anthropic = typeof body?.anthropic === 'string' ? body.anthropic.trim() : '';
-      const apiKeys: Record<string, string> = {};
-      if (openai) apiKeys.OPENAI_API_KEY = openai;
-      if (anthropic) apiKeys.ANTHROPIC_API_KEY = anthropic;
-      if (Object.keys(apiKeys).length === 0) {
-        return { ok: false, error: 'Paste at least one API key.' };
+      const activeProvider = body?.activeProvider || '';
+      const activeModel = body?.activeModel || '';
+
+      const pref = loadRuntime();
+      if (pref?.runtime !== 'nemoclaw') {
+        return {
+          ok: false,
+          error: 'Model settings are only available when NemoClaw is selected.',
+        };
       }
-      try {
-        const pref = loadRuntime();
-        if (pref?.runtime !== 'nemoclaw') {
-          return {
-            ok: false,
-            error: 'Optional model keys are only available when NemoClaw is selected. For OpenClaw, use Terminal → openclaw onboard or edit ~/.openclaw/openclaw.json.',
-          };
+
+      const sandboxName = getNemoClawSandboxName();
+      const { execSync: exec } = require('child_process');
+
+      function oshExec(cmd: string, timeout = 30000): string {
+        if (isIntelMac()) {
+          return exec(`docker exec openshell-cli openshell ${cmd}`, { encoding: 'utf-8', timeout, stdio: 'pipe', windowsHide: true }).trim();
+        } else if (process.platform === 'win32') {
+          return exec(`wsl openshell ${cmd}`, { encoding: 'utf-8', timeout, stdio: 'pipe', windowsHide: true }).trim();
         }
-        applySandboxSettings({ apiKeys });
+        return exec(`openshell ${cmd}`, { encoding: 'utf-8', timeout, stdio: 'pipe', windowsHide: true }).trim();
+      }
+
+      function providerExists(name: string): boolean {
+        try {
+          const out = oshExec(`provider list --gateway nemoclaw`, 10000);
+          return out.includes(name);
+        } catch { return false; }
+      }
+
+      try {
+        // Create/update providers only when a new key is provided
+        if (openai) {
+          try { oshExec(`provider delete openai --gateway nemoclaw`); } catch { /* ok */ }
+          oshExec(`provider create --name openai --type openai --credential OPENAI_API_KEY=${openai} --gateway nemoclaw`);
+          logApp('info', 'Created OpenAI provider via openshell');
+        }
+        if (anthropic) {
+          try { oshExec(`provider delete anthropic --gateway nemoclaw`); } catch { /* ok */ }
+          oshExec(`provider create --name anthropic --type anthropic --credential ANTHROPIC_API_KEY=${anthropic} --gateway nemoclaw`);
+          logApp('info', 'Created Anthropic provider via openshell');
+        }
+
+        // If switching to a provider that needs a key but doesn't have one yet, error
+        if (activeProvider === 'openai' && !openai && !providerExists('openai')) {
+          return { ok: false, error: 'Enter your OpenAI API key first.' };
+        }
+        if (activeProvider === 'anthropic' && !anthropic && !providerExists('anthropic')) {
+          return { ok: false, error: 'Enter your Anthropic API key first.' };
+        }
+
+        // Switch active model if requested
+        if (activeProvider && activeModel) {
+          try {
+            oshExec(`inference set --provider ${activeProvider} --model ${activeModel} --gateway nemoclaw`);
+          } catch {
+            // Some models fail verification — retry without verify
+            oshExec(`inference set --provider ${activeProvider} --model ${activeModel} --gateway nemoclaw --no-verify`);
+          }
+          logApp('info', `Switched inference to ${activeProvider}/${activeModel}`);
+
+          // Update the sandbox openclaw.json so the agent sees the correct model name.
+          // The config file is read-only for the sandbox user — chmod via kubectl, write, restore.
+          try {
+            const dk = isIntelMac() ? 'docker exec openshell-cluster-nemoclaw' : 'docker exec openshell-cluster-nemoclaw';
+            exec(`${dk} kubectl exec -n openshell ${sandboxName} -- chmod 666 /sandbox/.openclaw/openclaw.json`, { timeout: 10000, stdio: 'pipe', windowsHide: true });
+
+            const configRaw = exec(
+              isIntelMac()
+                ? `docker exec openshell-cli ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR openshell-${sandboxName} "cat /sandbox/.openclaw/openclaw.json"`
+                : `ssh -o ProxyCommand="${path.join(os.homedir(), '.local', 'bin', 'openshell')} ssh-proxy --gateway-name nemoclaw --name ${sandboxName}" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR sandbox@openshell-${sandboxName} "cat /sandbox/.openclaw/openclaw.json"`,
+              { encoding: 'utf-8', timeout: 10000, stdio: 'pipe', windowsHide: true },
+            );
+            const cfg = JSON.parse(configRaw);
+
+            // Determine context window and max tokens based on provider
+            const ctxWindow = activeProvider === 'anthropic' ? 200000 : 128000;
+            const maxTok = activeProvider === 'anthropic' ? 8192 : 16384;
+            const supportsImage = activeProvider !== 'nvidia';
+
+            cfg.models.providers.inference.models = [{
+              id: activeModel,
+              name: `inference/${activeModel}`,
+              reasoning: false,
+              input: supportsImage ? ['text', 'image'] : ['text'],
+              cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+              contextWindow: ctxWindow,
+              maxTokens: maxTok,
+            }];
+            cfg.agents.defaults.model.primary = `inference/${activeModel}`;
+
+            const b64 = Buffer.from(JSON.stringify(cfg, null, 2)).toString('base64');
+            if (isIntelMac()) {
+              exec(`docker exec openshell-cli ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR openshell-${sandboxName} "echo '${b64}' | base64 -d > /sandbox/.openclaw/openclaw.json"`, { timeout: 10000, stdio: 'pipe', windowsHide: true });
+            } else {
+              exec(`ssh -o "ProxyCommand=${path.join(os.homedir(), '.local', 'bin', 'openshell')} ssh-proxy --gateway-name nemoclaw --name ${sandboxName}" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR sandbox@openshell-${sandboxName} "echo '${b64}' | base64 -d > /sandbox/.openclaw/openclaw.json"`, { timeout: 10000, stdio: 'pipe', windowsHide: true });
+            }
+
+            // Restore read-only
+            exec(`${dk} kubectl exec -n openshell ${sandboxName} -- chmod 444 /sandbox/.openclaw/openclaw.json`, { timeout: 10000, stdio: 'pipe', windowsHide: true });
+
+            logApp('info', `Updated sandbox openclaw.json model to ${activeModel}`);
+          } catch (e: any) {
+            logApp('warn', `Failed to update sandbox config (non-fatal): ${e.message}`);
+          }
+        }
+
+        // Also write keys to sandbox config for direct API access
+        const apiKeys: Record<string, string> = {};
+        if (openai) apiKeys.OPENAI_API_KEY = openai;
+        if (anthropic) apiKeys.ANTHROPIC_API_KEY = anthropic;
+        if (Object.keys(apiKeys).length > 0) {
+          try { applySandboxSettings({ apiKeys }); } catch { /* non-fatal */ }
+        }
+
         return { ok: true };
       } catch (err: any) {
         logApp('warn', `settings:set-optional-model-keys: ${err.message}`);
@@ -2318,19 +2482,26 @@ function setupIPC(): void {
   let _runtimeCache: { ts: number; data: any } | null = null;
   const RUNTIME_CACHE_MS = 15_000;
 
-  ipcMain.handle('runtime:get', () => {
+  ipcMain.handle('runtime:get', async () => {
     const pref = loadRuntime();
     const now = Date.now();
     if (_runtimeCache && now - _runtimeCache.ts < RUNTIME_CACHE_MS && _runtimeCache.data._rt === (pref?.runtime || null)) {
       return _runtimeCache.data;
     }
+    // Docker checks use execSync which blocks the main thread for 20+ seconds.
+    // Run them off-thread via execAsync so the UI stays responsive.
+    const [dockerInstalled, dockerRunning, canInstall] = await Promise.all([
+      execAsync('docker --version', { timeout: 5000, windowsHide: true }).then(() => true, () => false),
+      execAsync('docker info', { timeout: 10000, windowsHide: true }).then(() => true, () => false),
+      execAsync(process.platform === 'darwin' ? 'brew --version' : 'winget --version', { timeout: 5000, windowsHide: true }).then(() => true, () => false),
+    ]);
     const data = {
       _rt: pref?.runtime || null,
       runtime: pref?.runtime || null,
       nemoClawSupported: isNemoClawSupported(),
-      dockerInstalled: isDockerInstalled(),
-      dockerRunning: isDockerRunning(),
-      canInstallDocker: canInstallDocker(),
+      dockerInstalled,
+      dockerRunning,
+      canInstallDocker: canInstall,
     };
     _runtimeCache = { ts: now, data };
     return data;
@@ -2392,6 +2563,36 @@ function setupIPC(): void {
     }
   });
 
+  // ── Inference info IPC ──
+
+  ipcMain.handle('settings:get-inference-info', async () => {
+    const pref = loadRuntime();
+    if (pref?.runtime !== 'nemoclaw') return null;
+    try {
+      let cmd: string;
+      if (isIntelMac()) {
+        cmd = 'docker exec openshell-cli openshell inference get --gateway nemoclaw';
+      } else if (process.platform === 'win32') {
+        cmd = 'wsl openshell inference get --gateway nemoclaw';
+      } else {
+        cmd = 'openshell inference get --gateway nemoclaw';
+      }
+      let out: string;
+      const { stdout } = await execAsync(cmd, { timeout: 15000, windowsHide: true });
+      out = stdout;
+      out = out.replace(/\x1b\[[0-9;]*m/g, '');
+      const providerMatch = out.match(/Provider:\s*(\S+)/);
+      const modelMatch = out.match(/Model:\s*(.+)/);
+      if (modelMatch) modelMatch[1] = modelMatch[1].trim();
+      return {
+        provider: providerMatch ? providerMatch[1] : null,
+        model: modelMatch ? modelMatch[1] : null,
+      };
+    } catch {
+      return null;
+    }
+  });
+
   manager.on('status', (status: AgentStatus) => {
     mainWindow?.webContents.send('agent:status-update', status);
     updateTrayMenu();
@@ -2445,6 +2646,7 @@ function startSubscriptionRecheck(session: { token: string; email: string }): vo
     }
   }, RECHECK_INTERVAL_MS);
 }
+
 
 async function autoStart(): Promise<void> {
   // 1. Check auth

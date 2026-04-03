@@ -126,6 +126,15 @@ function sidecarHasNemoClawBlueprint(): boolean {
   }
 }
 
+function sidecarHasLocalBinary(): boolean {
+  try {
+    execSyncSafe(`${dockerBin()} exec ${OPENSHELL_SIDECAR} test -x /usr/local/bin/openshell-local`, 3000);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function isSidecarReady(): boolean {
   if (!isOpenShellInstalled()) return false;
   if (!isOpenShellSidecarRunning()) return false;
@@ -135,6 +144,75 @@ export function isSidecarReady(): boolean {
   if (!sidecarHasInit()) return false;
   if (findNemoClawPackageRoot() && !sidecarHasNemoClawBlueprint()) return false;
   return true;
+}
+
+/**
+ * Verify the openshell binary inside the sidecar container is functional.
+ * When the host binary at ~/.local/lib/openshell/openshell-linux is replaced
+ * (e.g. during an update), the container's bind mount goes stale — the kernel
+ * marks the old inode as deleted so /proc/self/exe reports "(deleted)".
+ * openshell reads /proc/self/exe to build ProxyCommand paths in ssh-config,
+ * poisoning all SSH connections with a non-existent path.
+ *
+ * On macOS Docker Desktop, even a container restart doesn't fix this because
+ * the VM-level filesystem layer caches the old inode.  The bind mount is
+ * read-only and the container is unprivileged, so we can't shadow it.
+ *
+ * Fix: copy the binary to a container-local path (/usr/local/bin/openshell-local)
+ * and regenerate the SSH config using the healthy copy.  sandboxSSH and
+ * ensurePortForward use the SSH config's ProxyCommand, so this fixes all paths.
+ */
+export function ensureSidecarBinaryHealthy(): void {
+  if (!isIntelMac() || !isOpenShellSidecarRunning()) return;
+  const { execSync } = require('child_process');
+  const dk = dockerBin();
+  const LOCAL_BIN = '/usr/local/bin/openshell-local';
+
+  try {
+    // Quick check: generate a throwaway ssh-config and look for "(deleted)"
+    const probe = execSync(
+      `${dk} exec ${OPENSHELL_SIDECAR} /usr/local/bin/openshell sandbox ssh-config dummy --gateway dummy`,
+      { encoding: 'utf-8', timeout: 8000, stdio: 'pipe', windowsHide: true },
+    );
+    if (!probe.includes('(deleted)')) return; // binary is healthy
+  } catch {
+    // ssh-config failed entirely — try the fix anyway
+  }
+
+  logApp('info', 'Sidecar openshell binary has stale bind mount — creating local copy and regenerating SSH config');
+  try {
+    // 1. Copy the (readable but stale) bind-mounted binary to a local path
+    execSync(
+      `${dk} exec ${OPENSHELL_SIDECAR} sh -c 'cp /usr/local/bin/openshell ${LOCAL_BIN} && chmod 755 ${LOCAL_BIN}'`,
+      { timeout: 10000, stdio: 'pipe', windowsHide: true },
+    );
+    const ver = execSync(
+      `${dk} exec ${OPENSHELL_SIDECAR} ${LOCAL_BIN} --version`,
+      { encoding: 'utf-8', timeout: 5000, stdio: 'pipe', windowsHide: true },
+    ).trim();
+    logApp('info', `Local copy created: ${ver}`);
+
+    // 2. Regenerate the SSH config using the healthy local copy
+    const sandbox = getSandboxName();
+    if (sandbox) {
+      const sshConfig = execSync(
+        `${dk} exec ${OPENSHELL_SIDECAR} ${LOCAL_BIN} sandbox ssh-config ${sandbox} --gateway ${GATEWAY_NAME}`,
+        { encoding: 'utf-8', timeout: 10000, stdio: 'pipe', windowsHide: true },
+      ).trim();
+      execSync(
+        `${dk} exec ${OPENSHELL_SIDECAR} sh -c 'mkdir -p /root/.ssh && chmod 700 /root/.ssh'`,
+        { stdio: 'pipe', windowsHide: true, timeout: 5000 },
+      );
+      const b64 = Buffer.from(sshConfig).toString('base64');
+      execSync(
+        `${dk} exec ${OPENSHELL_SIDECAR} sh -c 'echo "${b64}" | base64 -d > /root/.ssh/config && chmod 600 /root/.ssh/config'`,
+        { stdio: 'pipe', windowsHide: true, timeout: 5000 },
+      );
+      logApp('info', 'SSH config regenerated with healthy binary path');
+    }
+  } catch (e: any) {
+    logApp('warn', `Sidecar binary fix failed: ${e?.message || e}`);
+  }
 }
 
 export async function setupOpenShellSidecar(onProgress?: (msg: string) => void): Promise<void> {
@@ -711,7 +789,36 @@ export function isOnboardComplete(): boolean {
   // The k3d cluster container must actually be running; after a Docker restart
   // the container disappears even though gateway metadata and sandboxes.json
   // still exist on disk, causing the app to skip re-onboard.
-  if (!isGatewayClusterContainerRunning()) return false;
+  if (!isGatewayClusterContainerRunning()) {
+    // Before giving up, check if sandboxes.json has sandboxes — if so, the
+    // container was already onboarded but got stopped (e.g. during a runtime
+    // switch that freed ports).  Restart it instead of re-onboarding.
+    try {
+      const registryPath = IS_WIN ? null : path.join(os.homedir(), '.nemoclaw', 'sandboxes.json');
+      const raw = IS_WIN
+        ? execSyncSafe('wsl bash -c "cat ~/.nemoclaw/sandboxes.json 2>/dev/null"', 5000)
+        : fs.readFileSync(registryPath!, 'utf-8');
+      const data = JSON.parse(raw);
+      if (Object.keys(data.sandboxes || {}).length > 0) {
+        logApp('info', 'Gateway container stopped but sandboxes exist — restarting container');
+        try {
+          const dk = dockerBin();
+          execSyncSafe(`${dk} start ${GATEWAY_CLUSTER_CONTAINER}`, 20000);
+          // Give it a moment to come up
+          for (let i = 0; i < 10; i++) {
+            execSyncSafe('sleep 1', 2000);
+            if (isGatewayClusterContainerRunning()) {
+              logApp('info', 'Gateway container restarted successfully');
+              return true;
+            }
+          }
+        } catch (e: any) {
+          logApp('warn', `Failed to restart gateway container: ${e?.message || e}`);
+        }
+      }
+    } catch { /* no sandboxes.json or parse error — fall through to false */ }
+    return false;
+  }
 
   try {
     if (IS_WIN) {
@@ -939,6 +1046,45 @@ function sandboxSSH(cmd: string, timeoutMs = 10000): string {
     `${prefix}ssh -o "ProxyCommand=${proxy}" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR sandbox@openshell-${name} "${escaped}"`,
     timeoutMs,
   );
+}
+
+/**
+ * Start the OpenClaw gateway inside the sandbox if it's not already running.
+ * This handles the case where onboard was interrupted — the sandbox exists
+ * and is Ready but the gateway process never started.
+ * Returns true if the gateway was started or is already running.
+ */
+export function ensureSandboxGatewayRunning(): boolean {
+  try {
+    // Check if gateway is already responding inside the sandbox
+    const check = sandboxSSH('curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:18789/ 2>/dev/null || echo "000"', 8000);
+    if (check.trim().includes('200')) {
+      logApp('info', 'Sandbox gateway already running');
+      return true;
+    }
+  } catch { /* sandbox may not be reachable yet — try starting anyway */ }
+
+  try {
+    logApp('info', 'Starting OpenClaw gateway inside sandbox...');
+    sandboxSSH('nohup openclaw gateway --port 18789 --bind loopback > /tmp/gateway.log 2>&1 &', 10000);
+
+    // Wait up to 15s for gateway to come up
+    for (let i = 0; i < 10; i++) {
+      try {
+        execSyncSafe('sleep 1.5', 3000);
+        const check = sandboxSSH('curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:18789/ 2>/dev/null || echo "000"', 5000);
+        if (check.trim().includes('200')) {
+          logApp('info', 'Sandbox gateway started successfully');
+          return true;
+        }
+      } catch { /* keep trying */ }
+    }
+    logApp('warn', 'Sandbox gateway did not respond after starting');
+    return false;
+  } catch (e: any) {
+    logApp('warn', `Failed to start sandbox gateway: ${e.message}`);
+    return false;
+  }
 }
 
 export function readSandboxConfig(): Record<string, any> | null {
@@ -1269,11 +1415,22 @@ export function ensurePortForward(): void {
 
   if (isIntelMac() && isOpenShellSidecarRunning()) {
     try {
-      // Write SSH config for the sandbox into the sidecar
-      const sshConfig = execSyncSafe(
-        `docker exec ${OPENSHELL_SIDECAR} /usr/local/bin/openshell sandbox ssh-config ${getSandboxName()} --gateway ${GATEWAY_NAME}`,
+      // Write SSH config for the sandbox into the sidecar.
+      // Prefer openshell-local (healthy container-local copy) over the bind-mounted
+      // binary which may have a stale /proc/self/exe on macOS Docker Desktop.
+      const sidecarBin = sidecarHasLocalBinary()
+        ? '/usr/local/bin/openshell-local'
+        : '/usr/local/bin/openshell';
+      let sshConfig = execSyncSafe(
+        `docker exec ${OPENSHELL_SIDECAR} ${sidecarBin} sandbox ssh-config ${getSandboxName()} --gateway ${GATEWAY_NAME}`,
         10000,
       );
+      // Safety net: if the binary was stale when ssh-config ran, openshell may
+      // have embedded "/usr/local/bin/openshell (deleted)" in the ProxyCommand.
+      if (sshConfig.includes('(deleted)')) {
+        sshConfig = sshConfig.replace(/\/usr\/local\/bin\/openshell[^\s]*\s*\(deleted\)/g, '/usr/local/bin/openshell-local');
+        logApp('warn', 'Sanitised stale "(deleted)" path from SSH config');
+      }
       execSync(
         `docker exec ${OPENSHELL_SIDECAR} sh -c 'mkdir -p /root/.ssh && chmod 700 /root/.ssh'`,
         { stdio: 'pipe', windowsHide: true, timeout: 5000 },

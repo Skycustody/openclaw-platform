@@ -10,7 +10,7 @@ import { logApp, logOpenclaw } from './logger';
 import { findOpenClawBinary, findNemoClawBinary } from './installer';
 import { startHealthPolling, stopHealthPolling, HealthStatus } from './health';
 import { findAvailablePort, PortResult } from '../lib/ports';
-import { loadRuntime, RuntimeType, isSandboxReady, waitForSandboxReady, ensurePortForward, stopPortForward, OPENCLAW_PORT, getActiveGatewayPort, readSandboxGatewayToken, clearSandboxTokenCache, clearSandboxNameCache, dockerBin, isIntelMac, isSidecarReady, setupOpenShellSidecar, ensureSidecarNetworking } from '../lib/runtime';
+import { loadRuntime, RuntimeType, isSandboxReady, waitForSandboxReady, ensurePortForward, stopPortForward, OPENCLAW_PORT, getActiveGatewayPort, readSandboxGatewayToken, clearSandboxTokenCache, clearSandboxNameCache, dockerBin, isIntelMac, isSidecarReady, setupOpenShellSidecar, ensureSidecarNetworking, ensureSandboxGatewayRunning, ensureSidecarBinaryHealthy } from '../lib/runtime';
 import { freePort } from '../lib/ports';
 
 function checkPortReady(port: number): Promise<boolean> {
@@ -262,13 +262,22 @@ class OpenClawManager extends EventEmitter {
 
     const { execSync } = require('child_process');
 
-    // Stop any local OpenClaw gateway so it doesn't occupy port 18789
+    // Stop any local OpenClaw gateway so it doesn't occupy port 18789.
+    // Also unload the launchctl service (macOS) so it doesn't auto-restart.
     const ocBin = findOpenClawBinary();
     if (ocBin) {
       try {
         execSync(`${ocBin} gateway stop`, { timeout: 8000, stdio: 'pipe' });
         logApp('info', 'Stopped local OpenClaw gateway service');
       } catch { /* no service running — fine */ }
+    }
+    if (process.platform === 'darwin') {
+      const plistPath = require('path').join(require('os').homedir(), 'Library', 'LaunchAgents', 'ai.openclaw.gateway.plist');
+      try {
+        require('fs').accessSync(plistPath);
+        execSync(`launchctl unload "${plistPath}" 2>/dev/null`, { timeout: 5000, stdio: 'pipe' });
+        logApp('info', 'Unloaded OpenClaw gateway launchctl service');
+      } catch { /* plist doesn't exist or already unloaded */ }
     }
 
     logApp('info', 'Connecting to NemoClaw sandbox...');
@@ -305,6 +314,7 @@ class OpenClawManager extends EventEmitter {
           }
         }
         try { ensureSidecarNetworking(); } catch { /* ok */ }
+        ensureSidecarBinaryHealthy();
       }
 
       // 2. Wait for a Ready sandbox (setup may complete from sandboxes.json first)
@@ -321,7 +331,16 @@ class OpenClawManager extends EventEmitter {
         return;
       }
 
-      // 3. Free the gateway port if something stale is on it, then ensure port forward.
+      // 3. Ensure the OpenClaw gateway is running inside the sandbox.
+      //    After an interrupted onboard the sandbox may be Ready but the
+      //    gateway process was never started. Detect and start it.
+      try {
+        ensureSandboxGatewayRunning();
+      } catch (e: any) {
+        logApp('warn', `ensureSandboxGatewayRunning: ${e?.message || e}`);
+      }
+
+      // 4. Free the gateway port if something stale is on it, then ensure port forward.
       //    On Intel Mac the sidecar owns the port via Docker port mapping —
       //    stopping it would destroy the forwarding mechanism we need.
       if (!(isIntelMac() && isSidecarReady())) {
@@ -333,7 +352,7 @@ class OpenClawManager extends EventEmitter {
         logApp('warn', `ensurePortForward: ${e?.message || e}`);
       }
 
-      // 4. Poll for the OpenClaw gateway on the active port
+      // 5. Poll for the OpenClaw gateway on the active port
       this.port = getActiveGatewayPort();
       logApp('info', `Waiting for OpenClaw gateway on port ${this.port}...`);
 

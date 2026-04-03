@@ -2233,6 +2233,10 @@
               <span class="settings-row-label">Engine</span>
               <span class="settings-row-value" id="settings-runtime">—</span>
             </div>
+            <div class="settings-row" id="settings-current-model-row" style="display:none;">
+              <span class="settings-row-label">Model</span>
+              <span class="settings-row-value" id="settings-current-model">—</span>
+            </div>
           </div>
           <div class="settings-btn-row">
             <button type="button" class="settings-btn" id="settings-change-runtime">Change runtime</button>
@@ -2240,20 +2244,47 @@
 
           <!-- NemoClaw only: OpenClaw users configure keys via openclaw onboard / ~/.openclaw -->
           <div id="settings-nemo-only-model-keys" class="settings-nemo-only-block" style="display: none;">
-            <div class="settings-heading">Model providers (optional)</div>
-            <p class="settings-hint" id="settings-optional-keys-hint"></p>
+            <div class="settings-heading">AI Model</div>
+            <p class="settings-hint">Select a model. Add your API key once per provider — it's saved for future switches.</p>
             <div class="settings-card">
               <div class="settings-field">
-                <label for="settings-openai-key">OpenAI API key</label>
+                <label for="settings-model-select">Model</label>
+                <select id="settings-model-select" style="width: 100%; padding: 8px 10px; background: #1a1a1a; color: #e0e0e0; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; font-size: 13px; outline: none; -webkit-appearance: none; appearance: none; background-image: url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22rgba(255,255,255,0.4)%22 stroke-width=%222%22><polyline points=%226 9 12 15 18 9%22/></svg>'); background-repeat: no-repeat; background-position: right 10px center; padding-right: 30px;">
+                  <option value="" disabled selected>— Select a model —</option>
+                  <optgroup label="NVIDIA (included with NemoClaw)">
+                    <option value="nvidia-prod|nvidia/llama-3.1-nemotron-ultra-253b-v1">Nemotron Ultra 253B</option>
+                    <option value="nvidia-prod|nvidia/nemotron-3-super-120b-a12b">Nemotron Super 120B</option>
+                    <option value="nvidia-prod|meta/llama-3.3-70b-instruct">Llama 3.3 70B</option>
+                    <option value="nvidia-prod|deepseek-ai/deepseek-r1">DeepSeek R1</option>
+                  </optgroup>
+                  <optgroup label="OpenAI (requires API key)">
+                    <option value="openai|gpt-4o">GPT-4o</option>
+                    <option value="openai|gpt-4o-mini">GPT-4o Mini</option>
+                    <option value="openai|gpt-4.1">GPT-4.1</option>
+                    <option value="openai|gpt-4.1-mini">GPT-4.1 Mini</option>
+                    <option value="openai|gpt-4.1-nano">GPT-4.1 Nano</option>
+                    <option value="openai|o3">o3</option>
+                    <option value="openai|o3-mini">o3 Mini</option>
+                    <option value="openai|o4-mini">o4 Mini</option>
+                  </optgroup>
+                  <optgroup label="Anthropic (requires API key)">
+                    <option value="anthropic|claude-sonnet-4-20250514">Claude Sonnet 4</option>
+                    <option value="anthropic|claude-opus-4-20250514">Claude Opus 4</option>
+                    <option value="anthropic|claude-haiku-3-5-20241022">Claude Haiku 3.5</option>
+                  </optgroup>
+                </select>
+              </div>
+              <div class="settings-field" id="settings-openai-key-field" style="display:none;">
+                <label for="settings-openai-key">OpenAI API key <span style="color:rgba(255,255,255,0.25); font-weight:400;">(saved after first entry)</span></label>
                 <input type="password" id="settings-openai-key" placeholder="sk-…" autocomplete="off" spellcheck="false" />
               </div>
-              <div class="settings-field">
-                <label for="settings-anthropic-key">Anthropic API key</label>
+              <div class="settings-field" id="settings-anthropic-key-field" style="display:none;">
+                <label for="settings-anthropic-key">Anthropic API key <span style="color:rgba(255,255,255,0.25); font-weight:400;">(saved after first entry)</span></label>
                 <input type="password" id="settings-anthropic-key" placeholder="sk-ant-…" autocomplete="off" spellcheck="false" />
               </div>
             </div>
             <div class="settings-btn-row" style="flex-wrap: wrap; gap: 8px;">
-              <button type="button" class="settings-btn settings-btn-primary" id="settings-save-model-keys">Save model keys</button>
+              <button type="button" class="settings-btn settings-btn-primary" id="settings-save-model-keys">Switch model</button>
               <span id="settings-save-model-keys-msg" class="settings-inline-msg" role="status"></span>
             </div>
           </div>
@@ -2612,36 +2643,43 @@
 
       emailEl.textContent = session?.email || 'Not signed in';
 
-      try {
-        const sub = await oc.checkSubscription();
+      // Show cached subscription state immediately, refresh in background
+      if (_lastSubResult) applySubResult(_lastSubResult, emailEl, planText, desktopBadge);
+
+      // Fetch fresh subscription without blocking the UI render
+      oc.checkSubscription().then(sub => {
         _lastSubResult = sub;
-
-        if (sub.email) emailEl.textContent = sub.email;
-
-        if (sub.desktopSubscription) {
-          if (sub.hasDesktopPaid) {
-            planText.textContent = 'Paid';
-            desktopBadge.style.display = 'none';
-          } else if (sub.desktopTrialActive) {
-            planText.textContent = '';
-            desktopBadge.textContent = 'Free Trial';
-            desktopBadge.className = 'settings-badge badge-trial';
-            desktopBadge.style.display = '';
-      } else {
-            planText.textContent = 'Active';
-            desktopBadge.style.display = 'none';
-          }
-        } else if (sub.status === 'trial_expired') {
-          planText.textContent = '';
-          desktopBadge.textContent = 'Expired';
-          desktopBadge.className = 'settings-badge badge-none';
-          desktopBadge.style.display = '';
-        } else {
-          planText.textContent = 'None';
+        applySubResult(sub, emailEl, planText, desktopBadge);
+      }).catch(() => {
+        if (!_lastSubResult) {
+          planText.textContent = 'Offline';
           desktopBadge.style.display = 'none';
         }
-      } catch {
-        planText.textContent = 'Offline';
+      });
+    }
+
+    function applySubResult(sub, emailEl, planText, desktopBadge) {
+      if (sub.email) emailEl.textContent = sub.email;
+      if (sub.desktopSubscription) {
+        if (sub.hasDesktopPaid) {
+          planText.textContent = 'Paid';
+          desktopBadge.style.display = 'none';
+        } else if (sub.desktopTrialActive) {
+          planText.textContent = '';
+          desktopBadge.textContent = 'Free Trial';
+          desktopBadge.className = 'settings-badge badge-trial';
+          desktopBadge.style.display = '';
+        } else {
+          planText.textContent = 'Active';
+          desktopBadge.style.display = 'none';
+        }
+      } else if (sub.status === 'trial_expired') {
+        planText.textContent = '';
+        desktopBadge.textContent = 'Expired';
+        desktopBadge.className = 'settings-badge badge-none';
+        desktopBadge.style.display = '';
+      } else {
+        planText.textContent = 'None';
         desktopBadge.style.display = 'none';
       }
     }
@@ -2664,33 +2702,147 @@
       showRuntimePicker();
     });
     document.getElementById('settings-open-data').addEventListener('click', () => oc.openDataFolder('config'));
+    // Track which providers have keys saved (persisted per session in renderer)
+    var _savedProviderKeys = {};
+    var _activeModelValue = '';
+
+    // Show/hide API key fields and update button state based on selected model
+    var modelSelect = document.getElementById('settings-model-select');
+    var openaiKeyField = document.getElementById('settings-openai-key-field');
+    var anthKeyField = document.getElementById('settings-anthropic-key-field');
+    var switchBtn = document.getElementById('settings-save-model-keys');
+
+    function updateModelSelectState() {
+      if (!modelSelect || !switchBtn) return;
+      var selected = modelSelect.value || '';
+      var provider = selected.split('|')[0];
+      openaiKeyField.style.display = (provider === 'openai' && !_savedProviderKeys.openai) ? 'block' : 'none';
+      anthKeyField.style.display = (provider === 'anthropic' && !_savedProviderKeys.anthropic) ? 'block' : 'none';
+      if (selected && selected === _activeModelValue) {
+        switchBtn.textContent = 'Current model';
+        switchBtn.disabled = true;
+      } else if (selected) {
+        switchBtn.textContent = 'Switch model';
+        switchBtn.disabled = false;
+      } else {
+        switchBtn.textContent = 'Switch model';
+        switchBtn.disabled = true;
+      }
+    }
+
+    // Load current model and mark it in the dropdown + show in Runtime card
+    async function loadActiveModel() {
+      if (!oc.getInferenceInfo) return;
+      try {
+        var info = await oc.getInferenceInfo();
+        var modelRow = document.getElementById('settings-current-model-row');
+        var modelLabel = document.getElementById('settings-current-model');
+        if (info?.provider && info?.model) {
+          _activeModelValue = info.provider + '|' + info.model;
+          if (modelRow && modelLabel) {
+            modelRow.style.display = '';
+            modelLabel.textContent = info.model;
+          }
+          // Try to select the matching option and add checkmark
+          var opts = modelSelect.options;
+          for (var i = 0; i < opts.length; i++) {
+            opts[i].textContent = opts[i].textContent.replace(/ \u2713$/, '');
+            if (opts[i].value === _activeModelValue) {
+              opts[i].textContent += ' \u2713';
+              modelSelect.value = _activeModelValue;
+            }
+          }
+          updateModelSelectState();
+        } else {
+          if (modelRow) modelRow.style.display = 'none';
+        }
+      } catch { /* ok */ }
+    }
+
+    if (modelSelect) {
+      modelSelect.addEventListener('change', updateModelSelectState);
+    }
+    // Load on settings tab click
+    document.querySelectorAll('.tab').forEach(function(t) {
+      t.addEventListener('click', function() {
+        if (t.dataset.tab === 'settings') loadActiveModel();
+      });
+    });
+
     document.getElementById('settings-save-model-keys')?.addEventListener('click', async () => {
       const openaiEl = document.getElementById('settings-openai-key');
       const anthEl = document.getElementById('settings-anthropic-key');
+      const selectEl = document.getElementById('settings-model-select');
       const msgEl = document.getElementById('settings-save-model-keys-msg');
       const btn = document.getElementById('settings-save-model-keys');
       if (!openaiEl || !anthEl || !msgEl || !btn || !oc.setOptionalModelKeys) return;
+
+      const selected = selectEl ? selectEl.value : '';
+      if (!selected) {
+        msgEl.textContent = 'Select a model first.';
+        msgEl.style.color = '#f87171';
+        return;
+      }
+      const parts = selected.split('|');
+      const activeProvider = parts[0] || '';
+      const activeModel = parts[1] || '';
+
+      // Require key only if provider hasn't been set up yet
+      if (activeProvider === 'openai' && !_savedProviderKeys.openai && !openaiEl.value.trim()) {
+        msgEl.textContent = 'Enter your OpenAI API key (first time only).';
+        msgEl.style.color = '#f87171';
+        return;
+      }
+      if (activeProvider === 'anthropic' && !_savedProviderKeys.anthropic && !anthEl.value.trim()) {
+        msgEl.textContent = 'Enter your Anthropic API key (first time only).';
+        msgEl.style.color = '#f87171';
+        return;
+      }
+
       msgEl.textContent = '';
       btn.disabled = true;
+      btn.textContent = 'Switching…';
       try {
         const r = await oc.setOptionalModelKeys({
-          openai: openaiEl.value,
-          anthropic: anthEl.value,
+          openai: openaiEl.value.trim() || undefined,
+          anthropic: anthEl.value.trim() || undefined,
+          activeProvider: activeProvider,
+          activeModel: activeModel,
         });
         if (!r?.ok) {
-          msgEl.textContent = r?.error || 'Save failed';
+          msgEl.textContent = r?.error || 'Failed';
           msgEl.style.color = '#f87171';
           return;
         }
-        msgEl.textContent = 'Saved.';
+        // Remember that this provider's key is saved
+        if (openaiEl.value.trim()) _savedProviderKeys.openai = true;
+        if (anthEl.value.trim()) _savedProviderKeys.anthropic = true;
+        // NVIDIA is always available
+        _savedProviderKeys['nvidia-prod'] = true;
+
+        msgEl.textContent = 'Switched to ' + activeModel;
         msgEl.style.color = '#4ade80';
         openaiEl.value = '';
         anthEl.value = '';
+        openaiKeyField.style.display = 'none';
+        anthKeyField.style.display = 'none';
+        // Update active model tracking
+        _activeModelValue = activeProvider + '|' + activeModel;
+        // Clear old checkmarks and set new one
+        var opts = selectEl.options;
+        for (var i = 0; i < opts.length; i++) {
+          opts[i].textContent = opts[i].textContent.replace(/ \u2713$/, '');
+          if (opts[i].value === _activeModelValue) {
+            opts[i].textContent += ' \u2713';
+          }
+        }
+        updateModelSelectState();
       } catch (e) {
         msgEl.textContent = e?.message || 'Save failed';
         msgEl.style.color = '#f87171';
       } finally {
         btn.disabled = false;
+        btn.textContent = 'Switch model';
       }
     });
     document.getElementById('settings-open-appdata').addEventListener('click', () => oc.openDataFolder('appdata'));
@@ -3848,5 +4000,7 @@
       });
     })();
   </script>
+
+  <!-- Policy permissions now handled by native OS dialog in main process -->
 </body>
 </html>

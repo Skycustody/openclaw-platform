@@ -154,8 +154,9 @@ contextBridge.exposeInMainWorld('openclaw', {
 
   // Inference API key
   submitApiKey: (provider: string, key: string) => ipcRenderer.invoke('setup:submit-api-key', provider, key),
-  setOptionalModelKeys: (body: { openai?: string; anthropic?: string }) =>
+  setOptionalModelKeys: (body: { openai?: string; anthropic?: string; activeProvider?: string; activeModel?: string }) =>
     ipcRenderer.invoke('settings:set-optional-model-keys', body),
+  getInferenceInfo: () => ipcRenderer.invoke('settings:get-inference-info'),
   onShowApiKeyForm: (
     cb: (payload: { providers: any[]; sectionTitle?: string; sectionSubtitle?: string } | any[]) => void,
   ) => {
@@ -190,4 +191,5 @@ contextBridge.exposeInMainWorld('openclaw', {
     return () => ipcRenderer.removeListener('app:update-available', handler);
   },
   installUpdate: () => ipcRenderer.invoke('app:install-update'),
+
 });

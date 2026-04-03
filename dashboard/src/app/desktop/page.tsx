@@ -185,14 +185,14 @@ const FEATURE_ROWS = [
 ];
 
 /** All seven screens mapped to left view tabs (3) + right toolbar buttons (4). */
-const ALL_SCREENS: { key: string; label: string; src: string; icon: LucideIcon }[] = [
-  { key: 'chat', label: 'Gateway chat', src: '/app-screenshots/01-gateway-chat.png', icon: MessageSquare },
-  { key: 'dashboard', label: 'NemoClaw dashboard', src: '/app-screenshots/02-nemoclaw-dashboard.png', icon: Monitor },
-  { key: 'browser', label: 'Browser relay', src: '/app-screenshots/03-browser-relay.png', icon: Globe },
-  { key: 'terminal', label: 'Terminal', src: '/app-screenshots/04-terminal.png', icon: Terminal },
-  { key: 'commands', label: 'Command reference', src: '/app-screenshots/05-command-reference.png', icon: Monitor },
-  { key: 'logs', label: 'Gateway logs', src: '/app-screenshots/06-gateway-logs.png', icon: FileText },
-  { key: 'settings', label: 'Settings', src: '/app-screenshots/07-settings.png', icon: Settings },
+const ALL_SCREENS: { key: string; label: string; src: string; src2x: string; icon: LucideIcon }[] = [
+  { key: 'chat', label: 'Gateway chat', src: '/app-screenshots/01-gateway-chat.png', src2x: '/app-screenshots/01-gateway-chat@2x.png', icon: MessageSquare },
+  { key: 'dashboard', label: 'NemoClaw dashboard', src: '/app-screenshots/02-nemoclaw-dashboard.png', src2x: '/app-screenshots/02-nemoclaw-dashboard@2x.png', icon: Monitor },
+  { key: 'browser', label: 'Browser relay', src: '/app-screenshots/03-browser-relay.png', src2x: '/app-screenshots/03-browser-relay@2x.png', icon: Globe },
+  { key: 'terminal', label: 'Terminal', src: '/app-screenshots/04-terminal.png', src2x: '/app-screenshots/04-terminal@2x.png', icon: Terminal },
+  { key: 'commands', label: 'Command reference', src: '/app-screenshots/05-command-reference.png', src2x: '/app-screenshots/05-command-reference@2x.png', icon: Monitor },
+  { key: 'logs', label: 'Gateway logs', src: '/app-screenshots/06-gateway-logs.png', src2x: '/app-screenshots/06-gateway-logs@2x.png', icon: FileText },
+  { key: 'settings', label: 'Settings', src: '/app-screenshots/07-settings.png', src2x: '/app-screenshots/07-settings@2x.png', icon: Settings },
 ];
 
 const LEFT_TABS = ALL_SCREENS.slice(0, 3);
@@ -260,10 +260,11 @@ function AppPreview({ className }: { className?: string }) {
             // eslint-disable-next-line @next/next/no-img-element -- original PNGs, no recompression
             <img
               key={current.key}
-              src={current.src}
+              src={current.src2x}
+              srcSet={`${current.src} 1x, ${current.src2x} 2x`}
               alt={`Valnaa Desktop — ${current.label}`}
-              width={1024}
-              height={624}
+              width={2048}
+              height={1108}
               className="block w-full"
               style={{ height: 'auto' }}
               loading={current.key === 'chat' ? 'eager' : 'lazy'}
