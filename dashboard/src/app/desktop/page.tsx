@@ -547,7 +547,6 @@ export default function DesktopPage() {
                         muted
                         loop
                         playsInline
-                        poster="/app-screenshots/install-poster.png"
                         className="block w-full rounded-[10px]"
                         style={{ height: 'auto' }}
                       >
