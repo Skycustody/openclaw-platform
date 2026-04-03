@@ -124,10 +124,12 @@ const TESTIMONIALS = [
 ];
 
 const CHANGELOG = [
-  { date: 'Mar 25, 2026', title: 'WSL auto setup improvements', desc: 'Better detection, fewer UAC flashes' },
+  { date: 'Apr 3, 2026', title: 'Runtime switch reliability', desc: 'Switch between OpenClaw and NemoClaw without re onboarding or port conflicts' },
+  { date: 'Apr 2, 2026', title: 'Performance improvements', desc: 'Faster tab switching, async Docker checks, non blocking UI' },
+  { date: 'Mar 25, 2026', title: 'WSL auto setup improvements', desc: 'Better detection, fewer UAC flashes on Windows' },
   { date: 'Mar 19, 2026', title: 'Browser relay setup polish', desc: 'Clearer steps for Chrome extension and policy' },
-  { date: 'Mar 11, 2026', title: 'Terminal & log focus', desc: 'Easier to keep shell open for NemoClaw prompts' },
-  { date: 'Mar 5, 2026', title: 'One click install path', desc: 'OpenClaw + NemoClaw dependency fixes' },
+  { date: 'Mar 11, 2026', title: 'Terminal and log focus', desc: 'Easier to keep shell open for NemoClaw prompts' },
+  { date: 'Mar 5, 2026', title: 'One click install path', desc: 'OpenClaw and NemoClaw dependency fixes' },
 ];
 
 const RESEARCH_ROWS = [
@@ -613,12 +615,12 @@ export default function DesktopPage() {
 
         <section className="border-t border-white/[0.06] px-5 py-20 md:py-28" style={{ backgroundColor: BG }}>
           <div className="mx-auto max-w-[36rem] text-center">
-            <h2 className="text-[clamp(1.5rem,2.2vw,2.25rem)] font-medium tracking-[-0.02em] text-[#f0efea]">Stay on the frontier</h2>
+            <h2 className="text-[clamp(1.5rem,2.2vw,2.25rem)] font-medium tracking-[-0.02em] text-[#f0efea]">Just the installer. Nothing else.</h2>
             <p className="mt-4 text-[16px] leading-relaxed" style={{ color: TEXT_SEC }}>
-              Valnaa Desktop installs and hosts the shell around OpenClaw and NemoClaw. Provider keys, models, and agent behavior are configured in OpenClaw and NemoClaw as usual. This app does not replace or proxy that layer.
+              Valnaa installs OpenClaw and NemoClaw on your computer and gives you a window to use them. It does not change how they work. Your models, API keys, agent settings, and everything else stay exactly where OpenClaw and NemoClaw put them. When they release updates you get the same features as everyone else.
             </p>
             <p className="mt-5 text-[14px]" style={{ color: '#6f6d68' }}>
-              Examples you configure in OpenClaw: OpenAI, Anthropic, Google, OpenRouter, local endpoints, same as upstream docs.
+              All configuration happens in OpenClaw and NemoClaw directly. Valnaa just makes it easier to get there.
             </p>
           </div>
         </section>
