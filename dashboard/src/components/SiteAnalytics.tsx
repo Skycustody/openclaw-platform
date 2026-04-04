@@ -30,6 +30,7 @@ export function SiteAnalytics() {
   const searchParams = useSearchParams();
 
   const sendPageview = useCallback(() => {
+    if (pathname.startsWith('/admin')) return;
     const vid = getVisitorId();
     if (!vid) return;
     const utm_source = searchParams?.get('utm_source') || '';

@@ -298,6 +298,10 @@ router.get('/traffic', async (_req: AuthRequest, res: Response, next: NextFuncti
       });
     }
 
+    // Exclude admin visitor_ids — anyone who ever visited /admin is an admin, not a real user
+    const ADMIN_FILTER = `visitor_id NOT IN (SELECT DISTINCT visitor_id FROM page_views WHERE path LIKE '/admin%')`;
+    const ADMIN_FILTER_TE = `visitor_id NOT IN (SELECT DISTINCT visitor_id FROM page_views WHERE path LIKE '/admin%')`;
+
     const [
       viewsToday,
       views7d,
@@ -315,38 +319,38 @@ router.get('/traffic', async (_req: AuthRequest, res: Response, next: NextFuncti
       funnelApp,
       funnelSignups,
     ] = await Promise.all([
-      db.getOne<any>(`SELECT COUNT(*)::text as c FROM page_views WHERE created_at > NOW() - INTERVAL '1 day'`),
-      db.getOne<any>(`SELECT COUNT(*)::text as c FROM page_views WHERE created_at > NOW() - INTERVAL '7 days'`),
-      db.getOne<any>(`SELECT COUNT(*)::text as c FROM page_views WHERE created_at > NOW() - INTERVAL '30 days'`),
-      db.getOne<any>(`SELECT COUNT(DISTINCT visitor_id)::text as c FROM page_views WHERE created_at > NOW() - INTERVAL '7 days'`),
-      db.getOne<any>(`SELECT COUNT(DISTINCT visitor_id)::text as c FROM page_views WHERE created_at > NOW() - INTERVAL '30 days'`),
+      db.getOne<any>(`SELECT COUNT(*)::text as c FROM page_views WHERE created_at > NOW() - INTERVAL '1 day' AND ${ADMIN_FILTER}`),
+      db.getOne<any>(`SELECT COUNT(*)::text as c FROM page_views WHERE created_at > NOW() - INTERVAL '7 days' AND ${ADMIN_FILTER}`),
+      db.getOne<any>(`SELECT COUNT(*)::text as c FROM page_views WHERE created_at > NOW() - INTERVAL '30 days' AND ${ADMIN_FILTER}`),
+      db.getOne<any>(`SELECT COUNT(DISTINCT visitor_id)::text as c FROM page_views WHERE created_at > NOW() - INTERVAL '7 days' AND ${ADMIN_FILTER}`),
+      db.getOne<any>(`SELECT COUNT(DISTINCT visitor_id)::text as c FROM page_views WHERE created_at > NOW() - INTERVAL '30 days' AND ${ADMIN_FILTER}`),
       db.getMany<any>(`
         SELECT path, COUNT(*)::text as views, COUNT(DISTINCT visitor_id)::text as uniques
-        FROM page_views WHERE created_at > NOW() - INTERVAL '30 days'
+        FROM page_views WHERE created_at > NOW() - INTERVAL '30 days' AND ${ADMIN_FILTER}
         GROUP BY path ORDER BY COUNT(*) DESC LIMIT 20`),
       db.getMany<any>(`
         SELECT COALESCE(NULLIF(TRIM(referrer), ''), '(direct)') as ref, COUNT(*)::text as views
-        FROM page_views WHERE created_at > NOW() - INTERVAL '30 days'
+        FROM page_views WHERE created_at > NOW() - INTERVAL '30 days' AND ${ADMIN_FILTER}
         GROUP BY 1 ORDER BY COUNT(*) DESC LIMIT 15`),
       db.getMany<any>(`
-        SELECT device, COUNT(*)::text as views FROM page_views WHERE created_at > NOW() - INTERVAL '30 days'
+        SELECT device, COUNT(*)::text as views FROM page_views WHERE created_at > NOW() - INTERVAL '30 days' AND ${ADMIN_FILTER}
         GROUP BY device ORDER BY COUNT(*) DESC`),
       db.getMany<any>(`
-        SELECT browser, COUNT(*)::text as views FROM page_views WHERE created_at > NOW() - INTERVAL '30 days'
+        SELECT browser, COUNT(*)::text as views FROM page_views WHERE created_at > NOW() - INTERVAL '30 days' AND ${ADMIN_FILTER}
         GROUP BY browser ORDER BY COUNT(*) DESC`),
       db.getMany<any>(`
         SELECT COALESCE(country, 'unknown') as country, COUNT(*)::text as views
-        FROM page_views WHERE created_at > NOW() - INTERVAL '30 days'
+        FROM page_views WHERE created_at > NOW() - INTERVAL '30 days' AND ${ADMIN_FILTER}
         GROUP BY country ORDER BY COUNT(*) DESC LIMIT 15`),
       db.getOne<any>(`
         SELECT COUNT(DISTINCT visitor_id)::text as c FROM page_views
-        WHERE created_at > NOW() - INTERVAL '30 days' AND (path = '/' OR path = '')`),
+        WHERE created_at > NOW() - INTERVAL '30 days' AND (path = '/' OR path = '') AND ${ADMIN_FILTER}`),
       db.getOne<any>(`
         SELECT COUNT(DISTINCT visitor_id)::text as c FROM page_views
-        WHERE created_at > NOW() - INTERVAL '30 days' AND path LIKE '/desktop%'`),
+        WHERE created_at > NOW() - INTERVAL '30 days' AND path LIKE '/desktop%' AND ${ADMIN_FILTER}`),
       db.getOne<any>(`
         SELECT COUNT(DISTINCT visitor_id)::text as c FROM track_events
-        WHERE created_at > NOW() - INTERVAL '30 days' AND event LIKE 'download_click%'`),
+        WHERE created_at > NOW() - INTERVAL '30 days' AND event LIKE 'download_click%' AND ${ADMIN_FILTER_TE}`),
       hasDu
         ? db.getOne<any>(`
             SELECT COUNT(DISTINCT user_id)::text as c FROM desktop_usage
