@@ -1379,19 +1379,38 @@ export default function AdminPanel() {
               </div>
             )}
 
-            <div className="grid grid-cols-5 gap-4">
+            {/* Stat cards */}
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
               <StatCard icon={Globe2} label="Views (24h)" value={String(trafficData.viewsToday)} sub="page views" color="cyan" />
               <StatCard icon={Activity} label="Views (7d)" value={String(trafficData.views7d)} sub="last week" color="blue" />
               <StatCard icon={BarChart3} label="Views (30d)" value={String(trafficData.views30d)} sub="last month" color="purple" />
-              <StatCard icon={Users} label="Unique (7d)" value={String(trafficData.uniqueVisitors7d)} sub="anonymous visitors" color="green" />
-              <StatCard icon={Users} label="Unique (30d)" value={String(trafficData.uniqueVisitors30d)} sub="anonymous visitors" color="amber" />
+              <StatCard icon={Users} label="Unique (7d)" value={String(trafficData.uniqueVisitors7d)} sub="unique visitors" color="green" />
+              <StatCard icon={Users} label="Unique (30d)" value={String(trafficData.uniqueVisitors30d)} sub="unique visitors" color="amber" />
             </div>
 
-            <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
-              <h3 className="text-[14px] font-semibold text-white mb-1">Conversion funnel (30 days)</h3>
-              <p className="text-[11px] text-white/30 mb-4">Approximate unique visitors per step. App &amp; signups are not linked to site visitors.</p>
+            {/* Conversion funnel */}
+            <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-6">
+              <div className="flex items-center gap-2 mb-1">
+                <h3 className="text-[14px] font-semibold text-white">Conversion funnel</h3>
+                <span className="text-[11px] text-white/20 font-medium px-1.5 py-0.5 rounded bg-white/[0.04]">30d</span>
+              </div>
+              <p className="text-[11px] text-white/30 mb-5">Approximate unique visitors per step. App &amp; signups are not linked to site visitors.</p>
               {(() => {
                 const f = trafficData.funnel;
+                const funnelColors = [
+                  'from-cyan-500/70 to-cyan-400/50',
+                  'from-blue-500/70 to-blue-400/50',
+                  'from-violet-500/70 to-violet-400/50',
+                  'from-amber-500/70 to-amber-400/50',
+                  'from-emerald-500/70 to-emerald-400/50',
+                ];
+                const funnelTextColors = [
+                  'text-cyan-400',
+                  'text-blue-400',
+                  'text-violet-400',
+                  'text-amber-400',
+                  'text-emerald-400',
+                ];
                 const steps: Array<{ label: string; count: number }> = [
                   { label: 'Homepage', count: f.homeLanding },
                   { label: '/desktop page', count: f.desktopPage },
@@ -1401,22 +1420,34 @@ export default function AdminPanel() {
                 ];
                 const max = Math.max(...steps.map(s => s.count), 1);
                 return (
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     {steps.map((s, i) => {
                       const prev = i > 0 ? steps[i - 1].count : s.count;
                       const pctOfPrev = prev > 0 ? Math.round((s.count / prev) * 100) : 0;
                       const w = Math.round((s.count / max) * 100);
                       return (
-                        <div key={s.label}>
-                          <div className="flex justify-between text-[12px] mb-1">
-                            <span className="text-white/70">{s.label}</span>
-                            <span className="text-white/40 tabular-nums">
-                              {s.count.toLocaleString()}
-                              {i > 0 && prev > 0 ? ` (${pctOfPrev}% of prev)` : ''}
-                            </span>
+                        <div key={s.label} className="group">
+                          <div className="flex items-center justify-between text-[12px] mb-1.5">
+                            <div className="flex items-center gap-2">
+                              <span className="flex h-5 w-5 items-center justify-center rounded text-[10px] font-semibold bg-white/[0.05] text-white/40">{i + 1}</span>
+                              <span className="text-white/70 font-medium">{s.label}</span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              {i > 0 && prev > 0 && (
+                                <span className={`text-[11px] font-medium ${pctOfPrev >= 50 ? 'text-emerald-400/60' : pctOfPrev >= 20 ? 'text-amber-400/60' : 'text-red-400/60'}`}>
+                                  {pctOfPrev}%
+                                </span>
+                              )}
+                              <span className={`tabular-nums font-semibold ${funnelTextColors[i]}`}>
+                                {s.count.toLocaleString()}
+                              </span>
+                            </div>
                           </div>
-                          <div className="h-2 rounded-full bg-white/5 overflow-hidden">
-                            <div className="h-full rounded-full bg-cyan-500/60" style={{ width: `${Math.max(w, s.count > 0 ? 4 : 0)}%` }} />
+                          <div className="h-2.5 rounded-full bg-white/[0.04] overflow-hidden">
+                            <div
+                              className={`h-full rounded-full bg-gradient-to-r ${funnelColors[i]} transition-all duration-500`}
+                              style={{ width: `${Math.max(w, s.count > 0 ? 4 : 0)}%` }}
+                            />
                           </div>
                         </div>
                       );
@@ -1426,27 +1457,29 @@ export default function AdminPanel() {
               })()}
             </div>
 
+            {/* Top pages + referrers */}
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               <div className="rounded-xl border border-white/[0.06] overflow-hidden">
-                <div className="border-b border-white/[0.06] bg-white/[0.02] px-4 py-3">
-                  <h3 className="text-[13px] font-semibold text-white">Top pages (30d)</h3>
+                <div className="border-b border-white/[0.06] bg-white/[0.03] px-5 py-3.5 flex items-center justify-between">
+                  <h3 className="text-[13px] font-semibold text-white">Top pages</h3>
+                  <span className="text-[11px] text-white/20 font-medium px-1.5 py-0.5 rounded bg-white/[0.04]">30d</span>
                 </div>
                 <table className="w-full text-[12px]">
                   <thead>
-                    <tr className="border-b border-white/[0.06] text-left text-white/30">
-                      <th className="px-4 py-2">Path</th>
-                      <th className="px-4 py-2 text-right">Views</th>
-                      <th className="px-4 py-2 text-right">Uniques</th>
+                    <tr className="border-b border-white/[0.06] text-left text-[11px] uppercase tracking-wider text-white/25">
+                      <th className="px-5 py-2.5 font-medium">Path</th>
+                      <th className="px-5 py-2.5 text-right font-medium">Views</th>
+                      <th className="px-5 py-2.5 text-right font-medium">Uniques</th>
                     </tr>
                   </thead>
                   <tbody>
                     {trafficData.topPages.length === 0 ? (
-                      <tr><td colSpan={3} className="px-4 py-8 text-center text-white/25">No data yet</td></tr>
-                    ) : trafficData.topPages.map((p) => (
-                      <tr key={p.path} className="border-b border-white/[0.04]">
-                        <td className="px-4 py-2 text-white/60 font-mono text-[11px] truncate max-w-[200px]">{p.path}</td>
-                        <td className="px-4 py-2 text-right text-white/50 tabular-nums">{p.views}</td>
-                        <td className="px-4 py-2 text-right text-white/50 tabular-nums">{p.uniques}</td>
+                      <tr><td colSpan={3} className="px-5 py-10 text-center text-white/25">No data yet</td></tr>
+                    ) : trafficData.topPages.map((p, i) => (
+                      <tr key={p.path} className={`border-b border-white/[0.04] transition-colors hover:bg-white/[0.02] ${i === 0 ? 'bg-white/[0.01]' : ''}`}>
+                        <td className="px-5 py-2.5 text-white/60 font-mono text-[11px] truncate max-w-[200px]">{p.path}</td>
+                        <td className="px-5 py-2.5 text-right text-white/50 tabular-nums font-medium">{p.views}</td>
+                        <td className="px-5 py-2.5 text-right text-white/40 tabular-nums">{p.uniques}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1454,23 +1487,24 @@ export default function AdminPanel() {
               </div>
 
               <div className="rounded-xl border border-white/[0.06] overflow-hidden">
-                <div className="border-b border-white/[0.06] bg-white/[0.02] px-4 py-3">
-                  <h3 className="text-[13px] font-semibold text-white">Top referrers (30d)</h3>
+                <div className="border-b border-white/[0.06] bg-white/[0.03] px-5 py-3.5 flex items-center justify-between">
+                  <h3 className="text-[13px] font-semibold text-white">Top referrers</h3>
+                  <span className="text-[11px] text-white/20 font-medium px-1.5 py-0.5 rounded bg-white/[0.04]">30d</span>
                 </div>
                 <table className="w-full text-[12px]">
                   <thead>
-                    <tr className="border-b border-white/[0.06] text-left text-white/30">
-                      <th className="px-4 py-2">Source</th>
-                      <th className="px-4 py-2 text-right">Views</th>
+                    <tr className="border-b border-white/[0.06] text-left text-[11px] uppercase tracking-wider text-white/25">
+                      <th className="px-5 py-2.5 font-medium">Source</th>
+                      <th className="px-5 py-2.5 text-right font-medium">Views</th>
                     </tr>
                   </thead>
                   <tbody>
                     {trafficData.topReferrers.length === 0 ? (
-                      <tr><td colSpan={2} className="px-4 py-8 text-center text-white/25">No data yet</td></tr>
-                    ) : trafficData.topReferrers.map((r) => (
-                      <tr key={r.referrer} className="border-b border-white/[0.04]">
-                        <td className="px-4 py-2 text-white/60 truncate max-w-[280px]" title={r.referrer}>{r.referrer}</td>
-                        <td className="px-4 py-2 text-right text-white/50 tabular-nums">{r.views}</td>
+                      <tr><td colSpan={2} className="px-5 py-10 text-center text-white/25">No data yet</td></tr>
+                    ) : trafficData.topReferrers.map((r, i) => (
+                      <tr key={r.referrer} className={`border-b border-white/[0.04] transition-colors hover:bg-white/[0.02] ${i === 0 ? 'bg-white/[0.01]' : ''}`}>
+                        <td className="px-5 py-2.5 text-white/60 truncate max-w-[280px]" title={r.referrer}>{r.referrer}</td>
+                        <td className="px-5 py-2.5 text-right text-white/50 tabular-nums font-medium">{r.views}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1478,40 +1512,42 @@ export default function AdminPanel() {
               </div>
             </div>
 
+            {/* Device / Browser / Country breakdown */}
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-              <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
-                <h3 className="text-[12px] font-semibold text-white/80 mb-3">Device</h3>
-                <ul className="space-y-2 text-[12px]">
-                  {trafficData.devices.length === 0 ? <li className="text-white/25">No data</li> : trafficData.devices.map((d) => (
-                    <li key={d.device} className="flex justify-between text-white/50">
-                      <span className="capitalize">{d.device}</span>
-                      <span className="tabular-nums">{d.views}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
-                <h3 className="text-[12px] font-semibold text-white/80 mb-3">Browser</h3>
-                <ul className="space-y-2 text-[12px]">
-                  {trafficData.browsers.length === 0 ? <li className="text-white/25">No data</li> : trafficData.browsers.map((b) => (
-                    <li key={b.browser} className="flex justify-between text-white/50">
-                      <span className="capitalize">{b.browser}</span>
-                      <span className="tabular-nums">{b.views}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
-                <h3 className="text-[12px] font-semibold text-white/80 mb-3">Country</h3>
-                <ul className="space-y-2 text-[12px]">
-                  {trafficData.countries.length === 0 ? <li className="text-white/25">No data (enable CF-IPCountry)</li> : trafficData.countries.map((c) => (
-                    <li key={c.country} className="flex justify-between text-white/50">
-                      <span>{c.country}</span>
-                      <span className="tabular-nums">{c.views}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+              {([
+                { title: 'Devices', data: trafficData.devices, key: 'device', emptyMsg: 'No data' },
+                { title: 'Browsers', data: trafficData.browsers, key: 'browser', emptyMsg: 'No data' },
+                { title: 'Countries', data: trafficData.countries, key: 'country', emptyMsg: 'No data (enable CF-IPCountry)' },
+              ] as const).map((section) => {
+                const items = section.data as Array<Record<string, any>>;
+                const maxViews = Math.max(...items.map((d: any) => d.views), 1);
+                return (
+                  <div key={section.title} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
+                    <h3 className="text-[12px] font-semibold text-white/60 uppercase tracking-wider mb-4">{section.title}</h3>
+                    {items.length === 0 ? (
+                      <p className="text-[12px] text-white/25">{section.emptyMsg}</p>
+                    ) : (
+                      <ul className="space-y-3">
+                        {items.map((d: any) => {
+                          const name = d[section.key];
+                          const barW = Math.round((d.views / maxViews) * 100);
+                          return (
+                            <li key={name}>
+                              <div className="flex justify-between text-[12px] mb-1">
+                                <span className="text-white/60 capitalize">{name}</span>
+                                <span className="tabular-nums text-white/40 font-medium">{d.views}</span>
+                              </div>
+                              <div className="h-1.5 rounded-full bg-white/[0.04] overflow-hidden">
+                                <div className="h-full rounded-full bg-white/[0.12] transition-all" style={{ width: `${Math.max(barW, 6)}%` }} />
+                              </div>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                );
+              })}
             </div>
             </>
             )}
@@ -1845,16 +1881,25 @@ function StatCard({ icon: Icon, label, value, sub, color }: {
     cyan: 'bg-cyan-500/10 text-cyan-400',
     orange: 'bg-orange-500/10 text-orange-400',
   };
+  const borderColors: Record<string, string> = {
+    blue: 'border-blue-500/10',
+    green: 'border-green-500/10',
+    purple: 'border-purple-500/10',
+    amber: 'border-amber-500/10',
+    red: 'border-red-500/10',
+    cyan: 'border-cyan-500/10',
+    orange: 'border-orange-500/10',
+  };
   return (
-    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
-      <div className="flex items-center gap-2 mb-3">
+    <div className={`rounded-xl border ${borderColors[color] || 'border-white/[0.06]'} bg-white/[0.02] p-4 transition-colors hover:bg-white/[0.04]`}>
+      <div className="flex items-center gap-2.5 mb-3">
         <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${colors[color]}`}>
           <Icon className="h-4 w-4" />
         </div>
-        <span className="text-[12px] text-white/30">{label}</span>
+        <span className="text-[12px] text-white/40 font-medium">{label}</span>
       </div>
-      <p className="text-[24px] font-bold text-white tabular-nums">{value}</p>
-      <p className="text-[11px] text-white/20 mt-0.5">{sub}</p>
+      <p className="text-[26px] font-bold text-white tabular-nums tracking-tight">{value}</p>
+      <p className="text-[11px] text-white/25 mt-1">{sub}</p>
     </div>
   );
 }
