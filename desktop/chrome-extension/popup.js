@@ -15,7 +15,7 @@ async function checkStatus() {
     const json = await res.json();
     if (json.ok) {
       dot.className = 'dot connected';
-      text.textContent = 'Connected to Valnaa gateway';
+      text.textContent = 'Connected to OpenClaw gateway';
     } else {
       dot.className = 'dot disconnected';
       text.textContent = 'Gateway not healthy';
