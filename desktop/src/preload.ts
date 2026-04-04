@@ -184,6 +184,12 @@ contextBridge.exposeInMainWorld('openclaw', {
     return () => ipcRenderer.removeListener('agent:install-progress', handler);
   },
 
+  // Agents
+  agentsList: () => ipcRenderer.invoke('agents:list'),
+  agentsCatalog: () => ipcRenderer.invoke('agents:catalog'),
+  agentsInstall: (id: string, soul: string, name: string) => ipcRenderer.invoke('agents:install', id, soul, name),
+  agentsDelete: (id: string) => ipcRenderer.invoke('agents:delete', id),
+
   // Update
   onUpdateAvailable: (cb: (info: { version: string; canAutoInstall: boolean }) => void) => {
     const handler = (_: any, info: { version: string; canAutoInstall: boolean }) => cb(info);

@@ -2367,6 +2367,79 @@ function setupIPC(): void {
     return { ok: true };
   });
 
+  // ── Agent Store ──
+
+  ipcMain.handle('agents:list', async () => {
+    try {
+      const { execSync } = require('child_process');
+      const raw = execSync('openclaw agents list --json', { encoding: 'utf8', timeout: 10000 });
+      return { ok: true, agents: JSON.parse(raw) };
+    } catch (err: any) {
+      logApp('warn', `agents:list failed: ${err.message}`);
+      return { ok: false, agents: [], error: err.message };
+    }
+  });
+
+  ipcMain.handle('agents:catalog', async () => {
+    try {
+      const https = require('https');
+      const url = 'https://raw.githubusercontent.com/mergisi/awesome-openclaw-agents/main/agents.json';
+      const data: string = await new Promise((resolve, reject) => {
+        https.get(url, (res: any) => {
+          let body = '';
+          res.on('data', (chunk: string) => body += chunk);
+          res.on('end', () => resolve(body));
+          res.on('error', reject);
+        }).on('error', reject);
+      });
+      return { ok: true, catalog: JSON.parse(data) };
+    } catch (err: any) {
+      logApp('warn', `agents:catalog failed: ${err.message}`);
+      return { ok: false, catalog: [], error: err.message };
+    }
+  });
+
+  ipcMain.handle('agents:install', async (_e, id: string, soul: string, name: string) => {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const { execSync } = require('child_process');
+      const home = require('os').homedir();
+      const workspacePath = path.join(home, '.openclaw', `workspace-${id}`);
+
+      // Create workspace and write SOUL.md
+      fs.mkdirSync(workspacePath, { recursive: true });
+      fs.writeFileSync(path.join(workspacePath, 'SOUL.md'), soul, 'utf8');
+      logApp('info', `agents:install — wrote SOUL.md to ${workspacePath}`);
+
+      // Register the agent
+      execSync(`openclaw agents add ${id} --workspace ${workspacePath}`, { encoding: 'utf8', timeout: 15000 });
+      logApp('info', `agents:install — registered agent ${id}`);
+
+      // Restart gateway to pick it up
+      try { execSync('openclaw gateway restart', { encoding: 'utf8', timeout: 15000 }); } catch { /* ok */ }
+      logApp('info', `agents:install — gateway restarted`);
+
+      return { ok: true };
+    } catch (err: any) {
+      logApp('error', `agents:install failed: ${err.message}`);
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('agents:delete', async (_e, id: string) => {
+    try {
+      const { execSync } = require('child_process');
+      execSync(`openclaw agents delete ${id} --force`, { encoding: 'utf8', timeout: 15000 });
+      try { execSync('openclaw gateway restart', { encoding: 'utf8', timeout: 15000 }); } catch { /* ok */ }
+      logApp('info', `agents:delete — removed agent ${id}`);
+      return { ok: true };
+    } catch (err: any) {
+      logApp('error', `agents:delete failed: ${err.message}`);
+      return { ok: false, error: err.message };
+    }
+  });
+
   /** OpenAI / Anthropic in addition to NVIDIA (NemoClaw) or local OpenClaw config. */
   ipcMain.handle(
     'settings:set-optional-model-keys',

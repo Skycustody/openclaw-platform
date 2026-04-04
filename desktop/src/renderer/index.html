@@ -1650,8 +1650,12 @@
       <div class="tab" data-tab="openshell" id="tab-openshell" title="OpenShell" aria-label="OpenShell" style="display:none;">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
       </div>
-      <div class="tab" data-tab="browser" title="Browser" aria-label="Browser">
+      <!-- Browser relay tab hidden — setup is now automatic -->
+      <div class="tab" data-tab="browser" title="Browser" aria-label="Browser" style="display:none;">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+      </div>
+      <div class="tab" data-tab="agents" title="Agents" aria-label="Agents">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
       </div>
     </div>
     <div class="tabs-center-slot">
@@ -1794,6 +1798,36 @@
       </div>
         </footer>
       </div>
+      </div>
+    </div>
+
+    <div id="agents-panel" class="panel">
+      <div style="padding: 20px; overflow-y: auto; height: 100%;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+          <div>
+            <h3 style="margin: 0; font-size: 16px; font-weight: 600;">Agents</h3>
+            <p style="margin: 4px 0 0; font-size: 12px; color: rgba(255,255,255,0.4);">Install and manage AI agents</p>
+          </div>
+          <button type="button" class="agent-toolbar-btn" id="agents-refresh-btn" style="font-size: 12px;">Refresh</button>
+        </div>
+
+        <div id="agents-installed" style="margin-bottom: 24px;">
+          <h4 style="font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px;">Installed</h4>
+          <div id="agents-installed-list" style="display: grid; gap: 8px;"></div>
+        </div>
+
+        <div id="agents-catalog">
+          <h4 style="font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px;">Available Templates</h4>
+          <div style="margin-bottom: 12px;">
+            <input type="text" id="agents-search" placeholder="Search agents..." style="width: 100%; padding: 8px 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; color: #f0efea; font-size: 13px; outline: none;" />
+          </div>
+          <div id="agents-categories" style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px;"></div>
+          <div id="agents-catalog-list" style="display: grid; gap: 8px;"></div>
+          <div id="agents-catalog-loading" style="text-align: center; padding: 40px; color: rgba(255,255,255,0.3); font-size: 13px;">
+            <div class="spinner" style="margin: 0 auto 12px;"></div>
+            Loading agent catalog...
+          </div>
+        </div>
       </div>
     </div>
 
@@ -2509,6 +2543,7 @@
         document.getElementById(id + '-panel').classList.add('active');
         if (id === 'logs') refreshLogs();
         if (id === 'browser') void refreshChromeSetupPanel();
+        if (id === 'agents') void refreshAgentsPanel();
         if (id === 'terminal') initTerminal();
         if (id === 'commands') updateCommandsPanel();
         if (id === 'settings') void refreshSettingsPanel();
@@ -3954,6 +3989,134 @@
 
     document.getElementById('openshell-restart-btn').addEventListener('click', () => {
       void spawnOpenshellTui();
+    });
+
+    // ── Agents Panel ──
+    let _agentsCatalog = [];
+    let _agentsInstalled = [];
+    let _agentsSelectedCategory = '';
+
+    async function refreshAgentsPanel() {
+      const installedEl = document.getElementById('agents-installed-list');
+      const catalogEl = document.getElementById('agents-catalog-list');
+      const loadingEl = document.getElementById('agents-catalog-loading');
+      const categoriesEl = document.getElementById('agents-categories');
+
+      // Fetch installed agents
+      try {
+        const res = await oc.agentsList();
+        _agentsInstalled = res.ok ? res.agents : [];
+        renderInstalledAgents();
+      } catch { _agentsInstalled = []; }
+
+      // Fetch catalog
+      if (_agentsCatalog.length === 0) {
+        loadingEl.style.display = 'block';
+        try {
+          const res = await oc.agentsCatalog();
+          _agentsCatalog = res.ok ? res.catalog : [];
+        } catch { _agentsCatalog = []; }
+        loadingEl.style.display = 'none';
+      }
+      renderCategories();
+      renderCatalogAgents();
+    }
+
+    function renderInstalledAgents() {
+      const el = document.getElementById('agents-installed-list');
+      if (_agentsInstalled.length === 0) {
+        el.innerHTML = '<p style="color: rgba(255,255,255,0.25); font-size: 13px;">No agents installed yet.</p>';
+        return;
+      }
+      el.innerHTML = _agentsInstalled.map(a => `
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px;">
+          <div>
+            <div style="font-size: 14px; font-weight: 500; color: #f0efea;">${a.id || a.name}</div>
+            <div style="font-size: 11px; color: rgba(255,255,255,0.35); margin-top: 2px;">${a.model || 'default model'}${a.isDefault ? ' — default' : ''}</div>
+          </div>
+          <div style="display: flex; gap: 6px;">
+            ${a.id !== 'main' ? `<button class="agent-toolbar-btn" style="font-size: 11px; color: #f87171;" onclick="deleteAgent('${a.id}')">Remove</button>` : ''}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function renderCategories() {
+      const el = document.getElementById('agents-categories');
+      const cats = [...new Set(_agentsCatalog.map(a => a.category || 'other'))].sort();
+      el.innerHTML = `<button class="agent-toolbar-btn" style="font-size: 11px; ${!_agentsSelectedCategory ? 'background: rgba(255,255,255,0.12);' : ''}" onclick="filterCategory('')">All</button>` +
+        cats.map(c => `<button class="agent-toolbar-btn" style="font-size: 11px; text-transform: capitalize; ${_agentsSelectedCategory === c ? 'background: rgba(255,255,255,0.12);' : ''}" onclick="filterCategory('${c}')">${c}</button>`).join('');
+    }
+
+    function renderCatalogAgents() {
+      const el = document.getElementById('agents-catalog-list');
+      const search = (document.getElementById('agents-search')).value.toLowerCase();
+      const installedIds = _agentsInstalled.map(a => a.id);
+      let filtered = _agentsCatalog.filter(a => {
+        if (_agentsSelectedCategory && (a.category || 'other') !== _agentsSelectedCategory) return false;
+        if (search && !(a.name || '').toLowerCase().includes(search) && !(a.description || '').toLowerCase().includes(search) && !(a.category || '').toLowerCase().includes(search)) return false;
+        return true;
+      });
+      if (filtered.length === 0) {
+        el.innerHTML = '<p style="color: rgba(255,255,255,0.25); font-size: 13px; text-align: center; padding: 20px;">No agents found.</p>';
+        return;
+      }
+      el.innerHTML = filtered.slice(0, 50).map(a => {
+        const installed = installedIds.includes(a.id);
+        return `
+        <div style="padding: 14px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; transition: border-color 0.15s;" onmouseenter="this.style.borderColor='rgba(255,255,255,0.12)'" onmouseleave="this.style.borderColor='rgba(255,255,255,0.06)'">
+          <div style="display: flex; align-items: start; justify-content: space-between;">
+            <div style="flex: 1; min-width: 0;">
+              <div style="font-size: 14px; font-weight: 500; color: #f0efea;">${a.name || a.id}</div>
+              <span style="display: inline-block; font-size: 10px; color: rgba(255,255,255,0.35); background: rgba(255,255,255,0.05); padding: 2px 6px; border-radius: 4px; margin-top: 4px; text-transform: capitalize;">${a.category || 'other'}</span>
+              <p style="font-size: 12px; color: rgba(255,255,255,0.45); margin: 8px 0 0; line-height: 1.4;">${(a.description || '').slice(0, 120)}${(a.description || '').length > 120 ? '...' : ''}</p>
+            </div>
+            <button class="agent-toolbar-btn${installed ? '' : ' primary'}" style="font-size: 11px; margin-left: 12px; flex-shrink: 0;" ${installed ? 'disabled' : ''} onclick="installAgent('${a.id}')">
+              ${installed ? 'Installed' : 'Install'}
+            </button>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    window.filterCategory = function(cat) {
+      _agentsSelectedCategory = cat;
+      renderCategories();
+      renderCatalogAgents();
+    };
+
+    window.installAgent = async function(id) {
+      const agent = _agentsCatalog.find(a => a.id === id);
+      if (!agent) return;
+      const btn = event.target;
+      btn.textContent = 'Installing...';
+      btn.disabled = true;
+      try {
+        const soul = agent.soul || agent.content || `# Agent: ${agent.name}\n\n${agent.description || ''}`;
+        const res = await oc.agentsInstall(id, soul, agent.name || id);
+        if (res.ok) {
+          btn.textContent = 'Installed';
+          await refreshAgentsPanel();
+        } else {
+          btn.textContent = 'Failed';
+          setTimeout(() => { btn.textContent = 'Install'; btn.disabled = false; }, 2000);
+        }
+      } catch {
+        btn.textContent = 'Failed';
+        setTimeout(() => { btn.textContent = 'Install'; btn.disabled = false; }, 2000);
+      }
+    };
+
+    window.deleteAgent = async function(id) {
+      if (!confirm(`Remove agent "${id}"? This will delete its workspace.`)) return;
+      await oc.agentsDelete(id);
+      await refreshAgentsPanel();
+    };
+
+    document.getElementById('agents-search').addEventListener('input', () => renderCatalogAgents());
+    document.getElementById('agents-refresh-btn').addEventListener('click', () => {
+      _agentsCatalog = [];
+      refreshAgentsPanel();
     });
 
     // Signal main process that renderer is ready to receive messages
