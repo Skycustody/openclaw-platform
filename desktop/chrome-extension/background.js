@@ -22,8 +22,10 @@ chrome.storage.local.get(['gatewayPort', 'relayPort', 'manualDisconnect'], (data
 
 function updateBadge(status) {
   connected = status === 'connected';
-  chrome.action.setBadgeText({ text: connected ? '\u200a' : '' });
-  chrome.action.setBadgeBackgroundColor({ color: '#22c55e' });
+  // Single dot character — Chrome renders this as a tiny colored badge
+  chrome.action.setBadgeText({ text: connected ? '●' : '' });
+  chrome.action.setBadgeBackgroundColor({ color: '#14120b' });
+  chrome.action.setBadgeTextColor({ color: '#22c55e' });
   chrome.action.setTitle({ title: connected ? 'Valnaa Relay: Connected to OpenClaw' : 'Valnaa Relay: Disconnected' });
 }
 
