@@ -20,7 +20,8 @@ chrome.storage.local.get(['gatewayPort', 'relayPort'], (data) => {
 
 function updateBadge(status) {
   connected = status === 'connected';
-  chrome.action.setBadgeText({ text: connected ? 'ON' : 'OFF' });
+  // Green dot when connected, red dot when disconnected — visible on toolbar without clicking
+  chrome.action.setBadgeText({ text: connected ? '\u2022' : '\u2022' });
   chrome.action.setBadgeBackgroundColor({ color: connected ? '#22c55e' : '#ef4444' });
   chrome.action.setTitle({ title: connected ? 'Valnaa Relay: Connected to OpenClaw' : 'Valnaa Relay: Disconnected' });
 }

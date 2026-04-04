@@ -35,7 +35,7 @@ document.getElementById('reconnect-btn').addEventListener('click', async () => {
 document.getElementById('disconnect-btn').addEventListener('click', async () => {
   chrome.runtime.sendMessage({ action: 'disconnect' });
   dot.className = 'dot disconnected';
-  text.textContent = 'Disconnected (manual)';
+  text.textContent = 'Disconnected';
 });
 
 checkStatus();
