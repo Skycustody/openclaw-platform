@@ -37,3 +37,11 @@ fs.copyFileSync(path.join(xtermPkg, 'lib', 'xterm.mjs'), path.join(vendorDir, 'x
 fs.copyFileSync(path.join(fitPkg, 'lib', 'addon-fit.mjs'), path.join(vendorDir, 'addon-fit.mjs'));
 
 console.log('xterm.js vendor files copied to dist/renderer/vendor/');
+
+// Copy Valnaa Chrome extension to dist
+const extSrc = path.join(__dirname, '..', 'chrome-extension');
+const extDest = path.join(__dirname, '..', 'dist', 'chrome-extension');
+if (fs.existsSync(extSrc)) {
+  copyDir(extSrc, extDest);
+  console.log('Chrome extension copied to dist/chrome-extension/');
+}

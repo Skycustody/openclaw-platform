@@ -136,17 +136,35 @@ export function ensureChromeExtensionFiles(): { ok: boolean; error?: string } {
   const dest = getChromeExtensionDir();
   const bin = findOpenClawBinary();
 
-  // 0) NemoClaw npm bundle (openclaw nested under nemoclaw) — fastest when sandbox copy fails
+  // 0) Valnaa bundled extension — copy from app resources (fastest, always available)
+  try {
+    const appPath = require('electron').app?.getAppPath?.() || '';
+    const bundledPaths = [
+      path.join(appPath, 'chrome-extension'),
+      path.join(appPath, 'dist', 'chrome-extension'),
+      path.join(__dirname, '..', 'chrome-extension'),
+      path.join(__dirname, '..', '..', 'chrome-extension'),
+    ];
+    for (const src of bundledPaths) {
+      if (fs.existsSync(path.join(src, 'manifest.json'))) {
+        fs.mkdirSync(path.dirname(dest), { recursive: true });
+        fs.rmSync(dest, { recursive: true, force: true });
+        fs.cpSync(src, dest, { recursive: true });
+        logApp('info', `Copied Valnaa browser extension from ${src}`);
+        if (chromeExtensionIsReady()) return { ok: true };
+      }
+    }
+  } catch (err: any) {
+    logApp('warn', `Valnaa bundled extension copy failed: ${err?.message || err}`);
+  }
+
+  // 1) NemoClaw npm bundle (openclaw nested under nemoclaw)
   if (loadRuntime()?.runtime === 'nemoclaw' && copyChromeExtensionFromNemoclawDependency()) {
     return { ok: true };
   }
 
-  // 1) Host CLI: preferred install path (OpenClaw ≥ versions with `browser extension install`)
+  // 2) Host CLI: try openclaw npm package copy (skip `browser extension install` — removed in 2026.4+)
   if (bin) {
-    tryHostOpenclawBrowserInstall(bin);
-    if (chromeExtensionIsReady()) {
-      return { ok: true };
-    }
     if (copyChromeExtensionFromOpenClawNpmTo(dest)) {
       return { ok: true };
     }
