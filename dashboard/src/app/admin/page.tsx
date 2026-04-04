@@ -181,6 +181,20 @@ interface TrafficData {
     appOpened: number;
     desktopSignups: number;
   };
+  avgTimeOnSite: number;
+  timePerPage: Array<{ path: string; avgSeconds: number; samples: number }>;
+  visitors: Array<{
+    visitorId: string;
+    firstSeen: string;
+    lastSeen: string;
+    pageViews: number;
+    totalSeconds: number;
+    referrer: string;
+    device: string;
+    country: string;
+    pages: string[];
+    events: string[];
+  }>;
 }
 
 interface FeedbackEntry {
@@ -1388,12 +1402,13 @@ export default function AdminPanel() {
             )}
 
             {/* Stat cards with week-over-week change */}
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
               <StatCard icon={Globe2} label="Views (24h)" value={String(trafficData.viewsToday)} sub="page views" color="cyan" prev={trafficData.prev.viewsToday} />
               <StatCard icon={Activity} label="Views (7d)" value={String(trafficData.views7d)} sub="vs prev 7 days" color="blue" prev={trafficData.prev.views7d} />
               <StatCard icon={BarChart3} label="Views (30d)" value={String(trafficData.views30d)} sub="vs prev 30 days" color="purple" prev={trafficData.prev.views30d} />
               <StatCard icon={Users} label="Unique (7d)" value={String(trafficData.uniqueVisitors7d)} sub="vs prev 7 days" color="green" prev={trafficData.prev.uniqueVisitors7d} />
               <StatCard icon={Users} label="Unique (30d)" value={String(trafficData.uniqueVisitors30d)} sub="vs prev 30 days" color="amber" prev={trafficData.prev.uniqueVisitors30d} />
+              <StatCard icon={Clock} label="Avg. time" value={trafficData.avgTimeOnSite > 0 ? `${Math.floor(trafficData.avgTimeOnSite / 60)}m ${trafficData.avgTimeOnSite % 60}s` : '—'} sub="time on site" color="orange" />
             </div>
 
             {/* Conversion funnel */}
@@ -1478,18 +1493,25 @@ export default function AdminPanel() {
                       <th className="px-5 py-2.5 font-medium">Path</th>
                       <th className="px-5 py-2.5 text-right font-medium">Views</th>
                       <th className="px-5 py-2.5 text-right font-medium">Uniques</th>
+                      <th className="px-5 py-2.5 text-right font-medium">Avg. time</th>
                     </tr>
                   </thead>
                   <tbody>
                     {trafficData.topPages.length === 0 ? (
-                      <tr><td colSpan={3} className="px-5 py-10 text-center text-white/25">No data yet</td></tr>
-                    ) : trafficData.topPages.map((p, i) => (
-                      <tr key={p.path} className={`border-b border-white/[0.04] transition-colors hover:bg-white/[0.02] ${i === 0 ? 'bg-white/[0.01]' : ''}`}>
-                        <td className="px-5 py-2.5 text-white/60 font-mono text-[11px] truncate max-w-[200px]">{p.path}</td>
-                        <td className="px-5 py-2.5 text-right text-white/50 tabular-nums font-medium">{p.views}</td>
-                        <td className="px-5 py-2.5 text-right text-white/40 tabular-nums">{p.uniques}</td>
-                      </tr>
-                    ))}
+                      <tr><td colSpan={4} className="px-5 py-10 text-center text-white/25">No data yet</td></tr>
+                    ) : trafficData.topPages.map((p, i) => {
+                      const timeData = trafficData.timePerPage.find(t => t.path === p.path);
+                      const secs = timeData?.avgSeconds || 0;
+                      const timeStr = secs > 0 ? (secs >= 60 ? `${Math.floor(secs / 60)}m ${secs % 60}s` : `${secs}s`) : '—';
+                      return (
+                        <tr key={p.path} className={`border-b border-white/[0.04] transition-colors hover:bg-white/[0.02] ${i === 0 ? 'bg-white/[0.01]' : ''}`}>
+                          <td className="px-5 py-2.5 text-white/60 font-mono text-[11px] truncate max-w-[200px]">{p.path}</td>
+                          <td className="px-5 py-2.5 text-right text-white/50 tabular-nums font-medium">{p.views}</td>
+                          <td className="px-5 py-2.5 text-right text-white/40 tabular-nums">{p.uniques}</td>
+                          <td className={`px-5 py-2.5 text-right tabular-nums ${secs >= 30 ? 'text-emerald-400/60' : secs > 0 ? 'text-amber-400/60' : 'text-white/20'}`}>{timeStr}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -1599,6 +1621,91 @@ export default function AdminPanel() {
                   </div>
                 );
               })}
+            </div>
+
+            {/* Individual visitors */}
+            <div className="rounded-xl border border-white/[0.06] overflow-hidden">
+              <div className="border-b border-white/[0.06] bg-white/[0.03] px-5 py-3.5 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Eye className="h-4 w-4 text-white/30" />
+                  <h3 className="text-[13px] font-semibold text-white">Recent visitors</h3>
+                </div>
+                <span className="text-[11px] text-white/20 font-medium px-1.5 py-0.5 rounded bg-white/[0.04]">30d</span>
+              </div>
+              <p className="px-5 py-2 text-[11px] text-white/25 border-b border-white/[0.04]">Each row is one anonymous visitor. See what they looked at, how long they stayed, and what actions they took.</p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-[12px] min-w-[700px]">
+                  <thead>
+                    <tr className="border-b border-white/[0.06] text-left text-[11px] uppercase tracking-wider text-white/25">
+                      <th className="px-5 py-2.5 font-medium">Visitor</th>
+                      <th className="px-5 py-2.5 font-medium">When</th>
+                      <th className="px-5 py-2.5 font-medium">Source</th>
+                      <th className="px-5 py-2.5 text-right font-medium">Pages</th>
+                      <th className="px-5 py-2.5 text-right font-medium">Time</th>
+                      <th className="px-5 py-2.5 font-medium">Viewed</th>
+                      <th className="px-5 py-2.5 font-medium">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {trafficData.visitors.length === 0 ? (
+                      <tr><td colSpan={7} className="px-5 py-10 text-center text-white/25">No visitor data yet</td></tr>
+                    ) : trafficData.visitors.map((v) => {
+                      const secs = v.totalSeconds;
+                      const timeStr = secs > 0 ? (secs >= 60 ? `${Math.floor(secs / 60)}m ${secs % 60}s` : `${secs}s`) : '—';
+                      const ago = (() => {
+                        const diff = Date.now() - new Date(v.lastSeen).getTime();
+                        const mins = Math.floor(diff / 60000);
+                        if (mins < 60) return `${mins}m ago`;
+                        const hrs = Math.floor(mins / 60);
+                        if (hrs < 24) return `${hrs}h ago`;
+                        return `${Math.floor(hrs / 24)}d ago`;
+                      })();
+                      const eventLabels: Record<string, { label: string; color: string }> = {
+                        'download_click_mac': { label: 'Download Mac', color: 'text-emerald-400 bg-emerald-500/10' },
+                        'download_click_win': { label: 'Download Win', color: 'text-emerald-400 bg-emerald-500/10' },
+                        'download_click_nav': { label: 'Download', color: 'text-emerald-400 bg-emerald-500/10' },
+                        'download_click_cta_mac': { label: 'Download Mac', color: 'text-emerald-400 bg-emerald-500/10' },
+                        'download_click_cta_win': { label: 'Download Win', color: 'text-emerald-400 bg-emerald-500/10' },
+                        'download_click_comparison': { label: 'Download', color: 'text-emerald-400 bg-emerald-500/10' },
+                        'desktop_signup': { label: 'Signed up', color: 'text-cyan-400 bg-cyan-500/10' },
+                      };
+                      return (
+                        <tr key={v.visitorId} className="border-b border-white/[0.04] transition-colors hover:bg-white/[0.02]">
+                          <td className="px-5 py-2.5">
+                            <span className="text-white/40 font-mono text-[10px]">{v.visitorId.slice(0, 8)}</span>
+                            {v.device && <span className="ml-1.5 text-white/25 text-[10px] capitalize">{v.device}</span>}
+                            {v.country && <span className="ml-1 text-white/20 text-[10px]">{v.country}</span>}
+                          </td>
+                          <td className="px-5 py-2.5 text-white/40 text-[11px]">{ago}</td>
+                          <td className="px-5 py-2.5 text-white/40 text-[11px] truncate max-w-[150px]" title={v.referrer}>{v.referrer}</td>
+                          <td className="px-5 py-2.5 text-right text-white/50 tabular-nums">{v.pageViews}</td>
+                          <td className={`px-5 py-2.5 text-right tabular-nums ${secs >= 30 ? 'text-emerald-400/60' : secs > 0 ? 'text-amber-400/60' : 'text-white/20'}`}>{timeStr}</td>
+                          <td className="px-5 py-2.5">
+                            <div className="flex flex-wrap gap-1">
+                              {v.pages.slice(0, 4).map((p) => (
+                                <span key={p} className="text-[10px] font-mono text-white/30 bg-white/[0.04] px-1.5 py-0.5 rounded">{p}</span>
+                              ))}
+                              {v.pages.length > 4 && <span className="text-[10px] text-white/20">+{v.pages.length - 4}</span>}
+                            </div>
+                          </td>
+                          <td className="px-5 py-2.5">
+                            <div className="flex flex-wrap gap-1">
+                              {v.events.length === 0 ? (
+                                <span className="text-[10px] text-white/15">—</span>
+                              ) : v.events.map((e) => {
+                                const info = eventLabels[e] || { label: e, color: 'text-white/40 bg-white/[0.04]' };
+                                return (
+                                  <span key={e} className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${info.color}`}>{info.label}</span>
+                                );
+                              })}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
             </>
             )}

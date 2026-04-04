@@ -325,6 +325,9 @@ router.get('/traffic', async (_req: AuthRequest, res: Response, next: NextFuncti
       funnelDownload,
       funnelApp,
       funnelSignups,
+      avgTimeOnSite,
+      timePerPage,
+      visitors,
     ] = await Promise.all([
       // Current period
       db.getOne<any>(`SELECT COUNT(*)::text as c FROM page_views WHERE created_at > NOW() - INTERVAL '1 day' AND ${ADMIN_FILTER}`),
@@ -391,6 +394,42 @@ router.get('/traffic', async (_req: AuthRequest, res: Response, next: NextFuncti
       db.getOne<any>(`
         SELECT COUNT(*)::text as c FROM desktop_users
         WHERE created_at > NOW() - INTERVAL '30 days' AND LOWER(email) != $1`, [ADMIN_EMAIL]),
+      // Average time on site (from page_leave events)
+      db.getOne<any>(`
+        SELECT COALESCE(ROUND(AVG((meta->>'seconds')::numeric))::text, '0') as avg_seconds
+        FROM track_events
+        WHERE created_at > NOW() - INTERVAL '30 days' AND event = 'page_leave'
+          AND (meta->>'seconds')::numeric > 0 AND (meta->>'seconds')::numeric < 1800
+          AND ${ADMIN_FILTER_TE}`),
+      // Average time per page
+      db.getMany<any>(`
+        SELECT path, ROUND(AVG((meta->>'seconds')::numeric))::text as avg_seconds, COUNT(*)::text as samples
+        FROM track_events
+        WHERE created_at > NOW() - INTERVAL '30 days' AND event = 'page_leave'
+          AND (meta->>'seconds')::numeric > 0 AND (meta->>'seconds')::numeric < 1800
+          AND ${ADMIN_FILTER_TE}
+        GROUP BY path ORDER BY AVG((meta->>'seconds')::numeric) DESC LIMIT 20`),
+      // Individual visitors (last 30 days, most recent first)
+      db.getMany<any>(`
+        SELECT
+          pv.visitor_id,
+          MIN(pv.created_at)::text as first_seen,
+          MAX(pv.created_at)::text as last_seen,
+          COUNT(*)::text as page_views,
+          COALESCE((SELECT SUM((meta->>'seconds')::numeric) FROM track_events te
+            WHERE te.visitor_id = pv.visitor_id AND te.event = 'page_leave'
+            AND (meta->>'seconds')::numeric > 0 AND (meta->>'seconds')::numeric < 1800), 0)::text as total_seconds,
+          COALESCE(MAX(NULLIF(TRIM(pv.referrer), '')), '(direct)') as referrer,
+          MAX(pv.device) as device,
+          COALESCE(MAX(pv.country), '') as country,
+          ARRAY_AGG(DISTINCT pv.path ORDER BY pv.path) as pages,
+          COALESCE(ARRAY_AGG(DISTINCT te2.event) FILTER (WHERE te2.event IS NOT NULL AND te2.event != 'page_leave'), '{}') as events
+        FROM page_views pv
+        LEFT JOIN track_events te2 ON te2.visitor_id = pv.visitor_id AND te2.event != 'page_leave'
+        WHERE pv.created_at > NOW() - INTERVAL '30 days' AND pv.${ADMIN_FILTER}
+        GROUP BY pv.visitor_id
+        ORDER BY MAX(pv.created_at) DESC
+        LIMIT 50`),
     ]);
 
     res.json({
@@ -433,6 +472,24 @@ router.get('/traffic', async (_req: AuthRequest, res: Response, next: NextFuncti
         appOpened: parseInt(funnelApp?.c || '0'),
         desktopSignups: parseInt(funnelSignups?.c || '0'),
       },
+      avgTimeOnSite: parseInt(avgTimeOnSite?.avg_seconds || '0'),
+      timePerPage: timePerPage.map((r: any) => ({
+        path: r.path,
+        avgSeconds: parseInt(r.avg_seconds || '0'),
+        samples: parseInt(r.samples || '0'),
+      })),
+      visitors: visitors.map((v: any) => ({
+        visitorId: v.visitor_id,
+        firstSeen: v.first_seen,
+        lastSeen: v.last_seen,
+        pageViews: parseInt(v.page_views || '0'),
+        totalSeconds: parseInt(v.total_seconds || '0'),
+        referrer: v.referrer,
+        device: v.device || '',
+        country: v.country || '',
+        pages: v.pages || [],
+        events: (v.events || []).filter((e: string) => e),
+      })),
     });
   } catch (err) {
     next(err);
