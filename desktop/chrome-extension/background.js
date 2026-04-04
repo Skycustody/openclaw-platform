@@ -22,10 +22,9 @@ chrome.storage.local.get(['gatewayPort', 'relayPort', 'manualDisconnect'], (data
 
 function updateBadge(status) {
   connected = status === 'connected';
-  // Single dot character — Chrome renders this as a tiny colored badge
   chrome.action.setBadgeText({ text: connected ? '●' : '' });
   chrome.action.setBadgeBackgroundColor({ color: '#14120b' });
-  chrome.action.setBadgeTextColor({ color: '#22c55e' });
+  try { chrome.action.setBadgeTextColor({ color: '#22c55e' }); } catch {}
   chrome.action.setTitle({ title: connected ? 'Valnaa Relay: Connected to OpenClaw' : 'Valnaa Relay: Disconnected' });
 }
 
@@ -39,50 +38,45 @@ async function checkGatewayHealth() {
   }
 }
 
-function connect() {
-  if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) return;
-
-  const url = `ws://127.0.0.1:${relayPort}`;
-  try {
-    ws = new WebSocket(url);
-  } catch {
-    updateBadge('disconnected');
-    scheduleReconnect();
-    return;
-  }
-
-  ws.onopen = () => {
-    console.log('[valnaa-relay] Connected to gateway relay');
+async function connect() {
+  // First check if gateway is healthy
+  const healthy = await checkGatewayHealth();
+  if (healthy) {
     updateBadge('connected');
-  };
-
-  ws.onmessage = async (event) => {
-    try {
-      const msg = JSON.parse(event.data);
-      const response = await handleRelayMessage(msg);
-      if (response) ws.send(JSON.stringify(response));
-    } catch (err) {
-      console.error('[valnaa-relay] Message handling error:', err);
+    // Try WebSocket relay connection (optional — may not be running)
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      const url = `ws://127.0.0.1:${relayPort}`;
+      try {
+        ws = new WebSocket(url);
+        ws.onmessage = async (event) => {
+          try {
+            const msg = JSON.parse(event.data);
+            const response = await handleRelayMessage(msg);
+            if (response) ws.send(JSON.stringify(response));
+          } catch (err) {
+            console.error('[valnaa-relay] Message handling error:', err);
+          }
+        };
+        ws.onclose = () => { ws = null; };
+        ws.onerror = () => { /* relay not available, gateway still healthy */ };
+      } catch { /* ok */ }
     }
-  };
-
-  ws.onclose = () => {
-    console.log('[valnaa-relay] Disconnected');
+  } else {
     updateBadge('disconnected');
-    ws = null;
-    scheduleReconnect();
-  };
-
-  ws.onerror = () => {
-    updateBadge('disconnected');
-  };
+  }
+  scheduleReconnect();
 }
 
 function scheduleReconnect() {
   setTimeout(async () => {
+    if (manualDisconnect) return;
     const healthy = await checkGatewayHealth();
-    if (healthy) connect();
-    else scheduleReconnect();
+    if (healthy) {
+      updateBadge('connected');
+    } else {
+      updateBadge('disconnected');
+    }
+    scheduleReconnect();
   }, RECONNECT_INTERVAL);
 }
 
