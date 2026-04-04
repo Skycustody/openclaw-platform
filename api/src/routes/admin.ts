@@ -308,8 +308,15 @@ router.get('/traffic', async (_req: AuthRequest, res: Response, next: NextFuncti
       views30d,
       unique7d,
       unique30d,
+      // Previous period for comparison
+      prevViewsToday,
+      prevViews7d,
+      prevViews30d,
+      prevUnique7d,
+      prevUnique30d,
       topPages,
       topReferrers,
+      utmSources,
       devices,
       browsers,
       countries,
@@ -319,19 +326,44 @@ router.get('/traffic', async (_req: AuthRequest, res: Response, next: NextFuncti
       funnelApp,
       funnelSignups,
     ] = await Promise.all([
+      // Current period
       db.getOne<any>(`SELECT COUNT(*)::text as c FROM page_views WHERE created_at > NOW() - INTERVAL '1 day' AND ${ADMIN_FILTER}`),
       db.getOne<any>(`SELECT COUNT(*)::text as c FROM page_views WHERE created_at > NOW() - INTERVAL '7 days' AND ${ADMIN_FILTER}`),
       db.getOne<any>(`SELECT COUNT(*)::text as c FROM page_views WHERE created_at > NOW() - INTERVAL '30 days' AND ${ADMIN_FILTER}`),
       db.getOne<any>(`SELECT COUNT(DISTINCT visitor_id)::text as c FROM page_views WHERE created_at > NOW() - INTERVAL '7 days' AND ${ADMIN_FILTER}`),
       db.getOne<any>(`SELECT COUNT(DISTINCT visitor_id)::text as c FROM page_views WHERE created_at > NOW() - INTERVAL '30 days' AND ${ADMIN_FILTER}`),
+      // Previous period (for week-over-week / period-over-period comparison)
+      db.getOne<any>(`SELECT COUNT(*)::text as c FROM page_views WHERE created_at BETWEEN NOW() - INTERVAL '2 days' AND NOW() - INTERVAL '1 day' AND ${ADMIN_FILTER}`),
+      db.getOne<any>(`SELECT COUNT(*)::text as c FROM page_views WHERE created_at BETWEEN NOW() - INTERVAL '14 days' AND NOW() - INTERVAL '7 days' AND ${ADMIN_FILTER}`),
+      db.getOne<any>(`SELECT COUNT(*)::text as c FROM page_views WHERE created_at BETWEEN NOW() - INTERVAL '60 days' AND NOW() - INTERVAL '30 days' AND ${ADMIN_FILTER}`),
+      db.getOne<any>(`SELECT COUNT(DISTINCT visitor_id)::text as c FROM page_views WHERE created_at BETWEEN NOW() - INTERVAL '14 days' AND NOW() - INTERVAL '7 days' AND ${ADMIN_FILTER}`),
+      db.getOne<any>(`SELECT COUNT(DISTINCT visitor_id)::text as c FROM page_views WHERE created_at BETWEEN NOW() - INTERVAL '60 days' AND NOW() - INTERVAL '30 days' AND ${ADMIN_FILTER}`),
+      // Top pages
       db.getMany<any>(`
         SELECT path, COUNT(*)::text as views, COUNT(DISTINCT visitor_id)::text as uniques
         FROM page_views WHERE created_at > NOW() - INTERVAL '30 days' AND ${ADMIN_FILTER}
         GROUP BY path ORDER BY COUNT(*) DESC LIMIT 20`),
+      // Top referrers with signup count per referrer domain
       db.getMany<any>(`
-        SELECT COALESCE(NULLIF(TRIM(referrer), ''), '(direct)') as ref, COUNT(*)::text as views
-        FROM page_views WHERE created_at > NOW() - INTERVAL '30 days' AND ${ADMIN_FILTER}
+        SELECT
+          COALESCE(NULLIF(TRIM(pv.referrer), ''), '(direct)') as ref,
+          COUNT(*)::text as views,
+          COUNT(DISTINCT CASE WHEN te.event IS NOT NULL THEN pv.visitor_id END)::text as signups
+        FROM page_views pv
+        LEFT JOIN track_events te ON te.visitor_id = pv.visitor_id AND te.event = 'desktop_signup'
+        WHERE pv.created_at > NOW() - INTERVAL '30 days' AND pv.${ADMIN_FILTER}
         GROUP BY 1 ORDER BY COUNT(*) DESC LIMIT 15`),
+      // UTM campaign breakdown
+      db.getMany<any>(`
+        SELECT
+          COALESCE(NULLIF(TRIM(utm_source), ''), '(none)') as source,
+          COALESCE(NULLIF(TRIM(utm_medium), ''), '') as medium,
+          COUNT(*)::text as views,
+          COUNT(DISTINCT visitor_id)::text as uniques
+        FROM page_views
+        WHERE created_at > NOW() - INTERVAL '30 days' AND ${ADMIN_FILTER}
+          AND utm_source IS NOT NULL AND TRIM(utm_source) != ''
+        GROUP BY 1, 2 ORDER BY COUNT(*) DESC LIMIT 15`),
       db.getMany<any>(`
         SELECT device, COUNT(*)::text as views FROM page_views WHERE created_at > NOW() - INTERVAL '30 days' AND ${ADMIN_FILTER}
         GROUP BY device ORDER BY COUNT(*) DESC`),
@@ -368,6 +400,13 @@ router.get('/traffic', async (_req: AuthRequest, res: Response, next: NextFuncti
       views30d: parseInt(views30d?.c || '0'),
       uniqueVisitors7d: parseInt(unique7d?.c || '0'),
       uniqueVisitors30d: parseInt(unique30d?.c || '0'),
+      prev: {
+        viewsToday: parseInt(prevViewsToday?.c || '0'),
+        views7d: parseInt(prevViews7d?.c || '0'),
+        views30d: parseInt(prevViews30d?.c || '0'),
+        uniqueVisitors7d: parseInt(prevUnique7d?.c || '0'),
+        uniqueVisitors30d: parseInt(prevUnique30d?.c || '0'),
+      },
       topPages: topPages.map((r: any) => ({
         path: r.path,
         views: parseInt(r.views || '0'),
@@ -376,6 +415,13 @@ router.get('/traffic', async (_req: AuthRequest, res: Response, next: NextFuncti
       topReferrers: topReferrers.map((r: any) => ({
         referrer: r.ref,
         views: parseInt(r.views || '0'),
+        signups: parseInt(r.signups || '0'),
+      })),
+      utmSources: utmSources.map((r: any) => ({
+        source: r.source,
+        medium: r.medium,
+        views: parseInt(r.views || '0'),
+        uniques: parseInt(r.uniques || '0'),
       })),
       devices: devices.map((r: any) => ({ device: r.device, views: parseInt(r.views || '0') })),
       browsers: browsers.map((r: any) => ({ browser: r.browser, views: parseInt(r.views || '0') })),

@@ -6,7 +6,7 @@ import {
   Users, Server, Coins, TrendingUp, Activity, Search,
   Shield, Loader2, RefreshCw, AlertTriangle, Edit3,
   BarChart3, Zap, HardDrive, LogOut, ChevronLeft, ChevronRight,
-  DollarSign, MessageSquare, Star, X, Monitor, Download, Clock, Eye, Globe2,
+  DollarSign, MessageSquare, Star, X, Monitor, Download, Clock, Eye, Globe2, TrendingDown, Link, ArrowUpRight, ArrowDownRight,
 } from 'lucide-react';
 
 interface PlanDetail {
@@ -161,8 +161,16 @@ interface TrafficData {
   views30d: number;
   uniqueVisitors7d: number;
   uniqueVisitors30d: number;
+  prev: {
+    viewsToday: number;
+    views7d: number;
+    views30d: number;
+    uniqueVisitors7d: number;
+    uniqueVisitors30d: number;
+  };
   topPages: Array<{ path: string; views: number; uniques: number }>;
-  topReferrers: Array<{ referrer: string; views: number }>;
+  topReferrers: Array<{ referrer: string; views: number; signups: number }>;
+  utmSources: Array<{ source: string; medium: string; views: number; uniques: number }>;
   devices: Array<{ device: string; views: number }>;
   browsers: Array<{ browser: string; views: number }>;
   countries: Array<{ country: string; views: number }>;
@@ -1379,13 +1387,13 @@ export default function AdminPanel() {
               </div>
             )}
 
-            {/* Stat cards */}
+            {/* Stat cards with week-over-week change */}
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-              <StatCard icon={Globe2} label="Views (24h)" value={String(trafficData.viewsToday)} sub="page views" color="cyan" />
-              <StatCard icon={Activity} label="Views (7d)" value={String(trafficData.views7d)} sub="last week" color="blue" />
-              <StatCard icon={BarChart3} label="Views (30d)" value={String(trafficData.views30d)} sub="last month" color="purple" />
-              <StatCard icon={Users} label="Unique (7d)" value={String(trafficData.uniqueVisitors7d)} sub="unique visitors" color="green" />
-              <StatCard icon={Users} label="Unique (30d)" value={String(trafficData.uniqueVisitors30d)} sub="unique visitors" color="amber" />
+              <StatCard icon={Globe2} label="Views (24h)" value={String(trafficData.viewsToday)} sub="page views" color="cyan" prev={trafficData.prev.viewsToday} />
+              <StatCard icon={Activity} label="Views (7d)" value={String(trafficData.views7d)} sub="vs prev 7 days" color="blue" prev={trafficData.prev.views7d} />
+              <StatCard icon={BarChart3} label="Views (30d)" value={String(trafficData.views30d)} sub="vs prev 30 days" color="purple" prev={trafficData.prev.views30d} />
+              <StatCard icon={Users} label="Unique (7d)" value={String(trafficData.uniqueVisitors7d)} sub="vs prev 7 days" color="green" prev={trafficData.prev.uniqueVisitors7d} />
+              <StatCard icon={Users} label="Unique (30d)" value={String(trafficData.uniqueVisitors30d)} sub="vs prev 30 days" color="amber" prev={trafficData.prev.uniqueVisitors30d} />
             </div>
 
             {/* Conversion funnel */}
@@ -1496,21 +1504,64 @@ export default function AdminPanel() {
                     <tr className="border-b border-white/[0.06] text-left text-[11px] uppercase tracking-wider text-white/25">
                       <th className="px-5 py-2.5 font-medium">Source</th>
                       <th className="px-5 py-2.5 text-right font-medium">Views</th>
+                      <th className="px-5 py-2.5 text-right font-medium">Signups</th>
+                      <th className="px-5 py-2.5 text-right font-medium">Conv.</th>
                     </tr>
                   </thead>
                   <tbody>
                     {trafficData.topReferrers.length === 0 ? (
-                      <tr><td colSpan={2} className="px-5 py-10 text-center text-white/25">No data yet</td></tr>
-                    ) : trafficData.topReferrers.map((r, i) => (
-                      <tr key={r.referrer} className={`border-b border-white/[0.04] transition-colors hover:bg-white/[0.02] ${i === 0 ? 'bg-white/[0.01]' : ''}`}>
-                        <td className="px-5 py-2.5 text-white/60 truncate max-w-[280px]" title={r.referrer}>{r.referrer}</td>
-                        <td className="px-5 py-2.5 text-right text-white/50 tabular-nums font-medium">{r.views}</td>
+                      <tr><td colSpan={4} className="px-5 py-10 text-center text-white/25">No data yet</td></tr>
+                    ) : trafficData.topReferrers.map((r, i) => {
+                      const convRate = r.views > 0 ? Math.round((r.signups / r.views) * 100) : 0;
+                      return (
+                        <tr key={r.referrer} className={`border-b border-white/[0.04] transition-colors hover:bg-white/[0.02] ${i === 0 ? 'bg-white/[0.01]' : ''}`}>
+                          <td className="px-5 py-2.5 text-white/60 truncate max-w-[200px]" title={r.referrer}>{r.referrer}</td>
+                          <td className="px-5 py-2.5 text-right text-white/50 tabular-nums font-medium">{r.views}</td>
+                          <td className="px-5 py-2.5 text-right text-white/50 tabular-nums">{r.signups}</td>
+                          <td className={`px-5 py-2.5 text-right tabular-nums font-medium ${convRate > 0 ? 'text-emerald-400/70' : 'text-white/20'}`}>
+                            {convRate > 0 ? `${convRate}%` : '—'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* UTM campaigns — which posts/ads drive traffic */}
+            {trafficData.utmSources.length > 0 && (
+              <div className="rounded-xl border border-white/[0.06] overflow-hidden">
+                <div className="border-b border-white/[0.06] bg-white/[0.03] px-5 py-3.5 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Link className="h-4 w-4 text-white/30" />
+                    <h3 className="text-[13px] font-semibold text-white">Campaign sources</h3>
+                  </div>
+                  <span className="text-[11px] text-white/20 font-medium px-1.5 py-0.5 rounded bg-white/[0.04]">30d</span>
+                </div>
+                <p className="px-5 py-2 text-[11px] text-white/25 border-b border-white/[0.04]">Traffic from links with UTM parameters (e.g. Reddit posts, ads, newsletters)</p>
+                <table className="w-full text-[12px]">
+                  <thead>
+                    <tr className="border-b border-white/[0.06] text-left text-[11px] uppercase tracking-wider text-white/25">
+                      <th className="px-5 py-2.5 font-medium">Source</th>
+                      <th className="px-5 py-2.5 font-medium">Medium</th>
+                      <th className="px-5 py-2.5 text-right font-medium">Views</th>
+                      <th className="px-5 py-2.5 text-right font-medium">Uniques</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {trafficData.utmSources.map((u, i) => (
+                      <tr key={`${u.source}-${u.medium}`} className={`border-b border-white/[0.04] transition-colors hover:bg-white/[0.02] ${i === 0 ? 'bg-white/[0.01]' : ''}`}>
+                        <td className="px-5 py-2.5 text-white/60 font-medium">{u.source}</td>
+                        <td className="px-5 py-2.5 text-white/40">{u.medium || '(none)'}</td>
+                        <td className="px-5 py-2.5 text-right text-white/50 tabular-nums font-medium">{u.views}</td>
+                        <td className="px-5 py-2.5 text-right text-white/40 tabular-nums">{u.uniques}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-            </div>
+            )}
 
             {/* Device / Browser / Country breakdown */}
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -1869,8 +1920,8 @@ export default function AdminPanel() {
   );
 }
 
-function StatCard({ icon: Icon, label, value, sub, color }: {
-  icon: any; label: string; value: string; sub: string; color: string;
+function StatCard({ icon: Icon, label, value, sub, color, prev }: {
+  icon: any; label: string; value: string; sub: string; color: string; prev?: number;
 }) {
   const colors: Record<string, string> = {
     blue: 'bg-blue-500/10 text-blue-400',
@@ -1890,6 +1941,8 @@ function StatCard({ icon: Icon, label, value, sub, color }: {
     cyan: 'border-cyan-500/10',
     orange: 'border-orange-500/10',
   };
+  const current = parseInt(value) || 0;
+  const change = prev != null && prev > 0 ? Math.round(((current - prev) / prev) * 100) : null;
   return (
     <div className={`rounded-xl border ${borderColors[color] || 'border-white/[0.06]'} bg-white/[0.02] p-4 transition-colors hover:bg-white/[0.04]`}>
       <div className="flex items-center gap-2.5 mb-3">
@@ -1898,7 +1951,15 @@ function StatCard({ icon: Icon, label, value, sub, color }: {
         </div>
         <span className="text-[12px] text-white/40 font-medium">{label}</span>
       </div>
-      <p className="text-[26px] font-bold text-white tabular-nums tracking-tight">{value}</p>
+      <div className="flex items-end gap-2">
+        <p className="text-[26px] font-bold text-white tabular-nums tracking-tight">{value}</p>
+        {change !== null && (
+          <div className={`flex items-center gap-0.5 mb-1 text-[11px] font-semibold ${change > 0 ? 'text-emerald-400' : change < 0 ? 'text-red-400' : 'text-white/25'}`}>
+            {change > 0 ? <ArrowUpRight className="h-3 w-3" /> : change < 0 ? <ArrowDownRight className="h-3 w-3" /> : null}
+            {change > 0 ? '+' : ''}{change}%
+          </div>
+        )}
+      </div>
       <p className="text-[11px] text-white/25 mt-1">{sub}</p>
     </div>
   );
