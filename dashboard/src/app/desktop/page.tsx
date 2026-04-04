@@ -433,7 +433,7 @@ export default function DesktopPage() {
                 </span>
                 <span className="inline-flex items-center gap-1.5">
                   <BadgeCheck className="size-3.5 shrink-0 opacity-70" />
-                  Free trial
+                  Free trial, no credit card needed
                 </span>
               </div>
             </div>
