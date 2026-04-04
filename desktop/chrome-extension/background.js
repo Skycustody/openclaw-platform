@@ -8,15 +8,45 @@ let ws = null;
 let connected = false;
 let paused = false; // user manually disconnected
 
-// ── Badge ──
-function setBadge(isConnected) {
+// ── Icon with green dot ──
+function drawDotIcon(size) {
+  return new Promise((resolve) => {
+    const canvas = new OffscreenCanvas(size, size);
+    const ctx = canvas.getContext('2d');
+    fetch(chrome.runtime.getURL(`icons/icon${size}.png`))
+      .then(r => r.blob())
+      .then(blob => createImageBitmap(blob))
+      .then(img => {
+        ctx.drawImage(img, 0, 0, size, size);
+        const r = Math.round(size * 0.18);
+        const cx = size - r - 1;
+        const cy = size - r - 1;
+        ctx.beginPath(); ctx.arc(cx, cy, r + 1, 0, Math.PI * 2); ctx.fillStyle = '#14120b'; ctx.fill();
+        ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fillStyle = '#22c55e'; ctx.fill();
+        resolve(ctx.getImageData(0, 0, size, size));
+      })
+      .catch(() => resolve(null));
+  });
+}
+
+async function setBadge(isConnected) {
   connected = isConnected;
-  // Green checkmark when connected, empty when not
-  chrome.action.setBadgeText({ text: isConnected ? '\u2713' : '' });
-  chrome.action.setBadgeBackgroundColor({ color: '#16a34a' });
+  chrome.action.setBadgeText({ text: '' });
   chrome.action.setTitle({
     title: isConnected ? 'Valnaa: Connected to OpenClaw' : (paused ? 'Valnaa: Disconnected by user' : 'Valnaa: Not connected'),
   });
+  if (isConnected) {
+    try {
+      const [i16, i32, i48] = await Promise.all([drawDotIcon(16), drawDotIcon(32), drawDotIcon(48)]);
+      const imageData = {};
+      if (i16) imageData[16] = i16;
+      if (i32) imageData[32] = i32;
+      if (i48) imageData[48] = i48;
+      if (Object.keys(imageData).length) chrome.action.setIcon({ imageData });
+    } catch {}
+  } else {
+    chrome.action.setIcon({ path: { 16: 'icons/icon16.png', 32: 'icons/icon32.png', 48: 'icons/icon48.png' } });
+  }
 }
 
 // ── Health ──
