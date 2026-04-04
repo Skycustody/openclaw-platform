@@ -161,9 +161,24 @@ async function handleRelayMessage(msg) {
   }
 }
 
-// Periodic health check
+let manualDisconnect = false;
+
+// Listen for popup messages
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg.action === 'reconnect') {
+    manualDisconnect = false;
+    connect();
+  }
+  if (msg.action === 'disconnect') {
+    manualDisconnect = true;
+    if (ws) { ws.close(); ws = null; }
+    updateBadge('disconnected');
+  }
+});
+
+// Periodic health check (skip if manually disconnected)
 setInterval(async () => {
-  if (!connected) {
+  if (!connected && !manualDisconnect) {
     const healthy = await checkGatewayHealth();
     if (healthy) connect();
   }

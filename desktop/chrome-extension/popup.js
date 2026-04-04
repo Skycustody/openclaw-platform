@@ -28,9 +28,14 @@ async function checkStatus() {
 
 document.getElementById('reconnect-btn').addEventListener('click', async () => {
   text.textContent = 'Reconnecting...';
-  // Send message to background to reconnect
   chrome.runtime.sendMessage({ action: 'reconnect' });
   setTimeout(checkStatus, 2000);
+});
+
+document.getElementById('disconnect-btn').addEventListener('click', async () => {
+  chrome.runtime.sendMessage({ action: 'disconnect' });
+  dot.className = 'dot disconnected';
+  text.textContent = 'Disconnected (manual)';
 });
 
 checkStatus();
