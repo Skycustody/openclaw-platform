@@ -28,6 +28,10 @@ mac:
       arch:
         - x64
         - arm64
+    - target: zip
+      arch:
+        - x64
+        - arm64
   icon: assets/icon.png
   darkModeSupport: true
   hardenedRuntime: true
