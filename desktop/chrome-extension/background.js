@@ -12,15 +12,17 @@ let gatewayPort = DEFAULT_GATEWAY_PORT;
 let relayPort = DEFAULT_RELAY_PORT;
 
 // Load saved settings
-chrome.storage.local.get(['gatewayPort', 'relayPort'], (data) => {
+chrome.storage.local.get(['gatewayPort', 'relayPort', 'manualDisconnect'], (data) => {
   if (data.gatewayPort) gatewayPort = data.gatewayPort;
   if (data.relayPort) relayPort = data.relayPort;
-  connect();
+  manualDisconnect = data.manualDisconnect === true;
+  if (!manualDisconnect) connect();
+  else updateBadge('disconnected');
 });
 
 function updateBadge(status) {
   connected = status === 'connected';
-  chrome.action.setBadgeText({ text: connected ? ' ' : '' });
+  chrome.action.setBadgeText({ text: connected ? '\u200a' : '' });
   chrome.action.setBadgeBackgroundColor({ color: '#22c55e' });
   chrome.action.setTitle({ title: connected ? 'Valnaa Relay: Connected to OpenClaw' : 'Valnaa Relay: Disconnected' });
 }
@@ -163,14 +165,22 @@ async function handleRelayMessage(msg) {
 
 let manualDisconnect = false;
 
+// Restore disconnect state from storage
+chrome.storage.local.get(['manualDisconnect'], (data) => {
+  manualDisconnect = data.manualDisconnect === true;
+  if (manualDisconnect) updateBadge('disconnected');
+});
+
 // Listen for popup messages
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.action === 'reconnect') {
     manualDisconnect = false;
+    chrome.storage.local.set({ manualDisconnect: false });
     connect();
   }
   if (msg.action === 'disconnect') {
     manualDisconnect = true;
+    chrome.storage.local.set({ manualDisconnect: true });
     if (ws) { ws.close(); ws = null; }
     updateBadge('disconnected');
   }
