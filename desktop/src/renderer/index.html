@@ -1811,6 +1811,14 @@
           <button type="button" class="agent-toolbar-btn" id="agents-refresh-btn" style="font-size: 12px;">Refresh</button>
         </div>
 
+        <div style="padding: 12px 14px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between;">
+          <div>
+            <div style="font-size: 14px; font-weight: 500; color: #f0efea;">Browser Relay</div>
+            <div style="font-size: 11px; color: rgba(255,255,255,0.35); margin-top: 2px;">Let your agent browse the web through Chrome</div>
+          </div>
+          <button class="agent-toolbar-btn primary" style="font-size: 11px; flex-shrink: 0;" id="agents-browser-relay-btn">Install Extension</button>
+        </div>
+
         <div id="agents-installed" style="margin-bottom: 24px;">
           <h4 style="font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px;">Installed</h4>
           <div id="agents-installed-list" style="display: grid; gap: 8px;"></div>
@@ -4112,6 +4120,20 @@
       await oc.agentsDelete(id);
       await refreshAgentsPanel();
     };
+
+    document.getElementById('agents-browser-relay-btn').addEventListener('click', async () => {
+      const btn = document.getElementById('agents-browser-relay-btn');
+      btn.textContent = 'Preparing...';
+      btn.disabled = true;
+      try {
+        await oc.copyChromeExtensionToDownloads();
+        btn.textContent = 'Copied to Downloads';
+        setTimeout(() => { btn.textContent = 'Install Extension'; btn.disabled = false; }, 3000);
+      } catch {
+        btn.textContent = 'Failed';
+        setTimeout(() => { btn.textContent = 'Install Extension'; btn.disabled = false; }, 2000);
+      }
+    });
 
     document.getElementById('agents-search').addEventListener('input', () => renderCatalogAgents());
     document.getElementById('agents-refresh-btn').addEventListener('click', () => {
