@@ -1,12 +1,15 @@
 ; Valnaa dark theme for NSIS installer
+; MUI_BGCOLOR is already defined by electron-builder — redefine it
 !macro customHeader
+  !ifdef MUI_BGCOLOR
+    !undef MUI_BGCOLOR
+  !endif
   !define MUI_BGCOLOR "18181B"
-  !define MUI_TEXTCOLOR "FAFAFA"
-  !define MUI_INSTFILESPAGE_COLORS "FAFAFA 18181B"
-  !define MUI_INSTFILESPAGE_PROGRESSBAR_COLORS "A855F7 18181B"
-!macroend
 
-!macro customInit
-  ; Set dark background color on the installer window
-  SetBrandingImage /IMGID=1046 /RESIZETOFIT ""
+  !ifdef MUI_TEXTCOLOR
+    !undef MUI_TEXTCOLOR
+  !endif
+  !define MUI_TEXTCOLOR "FAFAFA"
+
+  !define MUI_INSTFILESPAGE_COLORS "FAFAFA 18181B"
 !macroend
