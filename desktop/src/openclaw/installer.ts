@@ -114,9 +114,40 @@ export async function installOpenClaw(onProgress: ProgressCallback): Promise<str
   logApp('info', `Running official install script: ${cmd}`);
 
   return new Promise((resolve, reject) => {
-    const proc = spawn('bash', ['-c', cmd], {
+    let shellName: string;
+    let shellArgs: string[];
+    if (IS_WIN) {
+      const windir = process.env.SystemRoot || 'C:\\Windows';
+      shellName = `${windir}\\System32\\cmd.exe`;
+      shellArgs = ['/c', cmd];
+    } else {
+      shellName = 'bash';
+      shellArgs = ['-c', cmd];
+    }
+
+    // On Windows, Electron may not inherit the full system PATH — ensure
+    // critical dirs (System32, PowerShell) are present so the install script
+    // can find powershell.exe and network utilities.
+    const envPath = process.env.PATH || '';
+    let fullPath = envPath;
+    if (IS_WIN) {
+      const windir = process.env.SystemRoot || 'C:\\Windows';
+      const requiredDirs = [
+        `${windir}\\System32`,
+        `${windir}\\System32\\WindowsPowerShell\\v1.0`,
+        `${windir}\\System32\\Wbem`,
+        windir,
+      ];
+      for (const dir of requiredDirs) {
+        if (!fullPath.toLowerCase().includes(dir.toLowerCase())) {
+          fullPath = `${fullPath};${dir}`;
+        }
+      }
+    }
+
+    const proc = spawn(shellName, shellArgs, {
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env },
+      env: { ...process.env, PATH: fullPath },
       shell: false,
     });
 

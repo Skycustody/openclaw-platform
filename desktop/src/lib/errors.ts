@@ -53,6 +53,13 @@ export function classifyProcessError(code: number | null, signal: string | null,
 }
 
 export function classifyInstallError(stderr: string): AppError {
+  if (stderr.includes('cannot find the path specified') || stderr.includes('is not recognized as an internal')) {
+    return new AppError(
+      'System shell not found. Ensure Windows system directories are in your PATH and try again.',
+      stderr,
+      true,
+    );
+  }
   if (stderr.includes('EACCES')) {
     return new AppError(
       'Permission error during installation. The app will try an alternative install path.',
