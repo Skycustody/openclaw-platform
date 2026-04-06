@@ -624,14 +624,14 @@ export default function DesktopPage() {
                 </ul>
               </div>
               <div>
-                <div className="overflow-hidden rounded-[12px] border border-white/[0.08]" style={{ boxShadow: '0 28px 70px rgba(0,0,0,0.4), 0 14px 32px rgba(0,0,0,0.25)' }}>
+                <div className="aspect-square overflow-hidden rounded-[12px] border border-white/[0.08]" style={{ boxShadow: '0 28px 70px rgba(0,0,0,0.4), 0 14px 32px rgba(0,0,0,0.25)' }}>
                   <Image
                     src="/app-screenshots/claude-code-settings.png"
                     alt="Claude Code connected as AI model in Valnaa settings"
-                    width={2800}
+                    width={2304}
                     height={2304}
                     quality={95}
-                    className="block w-full rounded-[12px]"
+                    className="block h-full w-full object-cover object-top rounded-[12px]"
                   />
                 </div>
               </div>
@@ -642,18 +642,16 @@ export default function DesktopPage() {
         {/* Agent Store Section */}
         <section className="border-t border-white/[0.06] px-5 py-20 md:py-28" style={{ backgroundColor: BG }}>
           <div className="mx-auto max-w-[1280px]">
-            <div className="grid items-center gap-12 md:grid-cols-[1.4fr_1fr] md:gap-16">
+            <div className="grid items-center gap-12 md:grid-cols-2 md:gap-16">
               <div>
-                <p className="mb-3 text-center text-[11px] font-medium uppercase tracking-[0.15em] text-white/[0.25]">
-                  Agent Store
-                </p>
-                <div className="overflow-hidden rounded-[10px]" style={{ boxShadow: '0 28px 70px rgba(0,0,0,0.4), 0 14px 32px rgba(0,0,0,0.25)' }}>
+                <div className="aspect-square overflow-hidden rounded-[12px] border border-white/[0.08]" style={{ boxShadow: '0 28px 70px rgba(0,0,0,0.4), 0 14px 32px rgba(0,0,0,0.25)' }}>
                   <Image
                     src="/app-screenshots/agent-store.png"
                     alt="Agent Store showing 28 installable AI employees"
-                    width={1440}
-                    height={900}
-                    className="block w-full rounded-[10px]"
+                    width={2304}
+                    height={2304}
+                    quality={95}
+                    className="block h-full w-full object-cover object-top rounded-[12px]"
                   />
                 </div>
               </div>
