@@ -1,0 +1,189 @@
+{
+  "total": 23,
+  "skills": [
+    {
+      "id": "agent-browser-clawdbot",
+      "name": "Agent Browser",
+      "description": "Headless browser automation using accessibility tree snapshots and ref-based element selection for deterministic web interactions",
+      "category": "development",
+      "verified": true,
+      "essential": false
+    },
+    {
+      "id": "agent-orchestrator",
+      "name": "Agent Orchestrator",
+      "description": "Meta-agent skill for orchestrating complex tasks through autonomous sub-agents with file-based communication",
+      "category": "productivity",
+      "verified": true,
+      "essential": false
+    },
+    {
+      "id": "atxp-cli",
+      "name": "ATXP Agent Infrastructure",
+      "description": "Agent wallet, identity, and paid tools: web search, AI image/video/music generation, email, SMS, voice calls, and 100+ LLM models",
+      "category": "development",
+      "verified": true,
+      "essential": false
+    },
+    {
+      "id": "brainz-calendar",
+      "name": "Brainz Calendar",
+      "description": "Manage Google Calendar events using gcalcli. Create, list, and delete calendar events from the CLI",
+      "category": "productivity",
+      "verified": true,
+      "essential": true
+    },
+    {
+      "id": "byterover",
+      "name": "ByteRover Knowledge Management",
+      "description": "Knowledge management for AI agents. Store and retrieve project patterns, decisions, and architectural rules using the brv CLI",
+      "category": "memory",
+      "verified": true,
+      "essential": false
+    },
+    {
+      "id": "capability-evolver",
+      "name": "Capability Evolver",
+      "description": "Self-evolution engine for AI agents. Analyzes runtime history to identify improvements and applies protocol-constrained evolution",
+      "category": "development",
+      "verified": true,
+      "essential": false
+    },
+    {
+      "id": "daily-report-writer",
+      "name": "Daily Report Writer",
+      "description": "Generate daily work report Markdown drafts from highlights and blockers, saved to the reports directory",
+      "category": "productivity",
+      "verified": true,
+      "essential": true
+    },
+    {
+      "id": "deep-research-pro",
+      "name": "Deep Research Pro",
+      "description": "Multi-source deep research agent. Searches the web via DuckDuckGo, synthesizes findings, and delivers cited reports with no API keys required",
+      "category": "research",
+      "verified": true,
+      "essential": true
+    },
+    {
+      "id": "elite-longterm-memory",
+      "name": "Elite Longterm Memory",
+      "description": "Ultimate AI agent memory system combining WAL protocol, LanceDB vector search, git-notes knowledge graph, curated archives, and optional cloud backup",
+      "category": "memory",
+      "verified": true,
+      "essential": true
+    },
+    {
+      "id": "exa-web-search-free",
+      "name": "Exa Web Search (Free)",
+      "description": "Free AI-powered neural search for web content, code examples, and company research via Exa MCP with no API key needed",
+      "category": "research",
+      "verified": true,
+      "essential": false
+    },
+    {
+      "id": "file-manager-secure",
+      "name": "File Manager Secure",
+      "description": "Safe file operations with dry-run mode, trash recovery, path validation, and bulk confirmation to prevent data loss",
+      "category": "file-management",
+      "verified": true,
+      "essential": true
+    },
+    {
+      "id": "google-search",
+      "name": "Google Search",
+      "description": "Search the web using Google Custom Search Engine API for live information, documentation, and topic research",
+      "category": "research",
+      "verified": true,
+      "essential": true
+    },
+    {
+      "id": "inter-agent-communication",
+      "name": "Inter-Agent Communication",
+      "description": "Cross-session agent communication using sessions_spawn for creating labeled subagent channels between agents",
+      "category": "development",
+      "verified": true,
+      "essential": false
+    },
+    {
+      "id": "mh-wacli",
+      "name": "WhatsApp CLI",
+      "description": "Send WhatsApp messages, search and sync WhatsApp history via the wacli CLI for messaging third parties",
+      "category": "communication",
+      "verified": true,
+      "essential": false
+    },
+    {
+      "id": "multi-agent-coordinator",
+      "name": "Multi-Agent Coordinator",
+      "description": "Coordinate multiple sub-agents (Learner, Critic, etc.) for complex tasks with agent creation, communication, and result integration",
+      "category": "development",
+      "verified": true,
+      "essential": false
+    },
+    {
+      "id": "notion-skill",
+      "name": "Notion",
+      "description": "Work with Notion pages and databases via the official Notion API for reading, creating, querying, and updating content",
+      "category": "productivity",
+      "verified": true,
+      "essential": true
+    },
+    {
+      "id": "porteden-email",
+      "name": "Porteden Email",
+      "description": "Secured email management for Gmail, Outlook, and Exchange. List, search, read, send, reply, forward, and delete emails across multiple accounts",
+      "category": "communication",
+      "verified": true,
+      "essential": true
+    },
+    {
+      "id": "self-improving",
+      "name": "Self-Improving Agent",
+      "description": "Self-reflection, self-criticism, and self-learning with tiered memory. Agent evaluates its own work, catches mistakes, and improves permanently",
+      "category": "memory",
+      "verified": true,
+      "essential": false
+    },
+    {
+      "id": "slack-personal",
+      "name": "Slack Personal",
+      "description": "Read, send, search, and manage Slack messages and DMs via the slk CLI with auto-authentication from the Slack desktop app",
+      "category": "communication",
+      "verified": true,
+      "essential": true
+    },
+    {
+      "id": "social-media-scheduler",
+      "name": "Social Media Scheduler",
+      "description": "Plan, draft, and organize social media content across platforms with content calendars, platform-optimized posts, and hashtag strategies",
+      "category": "social",
+      "verified": true,
+      "essential": true
+    },
+    {
+      "id": "summarize-pro",
+      "name": "Summarize Pro",
+      "description": "20-feature AI summarizer with multiple formats, languages, and export options. All processing local with no external API calls",
+      "category": "productivity",
+      "verified": true,
+      "essential": false
+    },
+    {
+      "id": "web-pilot",
+      "name": "Web Pilot",
+      "description": "Search the web and read page contents without API keys. DuckDuckGo/Brave/Google search, persistent browser sessions, and file downloads via Playwright",
+      "category": "research",
+      "verified": true,
+      "essential": false
+    },
+    {
+      "id": "x-research",
+      "name": "X/Twitter Research",
+      "description": "General-purpose X/Twitter research agent for real-time perspectives, dev discussions, product feedback, breaking news, and expert opinions",
+      "category": "social",
+      "verified": true,
+      "essential": false
+    }
+  ]
+}

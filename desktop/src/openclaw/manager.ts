@@ -1,4 +1,4 @@
-import { ChildProcess, spawn } from 'child_process';
+import { ChildProcess, spawn, execFile } from 'child_process';
 import { EventEmitter } from 'events';
 import fs from 'fs';
 import http from 'http';
@@ -12,6 +12,7 @@ import { startHealthPolling, stopHealthPolling, HealthStatus } from './health';
 import { findAvailablePort, PortResult } from '../lib/ports';
 import { loadRuntime, RuntimeType, isSandboxReady, waitForSandboxReady, ensurePortForward, stopPortForward, OPENCLAW_PORT, getActiveGatewayPort, readSandboxGatewayToken, clearSandboxTokenCache, clearSandboxNameCache, dockerBin, isIntelMac, isSidecarReady, setupOpenShellSidecar, ensureSidecarNetworking, ensureSandboxGatewayRunning, ensureSidecarBinaryHealthy } from '../lib/runtime';
 import { freePort } from '../lib/ports';
+import { startRelay, stopRelay } from '../lib/relay';
 
 function checkPortReady(port: number): Promise<boolean> {
   return new Promise((resolve) => {
@@ -56,8 +57,34 @@ const MAX_RESTART_ATTEMPTS = 3;
 const RESTART_BACKOFF_MS = [2000, 5000, 10000];
 const STARTUP_TIMEOUT_MS = 30000;
 
+const CLAUDE_PROXY_PORT = 3456;
+
+/** Find the Claude proxy — prefer SDK proxy, fall back to claude-max-api. */
+function findClaudeProxyBinary(): { bin: string; args: string[] } | null {
+  // Prefer SDK proxy (faster — no subprocess per request)
+  const sdkProxy = path.join(os.homedir(), '.local', 'bin', 'claude-sdk-proxy.mjs');
+  if (fs.existsSync(sdkProxy)) {
+    return { bin: 'node', args: [sdkProxy] };
+  }
+  // Fall back to claude-max-api
+  try {
+    const nvmBase = path.join(os.homedir(), '.nvm', 'versions', 'node');
+    const versions = fs.readdirSync(nvmBase);
+    for (const v of versions.sort().reverse()) {
+      const bin = path.join(nvmBase, v, 'bin', 'claude-max-api');
+      if (fs.existsSync(bin)) return { bin, args: [] };
+    }
+  } catch { /* nvm not installed */ }
+  for (const dir of ['/usr/local/bin', path.join(os.homedir(), '.local', 'bin')]) {
+    const bin = path.join(dir, 'claude-max-api');
+    if (fs.existsSync(bin)) return { bin, args: [] };
+  }
+  return null;
+}
+
 class OpenClawManager extends EventEmitter {
   private proc: ChildProcess | null = null;
+  private claudeProxy: ChildProcess | null = null;
   private state: AgentState = 'stopped';
   private port: number | null = null;
   private health: HealthStatus = 'stopped';
@@ -70,6 +97,12 @@ class OpenClawManager extends EventEmitter {
   private lastErrorDetails: string | null = null;
   private activeRuntime: RuntimeType = 'openclaw';
   private switchingRuntime = false;
+  /** True when connected to a gateway we didn't start — don't modify config or clear tokens */
+  private externalGateway = false;
+  private pairingPoll: ReturnType<typeof setInterval> | null = null;
+
+  /** True when connected to a user's pre-existing gateway — app should not modify their config */
+  isExternal(): boolean { return this.externalGateway; }
 
   getStatus(): AgentStatus {
     const pref = loadRuntime();
@@ -96,6 +129,20 @@ class OpenClawManager extends EventEmitter {
     const pref = loadRuntime();
     const runtime = pref?.runtime || 'openclaw';
     this.activeRuntime = runtime;
+
+    // ── Check if an OpenClaw gateway is already running ──
+    if (runtime === 'openclaw') {
+      const existing = await this.detectExistingGateway();
+      if (existing) {
+        this.port = existing.port;
+        this.reused = true;
+        this.externalGateway = true;
+        logApp('info', `Found existing OpenClaw gateway on port ${existing.port} — connecting (read-only mode)`);
+        this.onGatewayReady();
+        return;
+      }
+      this.externalGateway = false;
+    }
 
     if (runtime === 'nemoclaw') {
       if (this.switchingRuntime) {
@@ -136,11 +183,19 @@ class OpenClawManager extends EventEmitter {
     this.port = portResult.port;
 
     if (portResult.reused) {
-      logApp('info', `Reusing existing gateway on port ${this.port}`);
-      this.reused = true;
-      this.setState('running');
-      this.startHealthCheck();
-      return;
+      // The gateway is already running but may have a stale token.
+      // Stop it properly (handles launchd service) and spawn fresh.
+      logApp('info', `Found existing gateway on port ${this.port} — restarting to apply current token`);
+      const ocBin = findOpenClawBinary();
+      if (ocBin) {
+        try {
+          const { execSync } = require('child_process');
+          execSync(`"${ocBin}" gateway stop`, { timeout: 8000, stdio: 'pipe' });
+          logApp('info', 'Stopped existing gateway via openclaw gateway stop');
+        } catch { /* ok */ }
+      }
+      try { freePort(this.port); } catch { /* ok */ }
+      await new Promise(r => setTimeout(r, 1000));
     }
 
     const bin = findOpenClawBinary();
@@ -154,17 +209,136 @@ class OpenClawManager extends EventEmitter {
     this.spawnProcess(bin);
   }
 
+  /** Start the Claude Code proxy if installed, enabled, and not already running. */
+  private startClaudeProxy(): void {
+    if (this.claudeProxy) return;
+    // Only start if user has enabled it
+    const flagPath = path.join(os.homedir(), '.openclaw-desktop', 'claude-code-enabled');
+    if (!fs.existsSync(flagPath)) return;
+    const proxyInfo = findClaudeProxyBinary();
+    if (!proxyInfo) return;
+    try {
+      const allArgs = [...proxyInfo.args, String(CLAUDE_PROXY_PORT)];
+      this.claudeProxy = spawn(proxyInfo.bin, allArgs, {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: { ...process.env },
+        windowsHide: true,
+      });
+      this.claudeProxy.stdout?.on('data', (d: Buffer) => {
+        const t = d.toString();
+        if (t.includes('running at')) logApp('info', `Claude Code proxy running on port ${CLAUDE_PROXY_PORT}`);
+      });
+      this.claudeProxy.stderr?.on('data', () => { /* suppress */ });
+      this.claudeProxy.on('close', () => { this.claudeProxy = null; });
+
+      // Register as provider in OpenClaw config if not already
+      this.registerClaudeCodeProvider();
+    } catch (e: any) {
+      logApp('warn', `Claude proxy failed to start: ${e.message}`);
+    }
+  }
+
+  /** Register claude-code-local as a provider in openclaw.json. */
+  private registerClaudeCodeProvider(): void {
+    try {
+      const cfgPath = path.join(os.homedir(), '.openclaw', 'openclaw.json');
+      const config = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
+      if (!config.models) config.models = {};
+      if (!config.models.providers) config.models.providers = {};
+      if (config.models.providers['claude-code-local']) return; // already registered
+
+      config.models.mode = config.models.mode || 'merge';
+      config.models.providers['claude-code-local'] = {
+        baseUrl: `http://127.0.0.1:${CLAUDE_PROXY_PORT}/v1`,
+        apiKey: 'not-needed',
+        api: 'openai-completions',
+        models: [
+          { id: 'claude-opus-4', name: 'Claude Opus 4 (Local)', reasoning: true, input: ['text'], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 200000, maxTokens: 8192 },
+          { id: 'claude-sonnet-4', name: 'Claude Sonnet 4 (Local)', reasoning: true, input: ['text'], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 200000, maxTokens: 8192 },
+        ],
+      };
+      fs.writeFileSync(cfgPath, JSON.stringify(config, null, 2));
+      logApp('info', 'Registered claude-code-local provider in openclaw.json');
+    } catch (e: any) {
+      logApp('warn', `Failed to register Claude Code provider: ${e.message}`);
+    }
+  }
+
+  private stopClaudeProxy(): void {
+    if (this.claudeProxy) {
+      this.claudeProxy.kill();
+      this.claudeProxy = null;
+      logApp('info', 'Claude Code proxy stopped');
+    }
+  }
+
+  /**
+   * Check if an OpenClaw gateway is already running via `openclaw gateway status --json`.
+   * Returns {port, token} if a gateway is running, null otherwise.
+   */
+  private async detectExistingGateway(): Promise<{ port: number; token: string | null } | null> {
+    const bin = findOpenClawBinary();
+    if (!bin) return null;
+    try {
+      const { execSync } = require('child_process');
+      const raw = execSync(`"${bin}" gateway status --json`, {
+        encoding: 'utf-8',
+        timeout: 8000,
+        stdio: 'pipe',
+      });
+      const status = JSON.parse(raw);
+      // Check for a running gateway — different CLI versions may use different field names
+      const running = status.running === true || status.state === 'running' || status.status === 'running';
+      if (running && status.port) {
+        // Verify the port is actually responding
+        const portUp = await checkPortReady(status.port);
+        if (portUp) {
+          return { port: status.port, token: status.token || null };
+        }
+      }
+    } catch {
+      // gateway status command failed — no existing gateway
+    }
+    return null;
+  }
+
   private spawnProcess(bin: string): void {
     this.setState('starting');
     this.stderrBuffer = '';
+
+    // Start Claude Code proxy if available
+    this.startClaudeProxy();
 
     logApp('info', `Starting OpenClaw: ${bin} gateway --port ${this.port}`);
 
     const args = ['gateway', '--port', String(this.port), '--bind', 'loopback', '--allow-unconfigured', 'run'];
 
+    // Inject API keys as env vars so the gateway uses in-memory keys
+    const envWithKeys = { ...process.env };
+    try {
+      const authPath = path.join(os.homedir(), '.openclaw', 'agents', 'main', 'agent', 'auth-profiles.json');
+      const authData = JSON.parse(fs.readFileSync(authPath, 'utf-8'));
+      const envMap: Record<string, string> = {
+        openai: 'OPENAI_API_KEY',
+        anthropic: 'ANTHROPIC_API_KEY',
+        google: 'GOOGLE_API_KEY',
+        xai: 'XAI_API_KEY',
+        mistral: 'MISTRAL_API_KEY',
+        groq: 'GROQ_API_KEY',
+      };
+      for (const [, profile] of Object.entries(authData.profiles || {})) {
+        const p = profile as any;
+        if (p.type === 'api_key' && p.key && envMap[p.provider]) {
+          envWithKeys[envMap[p.provider]] = p.key;
+        }
+      }
+      const injected = Object.keys(envMap).filter(k => envWithKeys[envMap[k]]);
+      if (injected.length) logApp('info', `Injected API keys as env vars: ${injected.join(', ')}`);
+    } catch { /* auth profiles may not exist yet */ }
+
     this.proc = spawn(bin, args, {
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env },
+      env: envWithKeys,
       shell: IS_WIN,
       windowsHide: true,
     });
@@ -415,12 +589,91 @@ class OpenClawManager extends EventEmitter {
     }
   }
 
+  private upgradeDeviceScopes(): void {
+    // Ensure all paired devices have full admin scopes so CLI commands work
+    const pairedPath = path.join(os.homedir(), '.openclaw', 'devices', 'paired.json');
+    try {
+      const devices = JSON.parse(fs.readFileSync(pairedPath, 'utf-8'));
+      const fullScopes = ['operator.admin', 'operator.approvals', 'operator.pairing', 'operator.read', 'operator.write'];
+      let updated = false;
+      for (const [, dev] of Object.entries(devices) as any) {
+        if (!dev.scopes || !fullScopes.every((s: string) => dev.scopes.includes(s))) {
+          dev.scopes = fullScopes;
+          dev.approvedScopes = fullScopes;
+          updated = true;
+        }
+      }
+      if (updated) {
+        fs.writeFileSync(pairedPath, JSON.stringify(devices, null, 2));
+        logApp('info', 'Upgraded device scopes to full admin');
+      }
+    } catch { /* no paired devices yet */ }
+  }
+
+  private startPairingPoller(): void {
+    this.stopPairingPoller();
+    // Check for pending pairing requests every 10 seconds
+    this.pairingPoll = setInterval(() => this.autoApprovePairings(), 10_000);
+    // Also run once immediately after gateway is ready (with short delay)
+    setTimeout(() => this.autoApprovePairings(), 3_000);
+  }
+
+  private stopPairingPoller(): void {
+    if (this.pairingPoll) { clearInterval(this.pairingPoll); this.pairingPoll = null; }
+  }
+
+  private async autoApprovePairings(): Promise<void> {
+    const bin = findOpenClawBinary();
+    if (!bin) return;
+
+    // Read configured channels from openclaw.json
+    const cfgPath = path.join(os.homedir(), '.openclaw', 'openclaw.json');
+    let channels: string[] = [];
+    try {
+      const config = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
+      channels = Object.keys(config.channels || {});
+    } catch { return; }
+
+    for (const channel of channels) {
+      try {
+        const json = await new Promise<string>((resolve, reject) => {
+          execFile(bin, ['pairing', 'list', channel, '--json'], { timeout: 10_000 }, (err, stdout) => {
+            if (err) return reject(err);
+            resolve(stdout);
+          });
+        });
+        const data = JSON.parse(json);
+        const requests = data.requests || [];
+        for (const req of requests) {
+          if (!req.code) continue;
+          const name = [req.meta?.firstName, req.meta?.lastName].filter(Boolean).join(' ') || req.id;
+          logApp('info', `Auto-approving ${channel} pairing: ${name} (${req.code})`);
+          await new Promise<void>((resolve) => {
+            execFile(bin, ['pairing', 'approve', channel, req.code, '--notify'], { timeout: 10_000 }, (err) => {
+              if (err) logApp('warn', `Pairing approve failed: ${err.message}`);
+              else logApp('info', `Approved ${channel} pairing for ${name}`);
+              resolve();
+            });
+          });
+        }
+      } catch { /* channel might not support pairing */ }
+    }
+  }
+
   private onGatewayReady(): void {
     this.clearStartupTimer();
     this.clearReadinessPoll();
     this.restartCount = 0;
     this.setState('running');
     this.startHealthCheck();
+    this.startPairingPoller();
+    // Only modify device scopes for gateways we manage
+    if (!this.externalGateway) this.upgradeDeviceScopes();
+
+    // Start browser relay so the Chrome extension can connect
+    const relayPort = (this.port || OPENCLAW_PORT) + 3;
+    startRelay(relayPort);
+
     logApp('info', `OpenClaw gateway ready on port ${this.port}`);
   }
 
@@ -443,6 +696,19 @@ class OpenClawManager extends EventEmitter {
     this.clearStartupTimer();
     this.clearReadinessPoll();
     stopHealthPolling();
+    stopRelay();
+    this.stopPairingPoller();
+    this.stopClaudeProxy();
+
+    // Don't kill an external gateway — we didn't start it
+    if (this.externalGateway) {
+      logApp('info', 'External gateway — disconnecting without stopping');
+      this.setState('stopped');
+      this.port = null;
+      this.externalGateway = false;
+      this.emitStatus();
+      return;
+    }
 
     const wasNemoClaw = this.activeRuntime === 'nemoclaw';
     const newPref = loadRuntime();

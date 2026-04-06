@@ -979,6 +979,9 @@ export function writeHostOpenclawGatewayToken(token: string): void {
   if (!cfg.gateway) cfg.gateway = {};
   if (!cfg.gateway.auth) cfg.gateway.auth = {};
   cfg.gateway.auth.token = token;
+  // Allow local CLI access without pairing (needed for cron, agent commands)
+  if (!cfg.gateway.controlUi) cfg.gateway.controlUi = {};
+  cfg.gateway.controlUi.allowInsecureAuth = true;
   fs.writeFileSync(p, JSON.stringify(cfg, null, 2), 'utf-8');
   logApp('info', 'Wrote gateway token to host openclaw.json');
 }

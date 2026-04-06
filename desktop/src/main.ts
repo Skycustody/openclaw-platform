@@ -35,11 +35,24 @@ const PROTOCOL = 'valnaa';
 (function patchProcessPath() {
   const sep = process.platform === 'win32' ? ';' : ':';
   const extra: string[] = [];
+  // Include nvm node path so #!/usr/bin/env node scripts work
+  const nvmNodeDir = path.join(os.homedir(), '.nvm', 'versions', 'node');
+  let nvmBin = '';
+  try {
+    const versions = fs.readdirSync(nvmNodeDir);
+    if (versions.length) {
+      // Use the latest version (sorted naturally, last entry)
+      const latest = versions.sort().pop()!;
+      nvmBin = path.join(nvmNodeDir, latest, 'bin');
+    }
+  } catch { /* nvm not installed — ok */ }
+
   const dirs = [
     path.join(os.homedir(), '.local', 'bin'),
     '/usr/local/bin',
     '/opt/homebrew/bin',
     '/Applications/Docker.app/Contents/Resources/bin',
+    ...(nvmBin ? [nvmBin] : []),
   ];
   const current = process.env.PATH || '';
   for (const d of dirs) {
@@ -944,7 +957,102 @@ function loadPersistedApiKey(): { provider: string; key: string } | null {
  * before starting the agent. This ensures the gateway uses a token that
  * was gated by a valid subscription check.
  */
+// ════════════════════════════════════
+//  Detect Existing OpenClaw Gateway
+// ════════════════════════════════════
+
+/**
+ * Try `openclaw gateway status --json` to detect a running gateway.
+ * Returns { port, token } if found, null otherwise.
+ */
+async function detectExistingOpenClawGateway(): Promise<{ port: number; token: string | null } | null> {
+  const bin = findOpenClawBinary();
+  if (!bin) return null;
+  try {
+    const raw = await execAsync(`"${bin}" gateway status --json`, { timeout: 8000 });
+    const status = JSON.parse(raw.stdout);
+    const running = status.running === true || status.state === 'running' || status.status === 'running';
+    if (running && status.port) {
+      logApp('info', `detectExistingOpenClawGateway: gateway reports running on port ${status.port}`);
+      return { port: status.port, token: status.token || null };
+    }
+  } catch {
+    // Command failed — no existing gateway
+  }
+  return null;
+}
+
+// ════════════════════════════════════
+//  Proxy Auth File Writer (Feature 2)
+// ════════════════════════════════════
+
+let proxyAuthTimer: ReturnType<typeof setInterval> | null = null;
+
+function getProxyAuthPath(): string {
+  return path.join(getAppDataDir(), 'proxy-auth.json');
+}
+
+function writeProxyAuthFile(): void {
+  try {
+    const session = loadSession();
+    const sessionId = session?.token ? crypto.createHash('md5').update(session.token).digest('hex').slice(0, 16) : 'unknown';
+    const data = { valid: true, ts: Date.now(), session: sessionId };
+    fs.writeFileSync(getProxyAuthPath(), JSON.stringify(data));
+  } catch (e: any) {
+    logApp('warn', `Failed to write proxy-auth.json: ${e.message}`);
+  }
+}
+
+function startProxyAuthWriter(): void {
+  if (proxyAuthTimer) return;
+  writeProxyAuthFile();
+  proxyAuthTimer = setInterval(writeProxyAuthFile, 60_000);
+}
+
+function stopProxyAuthWriter(): void {
+  if (proxyAuthTimer) {
+    clearInterval(proxyAuthTimer);
+    proxyAuthTimer = null;
+  }
+  // Delete the auth file on stop
+  try {
+    const authPath = getProxyAuthPath();
+    if (fs.existsSync(authPath)) fs.unlinkSync(authPath);
+  } catch { /* ok */ }
+}
+
+/**
+ * Ensure the OpenClaw node service is installed so the agent has access
+ * to browser, exec, and other local tools. Only runs for OpenClaw runtime
+ * (NemoClaw has its own node inside the sandbox).
+ */
+function ensureNodeService(runtime: RuntimeType): void {
+  if (runtime === 'nemoclaw') return;
+  const bin = findOpenClawBinary();
+  if (!bin) return;
+  try {
+    const { execSync } = require('child_process');
+    const status = execSync(`"${bin}" node status`, { encoding: 'utf-8', timeout: 5000, stdio: 'pipe' });
+    if (status.includes('running')) {
+      logApp('info', 'Node service already running');
+      return;
+    }
+  } catch { /* not installed or not running */ }
+  try {
+    const { execSync } = require('child_process');
+    execSync(`"${bin}" node install`, { timeout: 15000, stdio: 'pipe' });
+    logApp('info', 'Installed OpenClaw node service (browser/exec tools)');
+  } catch (e: any) {
+    logApp('warn', `Could not install node service: ${e.message}`);
+  }
+}
+
 function applyGatewayToken(): void {
+  // Don't modify config when connected to user's existing gateway
+  if (manager.isExternal()) {
+    logApp('info', 'External gateway — skipping token write');
+    return;
+  }
   if (!currentGatewayToken) {
     logApp('warn', 'No gateway token available — agent will use its own token');
     return;
@@ -963,6 +1071,11 @@ function applyGatewayToken(): void {
 
 /** Clear gateway token from config so the agent can't be accessed without the app. */
 function clearGatewayToken(): void {
+  // Don't clear token when connected to user's existing gateway
+  if (manager.isExternal()) {
+    logApp('info', 'External gateway — skipping token clear');
+    return;
+  }
   const pref = loadRuntime();
   if (pref?.runtime === 'nemoclaw') {
     try { clearSandboxGatewayToken(); } catch { /* sandbox may not be running */ }
@@ -992,6 +1105,7 @@ async function runSetupFlow(runtime: RuntimeType): Promise<void> {
       steps[steps.length - 1].status = 'running';
       sendSteps(steps);
       applyGatewayToken();
+      ensureNodeService(runtime);
       await manager.start();
       steps[steps.length - 1].status = 'done';
       sendSteps(steps);
@@ -1658,6 +1772,15 @@ async function runSetupFlow(runtime: RuntimeType): Promise<void> {
 // ════════════════════════════════════
 function needsSetup(): boolean {
   const fs = require('fs');
+
+  // Check if the onboard wizard has run successfully
+  const cfgPath = path.join(os.homedir(), '.openclaw', 'openclaw.json');
+  try {
+    const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
+    if (cfg.wizard?.lastRunCommand === 'onboard') return false;
+  } catch { /* fall through */ }
+
+  // Fallback: check auth-profiles.json
   const authPath = path.join(os.homedir(), '.openclaw', 'agents', 'main', 'agent', 'auth-profiles.json');
   try {
     const raw = fs.readFileSync(authPath, 'utf-8');
@@ -1944,6 +2067,216 @@ function setupIPC(): void {
   });
   ipcMain.handle('agent:log-path', () => getLogFilePath());
   ipcMain.handle('agent:open-log-file', () => shell.openPath(getLogFilePath()));
+
+  // Claude Code CLI detection and proxy setup
+  ipcMain.handle('settings:claude-code-status', async () => {
+    // Check if claude CLI exists
+    try {
+      const { stdout } = await execAsync('claude --version', { timeout: 5000 });
+      const version = stdout.trim();
+      // Check if proxy is installed
+      const proxyInstalled = !!(() => {
+        try {
+          const nvmBase = path.join(os.homedir(), '.nvm', 'versions', 'node');
+          const versions = fs.readdirSync(nvmBase);
+          for (const v of versions.sort().reverse()) {
+            if (fs.existsSync(path.join(nvmBase, v, 'bin', 'claude-max-api'))) return true;
+          }
+        } catch {}
+        for (const dir of ['/usr/local/bin', path.join(os.homedir(), '.local', 'bin')]) {
+          if (fs.existsSync(path.join(dir, 'claude-max-api'))) return true;
+        }
+        return false;
+      })();
+      // Check if proxy is running
+      let proxyRunning = false;
+      try {
+        const { stdout: healthOut } = await execAsync('curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3456/health', { timeout: 3000 });
+        proxyRunning = healthOut.trim() === '200';
+      } catch {}
+      const enabled = fs.existsSync(path.join(os.homedir(), '.openclaw-desktop', 'claude-code-enabled'));
+      return { cliFound: true, cliVersion: version, proxyInstalled, proxyRunning, enabled };
+    } catch {
+      return { cliFound: false, cliVersion: null, proxyInstalled: false, proxyRunning: false, enabled: false };
+    }
+  });
+
+  ipcMain.handle('settings:claude-code-connect', async () => {
+    // Step 1: install Claude Code CLI if not found
+    let cliInstalled = false;
+    try {
+      await execAsync('claude --version', { timeout: 5000 });
+      cliInstalled = true;
+    } catch {
+      try {
+        logApp('info', 'Installing Claude Code CLI...');
+        await execAsync('npm install -g @anthropic-ai/claude-code', { timeout: 120000 });
+        logApp('info', 'Claude Code CLI installed');
+        cliInstalled = true;
+      } catch (e: any) {
+        return { ok: false, error: 'Failed to install Claude Code: ' + e.message, step: 'install' };
+      }
+    }
+
+    // Step 2: check if authenticated
+    let authed = false;
+    try {
+      const { stdout } = await execAsync('claude auth status', { timeout: 5000 });
+      const status = JSON.parse(stdout);
+      authed = status.loggedIn === true;
+    } catch {}
+
+    if (!authed) {
+      // Return to tell the renderer to open auth flow
+      return { ok: false, needsAuth: true, step: 'auth' };
+    }
+
+    // Step 3: install proxy if needed
+    try {
+      await execAsync('claude-max-api --help', { timeout: 3000 });
+    } catch {
+      try {
+        logApp('info', 'Installing claude-max-api-proxy...');
+        await execAsync('npm install -g claude-max-api-proxy', { timeout: 60000 });
+        logApp('info', 'claude-max-api-proxy installed');
+      } catch (e: any) {
+        return { ok: false, error: 'Failed to install proxy: ' + e.message, step: 'proxy' };
+      }
+    }
+
+    // Step 4: set enabled flag, set default model, and restart
+    try {
+      const flagDir = path.join(os.homedir(), '.openclaw-desktop');
+      if (!fs.existsSync(flagDir)) fs.mkdirSync(flagDir, { recursive: true });
+      fs.writeFileSync(path.join(flagDir, 'claude-code-enabled'), '1');
+      // Set default model to Claude Code
+      const cfgPath = path.join(os.homedir(), '.openclaw', 'openclaw.json');
+      const config = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
+      if (config.agents?.defaults?.model) {
+        config.agents.defaults.model.primary = 'claude-code-local/claude-sonnet-4';
+      }
+      fs.writeFileSync(cfgPath, JSON.stringify(config, null, 2));
+      manager.restart();
+    } catch {}
+    return { ok: true };
+  });
+
+  // Run claude auth login in a terminal session
+  ipcMain.handle('settings:claude-code-auth', async () => {
+    try {
+      // Launch login — this opens the browser for OAuth
+      const child = spawn('claude', ['auth', 'login'], {
+        stdio: 'ignore',
+        detached: true,
+        shell: true,
+      });
+      child.unref();
+      logApp('info', 'Claude Code auth login launched');
+      return { ok: true };
+    } catch (e: any) {
+      return { ok: false, error: e.message };
+    }
+  });
+
+  ipcMain.handle('settings:claude-code-disconnect', async () => {
+    try {
+      // Remove enabled flag
+      const flagPath = path.join(os.homedir(), '.openclaw-desktop', 'claude-code-enabled');
+      try { fs.unlinkSync(flagPath); } catch {}
+      // Remove the provider and reset any agents using it
+      const cfgPath = path.join(os.homedir(), '.openclaw', 'openclaw.json');
+      const config = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
+      if (config.models?.providers?.['claude-code-local']) {
+        delete config.models.providers['claude-code-local'];
+      }
+      // Reset default model if it was claude-code-local
+      const defaultModel = config.agents?.defaults?.model?.primary || '';
+      if (defaultModel.startsWith('claude-code-local/')) {
+        config.agents.defaults.model.primary = 'openai-codex/gpt-5.4';
+      }
+      // Reset per-agent models too
+      for (const agent of (config.agents?.list || [])) {
+        if (agent.model && agent.model.startsWith('claude-code-local/')) {
+          delete agent.model;
+        }
+      }
+      fs.writeFileSync(cfgPath, JSON.stringify(config, null, 2));
+      // Restart to kill the proxy (won't re-start it since flag is gone)
+      manager.restart();
+      logApp('info', 'Claude Code disconnected — models reset');
+      return { ok: true };
+    } catch (e: any) {
+      return { ok: false, error: e.message };
+    }
+  });
+
+  // Claude Code thinking level
+  const thinkingPath = path.join(os.homedir(), '.openclaw-desktop', 'claude-code-thinking');
+  ipcMain.handle('settings:get-claude-thinking', async () => {
+    try { return fs.readFileSync(thinkingPath, 'utf-8').trim(); } catch { return 'medium'; }
+  });
+  ipcMain.handle('settings:set-claude-thinking', async (_e, level: string) => {
+    try { fs.writeFileSync(thinkingPath, level); return { ok: true }; } catch { return { ok: false }; }
+  });
+
+  // Exec approval policy toggle
+  ipcMain.handle('settings:get-exec-ask', async () => {
+    try {
+      const configPath = path.join(os.homedir(), '.openclaw', 'openclaw.json');
+      const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+      return config.tools?.exec?.ask || 'off';
+    } catch { return 'off'; }
+  });
+
+  ipcMain.handle('settings:set-exec-ask', async (_e, mode: string) => {
+    const bin = findOpenClawBinary();
+    if (!bin) return { ok: false, error: 'OpenClaw not found.' };
+    try {
+      await execAsync(`"${bin}" config set tools.exec.ask ${mode}`, { timeout: 10000, windowsHide: true });
+      logApp('info', `Exec ask policy set to: ${mode}`);
+      return { ok: true };
+    } catch (e: any) {
+      logApp('warn', `set-exec-ask: ${e.message}`);
+      return { ok: false, error: e.message };
+    }
+  });
+
+  // Activity log — reads tool calls from the latest session transcript
+  ipcMain.handle('agent:activity-log', async () => {
+    try {
+      const sessDir = path.join(os.homedir(), '.openclaw', 'agents', 'main', 'sessions');
+      const indexPath = path.join(sessDir, 'sessions.json');
+      const index = JSON.parse(fs.readFileSync(indexPath, 'utf-8'));
+      const sessions = index.sessions || index;
+      if (!Array.isArray(sessions) || !sessions.length) return [];
+      // Get latest session
+      const latest = sessions[sessions.length - 1];
+      const id = latest.id || latest;
+      const transcriptPath = path.join(sessDir, `${id}.jsonl`);
+      const content = fs.readFileSync(transcriptPath, 'utf-8');
+      const entries: { ts: string; tool: string; detail: string }[] = [];
+      for (const line of content.split('\n').filter(Boolean)) {
+        try {
+          const entry = JSON.parse(line);
+          if (entry.type !== 'message' || entry.message?.role !== 'assistant') continue;
+          const toolCalls = (entry.message.content || []).filter((c: any) => c.type === 'toolCall');
+          for (const tc of toolCalls) {
+            const args = tc.arguments || {};
+            let detail = '';
+            if (tc.name === 'exec') detail = args.command || JSON.stringify(args);
+            else if (tc.name === 'read') detail = args.path || args.file_path || '';
+            else if (tc.name === 'write' || tc.name === 'edit') detail = args.path || args.file_path || '';
+            else if (tc.name === 'web_fetch') detail = args.url || '';
+            else detail = JSON.stringify(args).substring(0, 200);
+            entries.push({ ts: entry.timestamp, tool: tc.name, detail });
+          }
+        } catch { /* skip bad lines */ }
+      }
+      return entries;
+    } catch {
+      return [];
+    }
+  });
   ipcMain.handle('app:version', () => app.getVersion());
   ipcMain.handle('app:get-mac-fullscreen', () =>
     process.platform === 'darwin' && !!mainWindow && !mainWindow.isDestroyed() && mainWindow.isFullScreen(),
@@ -2371,9 +2704,34 @@ function setupIPC(): void {
 
   ipcMain.handle('agents:list', async () => {
     try {
-      const { execSync } = require('child_process');
-      const raw = execSync('openclaw agents list --json', { encoding: 'utf8', timeout: 10000 });
-      return { ok: true, agents: JSON.parse(raw) };
+      const home = os.homedir();
+      const cfgPath = path.join(home, '.openclaw', 'openclaw.json');
+      const config = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
+      const defaultModel = config.agents?.defaults?.model?.primary || 'default';
+      const agents = (config.agents?.list || []).map((a: any) => ({
+        id: a.id,
+        name: a.name || a.id,
+        model: a.model?.primary || defaultModel,
+        isDefault: a.id === (config.agents?.list?.[0]?.id || 'main'),
+      }));
+
+      // Bootstrap sessions.json for any agent missing it so it appears in the chat dropdown
+      for (const a of agents) {
+        const sessDir = path.join(home, '.openclaw', 'agents', a.id, 'sessions');
+        const sessIndex = path.join(sessDir, 'sessions.json');
+        if (!fs.existsSync(sessIndex)) {
+          fs.mkdirSync(sessDir, { recursive: true });
+          const sessionId = require('crypto').randomUUID();
+          const sessionFile = path.join(sessDir, `${sessionId}.jsonl`);
+          const store: Record<string, any> = {};
+          store[`agent:${a.id}:${a.id}`] = { sessionId, updatedAt: Date.now(), sessionFile };
+          fs.writeFileSync(sessIndex, JSON.stringify(store), 'utf-8');
+          fs.writeFileSync(sessionFile, '', 'utf-8');
+          logApp('info', `agents:list — bootstrapped sessions.json for ${a.id}`);
+        }
+      }
+
+      return { ok: true, agents };
     } catch (err: any) {
       logApp('warn', `agents:list failed: ${err.message}`);
       return { ok: false, agents: [], error: err.message };
@@ -2381,18 +2739,13 @@ function setupIPC(): void {
   });
 
   ipcMain.handle('agents:catalog', async () => {
+    // Use our vetted, encrypted agent store (20 employee agents)
     try {
-      const https = require('https');
-      const url = 'https://raw.githubusercontent.com/mergisi/awesome-openclaw-agents/main/agents.json';
-      const data: string = await new Promise((resolve, reject) => {
-        https.get(url, (res: any) => {
-          let body = '';
-          res.on('data', (chunk: string) => body += chunk);
-          res.on('end', () => resolve(body));
-          res.on('error', reject);
-        }).on('error', reject);
-      });
-      return { ok: true, catalog: JSON.parse(data) };
+      const { loadAgentStore } = require('./data/agent-store-crypto');
+      const store = loadAgentStore();
+      const agents = store.agents || [];
+      logApp('info', `agents:catalog loaded ${agents.length} agents from encrypted store`);
+      return { ok: true, catalog: agents };
     } catch (err: any) {
       logApp('warn', `agents:catalog failed: ${err.message}`);
       return { ok: false, catalog: [], error: err.message };
@@ -2401,10 +2754,7 @@ function setupIPC(): void {
 
   ipcMain.handle('agents:install', async (_e, id: string, soul: string, name: string) => {
     try {
-      const fs = require('fs');
-      const path = require('path');
-      const { execSync } = require('child_process');
-      const home = require('os').homedir();
+      const home = os.homedir();
       const workspacePath = path.join(home, '.openclaw', `workspace-${id}`);
 
       // Create workspace and write SOUL.md
@@ -2412,14 +2762,50 @@ function setupIPC(): void {
       fs.writeFileSync(path.join(workspacePath, 'SOUL.md'), soul, 'utf8');
       logApp('info', `agents:install — wrote SOUL.md to ${workspacePath}`);
 
-      // Register the agent
-      execSync(`openclaw agents add ${id} --workspace ${workspacePath}`, { encoding: 'utf8', timeout: 15000 });
-      logApp('info', `agents:install — registered agent ${id}`);
+      // Write HEARTBEAT.md if provided in catalog
+      try {
+        const { loadAgentStore } = require('./data/agent-store-crypto');
+        const store = loadAgentStore();
+        const agentData = (store.agents || []).find((a: any) => a.id === id);
+        if (agentData?.heartbeat) {
+          fs.writeFileSync(path.join(workspacePath, 'HEARTBEAT.md'), agentData.heartbeat, 'utf8');
+        }
+      } catch { /* ok */ }
 
-      // Restart gateway to pick it up
-      try { execSync('openclaw gateway restart', { encoding: 'utf8', timeout: 15000 }); } catch { /* ok */ }
-      logApp('info', `agents:install — gateway restarted`);
+      // Copy skills from main workspace
+      const mainSkills = path.join(home, '.openclaw', 'workspace', 'skills');
+      const agentSkills = path.join(workspacePath, 'skills');
+      if (fs.existsSync(mainSkills)) {
+        try {
+          require('child_process').execSync(`cp -r "${mainSkills}" "${agentSkills}"`, { timeout: 10000 });
+          logApp('info', `agents:install — copied skills to ${id}`);
+        } catch { /* ok */ }
+      }
 
+      // Register the agent via CLI (creates agent dir and updates config)
+      const bin = findOpenClawBinary();
+      if (bin) {
+        await execAsync(`"${bin}" agents add ${id} --workspace "${workspacePath}"`, { timeout: 60000, windowsHide: true });
+        logApp('info', `agents:install — registered agent ${id} via CLI`);
+      }
+
+      // Bootstrap sessions.json so agent appears in Control UI chat dropdown
+      const agentSessionsDir = path.join(home, '.openclaw', 'agents', id, 'sessions');
+      fs.mkdirSync(agentSessionsDir, { recursive: true });
+      const sessionsIndex = path.join(agentSessionsDir, 'sessions.json');
+      if (!fs.existsSync(sessionsIndex)) {
+        const sessionId = require('crypto').randomUUID();
+        const sessionFile = path.join(agentSessionsDir, `${sessionId}.jsonl`);
+        const store: Record<string, any> = {};
+        store[`agent:${id}:${id}`] = { sessionId, updatedAt: Date.now(), sessionFile };
+        fs.writeFileSync(sessionsIndex, JSON.stringify(store), 'utf-8');
+        fs.writeFileSync(sessionFile, '', 'utf-8');
+        logApp('info', `agents:install — created sessions.json for ${id}`);
+      }
+
+      // Restart gateway so it picks up the new agent and sessions
+      await manager.restart();
+      logApp('info', `agents:install — agent ${id} installed, gateway restarted`);
       return { ok: true };
     } catch (err: any) {
       logApp('error', `agents:install failed: ${err.message}`);
@@ -2429,15 +2815,113 @@ function setupIPC(): void {
 
   ipcMain.handle('agents:delete', async (_e, id: string) => {
     try {
-      const { execSync } = require('child_process');
-      execSync(`openclaw agents delete ${id} --force`, { encoding: 'utf8', timeout: 15000 });
-      try { execSync('openclaw gateway restart', { encoding: 'utf8', timeout: 15000 }); } catch { /* ok */ }
-      logApp('info', `agents:delete — removed agent ${id}`);
+      const home = os.homedir();
+      const cfgPath = path.join(home, '.openclaw', 'openclaw.json');
+      const config = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
+
+      // Remove agent from config
+      config.agents.list = (config.agents.list || []).filter((a: any) => a.id !== id);
+      // Remove bindings for this agent
+      config.bindings = (config.bindings || []).filter((b: any) => b.agentId !== id);
+      fs.writeFileSync(cfgPath, JSON.stringify(config, null, 2));
+
+      // Remove workspace and agent dir
+      const workspacePath = path.join(home, '.openclaw', `workspace-${id}`);
+      const agentDir = path.join(home, '.openclaw', 'agents', id);
+      try { fs.rmSync(workspacePath, { recursive: true, force: true }); } catch { /* ok */ }
+      try { fs.rmSync(agentDir, { recursive: true, force: true }); } catch { /* ok */ }
+
+      await manager.restart();
+      logApp('info', `agents:delete — removed agent ${id}, gateway restarted`);
       return { ok: true };
     } catch (err: any) {
       logApp('error', `agents:delete failed: ${err.message}`);
       return { ok: false, error: err.message };
     }
+  });
+
+  // ── Agent health ──
+  ipcMain.handle('agents:health', async (_e, id: string) => {
+    try {
+      const home = os.homedir();
+      const sessPath = path.join(home, '.openclaw', 'agents', id, 'sessions', 'sessions.json');
+      const health: any = { sessions: 0, lastActive: null, cronRuns: 0 };
+
+      if (fs.existsSync(sessPath)) {
+        const store = JSON.parse(fs.readFileSync(sessPath, 'utf-8'));
+        const entries = Object.values(store) as any[];
+        health.sessions = entries.length;
+
+        // Find most recent activity
+        let latest = 0;
+        let cronCount = 0;
+        for (const entry of entries) {
+          if (entry.updatedAt && entry.updatedAt > latest) latest = entry.updatedAt;
+          // Count cron sessions
+          const key = Object.keys(store).find(k => store[k] === entry);
+          if (key && key.includes(':cron:')) cronCount++;
+        }
+        health.lastActive = latest > 0 ? latest : null;
+        health.cronRuns = cronCount;
+      }
+
+      return health;
+    } catch { return { sessions: 0, lastActive: null, cronRuns: 0 }; }
+  });
+
+  // ── Agent env/API key management (shared global .env) ──
+  function parseEnvFile(filePath: string): Record<string, string> {
+    const env: Record<string, string> = {};
+    try {
+      if (!fs.existsSync(filePath)) return env;
+      for (const line of fs.readFileSync(filePath, 'utf-8').split('\n')) {
+        const match = line.match(/^([A-Z_][A-Z0-9_]*)=(.+)$/);
+        if (match) env[match[1]] = match[2];
+      }
+    } catch { /* ok */ }
+    return env;
+  }
+
+  function writeEnvFile(filePath: string, env: Record<string, string>) {
+    const dir = path.dirname(filePath);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(filePath, Object.entries(env).map(([k, v]) => `${k}=${v}`).join('\n') + '\n', 'utf-8');
+  }
+
+  const globalEnvPath = () => path.join(os.homedir(), '.openclaw', '.env');
+
+  ipcMain.handle('agents:get-env', async (_e, _id: string) => {
+    // All keys live in the shared global .env — every agent reads from the same place
+    return parseEnvFile(globalEnvPath());
+  });
+
+  ipcMain.handle('agents:save-env', async (_e, _id: string, env: Record<string, string>) => {
+    try {
+      // Merge with existing global keys (don't overwrite keys this agent doesn't manage)
+      const existing = parseEnvFile(globalEnvPath());
+      const merged = { ...existing, ...env };
+      // Remove keys that were cleared
+      for (const [k, v] of Object.entries(merged)) { if (!v) delete merged[k]; }
+      writeEnvFile(globalEnvPath(), merged);
+      logApp('info', `agents:save-env — saved ${Object.keys(env).length} keys to global .env`);
+      return { ok: true };
+    } catch (err: any) {
+      logApp('error', `agents:save-env failed: ${err.message}`);
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('dialog:confirm', async (_e, message: string) => {
+    const iconPath = path.join(__dirname, '..', 'assets', 'icon.png');
+    const result = await dialog.showMessageBox({
+      type: 'question',
+      buttons: ['Cancel', 'OK'],
+      defaultId: 1,
+      cancelId: 0,
+      message,
+      icon: nativeImage.createFromPath(iconPath),
+    });
+    return result.response === 1;
   });
 
   /** OpenAI / Anthropic in addition to NVIDIA (NemoClaw) or local OpenClaw config. */
@@ -2573,6 +3057,355 @@ function setupIPC(): void {
       }
     },
   );
+
+  // ── OpenClaw model & API key management ──
+
+  ipcMain.handle('settings:oc-model-status', async () => {
+    const pref = loadRuntime();
+    if (pref?.runtime === 'nemoclaw') return null;
+    try {
+      // Read from config files directly — instant, no child process
+      const home = process.env.HOME || os.homedir();
+      const configPath = path.join(home, '.openclaw', 'openclaw.json');
+      const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+
+      const defaults = config.agents?.defaults || {};
+      const defaultModel = defaults.model?.primary || '';
+
+      // Read auth profiles from agent dir
+      const authProfilesPath = path.join(home, '.openclaw', 'agents', 'main', 'agent', 'auth-profiles.json');
+      let providers: { provider: string }[] = [];
+      try {
+        const authData = JSON.parse(fs.readFileSync(authProfilesPath, 'utf-8'));
+        const seen = new Set<string>();
+        for (const [, profile] of Object.entries(authData.profiles || {})) {
+          const p = (profile as any).provider;
+          if (p && !seen.has(p)) { seen.add(p); providers.push({ provider: p }); }
+        }
+        // github-copilot shares OAuth with openai-codex
+        if (seen.has('openai-codex') && !seen.has('github-copilot')) {
+          providers.push({ provider: 'github-copilot' });
+        }
+      } catch { /* no auth profiles yet */ }
+
+      // Collect all configured model keys
+      const modelSet = new Set<string>(Object.keys(defaults.models || {}));
+
+      // Include current default model
+      if (defaultModel) modelSet.add(defaultModel);
+
+      // Include models from custom providers (e.g. claude-code-local)
+      const customProviders = config.models?.providers || {};
+      for (const [provId, prov] of Object.entries(customProviders)) {
+        const models = (prov as any).models || [];
+        for (const m of models) modelSet.add(`${provId}/${m.id}`);
+        if (!providers.find((p: any) => p.provider === provId)) {
+          providers.push({ provider: provId });
+        }
+      }
+
+      // Include models from auth profiles (providers the user has keys for)
+      for (const p of providers) {
+        const provModels = Object.keys(defaults.models || {}).filter(k => k.startsWith(p.provider + '/'));
+        provModels.forEach(m => modelSet.add(m));
+      }
+
+      const configuredModels = Array.from(modelSet);
+
+      return {
+        defaultModel,
+        configuredModels,
+        auth: { providers },
+      };
+    } catch (e: any) {
+      logApp('warn', `oc-model-status: ${e.message}`);
+      return null;
+    }
+  });
+
+  ipcMain.handle('settings:oc-set-model', async (_e, model: string) => {
+    const bin = findOpenClawBinary();
+    if (!bin) return { ok: false, error: 'OpenClaw binary not found.' };
+    try {
+      await execAsync(`"${bin}" models set "${model}"`, { timeout: 15000, windowsHide: true });
+      logApp('info', `OpenClaw model set to ${model}`);
+      return { ok: true };
+    } catch (e: any) {
+      logApp('warn', `oc-set-model: ${e.message}`);
+      return { ok: false, error: e.message };
+    }
+  });
+
+  ipcMain.handle('settings:oc-set-agent-model', async (_e, agentId: string, model: string) => {
+    const bin = findOpenClawBinary();
+    if (!bin) return { ok: false, error: 'OpenClaw binary not found.' };
+    try {
+      // Find the agent index in the list
+      const cfgPath = path.join(os.homedir(), '.openclaw', 'openclaw.json');
+      const config = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
+      const agents = config.agents?.list || [];
+      const idx = agents.findIndex((a: any) => a.id === agentId);
+      if (idx < 0) return { ok: false, error: 'Agent not found' };
+
+      // Use openclaw config set — the official CLI way
+      await execAsync(`"${bin}" config set "agents.list[${idx}].model" "${model}"`, { timeout: 15000, windowsHide: true });
+      logApp('info', `Set model for agent ${agentId} to ${model} via config set`);
+      return { ok: true };
+    } catch (e: any) {
+      logApp('warn', `oc-set-agent-model: ${e.message}`);
+      return { ok: false, error: e.message };
+    }
+  });
+
+  ipcMain.handle('settings:oc-save-api-key', async (_e, provider: string, key: string) => {
+    if (!key || !key.trim()) return { ok: false, error: 'API key is empty.' };
+    if (!provider) return { ok: false, error: 'Provider not specified.' };
+    try {
+      const profileId = `${provider}:default`;
+      const authPath = path.join(getOpenClawDir(), 'agents', 'main', 'agent', 'auth-profiles.json');
+
+      let data: any = { version: 1, profiles: {}, lastGood: {}, usageStats: {} };
+      try {
+        data = JSON.parse(fs.readFileSync(authPath, 'utf-8'));
+      } catch { /* file may not exist yet */ }
+
+      data.profiles = data.profiles || {};
+      data.profiles[profileId] = {
+        type: 'api_key',
+        provider: provider,
+        key: key.trim(),
+      };
+      data.lastGood = data.lastGood || {};
+      data.lastGood[provider] = profileId;
+
+      // Ensure directory exists
+      const authDir = path.dirname(authPath);
+      if (!fs.existsSync(authDir)) fs.mkdirSync(authDir, { recursive: true });
+
+      fs.writeFileSync(authPath, JSON.stringify(data, null, 2));
+      logApp('info', `Saved API key for provider ${provider} to ${authPath}`);
+      return { ok: true };
+    } catch (e: any) {
+      logApp('warn', `oc-save-api-key (${provider}): ${e.message}`);
+      return { ok: false, error: e.message };
+    }
+  });
+
+  ipcMain.handle('settings:oc-run-oauth', async (_e, provider: string) => {
+    const bin = findOpenClawBinary();
+    if (!bin) return { ok: false, error: 'OpenClaw binary not found.' };
+    try {
+      let cmd: string;
+      if (provider === 'github-copilot') {
+        cmd = `"${bin}" models auth login-github-copilot --yes`;
+      } else if (provider === 'anthropic') {
+        cmd = `"${bin}" models auth setup-token --provider anthropic --yes`;
+      } else {
+        cmd = `"${bin}" models auth login --provider "${provider}"`;
+      }
+      logApp('info', `Running OAuth for ${provider}: ${cmd}`);
+
+      // Spawn in a PTY so it has a TTY for interactive prompts
+      const localBin = path.join(os.homedir(), '.local', 'bin');
+      const sep = process.platform === 'win32' ? ';' : ':';
+      const envPath = process.env.PATH || '';
+      const patchedPath = envPath.includes(localBin) ? envPath : `${localBin}${sep}${envPath}`;
+
+      const oauthPty = pty.spawn(process.env.SHELL || '/bin/zsh', ['-c', cmd], {
+        name: 'xterm-256color',
+        cols: 80,
+        rows: 24,
+        env: { ...process.env, PATH: patchedPath },
+      });
+
+      return await new Promise<{ ok: boolean; error?: string }>((resolve) => {
+        let output = '';
+        oauthPty.onData((data: string) => {
+          output += data;
+          logApp('info', `[oauth-${provider}] ${data.replace(/[\r\n]+/g, ' ').trim()}`);
+        });
+        oauthPty.onExit(({ exitCode }) => {
+          if (exitCode === 0) {
+            logApp('info', `OAuth for ${provider} completed successfully`);
+            resolve({ ok: true });
+          } else {
+            logApp('warn', `OAuth for ${provider} failed (exit ${exitCode})`);
+            resolve({ ok: false, error: `Auth flow failed (exit ${exitCode}). Check logs.` });
+          }
+        });
+        // Timeout after 3 minutes
+        setTimeout(() => {
+          try { oauthPty.kill(); } catch { /* ok */ }
+          resolve({ ok: false, error: 'Auth flow timed out after 3 minutes.' });
+        }, 180000);
+      });
+    } catch (e: any) {
+      logApp('warn', `oc-run-oauth (${provider}): ${e.message}`);
+      return { ok: false, error: e.message };
+    }
+  });
+
+  // ── Agent + Channel management ──
+
+  ipcMain.handle('settings:oc-get-agents', async () => {
+    const bin = findOpenClawBinary();
+    if (!bin) return null;
+    try {
+      // Read agents + bindings from config file directly — instant, no gateway needed
+      const configPath = path.join(process.env.HOME || os.homedir(), '.openclaw', 'openclaw.json');
+      const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+
+      const defaultModel = config.agents?.defaults?.model?.primary || '';
+      const agentsParsed = (config.agents?.list || []).map((a: any) => ({
+        id: a.id,
+        name: a.name || a.id,
+        model: a.model || defaultModel || 'default',
+        isDefault: a.id === (config.agents?.list?.[0]?.id || 'main'),
+        workspace: a.workspace || '',
+      }));
+      // If no agents in list but main workspace exists, show main
+      if (agentsParsed.length === 0) {
+        agentsParsed.push({ id: 'main', name: 'main', model: defaultModel || 'default', isDefault: true });
+      }
+
+      const bindings = config.bindings || [];
+
+      // Channel status still needs CLI (best-effort)
+      let channelStatus: Record<string, any> = {};
+      try {
+        const statusOut = await execAsync(`"${bin}" channels status --json`, { timeout: 10000, windowsHide: true });
+        const statusData = JSON.parse(statusOut.stdout);
+        channelStatus = statusData.channels || {};
+      } catch { /* ok — gateway might not be ready yet */ }
+
+      const result = {
+        agents: agentsParsed,
+        bindings,
+        channels: config.channels || {},
+        channelStatus,
+      };
+      logApp('info', `oc-get-agents: ${result.agents.length} agents, ${result.bindings.length} bindings`);
+      return result;
+    } catch (e: any) {
+      logApp('warn', `oc-get-agents: ${e.message}`);
+      return null;
+    }
+  });
+
+  // Helper: retry bind with delay (channels add triggers gateway reload which can race with bind)
+  async function bindWithRetry(bin: string, agentId: string, channel: string, attempts = 3): Promise<void> {
+    for (let i = 1; i <= attempts; i++) {
+      try {
+        await execAsync(`"${bin}" agents bind --agent "${agentId}" --bind "${channel}"`, { timeout: 10000, windowsHide: true });
+        logApp('info', `Bound ${channel} → ${agentId}`);
+        return;
+      } catch (e: any) {
+        logApp('warn', `Bind attempt ${i}/${attempts} failed: ${e.message}`);
+        if (i < attempts) await new Promise(r => setTimeout(r, 3000));
+        else throw e;
+      }
+    }
+  }
+
+  ipcMain.handle('settings:oc-add-channel', async (_e, agentId: string, channel: string, token: string) => {
+    try {
+      // Write channel config + binding directly to openclaw.json — no CLI needed
+      const cfgPath = path.join(os.homedir(), '.openclaw', 'openclaw.json');
+      const config = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
+
+      // Add channel with token (format varies by channel type)
+      if (!config.channels) config.channels = {};
+      if (!config.channels[channel]) config.channels[channel] = {};
+      config.channels[channel].enabled = true;
+      const trimmed = token.trim();
+      if (channel === 'telegram') {
+        config.channels[channel].botToken = trimmed;
+      } else if (channel === 'discord') {
+        config.channels[channel].botToken = trimmed;
+      } else if (channel === 'slack') {
+        config.channels[channel].botToken = trimmed;
+      } else if (channel === 'signal') {
+        config.channels[channel].signalNumber = trimmed;
+      } else {
+        config.channels[channel].botToken = trimmed;
+      }
+
+      // Add binding
+      if (!config.bindings) config.bindings = [];
+      const exists = config.bindings.some((b: any) =>
+        b.agentId === agentId && b.match?.channel === channel
+      );
+      if (!exists) {
+        config.bindings.push({
+          type: 'route',
+          agentId,
+          match: { channel, accountId: 'default' },
+        });
+      }
+
+      fs.writeFileSync(cfgPath, JSON.stringify(config, null, 2));
+      logApp('info', `Added channel ${channel} → ${agentId} (direct config write)`);
+
+      // Restart gateway via app manager so it picks up the new channel
+      await manager.restart();
+      logApp('info', `Gateway restarted after adding ${channel}`);
+
+      return { ok: true };
+    } catch (e: any) {
+      logApp('warn', `oc-add-channel: ${e.message}`);
+      return { ok: false, error: e.message };
+    }
+  });
+
+  ipcMain.handle('settings:oc-add-channel-no-token', async (_e, agentId: string, channel: string) => {
+    const bin = findOpenClawBinary();
+    if (!bin) return { ok: false, error: 'OpenClaw binary not found.' };
+    try {
+      await execAsync(
+        `"${bin}" channels add --channel "${channel}"`,
+        { timeout: 15000, windowsHide: true },
+      );
+      logApp('info', `Added channel ${channel} (no token)`);
+
+      // Bind + restart in background so terminal opens immediately for QR scan
+      (async () => {
+        try {
+          await new Promise(r => setTimeout(r, 3000));
+          await bindWithRetry(bin, agentId, channel);
+          await execAsync(`"${bin}" gateway restart`, { timeout: 15000, windowsHide: true });
+          logApp('info', `Gateway restarted after adding ${channel}`);
+        } catch (e: any) { logApp('warn', `Background bind/restart: ${e.message}`); }
+      })();
+
+      return { ok: true };
+    } catch (e: any) {
+      logApp('warn', `oc-add-channel-no-token: ${e.message}`);
+      return { ok: false, error: e.message };
+    }
+  });
+
+  ipcMain.handle('settings:oc-remove-channel', async (_e, agentId: string, channel: string) => {
+    try {
+      const cfgPath = path.join(os.homedir(), '.openclaw', 'openclaw.json');
+      const config = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
+
+      // Remove binding
+      config.bindings = (config.bindings || []).filter((b: any) =>
+        !(b.agentId === agentId && ((b.match?.channel === channel) || b.channel === channel))
+      );
+
+      fs.writeFileSync(cfgPath, JSON.stringify(config, null, 2));
+      logApp('info', `Unbound ${channel} from ${agentId} (direct config write)`);
+
+      // Restart gateway
+      await manager.restart();
+
+      return { ok: true };
+    } catch (e: any) {
+      logApp('warn', `oc-remove-channel: ${e.message}`);
+      return { ok: false, error: e.message };
+    }
+  });
 
   // Runtime selection IPC — cache Docker probe results (they spawn child
   // processes with multi-second timeouts and block the main thread).
@@ -2813,7 +3646,21 @@ async function autoStart(): Promise<void> {
   startSubscriptionRecheck(session);
   startHeartbeat();
 
-  // 3. Check runtime selection
+  // 3. Detect existing OpenClaw gateway before setup
+  const existingGateway = await detectExistingOpenClawGateway();
+  if (existingGateway) {
+    logApp('info', `Found existing OpenClaw gateway on port ${existingGateway.port} — skipping setup flow`);
+    // Ensure runtime is set to openclaw if not already
+    if (!loadRuntime()) {
+      saveRuntime('openclaw');
+    }
+    startProxyAuthWriter();
+    applyGatewayToken();
+    await manager.start();
+    return;
+  }
+
+  // 4. Check runtime selection
   const runtimePref = loadRuntime();
   if (!runtimePref) {
     logApp('info', 'No runtime selected — showing runtime picker');
@@ -2821,8 +3668,9 @@ async function autoStart(): Promise<void> {
     return;
   }
 
-  // 4. Run environment setup and start agent
+  // 5. Run environment setup and start agent
   logApp('info', `Runtime: ${runtimePref.runtime} — entering setup flow`);
+  startProxyAuthWriter();
   try {
     await runSetupFlow(runtimePref.runtime);
   } catch (err: any) {
@@ -3000,6 +3848,7 @@ app.on('before-quit', async () => {
   isQuitting = true;
   logApp('info', 'App quitting — stopping agent and clearing gateway token');
   stopHeartbeat();
+  stopProxyAuthWriter();
   if (subscriptionCheckTimer) { clearInterval(subscriptionCheckTimer); subscriptionCheckTimer = null; }
   killAllPtys();
   await manager.stop();
@@ -3022,6 +3871,8 @@ process.on('uncaughtException', (err) => {
     /posix_spawnp/i.test(msg) ||
     /EADDRINUSE/i.test(msg) ||
     /ECONNREFUSED/i.test(msg) ||
+    /EPIPE/i.test(msg) ||
+    /Object has been destroyed/i.test(msg) ||
     /docker.*not running/i.test(msg) ||
     /Cannot connect to the Docker daemon/i.test(msg) ||
     /spawn.*ENOENT/i.test(msg);

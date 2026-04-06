@@ -38,6 +38,15 @@ fs.copyFileSync(path.join(fitPkg, 'lib', 'addon-fit.mjs'), path.join(vendorDir, 
 
 console.log('xterm.js vendor files copied to dist/renderer/vendor/');
 
+// Copy encrypted agent store to dist/data
+const dataDestDir = path.join(__dirname, '..', 'dist', 'data');
+fs.mkdirSync(dataDestDir, { recursive: true });
+const encSrc = path.join(__dirname, '..', 'src', 'data', 'agent-store.enc');
+if (fs.existsSync(encSrc)) {
+  fs.copyFileSync(encSrc, path.join(dataDestDir, 'agent-store.enc'));
+  console.log('Encrypted agent store copied to dist/data/');
+}
+
 // Copy Valnaa Chrome extension to dist
 const extSrc = path.join(__dirname, '..', 'chrome-extension');
 const extDest = path.join(__dirname, '..', 'dist', 'chrome-extension');

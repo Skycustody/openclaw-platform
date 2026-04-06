@@ -181,28 +181,40 @@ export interface PortPairResult {
 }
 
 /**
- * Find an available port for the OpenClaw gateway.
- * Checks 18789 first; if busy, checks if it's an existing OpenClaw instance (reuse it).
- * Otherwise scans upward for a free port.
+ * Find the port for the OpenClaw gateway.
+ * 1. Read from ~/.openclaw/openclaw.json (source of truth)
+ * 2. Check if that port has an existing OpenClaw instance (reuse it)
+ * 3. If port is busy with something else, free it
+ * No scanning, no guessing.
  */
 export async function findAvailablePort(): Promise<PortResult> {
-  if (await isPortFree(DEFAULT_PORT)) {
-    return { port: DEFAULT_PORT, reused: false };
+  // Read configured port from openclaw.json — no guessing
+  let configPort = DEFAULT_PORT;
+  try {
+    const os = require('os');
+    const path = require('path');
+    const fs = require('fs');
+    const cfgPath = path.join(os.homedir(), '.openclaw', 'openclaw.json');
+    const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
+    if (cfg.gateway?.port) configPort = cfg.gateway.port;
+  } catch { /* use default */ }
+
+  if (await isPortFree(configPort)) {
+    return { port: configPort, reused: false };
   }
 
-  if (await isOpenClawRunning(DEFAULT_PORT)) {
-    return { port: DEFAULT_PORT, reused: true };
+  if (await isOpenClawRunning(configPort)) {
+    return { port: configPort, reused: true };
   }
 
-  for (let i = 1; i <= MAX_PORT_ATTEMPTS; i++) {
-    const candidate = DEFAULT_PORT + i;
-    if (await isPortFree(candidate)) {
-      return { port: candidate, reused: false };
-    }
+  // Port is busy with something else — try to free it
+  try { freePort(configPort); } catch { /* ok */ }
+  if (await isPortFree(configPort)) {
+    return { port: configPort, reused: false };
   }
 
   throw new Error(
-    `All ports ${DEFAULT_PORT}-${DEFAULT_PORT + MAX_PORT_ATTEMPTS} are in use. Close other applications and try again.`,
+    `Port ${configPort} is in use by another application. Close it and try again.`,
   );
 }
 

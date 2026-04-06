@@ -64,8 +64,10 @@ export function logApp(level: 'info' | 'warn' | 'error', message: string, detail
   const stream = getStream('app');
   stream.write(`[${ts()}] [${level.toUpperCase()}] ${message}\n`);
   if (details) stream.write(`  ${details}\n`);
-  if (level === 'error') console.error(`[app] ${message}`, details || '');
-  else console.log(`[app] ${message}`);
+  try {
+    if (level === 'error') console.error(`[app] ${message}`, details || '');
+    else console.log(`[app] ${message}`);
+  } catch { /* ignore EPIPE — stdout pipe may be broken */ }
 }
 
 /** Read the last N lines from the openclaw log for display in the UI. */
@@ -90,6 +92,19 @@ export function getLogFilePath(): string {
 export function getAppLogPath(): string {
   ensureLogDir();
   return path.join(logDir, 'app.log');
+}
+
+/** In-memory activity log for exec commands and tool calls (shown in Security tab). */
+const activityLog: { ts: string; type: string; detail: string }[] = [];
+const MAX_ACTIVITY = 500;
+
+export function logActivity(type: string, detail: string): void {
+  activityLog.push({ ts: new Date().toISOString(), type, detail });
+  if (activityLog.length > MAX_ACTIVITY) activityLog.splice(0, activityLog.length - MAX_ACTIVITY);
+}
+
+export function getActivityLog(): { ts: string; type: string; detail: string }[] {
+  return activityLog;
 }
 
 export function closeStreams(): void {

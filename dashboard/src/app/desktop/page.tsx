@@ -595,6 +595,124 @@ export default function DesktopPage() {
           </div>
         </section>
 
+        {/* Claude Code CLI Section */}
+        <section className="border-t border-white/[0.06] px-5 py-20 md:py-28" style={{ backgroundColor: BG }}>
+          <div className="mx-auto max-w-[1280px]">
+            <div className="grid items-center gap-12 md:grid-cols-[1fr_1.4fr] md:gap-16">
+              <div className="flex flex-col justify-center md:py-10">
+                <p className="text-[12px] font-medium uppercase tracking-[0.12em]" style={{ color: TEXT_SEC }}>
+                  AI Model
+                </p>
+                <h3 className="mt-3 text-2xl font-medium tracking-[-0.02em] text-[#f0efea] md:text-3xl">
+                  Use Claude Code as your AI model
+                </h3>
+                <p className="mt-4 text-[16px] leading-relaxed" style={{ color: TEXT_SEC }}>
+                  Connect your Claude Code CLI directly to Valnaa with one click. Your agents run on Claude Sonnet 4 or Opus through a local proxy that translates requests automatically. No API keys to manage, no provider configuration. Just connect and go.
+                </p>
+                <ul className="mt-6 space-y-3">
+                  {[
+                    'One-click connect from Settings',
+                    'Supports Sonnet 4, Opus, and Haiku models',
+                    'Thinking effort control (low, medium, high)',
+                    'Add other providers like Anthropic API, OpenAI, Google',
+                  ].map((item) => (
+                    <li key={item} className="flex items-center gap-2 text-[14px]" style={{ color: TEXT_SEC }}>
+                      <Check className="size-4 shrink-0 text-emerald-500" />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <p className="mb-3 text-center text-[11px] font-medium uppercase tracking-[0.15em] text-white/[0.25]">
+                  Settings
+                </p>
+                <div className="overflow-hidden rounded-[10px]" style={{ boxShadow: '0 28px 70px rgba(0,0,0,0.4), 0 14px 32px rgba(0,0,0,0.25)' }}>
+                  <Image
+                    src="/app-screenshots/claude-code-settings.png"
+                    alt="Claude Code connected as AI model in Valnaa settings"
+                    width={1440}
+                    height={900}
+                    className="block w-full rounded-[10px]"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Agent Store Section */}
+        <section className="border-t border-white/[0.06] px-5 py-20 md:py-28" style={{ backgroundColor: BG }}>
+          <div className="mx-auto max-w-[1280px]">
+            <div className="grid items-center gap-12 md:grid-cols-[1.4fr_1fr] md:gap-16">
+              <div>
+                <p className="mb-3 text-center text-[11px] font-medium uppercase tracking-[0.15em] text-white/[0.25]">
+                  Agent Store
+                </p>
+                <div className="overflow-hidden rounded-[10px]" style={{ boxShadow: '0 28px 70px rgba(0,0,0,0.4), 0 14px 32px rgba(0,0,0,0.25)' }}>
+                  <Image
+                    src="/app-screenshots/agent-store.png"
+                    alt="Agent Store showing 28 installable AI employees"
+                    width={1440}
+                    height={900}
+                    className="block w-full rounded-[10px]"
+                  />
+                </div>
+              </div>
+              <div className="flex flex-col justify-center md:py-10">
+                <p className="text-[12px] font-medium uppercase tracking-[0.12em]" style={{ color: TEXT_SEC }}>
+                  AI Employees
+                </p>
+                <h3 className="mt-3 text-2xl font-medium tracking-[-0.02em] text-[#f0efea] md:text-3xl">
+                  28 agents that work on autopilot
+                </h3>
+                <p className="mt-4 text-[16px] leading-relaxed" style={{ color: TEXT_SEC }}>
+                  Install AI employees from the Agent Store. Each agent comes with 20 skills, 7 scheduled tasks, and integrations with tools like GitHub, Notion, Slack, Google, Figma, and Canva. They run cron jobs, send emails, review PRs, manage social media, and research the web while you sleep.
+                </p>
+                <div className="mt-6 grid grid-cols-2 gap-3">
+                  {[
+                    { name: 'Research Assistant', cat: 'Productivity' },
+                    { name: 'GitHub PR Reviewer', cat: 'Development' },
+                    { name: 'Social Media Manager', cat: 'Marketing' },
+                    { name: 'Self Healing Server', cat: 'DevOps' },
+                    { name: 'Video Editor', cat: 'Creative' },
+                    { name: 'Sales Assistant', cat: 'Business' },
+                  ].map((agent) => (
+                    <div key={agent.name} className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2">
+                      <p className="text-[13px] font-medium text-[#e0e0e0]">{agent.name}</p>
+                      <p className="text-[11px]" style={{ color: TEXT_SEC }}>{agent.cat}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-20 text-center">
+              <h3 className="text-xl font-medium tracking-[-0.02em] text-[#f0efea]">
+                How agents work
+              </h3>
+              <p className="mx-auto mt-3 max-w-2xl text-[15px] leading-relaxed" style={{ color: TEXT_SEC }}>
+                Every agent has a SOUL (personality and rules), scheduled cron jobs that run automatically, and skills that connect to real APIs and tools. Install one, configure its API keys in the Setup panel, and it starts working.
+              </p>
+              <div className="mx-auto mt-10 grid max-w-3xl gap-4 md:grid-cols-3">
+                {[
+                  { step: '1', title: 'Install', desc: 'Pick an agent from the store. One click installs its SOUL, skills, and cron schedule.' },
+                  { step: '2', title: 'Configure', desc: 'Add API keys for integrations like Notion, GitHub, or Google. Shared across all agents.' },
+                  { step: '3', title: 'It works', desc: 'The agent runs its scheduled tasks, responds in chat, and uses your browser for research.' },
+                ].map((s) => (
+                  <div key={s.step} className="rounded-xl border border-white/[0.08] bg-[#1a1916] p-6 text-left">
+                    <div className="mb-3 flex size-8 items-center justify-center rounded-full border border-white/[0.1] text-[13px] font-semibold text-[#f0efea]">
+                      {s.step}
+                    </div>
+                    <p className="text-[15px] font-medium text-[#f0efea]">{s.title}</p>
+                    <p className="mt-2 text-[13px] leading-relaxed" style={{ color: TEXT_SEC }}>{s.desc}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section className="border-t border-white/[0.06] px-5 py-20 md:py-28" style={{ backgroundColor: BG }}>
           <div className="mx-auto max-w-[1280px]">
             <h2 className="text-center text-[clamp(1.5rem,2.2vw,2.25rem)] font-medium tracking-[-0.02em] text-[#f0efea]">

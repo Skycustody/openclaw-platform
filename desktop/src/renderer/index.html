@@ -640,9 +640,38 @@
     .logs-toolbar {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 0;
       margin-bottom: 8px;
     }
+    .logs-tab {
+      padding: 6px 16px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: transparent;
+      color: rgba(255,255,255,0.4);
+      font-size: 12px;
+      font-weight: 500;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+    .logs-tab:first-child { border-radius: 6px 0 0 6px; }
+    .logs-tab:last-child { border-radius: 0 6px 6px 0; border-left: none; }
+    .logs-tab.active {
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+    }
+    .logs-tab:hover:not(.active) { background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.6); }
+    .activity-entry {
+      display: flex;
+      gap: 12px;
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .activity-ts { color: rgba(255,255,255,0.25); white-space: nowrap; min-width: 70px; }
+    .activity-tool { color: #4ade80; font-weight: 500; min-width: 80px; }
+    .activity-tool.tool-exec { color: #f87171; }
+    .activity-tool.tool-web_fetch { color: #facc15; }
+    .activity-detail { color: rgba(255,255,255,0.6); word-break: break-all; }
 
     #terminal-panel {
       padding: 0;
@@ -857,7 +886,7 @@
       margin-top: 36px;
     }
     .settings-card {
-      background: #0a0a0a;
+      background: transparent;
       border: 1px solid #262626;
       border-radius: 8px;
       overflow: hidden;
@@ -936,6 +965,141 @@
       color: rgba(255,255,255,0.4);
       align-self: center;
     }
+    /* ── Cursor-style sidebar settings ── */
+    #settings-panel > div { background: #1b1b1b; }
+    .stg-sidebar {
+      width: 230px;
+      min-width: 230px;
+      padding: 40px 14px 20px 14px;
+      overflow-y: auto;
+      flex-shrink: 0;
+      background: #1b1b1b;
+      border: none;
+    }
+    .stg-sidebar-user {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 18px;
+      padding: 0 6px;
+    }
+    .stg-sidebar-avatar {
+      width: 32px; height: 32px;
+      border-radius: 8px;
+      background: #383838;
+      color: #bbb;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 600;
+      flex-shrink: 0;
+    }
+    .stg-sidebar-email {
+      font-size: 13px; font-weight: 500; color: #e0e0e0;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px;
+    }
+    .stg-sidebar-plan { font-size: 11px; color: #666; margin-top: 1px; }
+    .stg-nav { display: flex; flex-direction: column; gap: 1px; margin-top: 6px; }
+    .stg-nav-item {
+      padding: 5px 10px;
+      border-radius: 6px;
+      font-size: 13px;
+      color: #888;
+      cursor: pointer;
+      transition: background 0.1s, color 0.1s;
+    }
+    .stg-nav-item:hover { background: #262626; color: #ccc; }
+    .stg-nav-item.active {
+      color: #e5e5e5;
+      font-weight: 500;
+      background: #2a2a2a;
+    }
+    .stg-content {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 40px 40px 48px 40px;
+      background: #1b1b1b;
+    }
+    .stg-section { display: none; }
+    .stg-section.active { display: block; }
+    .stg-title {
+      font-size: 20px; font-weight: 600; color: #f0f0f0;
+      margin: 0 0 20px 0; letter-spacing: -0.02em;
+    }
+    .stg-group-label {
+      font-size: 12px; font-weight: 400; color: #666;
+      margin: 24px 0 8px 0; padding: 0;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .stg-group-label::after {
+      content: ''; flex: 1; height: 1px; background: #2e2e2e;
+    }
+    .stg-group-label:first-of-type { margin-top: 0; }
+    .stg-card {
+      border: none;
+      border-radius: 10px;
+      overflow: hidden;
+      background: #222;
+      padding: 2px 0;
+    }
+    .stg-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 11px 16px;
+    }
+    .stg-item-title { font-size: 13px; font-weight: 400; color: #e0e0e0; }
+    .stg-item-desc { font-size: 12px; color: #666; margin-top: 1px; }
+    .stg-item-value { font-size: 13px; color: #888; font-weight: 400; white-space: nowrap; }
+    .stg-btn {
+      padding: 5px 16px;
+      border-radius: 6px;
+      border: 1px solid #3a3a3a;
+      background: #303030;
+      color: #e0e0e0;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.12s;
+      font-family: inherit;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .stg-btn:hover { background: #3a3a3a; }
+    .stg-btn-danger { color: #f87171; border-color: rgba(248,113,113,0.3); background: transparent; }
+    .stg-btn-danger:hover { background: rgba(248,113,113,0.1); }
+    .stg-select {
+      padding: 6px 30px 6px 10px;
+      background: #303030;
+      color: #e0e0e0;
+      border: 1px solid #3a3a3a;
+      border-radius: 6px;
+      font-size: 13px;
+      font-family: inherit;
+      outline: none;
+      -webkit-appearance: none;
+      appearance: none;
+      background-image: url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22rgba(255,255,255,0.4)%22 stroke-width=%222%22><polyline points=%226 9 12 15 18 9%22/></svg>');
+      background-repeat: no-repeat;
+      background-position: right 8px center;
+      cursor: pointer;
+      min-width: 180px;
+    }
+    .stg-select:hover { border-color: #555; }
+    .stg-input {
+      padding: 6px 10px;
+      background: #303030;
+      color: #e0e0e0;
+      border: 1px solid #3a3a3a;
+      border-radius: 6px;
+      font-size: 13px;
+      font-family: inherit;
+      outline: none;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .stg-input:focus { border-color: #555; }
+
     .settings-plan-cell {
       display: inline-flex;
       align-items: center;
@@ -1064,6 +1228,91 @@
     .version-label { font-size: 11px; color: rgba(255,255,255,0.15); margin-left: 8px; }
 
     /* ── Full-screen overlays ── */
+    .api-key-modal-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 300;
+      background: rgba(0,0,0,0.6);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(4px);
+    }
+    .api-key-modal-backdrop.active { display: flex; }
+    .api-key-modal {
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 12px;
+      padding: 24px;
+      width: 420px;
+      max-width: 90vw;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    }
+    .api-key-modal h3 {
+      font-size: 15px;
+      font-weight: 600;
+      color: #fff;
+      margin: 0 0 4px 0;
+    }
+    .api-key-modal .modal-desc {
+      font-size: 12px;
+      color: rgba(255,255,255,0.4);
+      margin: 0 0 16px 0;
+    }
+    .api-key-modal input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.15);
+      background: #0d0d0d;
+      color: #fafafa;
+      font-size: 13px;
+      font-family: inherit;
+    }
+    .api-key-modal input:focus { outline: none; border-color: rgba(99,102,241,0.5); }
+    .api-key-modal .modal-label {
+      font-size: 11px;
+      color: rgba(255,255,255,0.35);
+      margin-top: 6px;
+    }
+    .api-key-modal .modal-status {
+      font-size: 12px;
+      margin-top: 8px;
+      min-height: 16px;
+    }
+    .api-key-modal .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 20px;
+    }
+    .api-key-modal .modal-btn {
+      padding: 8px 20px;
+      border-radius: 6px;
+      border: 1px solid #404040;
+      background: transparent;
+      color: #e5e5e5;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .api-key-modal .modal-btn:hover { background: #252525; border-color: #525252; }
+    .api-key-modal .modal-btn-primary {
+      background: #fff;
+      border-color: #fff;
+      color: #000;
+    }
+    .api-key-modal .modal-btn-primary:hover { background: #e5e5e5; border-color: #e5e5e5; }
+    .api-key-modal .modal-btn-primary:disabled { opacity: 0.4; cursor: default; }
+    .api-key-modal .modal-oauth-divider {
+      text-align: center;
+      font-size: 11px;
+      color: rgba(255,255,255,0.25);
+      margin: 14px 0;
+    }
     .full-overlay {
       position: fixed;
       inset: 0;
@@ -1802,41 +2051,131 @@
     </div>
 
     <div id="agents-panel" class="panel">
-      <div style="padding: 20px; overflow-y: auto; height: 100%;">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
-          <div>
-            <h3 style="margin: 0; font-size: 16px; font-weight: 600;">Agents</h3>
-            <p style="margin: 4px 0 0; font-size: 12px; color: rgba(255,255,255,0.4);">Install and manage AI agents</p>
-          </div>
-          <button type="button" class="agent-toolbar-btn" id="agents-refresh-btn" style="font-size: 12px;">Refresh</button>
+      <style>
+        /* ── Agent Store ── */
+        .ag-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+        .ag-top h2 { font-size: 26px; font-weight: 600; color: #f0f0f0; letter-spacing: -0.03em; margin: 0; }
+        .ag-search {
+          width: 220px; padding: 7px 12px 7px 32px;
+          background: #181818; color: #e0e0e0;
+          border: 1px solid rgba(255,255,255,0.08); border-radius: 8px;
+          font-size: 12px; font-family: inherit; outline: none;
+          background-image: url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2214%22 height=%2214%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22rgba(255,255,255,0.2)%22 stroke-width=%222%22><circle cx=%2211%22 cy=%2211%22 r=%228%22/><line x1=%2221%22 y1=%2221%22 x2=%2216.65%22 y2=%2216.65%22/></svg>');
+          background-repeat: no-repeat; background-position: 10px center;
+        }
+        .ag-search:focus { border-color: rgba(255,255,255,0.18); }
+        .ag-search::placeholder { color: rgba(255,255,255,0.2); }
+        .ag-tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 0; }
+        .ag-tab {
+          padding: 6px 14px 10px; border: none; background: transparent;
+          color: rgba(255,255,255,0.35); font-size: 13px; font-weight: 500;
+          cursor: pointer; font-family: inherit; border-bottom: 2px solid transparent;
+          margin-bottom: -1px; transition: color 0.1s;
+          text-transform: capitalize;
+        }
+        .ag-tab:hover { color: rgba(255,255,255,0.6); }
+        .ag-tab.active { color: #e0e0e0; border-bottom-color: #e0e0e0; }
+        .ag-installed-grid { display: flex; flex-direction: column; gap: 1px; background: rgba(255,255,255,0.04); border-radius: 10px; overflow: hidden; margin-bottom: 20px; }
+        .ag-installed-item {
+          display: flex; align-items: center; gap: 12px;
+          padding: 12px 16px; background: #1a1a1a; transition: background 0.1s;
+        }
+        .ag-installed-item:hover { background: #222222; }
+        .ag-installed-dot { width: 8px; height: 8px; border-radius: 50%; background: #3b82f6; flex-shrink: 0; }
+        .ag-installed-dot.default { background: #22c55e; }
+        .ag-installed-info { flex: 1; min-width: 0; }
+        .ag-installed-name { font-size: 13px; font-weight: 500; color: #e8e8e8; }
+        .ag-installed-model { font-size: 11px; color: rgba(255,255,255,0.2); margin-top: 1px; }
+        .ag-installed-badge { font-size: 10px; color: rgba(255,255,255,0.3); background: rgba(255,255,255,0.06); padding: 2px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.04em; }
+        .ag-setup-btn { padding: 4px 12px; border-radius: 5px; border: 1px solid rgba(255,255,255,0.1); background: transparent; color: rgba(255,255,255,0.5); font-size: 11px; font-weight: 500; cursor: pointer; transition: all 0.12s; font-family: inherit; }
+        .ag-setup-btn:hover { background: rgba(255,255,255,0.05); color: #e0e0e0; }
+        .ag-setup-panel { background: #1a1a1a; border-top: 1px solid rgba(255,255,255,0.04); }
+        .ag-remove-btn { padding: 4px 12px; border-radius: 5px; border: 1px solid rgba(248,113,113,0.15); background: transparent; color: rgba(248,113,113,0.6); font-size: 11px; font-weight: 500; cursor: pointer; transition: all 0.12s; font-family: inherit; opacity: 0; }
+        .ag-installed-item:hover .ag-remove-btn { opacity: 1; }
+        .ag-remove-btn:hover { background: rgba(248,113,113,0.08); color: #f87171; }
+        /* Card grid — masonry */
+        .ag-grid { column-count: 3; column-gap: 10px; }
+        .ag-card {
+          background: #1a1a1a; border: 1px solid rgba(255,255,255,0.08);
+          border-radius: 12px; padding: 18px 20px; cursor: pointer;
+          transition: border-color 0.15s;
+          display: inline-flex; flex-direction: column; width: 100%;
+          break-inside: avoid; margin-bottom: 10px;
+        }
+        .ag-card:hover { border-color: rgba(255,255,255,0.18); }
+        .ag-card-name { font-size: 15px; font-weight: 500; color: #e8e8e8; margin-bottom: 8px; line-height: 1.35; }
+        .ag-card-desc { font-size: 12px; color: rgba(255,255,255,0.3); line-height: 1.5; margin-bottom: 14px; }
+        .ag-card-footer { display: flex; align-items: center; justify-content: space-between; margin-top: auto; }
+        .ag-card-cat { font-size: 11px; color: rgba(255,255,255,0.6); background: #000; padding: 4px 10px; border-radius: 5px; text-transform: capitalize; }
+        .ag-card-action { padding: 5px 14px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); background: transparent; color: rgba(255,255,255,0.5); font-size: 11px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.12s; }
+        .ag-card-action:hover { background: rgba(255,255,255,0.06); color: #e0e0e0; }
+        .ag-card-action.installed { color: rgba(255,255,255,0.2); cursor: default; border-color: transparent; }
+        /* Detail page */
+        .ag-dp-back { background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.08); color:rgba(255,255,255,0.5); font-size:12px; cursor:pointer; font-family:inherit; padding:6px 12px; margin-bottom:24px; display:inline-flex; align-items:center; gap:6px; border-radius:8px; }
+        .ag-dp-back:hover { background:rgba(255,255,255,0.1); color:#e0e0e0; }
+        .ag-dp-back svg { width:14px; height:14px; }
+        .ag-dp-name { font-size:24px; font-weight:600; color:#f0f0f0; margin-bottom:6px; }
+        .ag-dp-desc { font-size:13px; color:rgba(255,255,255,0.4); line-height:1.6; margin-bottom:24px; max-width:600px; }
+        .ag-dp-section { margin-bottom:22px; }
+        .ag-dp-label { font-size:10px; font-weight:600; color:rgba(255,255,255,0.25); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:10px; }
+        .ag-dp-integrations { display:flex; flex-wrap:wrap; gap:8px; }
+        .ag-dp-integ { display:flex; align-items:center; gap:8px; padding:8px 14px; background:#222; border:1px solid rgba(255,255,255,0.06); border-radius:10px; font-size:13px; color:rgba(255,255,255,0.6); }
+        .ag-dp-integ-icon { display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; background:#222; border:1px solid rgba(255,255,255,0.08); border-radius:8px; }
+        .ag-dp-integ-icon img { width:18px; height:18px; }
+        .ag-dp-tasks { display:flex; flex-direction:column; border-radius:10px; overflow:hidden; border:1px solid rgba(255,255,255,0.06); }
+        .ag-dp-task { padding:12px 16px; background:#222; border-bottom:1px solid rgba(255,255,255,0.04); }
+        .ag-dp-task:last-child { border-bottom:none; }
+        .ag-dp-task-name { font-size:13px; color:#ccc; font-weight:600; margin-bottom:3px; }
+        .ag-dp-task-meta { font-size:11px; color:rgba(255,255,255,0.3); }
+        .ag-dp-skills { display:flex; flex-wrap:wrap; gap:6px; }
+        .ag-dp-skill { font-size:11px; padding:4px 10px; background:#222; border:1px solid rgba(255,255,255,0.06); color:rgba(255,255,255,0.45); border-radius:6px; }
+        .ag-dp-footer { margin-top:24px; padding-top:18px; border-top:1px solid rgba(255,255,255,0.06); }
+        .ag-dp-install { padding:10px 28px; border-radius:8px; border:none; background:#fff; color:#111; font-size:14px; font-weight:600; cursor:pointer; font-family:inherit; }
+        .ag-dp-install:hover { background:#e0e0e0; }
+        .ag-dp-install.installed { background:#333; color:rgba(255,255,255,0.3); cursor:default; }
+        .ag-detail-section { margin-bottom: 14px; }
+        .ag-detail-section:last-child { margin-bottom: 0; }
+        .ag-detail-label { font-size: 10px; font-weight: 600; color: rgba(255,255,255,0.25); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
+        .ag-detail-tasks { display: flex; flex-direction: column; border-radius: 8px; overflow: hidden; border: 1px solid rgba(255,255,255,0.06); }
+        .ag-detail-task { padding: 10px 14px; background: #1c1c1c; border-bottom: 1px solid rgba(255,255,255,0.04); }
+        .ag-detail-task:last-child { border-bottom: none; }
+        .ag-detail-task-name { font-size: 12px; color: #ccc; font-weight: 600; margin-bottom: 3px; }
+        .ag-detail-task-desc { font-size: 11px; color: rgba(255,255,255,0.35); line-height: 1.4; }
+        .ag-detail-skills { display: flex; flex-wrap: wrap; gap: 5px; }
+        .ag-skill-tag { font-size: 10px; padding: 3px 8px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); color: rgba(255,255,255,0.4); border-radius: 4px; }
+      </style>
+      <div style="padding: 24px 28px; overflow-y: auto; flex: 1; min-height: 0; background: #1a1a1a;">
+        <div class="ag-top">
+          <h2>Agents</h2>
+          <input type="text" id="agents-search" placeholder="Search" class="ag-search" />
         </div>
 
-        <div style="padding: 12px 14px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between;">
-          <div>
-            <div style="font-size: 14px; font-weight: 500; color: #f0efea;">Browser Relay</div>
-            <div style="font-size: 11px; color: rgba(255,255,255,0.35); margin-top: 2px;">Let your agent browse the web through Chrome</div>
-          </div>
-          <button class="agent-toolbar-btn primary" style="font-size: 11px; flex-shrink: 0;" id="agents-browser-relay-btn">Install Extension</button>
-        </div>
+        <div id="agents-categories" class="ag-tabs"></div>
 
-        <div id="agents-installed" style="margin-bottom: 24px;">
-          <h4 style="font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px;">Installed</h4>
-          <div id="agents-installed-list" style="display: grid; gap: 8px;"></div>
-        </div>
+        <div id="agents-installed-list" class="ag-installed-grid" style="display:none;"></div>
 
-        <div id="agents-catalog">
-          <h4 style="font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px;">Available Templates</h4>
-          <div style="margin-bottom: 12px;">
-            <input type="text" id="agents-search" placeholder="Search agents..." style="width: 100%; padding: 8px 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; color: #f0efea; font-size: 13px; outline: none;" />
-          </div>
-          <div id="agents-categories" style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px;"></div>
-          <div id="agents-catalog-list" style="display: grid; gap: 8px;"></div>
-          <div id="agents-catalog-loading" style="text-align: center; padding: 40px; color: rgba(255,255,255,0.3); font-size: 13px;">
-            <div class="spinner" style="margin: 0 auto 12px;"></div>
-            Loading agent catalog...
-          </div>
-        </div>
+        <div id="agents-catalog-list"></div>
+        <div id="agents-catalog-loading" style="text-align: center; padding: 40px; color: rgba(255,255,255,0.2); font-size: 13px; display:none;">Loading agents...</div>
+
+        <!-- Agent detail page (replaces grid when card is clicked) -->
+        <div id="ag-detail-page" style="display:none;background:#1a1a1a;margin:-24px -28px;padding:24px 28px;min-height:calc(100% + 48px);"></div>
+
+        <!-- hidden refresh + browser relay -->
+        <button type="button" id="agents-refresh-btn" style="display:none;">Refresh</button>
+        <button id="agents-browser-relay-btn" style="display:none;">Install Extension</button>
       </div>
+      <!-- Loading overlay -->
+      <div id="ag-overlay" style="display:none;position:absolute;inset:0;z-index:100;background:rgba(0,0,0,0.3);flex-direction:column;align-items:center;justify-content:center;gap:16px;">
+        <svg id="ag-overlay-spinner" width="40" height="40" viewBox="0 0 40 40" style="animation:ag-spin 0.9s linear infinite;">
+          <circle cx="20" cy="20" r="16" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="3"/>
+          <circle cx="20" cy="20" r="16" fill="none" stroke="#3b82f6" stroke-width="3" stroke-linecap="round" stroke-dasharray="80" stroke-dashoffset="60"/>
+        </svg>
+        <div id="ag-overlay-label" style="font-size:13px;font-weight:500;color:rgba(255,255,255,0.6);letter-spacing:-0.01em;"></div>
+      </div>
+      <style>
+        /* keep absolute from .panel but also be a positioning context for the overlay */
+        @keyframes ag-spin { to { transform: rotate(360deg); } }
+      </style>
     </div>
 
     <div id="commands-panel" class="panel">
@@ -1999,6 +2338,55 @@
             <button class="cmd-learn-btn">Learn more</button>
             <div class="cmd-detail">Adds your agent to a Slack workspace. Create a Slack App at <strong>api.slack.com/apps</strong>, enable Socket Mode, add bot permissions, install it to your workspace, and paste the bot token here. Your agent can then respond to DMs and channel mentions — perfect for a team AI assistant that lives right in your company's Slack.</div>
           </div>
+          <div class="cmd-section-title">Agents</div>
+          <div class="cmd-entry"><div class="cmd-top"><code class="cmd-code">openclaw agents list --json</code><button class="cmd-copy-btn" data-cmd="openclaw agents list --json">Copy</button></div><div class="cmd-desc">List all installed agents with their config</div></div>
+          <div class="cmd-entry"><div class="cmd-top"><code class="cmd-code">openclaw agents add my-agent --workspace ~/.openclaw/workspace-my-agent</code><button class="cmd-copy-btn" data-cmd="openclaw agents add my-agent --workspace ~/.openclaw/workspace-my-agent">Copy</button></div><div class="cmd-desc">Add a new agent with a workspace</div></div>
+          <div class="cmd-entry"><div class="cmd-top"><code class="cmd-code">openclaw agent --agent research-assistant --message "Search for AI trends"</code><button class="cmd-copy-btn" data-cmd='openclaw agent --agent research-assistant --message "Search for AI trends"'>Copy</button></div><div class="cmd-desc">Run a one-shot task on a specific agent</div></div>
+
+          <div class="cmd-section-title">Cron Jobs</div>
+          <div class="cmd-entry"><div class="cmd-top"><code class="cmd-code">openclaw cron list</code><button class="cmd-copy-btn" data-cmd="openclaw cron list">Copy</button></div><div class="cmd-desc">List all scheduled cron jobs</div></div>
+          <div class="cmd-entry"><div class="cmd-top"><code class="cmd-code">openclaw cron trigger &lt;job-id&gt;</code><button class="cmd-copy-btn" data-cmd="openclaw cron trigger">Copy</button></div><div class="cmd-desc">Manually trigger a cron job now</div></div>
+          <div class="cmd-entry"><div class="cmd-top"><code class="cmd-code">openclaw cron runs --limit 20</code><button class="cmd-copy-btn" data-cmd="openclaw cron runs --limit 20">Copy</button></div><div class="cmd-desc">View recent cron run history</div></div>
+
+          <div class="cmd-section-title">Sessions</div>
+          <div class="cmd-entry"><div class="cmd-top"><code class="cmd-code">openclaw sessions list</code><button class="cmd-copy-btn" data-cmd="openclaw sessions list">Copy</button></div><div class="cmd-desc">List all conversation sessions</div></div>
+
+          <div class="cmd-section-title">Messages</div>
+          <div class="cmd-entry"><div class="cmd-top"><code class="cmd-code">openclaw message send --channel telegram --target @user --message "Hello"</code><button class="cmd-copy-btn" data-cmd='openclaw message send --channel telegram --target @user --message "Hello"'>Copy</button></div><div class="cmd-desc">Send a message via Telegram</div></div>
+          <div class="cmd-entry"><div class="cmd-top"><code class="cmd-code">openclaw message send --channel whatsapp --target +1234567890 --message "Hi"</code><button class="cmd-copy-btn" data-cmd='openclaw message send --channel whatsapp --target +1234567890 --message "Hi"'>Copy</button></div><div class="cmd-desc">Send a message via WhatsApp</div></div>
+
+          <div class="cmd-section-title">Memory</div>
+          <div class="cmd-entry"><div class="cmd-top"><code class="cmd-code">openclaw memory search "project architecture"</code><button class="cmd-copy-btn" data-cmd='openclaw memory search "project architecture"'>Copy</button></div><div class="cmd-desc">Search agent memory files</div></div>
+
+          <div class="cmd-section-title">Models</div>
+          <div class="cmd-entry"><div class="cmd-top"><code class="cmd-code">openclaw models list</code><button class="cmd-copy-btn" data-cmd="openclaw models list">Copy</button></div><div class="cmd-desc">List all configured model providers</div></div>
+          <div class="cmd-entry"><div class="cmd-top"><code class="cmd-code">openclaw models scan</code><button class="cmd-copy-btn" data-cmd="openclaw models scan">Copy</button></div><div class="cmd-desc">Discover available models from all providers</div></div>
+
+          <div class="cmd-section-title">Nodes &amp; Devices</div>
+          <div class="cmd-entry"><div class="cmd-top"><code class="cmd-code">openclaw node run</code><button class="cmd-copy-btn" data-cmd="openclaw node run">Copy</button></div><div class="cmd-desc">Start the headless node host service</div></div>
+          <div class="cmd-entry"><div class="cmd-top"><code class="cmd-code">openclaw nodes list</code><button class="cmd-copy-btn" data-cmd="openclaw nodes list">Copy</button></div><div class="cmd-desc">List paired nodes and devices</div></div>
+          <div class="cmd-entry"><div class="cmd-top"><code class="cmd-code">openclaw qr</code><button class="cmd-copy-btn" data-cmd="openclaw qr">Copy</button></div><div class="cmd-desc">Generate pairing QR code for mobile app</div></div>
+
+          <div class="cmd-section-title">Security &amp; Maintenance</div>
+          <div class="cmd-entry"><div class="cmd-top"><code class="cmd-code">openclaw security audit</code><button class="cmd-copy-btn" data-cmd="openclaw security audit">Copy</button></div><div class="cmd-desc">Run a security audit on your config</div></div>
+          <div class="cmd-entry"><div class="cmd-top"><code class="cmd-code">openclaw doctor --fix</code><button class="cmd-copy-btn" data-cmd="openclaw doctor --fix">Copy</button></div><div class="cmd-desc">Health check with auto-fix for common issues</div></div>
+          <div class="cmd-entry"><div class="cmd-top"><code class="cmd-code">openclaw backup create</code><button class="cmd-copy-btn" data-cmd="openclaw backup create">Copy</button></div><div class="cmd-desc">Create a local backup of all OpenClaw state</div></div>
+          <div class="cmd-entry"><div class="cmd-top"><code class="cmd-code">openclaw update check</code><button class="cmd-copy-btn" data-cmd="openclaw update check">Copy</button></div><div class="cmd-desc">Check for OpenClaw updates</div></div>
+          <div class="cmd-entry"><div class="cmd-top"><code class="cmd-code">openclaw reset</code><button class="cmd-copy-btn" data-cmd="openclaw reset">Copy</button></div><div class="cmd-desc">Reset local config and state (keeps CLI installed)</div></div>
+
+          <div class="cmd-section-title">Plugins &amp; Webhooks</div>
+          <div class="cmd-entry"><div class="cmd-top"><code class="cmd-code">openclaw plugins list</code><button class="cmd-copy-btn" data-cmd="openclaw plugins list">Copy</button></div><div class="cmd-desc">List installed plugins and extensions</div></div>
+          <div class="cmd-entry"><div class="cmd-top"><code class="cmd-code">openclaw webhooks list</code><button class="cmd-copy-btn" data-cmd="openclaw webhooks list">Copy</button></div><div class="cmd-desc">List configured webhook integrations</div></div>
+
+          <div class="cmd-section-title">Other</div>
+          <div class="cmd-entry"><div class="cmd-top"><code class="cmd-code">openclaw dashboard</code><button class="cmd-copy-btn" data-cmd="openclaw dashboard">Copy</button></div><div class="cmd-desc">Open the Control UI in your browser</div></div>
+          <div class="cmd-entry"><div class="cmd-top"><code class="cmd-code">openclaw tui</code><button class="cmd-copy-btn" data-cmd="openclaw tui">Copy</button></div><div class="cmd-desc">Open terminal UI connected to the gateway</div></div>
+          <div class="cmd-entry"><div class="cmd-top"><code class="cmd-code">openclaw onboard</code><button class="cmd-copy-btn" data-cmd="openclaw onboard">Copy</button></div><div class="cmd-desc">Interactive onboarding for gateway and workspace</div></div>
+          <div class="cmd-entry"><div class="cmd-top"><code class="cmd-code">openclaw configure</code><button class="cmd-copy-btn" data-cmd="openclaw configure">Copy</button></div><div class="cmd-desc">Interactive config for credentials, channels, and defaults</div></div>
+          <div class="cmd-entry"><div class="cmd-top"><code class="cmd-code">openclaw status</code><button class="cmd-copy-btn" data-cmd="openclaw status">Copy</button></div><div class="cmd-desc">Show channel health and recent session recipients</div></div>
+          <div class="cmd-entry"><div class="cmd-top"><code class="cmd-code">openclaw logs</code><button class="cmd-copy-btn" data-cmd="openclaw logs">Copy</button></div><div class="cmd-desc">Tail gateway logs via RPC</div></div>
+          <div class="cmd-entry"><div class="cmd-top"><code class="cmd-code">openclaw docs "how to set up telegram"</code><button class="cmd-copy-btn" data-cmd='openclaw docs "how to set up telegram"'>Copy</button></div><div class="cmd-desc">Search the live OpenClaw documentation</div></div>
+          <div class="cmd-entry"><div class="cmd-top"><code class="cmd-code">openclaw completion</code><button class="cmd-copy-btn" data-cmd="openclaw completion">Copy</button></div><div class="cmd-desc">Generate shell completion script for autocomplete</div></div>
         </div>
 
         <!-- NemoClaw commands -->
@@ -2216,10 +2604,11 @@
 
     <div id="logs-panel" class="panel">
       <div class="logs-toolbar">
-        <button class="btn" id="refresh-logs-btn">Refresh</button>
-        <button class="btn" id="open-log-file-btn">Open Log File</button>
+        <button class="logs-tab active" id="logs-tab-raw" data-logs-tab="raw">Logs</button>
+        <button class="logs-tab" id="logs-tab-activity" data-logs-tab="activity">Activity</button>
       </div>
       <div class="logs-viewer" id="logs-content">(Loading...)</div>
+      <div class="logs-viewer" id="activity-content" style="display:none;">(No activity yet)</div>
     </div>
 
     <div id="terminal-panel" class="panel">
@@ -2240,49 +2629,97 @@
     </div>
 
     <div id="settings-panel" class="panel">
-      <div class="settings-scroll">
-        <div class="settings-inner">
-
-          <header class="settings-header">
-            <h1 class="settings-page-title">Settings</h1>
-            <p class="settings-page-desc">Account, billing, runtime, and local data for this device.</p>
-          </header>
-
-          <div class="settings-heading">Account</div>
-          <div class="settings-card">
-            <div class="settings-row">
-              <span class="settings-row-label">Email</span>
-              <span class="settings-row-value" id="settings-email">—</span>
+      <div style="display:flex; height:100%; overflow:hidden;">
+        <!-- Settings Sidebar -->
+        <div class="stg-sidebar">
+          <div class="stg-sidebar-user">
+            <div class="stg-sidebar-avatar" id="stg-avatar">V</div>
+            <div>
+              <div class="stg-sidebar-email" id="stg-sidebar-email">—</div>
+              <div class="stg-sidebar-plan" id="stg-sidebar-plan">—</div>
             </div>
-            <div class="settings-row">
-              <span class="settings-row-label">Plan</span>
-              <span class="settings-row-value" id="settings-desktop-desc">
-                <span class="settings-plan-cell">
-                  <span id="settings-desktop-badge" class="settings-badge badge-none" style="display:none;"></span>
-                  <span id="settings-plan-text">Checking…</span>
+          </div>
+          <nav class="stg-nav">
+            <div class="stg-nav-item active" data-section="general"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:8px;opacity:0.7;"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>General</div>
+            <div class="stg-nav-item" data-section="ai-model"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:8px;opacity:0.7;"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>AI Model</div>
+            <div class="stg-nav-item" data-section="agents-channels"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:8px;opacity:0.7;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Agents & Channels</div>
+            <div class="stg-nav-item" data-section="browser-relay"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:8px;opacity:0.7;"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>Browser Relay</div>
+            <div class="stg-nav-item" data-section="data"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:8px;opacity:0.7;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Data</div>
+            <div class="stg-nav-item" data-section="about"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:8px;opacity:0.7;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>About</div>
+          </nav>
+        </div>
+        <!-- Settings Content -->
+        <div class="stg-content">
+          <!-- General -->
+          <div class="stg-section active" id="stg-general">
+            <h2 class="stg-title">General</h2>
+
+            <div class="stg-group-label">Account</div>
+            <div class="stg-card">
+              <div class="stg-item">
+                <div><div class="stg-item-title">Email</div></div>
+                <span class="stg-item-value" id="settings-email">—</span>
+              </div>
+              <div class="stg-item">
+                <div><div class="stg-item-title">Plan</div></div>
+                <span class="stg-item-value">
+                  <span class="settings-plan-cell">
+                    <span id="settings-desktop-badge" class="settings-badge badge-none" style="display:none;"></span>
+                    <span id="settings-plan-text">Checking…</span>
+                  </span>
                 </span>
-              </span>
+              </div>
+              <div class="stg-item">
+                <div><div class="stg-item-title">Manage Subscription</div><div class="stg-item-desc">Billing, invoices, and plan changes</div></div>
+                <button class="stg-btn" id="settings-manage-sub">Open</button>
+              </div>
             </div>
-          </div>
-          <div class="settings-btn-row">
-            <button type="button" class="settings-btn settings-btn-primary" id="settings-manage-sub">Manage subscription</button>
-            <button type="button" class="settings-btn" id="settings-sign-out">Sign out</button>
+
+            <div class="stg-group-label">Runtime</div>
+            <div class="stg-card">
+              <div class="stg-item">
+                <div><div class="stg-item-title">Engine</div></div>
+                <span class="stg-item-value" id="settings-runtime">—</span>
+              </div>
+              <div class="stg-item" id="settings-current-model-row" style="display:none;">
+                <div><div class="stg-item-title">Model</div></div>
+                <span class="stg-item-value" id="settings-current-model">—</span>
+              </div>
+              <div class="stg-item">
+                <div><div class="stg-item-title">Change Runtime</div><div class="stg-item-desc">Switch between OpenClaw and NemoClaw</div></div>
+                <button class="stg-btn" id="settings-change-runtime">Switch</button>
+              </div>
+            </div>
+
+            <div class="stg-group-label">Security</div>
+            <div class="stg-card">
+              <div class="stg-item">
+                <div>
+                  <div class="stg-item-title">Command approval</div>
+                  <div class="stg-item-desc">When enabled, the agent asks for your permission before running commands it hasn't run before. Approved commands are remembered for the session.</div>
+                </div>
+                <label style="position:relative;display:inline-block;width:42px;height:24px;flex-shrink:0;">
+                  <input type="checkbox" id="settings-exec-ask" style="opacity:0;width:0;height:0;">
+                  <span style="position:absolute;cursor:pointer;inset:0;background:#333;border-radius:12px;transition:background 0.2s;"></span>
+                  <span id="settings-exec-ask-knob" style="position:absolute;top:3px;left:3px;width:18px;height:18px;background:#888;border-radius:50%;transition:transform 0.2s,background 0.2s;"></span>
+                </label>
+              </div>
+            </div>
+
+            <div class="stg-group-label">Session</div>
+            <div class="stg-card">
+              <div class="stg-item">
+                <div><div class="stg-item-title">Sign Out</div><div class="stg-item-desc">Sign out of this device</div></div>
+                <button class="stg-btn stg-btn-danger" id="settings-sign-out">Sign out</button>
+              </div>
+            </div>
           </div>
 
-          <div class="settings-heading">Runtime</div>
-          <div class="settings-card">
-            <div class="settings-row">
-              <span class="settings-row-label">Engine</span>
-              <span class="settings-row-value" id="settings-runtime">—</span>
-            </div>
-            <div class="settings-row" id="settings-current-model-row" style="display:none;">
-              <span class="settings-row-label">Model</span>
-              <span class="settings-row-value" id="settings-current-model">—</span>
-            </div>
-          </div>
-          <div class="settings-btn-row">
-            <button type="button" class="settings-btn" id="settings-change-runtime">Change runtime</button>
-          </div>
+          <!-- AI Model (placeholder — the actual content is below, toggled by runtime) -->
+          <div class="stg-section" id="stg-ai-model">
+            <h2 class="stg-title">AI Model</h2>
+
+          <!-- old account/runtime sections removed — now in sidebar General tab -->
 
           <!-- NemoClaw only: OpenClaw users configure keys via openclaw onboard / ~/.openclaw -->
           <div id="settings-nemo-only-model-keys" class="settings-nemo-only-block" style="display: none;">
@@ -2331,38 +2768,204 @@
             </div>
           </div>
 
-          <div class="settings-heading">Data</div>
-          <div class="settings-card">
-            <div class="settings-row">
-              <span class="settings-row-label">Agent config</span>
-              <span class="settings-row-value mono" id="settings-data-path">~/.openclaw</span>
+          <!-- OpenClaw only: model + API key management via openclaw CLI -->
+          <div id="settings-openclaw-model-keys" style="display: none;">
+            <p class="stg-item-desc" style="margin-bottom:16px;">Manage API keys and connect AI providers. Switch models in the chat using the model dropdown.</p>
+
+            <div class="stg-group-label">Default Model</div>
+            <div class="stg-item">
+              <div>
+                <div class="stg-item-title">Fallback model for new conversations</div>
+                <div class="stg-item-desc">Used when no model is explicitly selected in chat</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <select id="oc-default-model-select" class="stg-select" style="min-width:180px;"></select>
+              </div>
             </div>
-            <div class="settings-row">
-              <span class="settings-row-label">App data</span>
-              <span class="settings-row-value mono" id="settings-appdata-path">~/.openclaw-desktop</span>
+
+            <div class="stg-group-label">Claude Code</div>
+            <div class="stg-item">
+              <div style="display:flex;align-items:center;gap:10px;">
+                <svg width="20" height="20" viewBox="0 0 248 248" fill="none" style="flex-shrink:0;">
+                  <path d="M52.4285 162.873L98.7844 136.879L99.5485 134.602L98.7844 133.334H96.4921L88.7237 132.862L62.2346 132.153L39.3113 131.207L17.0249 130.026L11.4214 128.844L6.2 121.873L6.7094 118.447L11.4214 115.257L18.171 115.847L33.0711 116.911L55.485 118.447L71.6586 119.392L95.728 121.873H99.5485L100.058 120.337L98.7844 119.392L97.7656 118.447L74.5877 102.732L49.4995 86.1905L36.3823 76.62L29.3779 71.7757L25.8121 67.2858L24.2839 57.3608L30.6515 50.2716L39.3113 50.8623L41.4763 51.4531L50.2636 58.1879L68.9842 72.7209L93.4357 90.6804L97.0015 93.6343L98.4374 92.6652L98.6571 91.9801L97.0015 89.2625L83.757 65.2772L69.621 40.8192L63.2534 30.6579L61.5978 24.632C60.9565 22.1032 60.579 20.0111 60.579 17.4246L67.8381 7.49965L71.9133 6.19995L81.7193 7.49965L85.7946 11.0443L91.9074 24.9865L101.714 46.8451L116.996 76.62L121.453 85.4816L123.873 93.6343L124.764 96.1155H126.292V94.6976L127.566 77.9197L129.858 57.3608L132.15 30.8942L132.915 23.4505L136.608 14.4708L143.994 9.62643L149.725 12.344L154.437 19.0788L153.8 23.4505L150.998 41.6463L145.522 70.1215L141.957 89.2625H143.994L146.414 86.7813L156.093 74.0206L172.266 53.698L179.398 45.6635L187.803 36.802L193.152 32.5484H203.34L210.726 43.6549L207.415 55.1159L196.972 68.3492L188.312 79.5739L175.896 96.2095L168.191 109.585L168.882 110.689L170.738 110.53L198.755 104.504L213.91 101.787L231.994 98.7149L240.144 102.496L241.036 106.395L237.852 114.311L218.495 119.037L195.826 123.645L162.07 131.592L161.696 131.893L162.137 132.547L177.36 133.925L183.855 134.279H199.774L229.447 136.524L237.215 141.605L241.8 147.867L241.036 152.711L229.065 158.737L213.019 154.956L175.45 145.977L162.587 142.787H160.805V143.85L171.502 154.366L191.242 172.089L215.82 195.011L217.094 200.682L213.91 205.172L210.599 204.699L188.949 188.394L180.544 181.069L161.696 165.118H160.422V166.772L164.752 173.152L187.803 207.771L188.949 218.405L187.294 221.832L181.308 223.959L174.813 222.777L161.187 203.754L147.305 182.486L136.098 163.345L134.745 164.2L128.075 235.42L125.019 239.082L117.887 241.8L111.902 237.31L108.718 229.984L111.902 215.452L115.722 196.547L118.779 181.541L121.58 162.873L123.291 156.636L123.14 156.219L121.773 156.449L107.699 175.752L86.304 204.699L69.3663 222.777L65.291 224.431L58.2867 220.768L58.9235 214.27L62.8713 208.48L86.304 178.705L100.44 160.155L109.551 149.507L109.462 147.967L108.959 147.924L46.6977 188.512L35.6182 189.93L30.7788 185.44L31.4156 178.115L33.7079 175.752L52.4285 162.873Z" fill="#D97757"/>
+                </svg>
+                <div>
+                  <div class="stg-item-title">Use your Claude Code as your AI model</div>
+                  <div class="stg-item-desc" id="claude-code-status">Checking…</div>
+                </div>
+              </div>
+              <button class="stg-btn" id="claude-code-connect-btn">Connect</button>
             </div>
-          </div>
-          <div class="settings-btn-row">
-            <button type="button" class="settings-btn" id="settings-open-data">Open config folder</button>
-            <button type="button" class="settings-btn" id="settings-open-appdata">Open app data</button>
-            <button type="button" class="settings-btn settings-btn-danger" id="settings-delete-agent">Delete agent &amp; files</button>
+            <div class="stg-item" id="claude-code-thinking-row" style="display:none;">
+              <div><div class="stg-item-title">Thinking effort</div><div class="stg-item-desc">How much reasoning before responding</div></div>
+              <select class="stg-select" id="claude-code-thinking" style="min-width:120px;">
+                <option value="low">Low</option>
+                <option value="medium" selected>Medium</option>
+                <option value="high">High</option>
+              </select>
+            </div>
+            <div class="stg-group-label">API Keys</div>
+            <div class="stg-item">
+              <div><div class="stg-item-title">Configured providers</div></div>
+              <span class="stg-item-value" id="oc-auth-providers-list">loading…</span>
+            </div>
+            <div class="stg-item">
+              <div>
+                <div class="stg-item-title">Add a provider</div>
+                <div class="stg-item-desc">Add an API key to unlock more models in chat</div>
+              </div>
+              <select id="oc-add-provider-select" class="stg-select" style="min-width:160px;">
+                <option value="" disabled selected>Select provider</option>
+                <option value="openai">OpenAI</option>
+                <option value="anthropic">Anthropic</option>
+                <option value="google">Google</option>
+                <option value="xai">xAI</option>
+                <option value="mistral">Mistral</option>
+                <option value="groq">Groq</option>
+                <option value="openai-codex">OpenAI Codex</option>
+                <option value="github-copilot">GitHub Copilot</option>
+              </select>
+            </div>
+
           </div>
 
-          <div class="settings-heading">About</div>
-          <div class="settings-card">
-            <div class="settings-row">
-              <span class="settings-row-label">Version</span>
-              <span class="settings-row-value" id="settings-version">v0.1.0</span>
+          </div><!-- end stg-ai-model -->
+
+          <!-- Agents & Channels -->
+          <div class="stg-section" id="stg-agents-channels">
+            <h2 class="stg-title">Agents & Channels</h2>
+            <div id="settings-openclaw-channels" style="display: none;">
+              <p class="settings-hint">Connect messaging channels to your agents. Each agent can have its own channel.</p>
+              <div id="oc-agents-list"></div>
+
+              <!-- Add channel form -->
+              <div class="settings-card" style="margin-top: 12px;">
+                <div class="settings-field">
+                  <label style="font-weight: 600; margin-bottom: 8px; display: block;">Connect a new channel</label>
+                  <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end;">
+                    <div style="flex: 1; min-width: 120px;">
+                      <label style="font-size: 11px; color: rgba(255,255,255,0.4); display: block; margin-bottom: 4px;">Agent</label>
+                      <select id="oc-ch-agent" style="width: 100%; padding: 7px 10px; background: #1a1a1a; color: #e0e0e0; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; font-size: 13px; outline: none;">
+                        <option value="">Select agent</option>
+                      </select>
+                    </div>
+                    <div style="flex: 1; min-width: 120px;">
+                      <label style="font-size: 11px; color: rgba(255,255,255,0.4); display: block; margin-bottom: 4px;">Channel</label>
+                      <select id="oc-ch-type" style="width: 100%; padding: 7px 10px; background: #1a1a1a; color: #e0e0e0; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; font-size: 13px; outline: none;">
+                        <option value="">Select channel</option>
+                        <option value="telegram">Telegram</option>
+                        <option value="discord">Discord</option>
+                        <option value="slack">Slack</option>
+                        <option value="whatsapp">WhatsApp</option>
+                        <option value="signal">Signal</option>
+                        <option value="imessage">iMessage</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div id="oc-ch-token-field" style="margin-top: 10px; display: none;">
+                    <label style="font-size: 11px; color: rgba(255,255,255,0.4); display: block; margin-bottom: 4px;" id="oc-ch-token-label">Bot token</label>
+                    <input type="password" id="oc-ch-token" placeholder="" autocomplete="off" spellcheck="false" style="width: 100%;" />
+                  </div>
+                  <div id="oc-ch-whatsapp-note" style="display: none; margin-top: 10px; font-size: 12px; color: rgba(255,255,255,0.4);">
+                    Click Connect to open the pairing flow. You'll scan a QR code to link your account.
+                  </div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px; margin-top: 12px; padding: 0 16px 14px 16px;">
+                  <button type="button" class="settings-btn settings-btn-primary" id="oc-ch-connect-btn" disabled>Connect</button>
+                  <span id="oc-ch-status" class="settings-inline-msg" role="status"></span>
+                </div>
+              </div>
             </div>
           </div>
-          <div class="settings-btn-row">
-            <button type="button" class="settings-btn" id="settings-open-logs">View logs</button>
-            <button type="button" class="settings-btn" id="settings-contact-support">Contact support</button>
-            <button type="button" class="settings-btn" id="settings-open-website">valnaa.com</button>
+
+          <!-- Browser Relay -->
+          <div class="stg-section" id="stg-browser-relay">
+            <h2 class="stg-title">Browser Relay</h2>
+            <p class="stg-item-desc" style="margin-bottom:20px;">The browser relay is a Chrome extension that gives your agents the ability to browse the web. Once installed, it automatically detects the running gateway on your machine and connects over localhost. Your agents can then open tabs, read page content, take screenshots, click elements, and fill forms through your browser.</p>
+
+            <div class="stg-group-label">Extension</div>
+            <div class="stg-card">
+              <div class="stg-item">
+                <div>
+                  <div class="stg-item-title">Valnaa Browser Relay</div>
+                  <div class="stg-item-desc">Chrome extension · v1.0.0 · Connects automatically</div>
+                </div>
+                <button class="stg-btn stg-btn-primary" id="stg-chrome-store-btn">Install from Chrome Web Store</button>
+              </div>
+            </div>
+
+            <div class="stg-group-label">Status</div>
+            <div class="stg-card">
+              <div class="stg-item">
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <div id="stg-relay-dot" style="width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,0.15);flex-shrink:0;"></div>
+                  <div>
+                    <div class="stg-item-title" id="stg-relay-status">Checking...</div>
+                    <div class="stg-item-desc">The extension checks every few seconds and connects when the gateway is running</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="stg-group-label">Manual install</div>
+            <div class="stg-card">
+              <div class="stg-item">
+                <div>
+                  <div class="stg-item-title">Install from file</div>
+                  <div class="stg-item-desc">For offline use or if the Web Store is unavailable</div>
+                </div>
+                <div style="display:flex;gap:6px;">
+                  <button class="stg-btn" id="stg-chrome-copy-downloads">Copy to Downloads</button>
+                  <button class="stg-btn" id="stg-chrome-download-zip">Save .zip</button>
+                </div>
+              </div>
+            </div>
           </div>
 
-        </div>
-      </div>
+          <!-- Data -->
+          <div class="stg-section" id="stg-data">
+            <h2 class="stg-title">Data</h2>
+            <div class="stg-card">
+              <div class="stg-item">
+                <div><div class="stg-item-title">Agent Config</div><div class="stg-item-desc" id="settings-data-path">~/.openclaw</div></div>
+                <button class="stg-btn" id="settings-open-data">Open</button>
+              </div>
+              <div class="stg-item">
+                <div><div class="stg-item-title">App Data</div><div class="stg-item-desc" id="settings-appdata-path">~/.openclaw-desktop</div></div>
+                <button class="stg-btn" id="settings-open-appdata">Open</button>
+              </div>
+              <div class="stg-item">
+                <div><div class="stg-item-title">Delete Agent & Files</div><div class="stg-item-desc">Remove all agent data, config, and workspace files from this device</div></div>
+                <button class="stg-btn stg-btn-danger" id="settings-delete-agent">Delete</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- About -->
+          <div class="stg-section" id="stg-about">
+            <h2 class="stg-title">About</h2>
+            <div class="stg-card">
+              <div class="stg-item">
+                <div><div class="stg-item-title">Version</div></div>
+                <span class="stg-item-value" id="settings-version">v0.1.0</span>
+              </div>
+              <div class="stg-item">
+                <div><div class="stg-item-title">View Logs</div><div class="stg-item-desc">Open diagnostics log file</div></div>
+                <button class="stg-btn" id="settings-open-logs">Open</button>
+              </div>
+              <div class="stg-item">
+                <div><div class="stg-item-title">Contact Support</div><div class="stg-item-desc">Send an email to the Valnaa team</div></div>
+                <button class="stg-btn" id="settings-contact-support">Email</button>
+              </div>
+              <div class="stg-item">
+                <div><div class="stg-item-title">Website</div><div class="stg-item-desc">valnaa.com</div></div>
+                <button class="stg-btn" id="settings-open-website">Open</button>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- end stg-content -->
+      </div><!-- end flex container -->
     </div>
   </div>
 
@@ -2553,7 +3156,7 @@
         if (id === 'browser') void refreshChromeSetupPanel();
         if (id === 'agents') void refreshAgentsPanel();
         if (id === 'terminal') initTerminal();
-        if (id === 'commands') updateCommandsPanel();
+        if (id === 'commands') { updateDashboard(); updateCommandsPanel(); }
         if (id === 'settings') void refreshSettingsPanel();
         if (id === 'openshell') {
           if (!oshAlive && lastAppliedRuntime === 'nemoclaw') void spawnOpenshellTui();
@@ -2673,6 +3276,16 @@
       if (nemoModelBlock) {
         nemoModelBlock.style.display = runtimeInfo?.runtime === 'nemoclaw' ? 'block' : 'none';
       }
+      const ocModelBlock = document.getElementById('settings-openclaw-model-keys');
+      if (ocModelBlock) {
+        ocModelBlock.style.display = runtimeInfo?.runtime !== 'nemoclaw' ? 'block' : 'none';
+        if (runtimeInfo?.runtime !== 'nemoclaw') loadOcModelStatus();
+      }
+      const ocChannelsBlock = document.getElementById('settings-openclaw-channels');
+      if (ocChannelsBlock) {
+        ocChannelsBlock.style.display = runtimeInfo?.runtime !== 'nemoclaw' ? 'block' : 'none';
+        if (runtimeInfo?.runtime !== 'nemoclaw') loadAgentChannels();
+      }
       const optHint = document.getElementById('settings-optional-keys-hint');
       if (optHint) {
         optHint.textContent =
@@ -2685,6 +3298,7 @@
       }
 
       emailEl.textContent = session?.email || 'Not signed in';
+      updateSidebarUser(session?.email, null);
 
       // Show cached subscription state immediately, refresh in background
       if (_lastSubResult) applySubResult(_lastSubResult, emailEl, planText, desktopBadge);
@@ -2702,7 +3316,7 @@
     }
 
     function applySubResult(sub, emailEl, planText, desktopBadge) {
-      if (sub.email) emailEl.textContent = sub.email;
+      if (sub.email) { emailEl.textContent = sub.email; updateSidebarUser(sub.email, sub.hasDesktopPaid ? 'Paid' : sub.desktopTrialActive ? 'Free Trial' : 'Active'); }
       if (sub.desktopSubscription) {
         if (sub.hasDesktopPaid) {
           planText.textContent = 'Paid';
@@ -2744,6 +3358,146 @@
     document.getElementById('settings-change-runtime').addEventListener('click', () => {
       showRuntimePicker();
     });
+
+    // ── Exec approval toggle ──
+    var execAskCheckbox = document.getElementById('settings-exec-ask');
+    var execAskKnob = document.getElementById('settings-exec-ask-knob');
+    function updateExecAskVisual(on) {
+      if (!execAskCheckbox || !execAskKnob) return;
+      var track = execAskKnob.parentElement.querySelector('span:first-of-type');
+      if (on) {
+        execAskKnob.style.transform = 'translateX(18px)';
+        execAskKnob.style.background = '#fff';
+        if (track) track.style.background = '#4ade80';
+      } else {
+        execAskKnob.style.transform = 'translateX(0)';
+        execAskKnob.style.background = '#888';
+        if (track) track.style.background = '#333';
+      }
+    }
+    // Load current state
+    if (oc.getExecAsk) {
+      oc.getExecAsk().then(function(mode) {
+        var isOn = mode === 'on-miss' || mode === 'always';
+        execAskCheckbox.checked = isOn;
+        updateExecAskVisual(isOn);
+      });
+    }
+    if (execAskCheckbox) {
+      execAskCheckbox.addEventListener('change', async function() {
+        var newMode = this.checked ? 'on-miss' : 'off';
+        updateExecAskVisual(this.checked);
+        if (oc.setExecAsk) {
+          var r = await oc.setExecAsk(newMode);
+          if (!r?.ok) {
+            this.checked = !this.checked;
+            updateExecAskVisual(this.checked);
+          }
+        }
+      });
+    }
+    // ── Agent Models collapse toggle ──
+    var amToggle = document.getElementById('agent-models-toggle');
+    var amBody = document.getElementById('oc-agent-models-list');
+    var amChevron = document.getElementById('agent-models-chevron');
+    if (amToggle && amBody) {
+      amToggle.addEventListener('click', function() {
+        var hidden = amBody.style.display === 'none';
+        amBody.style.display = hidden ? '' : 'none';
+        if (amChevron) amChevron.style.transform = hidden ? 'rotate(90deg)' : 'rotate(0deg)';
+      });
+    }
+
+    // ── Claude Code connect ──
+    var ccStatusEl = document.getElementById('claude-code-status');
+    var ccBtn = document.getElementById('claude-code-connect-btn');
+    async function checkClaudeCodeStatus() {
+      if (!oc.claudeCodeStatus || !ccStatusEl || !ccBtn) return;
+      var s = await oc.claudeCodeStatus();
+      if (!s.cliFound) {
+        ccStatusEl.textContent = 'Claude Code not installed — click Connect to set up';
+        ccStatusEl.style.color = 'rgba(255,255,255,0.35)';
+        ccBtn.textContent = 'Connect';
+        ccBtn.disabled = false;
+        ccBtn.dataset.mode = '';
+      } else if (s.enabled && (s.proxyRunning || s.proxyInstalled)) {
+        ccStatusEl.textContent = 'Connected — ' + s.cliVersion;
+        ccStatusEl.style.color = '#4ade80';
+        ccBtn.textContent = 'Disconnect';
+        ccBtn.disabled = false;
+        ccBtn.dataset.mode = 'disconnect';
+        var thinkRow = document.getElementById('claude-code-thinking-row');
+        if (thinkRow) thinkRow.style.display = '';
+      } else if (!s.enabled && s.cliFound) {
+        ccStatusEl.textContent = 'Claude Code found (' + s.cliVersion + ')';
+        ccStatusEl.style.color = 'rgba(255,255,255,0.5)';
+        ccBtn.textContent = 'Connect';
+        ccBtn.disabled = false;
+        ccBtn.dataset.mode = '';
+      } else {
+        ccStatusEl.textContent = 'Claude Code found (' + s.cliVersion + ') — click to connect';
+        ccStatusEl.style.color = 'rgba(255,255,255,0.5)';
+        ccBtn.textContent = 'Connect';
+        ccBtn.disabled = false;
+      }
+    }
+    checkClaudeCodeStatus();
+
+    if (ccBtn) {
+      ccBtn.addEventListener('click', async function() {
+        if (this.dataset.mode === 'disconnect') {
+          this.disabled = true; this.textContent = 'Disconnecting…';
+          await oc.claudeCodeDisconnect();
+          this.dataset.mode = '';
+          if (ccStatusEl) { ccStatusEl.textContent = 'Disconnected'; ccStatusEl.style.color = 'rgba(255,255,255,0.35)'; }
+          this.textContent = 'Connect';
+          this.disabled = false;
+          setTimeout(checkClaudeCodeStatus, 5000);
+          return;
+        }
+        this.disabled = true; this.textContent = 'Setting up…';
+        if (ccStatusEl) { ccStatusEl.textContent = 'Installing Claude Code…'; ccStatusEl.style.color = 'rgba(255,255,255,0.5)'; }
+        var r = await oc.claudeCodeConnect();
+        if (r?.ok) {
+          if (ccStatusEl) { ccStatusEl.textContent = 'Connected! Restarting agent…'; ccStatusEl.style.color = '#4ade80'; }
+          setTimeout(checkClaudeCodeStatus, 5000);
+        } else if (r?.needsAuth) {
+          // Claude Code installed but needs sign-in
+          if (ccStatusEl) { ccStatusEl.textContent = 'Sign in to Claude in your browser…'; ccStatusEl.style.color = '#D97757'; }
+          this.textContent = 'Waiting…';
+          await oc.claudeCodeAuth();
+          // Poll for auth completion
+          var authPoll = setInterval(async function() {
+            var s = await oc.claudeCodeStatus();
+            if (s?.cliFound) {
+              try {
+                var r2 = await oc.claudeCodeConnect();
+                if (r2?.ok) {
+                  clearInterval(authPoll);
+                  if (ccStatusEl) { ccStatusEl.textContent = 'Connected!'; ccStatusEl.style.color = '#4ade80'; }
+                  setTimeout(checkClaudeCodeStatus, 3000);
+                }
+              } catch {}
+            }
+          }, 3000);
+          // Stop polling after 2 minutes
+          setTimeout(function() { clearInterval(authPoll); ccBtn.disabled = false; ccBtn.textContent = 'Connect'; }, 120000);
+        } else {
+          if (ccStatusEl) { ccStatusEl.textContent = r?.error || 'Failed'; ccStatusEl.style.color = '#f87171'; }
+          this.disabled = false; this.textContent = 'Connect';
+        }
+      });
+    }
+
+    // Claude Code thinking level
+    var thinkSelect = document.getElementById('claude-code-thinking');
+    if (thinkSelect && oc.getClaudeThinking) {
+      oc.getClaudeThinking().then(function(v) { if (v) thinkSelect.value = v; });
+      thinkSelect.addEventListener('change', function() {
+        if (oc.setClaudeThinking) oc.setClaudeThinking(this.value);
+      });
+    }
+
     document.getElementById('settings-open-data').addEventListener('click', () => oc.openDataFolder('config'));
     // Track which providers have keys saved (persisted per session in renderer)
     var _savedProviderKeys = {};
@@ -2888,6 +3642,516 @@
         btn.textContent = 'Switch model';
       }
     });
+    // ── OpenClaw model + API key management ──
+    var _ocCurrentModel = '';
+
+    async function loadOcModelStatus() {
+      if (!oc.ocGetModelStatus) return;
+      try {
+        var status = await oc.ocGetModelStatus();
+        if (!status) return;
+        if (status.defaultModel) {
+          _ocCurrentModel = status.defaultModel;
+        }
+        // Populate default model dropdown from configured models
+        var defSel = document.getElementById('oc-default-model-select');
+        if (defSel && status.configuredModels) {
+          defSel.innerHTML = '';
+          status.configuredModels.forEach(function(m) {
+            var opt = document.createElement('option');
+            opt.value = m;
+            opt.textContent = m.split('/').pop() + ' \u00B7 ' + m.split('/')[0];
+            if (m === _ocCurrentModel) opt.selected = true;
+            defSel.appendChild(opt);
+          });
+        }
+        // Show configured providers and track which have keys
+        var provList = document.getElementById('oc-auth-providers-list');
+        if (provList && status.auth?.providers) {
+          var names = status.auth.providers.map(function(p) { return p.provider; });
+          provList.textContent = names.length ? names.join(', ') : 'none';
+          names.forEach(function(n) { _ocSavedProviders[n] = true; });
+        }
+
+        // Build per-agent model dropdowns
+        if (oc.ocGetAgents) {
+          var agentData = await oc.ocGetAgents();
+          var agentList = document.getElementById('oc-agent-models-list');
+          if (agentList && agentData?.agents) {
+            agentList.innerHTML = '';
+            agentData.agents.forEach(function(a) {
+              var modelId = a.model || _ocCurrentModel || '';
+              var item = document.createElement('div');
+              item.className = 'stg-item';
+              item.innerHTML = '<div><div class="stg-item-title">' + (a.name || a.id) +
+                (a.isDefault ? ' <span style="color:#555;font-size:11px;">(default)</span>' : '') +
+                '</div><div class="stg-item-desc">' + modelId + '</div></div>';
+              // Build dropdown from configured models
+              var sel = document.createElement('select');
+              sel.className = 'stg-select';
+              sel.style.minWidth = '180px';
+              (status.configuredModels || []).forEach(function(m) {
+                var opt = document.createElement('option');
+                opt.value = m;
+                opt.textContent = m.split('/').pop() + ' \u00B7 ' + m.split('/')[0];
+                if (m === modelId) opt.selected = true;
+                sel.appendChild(opt);
+              });
+              sel.addEventListener('change', async function() {
+                var model = this.value;
+                if (!model || !oc.ocSetAgentModel) return;
+                try {
+                  await oc.ocSetAgentModel(a.id, model);
+                  loadOcModelStatus();
+                } catch {}
+              });
+              item.appendChild(sel);
+              agentList.appendChild(item);
+            });
+          }
+        }
+      } catch { /* ok */ }
+    }
+
+    var _ocProviderKeyPlaceholders = {
+      openai: 'sk-…', anthropic: 'sk-ant-…', google: 'AIza…',
+      xai: 'xai-…', mistral: '…', groq: 'gsk_…',
+      'openai-codex': 'sk-…',
+    };
+    // Providers with browser-based OAuth (verified from OpenClaw source exports)
+    // openai-codex: loginOpenAICodexOAuth (browser OAuth on localhost:1455)
+    // github-copilot: githubCopilotLoginCommand (GitHub device flow)
+    // Regular openai/anthropic/google/etc = API key only via paste-token
+    var _ocOAuthProviders = {
+      'openai-codex': { label: 'OpenAI Codex OAuth', cmd: 'openclaw models auth login --provider openai-codex' },
+      'github-copilot': { label: 'GitHub Copilot', cmd: 'openclaw models auth login-github-copilot --yes' },
+    };
+    var _ocSavedProviders = {};
+
+    // Add provider select — opens API key modal for selected provider
+    var addProviderSelect = document.getElementById('oc-add-provider-select');
+    if (addProviderSelect) addProviderSelect.addEventListener('change', function() {
+      var provider = this.value;
+      if (provider) {
+        showApiKeyModal(provider);
+        this.value = '';
+      }
+    });
+
+    // Default model change — uses openclaw CLI to set and signal gateway
+    var defModelSel = document.getElementById('oc-default-model-select');
+    if (defModelSel) defModelSel.addEventListener('change', async function() {
+      var model = this.value;
+      if (!model || !oc.ocSetModel) return;
+      this.disabled = true;
+      this.style.opacity = '0.5';
+      var toast = document.getElementById('app-toast');
+      if (toast) { toast.textContent = 'Switching model…'; toast.classList.add('visible'); }
+      try {
+        var r = await oc.ocSetModel(model);
+        if (r?.ok) {
+          _ocCurrentModel = model;
+          if (toast) { toast.textContent = 'Model switched'; }
+          // Reload the Control UI so it picks up the new default
+          if (webview.style.display !== 'none' && webview.src) webview.reload();
+        } else {
+          if (toast) { toast.textContent = r?.error || 'Failed to switch'; }
+        }
+      } catch (e) {
+        if (toast) { toast.textContent = 'Failed to switch model'; }
+      } finally {
+        this.disabled = false;
+        this.style.opacity = '1';
+        setTimeout(function() { if (toast) toast.classList.remove('visible'); }, 2000);
+      }
+    });
+
+    function showApiKeyModal(provider) {
+      var backdrop = document.getElementById('api-key-modal-backdrop');
+      var title = document.getElementById('api-key-modal-title');
+      var desc = document.getElementById('api-key-modal-desc');
+      var keySection = document.getElementById('api-key-modal-key-section');
+      var oauthSection = document.getElementById('api-key-modal-oauth-section');
+      var oauthDivider = document.getElementById('api-key-modal-oauth-divider');
+      var keyLabel = document.getElementById('oc-key-label');
+      var keyInput = document.getElementById('oc-key-input');
+      var oauthLabel = document.getElementById('oc-oauth-label');
+      var oauthBtn = document.getElementById('oc-oauth-btn');
+      var saveBtn = document.getElementById('oc-key-save-btn');
+      var statusEl = document.getElementById('oc-key-status');
+
+      var hasApiKey = provider in _ocProviderKeyPlaceholders;
+      var hasOAuth = provider in _ocOAuthProviders;
+      var isCopilotOnly = provider === 'github-copilot';
+      var pName = provider === 'xai' ? 'xAI' : provider === 'openai-codex' ? 'OpenAI Codex' : provider === 'github-copilot' ? 'GitHub Copilot' : provider.charAt(0).toUpperCase() + provider.slice(1);
+
+      if (title) title.textContent = pName + ' API Key';
+      if (desc) desc.textContent = 'Enter your ' + pName + ' API key to use this model';
+      if (statusEl) { statusEl.textContent = ''; statusEl.style.color = ''; }
+
+      // Key input
+      if (keySection) keySection.style.display = (hasApiKey && !isCopilotOnly) ? 'block' : 'none';
+      if (saveBtn) saveBtn.style.display = (hasApiKey && !isCopilotOnly) ? '' : 'none';
+      if (hasApiKey && keyLabel && keyInput) {
+        keyLabel.textContent = pName + ' API key';
+        keyInput.placeholder = _ocProviderKeyPlaceholders[provider] || '…';
+        keyInput.dataset.provider = provider;
+        keyInput.value = '';
+      }
+
+      // OAuth
+      if (oauthSection) oauthSection.style.display = hasOAuth ? 'block' : 'none';
+      if (oauthDivider) oauthDivider.style.display = (hasOAuth && hasApiKey && !isCopilotOnly) ? 'block' : 'none';
+      if (hasOAuth && oauthLabel && oauthBtn) {
+        var info = _ocOAuthProviders[provider];
+        oauthLabel.textContent = isCopilotOnly ? 'Sign in with GitHub' : 'Login in browser';
+        oauthBtn.dataset.cmd = info.cmd;
+        oauthBtn.dataset.provider = provider;
+      }
+      if (isCopilotOnly && title) title.textContent = 'GitHub Copilot';
+      if (isCopilotOnly && desc) desc.textContent = 'Sign in with your GitHub account';
+
+      if (backdrop) backdrop.classList.add('active');
+      if (keyInput && hasApiKey && !isCopilotOnly) setTimeout(function() { keyInput.focus(); }, 100);
+    }
+
+    function hideApiKeyModal() {
+      var backdrop = document.getElementById('api-key-modal-backdrop');
+      if (backdrop) backdrop.classList.remove('active');
+    }
+
+    // Cancel button
+    document.getElementById('api-key-modal-cancel')?.addEventListener('click', hideApiKeyModal);
+    // Click backdrop to close
+    document.getElementById('api-key-modal-backdrop')?.addEventListener('click', function(e) {
+      if (e.target === this) hideApiKeyModal();
+    });
+
+
+    // Single API key save button
+    document.getElementById('oc-key-save-btn')?.addEventListener('click', async function() {
+      const input = document.getElementById('oc-key-input');
+      const statusEl = document.getElementById('oc-key-status');
+      const btn = document.getElementById('oc-key-save-btn');
+      if (!input || !oc.ocSaveApiKey) return;
+      const provider = input.dataset.provider;
+      const key = input.value.trim();
+      if (!key) { if (statusEl) { statusEl.textContent = 'Enter a key first.'; statusEl.style.color = '#f87171'; } return; }
+      btn.disabled = true; btn.textContent = 'Saving…';
+      if (statusEl) statusEl.textContent = '';
+      try {
+        const r = await oc.ocSaveApiKey(provider, key);
+        if (!r?.ok) { if (statusEl) { statusEl.textContent = r?.error || 'Failed'; statusEl.style.color = '#f87171'; } return; }
+        if (statusEl) { statusEl.textContent = 'Saved!'; statusEl.style.color = '#4ade80'; }
+        input.value = '';
+        _ocSavedProviders[provider] = true;
+        setTimeout(function() { hideApiKeyModal(); }, 600);
+        loadOcModelStatus();
+      } catch (e) {
+        if (statusEl) { statusEl.textContent = e?.message || 'Failed'; statusEl.style.color = '#f87171'; }
+      } finally { btn.disabled = false; btn.textContent = 'Save key'; }
+    });
+
+    // OAuth button — runs auth flow via IPC (opens system browser)
+    document.getElementById('oc-oauth-btn')?.addEventListener('click', async function() {
+      const statusEl = document.getElementById('oc-oauth-status');
+      const provider = this.dataset.provider;
+      if (!provider || !oc.ocRunOAuth) return;
+      this.disabled = true;
+      this.textContent = 'Waiting for browser…';
+      if (statusEl) { statusEl.textContent = 'Complete sign-in in your browser.'; statusEl.style.color = '#a3a3a3'; }
+      try {
+        const r = await oc.ocRunOAuth(provider);
+        if (r?.ok) {
+          if (statusEl) { statusEl.textContent = 'Authenticated!'; statusEl.style.color = '#4ade80'; }
+          _ocSavedProviders[provider] = true;
+          setTimeout(function() { hideApiKeyModal(); }, 600);
+          loadOcModelStatus();
+        } else {
+          if (statusEl) { statusEl.textContent = r?.error || 'Auth failed.'; statusEl.style.color = '#f87171'; }
+        }
+      } catch (e) {
+        if (statusEl) { statusEl.textContent = e?.message || 'Auth failed.'; statusEl.style.color = '#f87171'; }
+      } finally {
+        this.disabled = false;
+        var isCopilotOnly = provider === 'github-copilot';
+        this.textContent = isCopilotOnly ? 'Login with GitHub' : 'Login in browser';
+      }
+    });
+
+    // ── Agent Channels management ──
+
+    var _channelTokenFields = {
+      telegram: { label: 'Bot token (from @BotFather)', placeholder: '123456:ABC-DEF...' },
+      discord: { label: 'Bot token (from discord.com/developers)', placeholder: 'MTk...' },
+      slack: { label: 'Bot token (xoxb-...)', placeholder: 'xoxb-...' },
+      signal: { label: 'Phone number (E.164 format)', placeholder: '+1234567890' },
+    };
+    var _channelNoToken = ['whatsapp', 'imessage'];
+
+    async function loadAgentChannels() {
+      if (!oc.ocGetAgents) return;
+      var channelsBlock = document.getElementById('settings-openclaw-channels');
+      try {
+        var data = await oc.ocGetAgents();
+        if (!data) return;
+        var list = document.getElementById('oc-agents-list');
+        var agentSelect = document.getElementById('oc-ch-agent');
+        if (!list || !agentSelect) return;
+
+        // Preserve current form selections
+        var prevAgent = agentSelect.value;
+        var prevChannel = document.getElementById('oc-ch-type')?.value || '';
+
+        // Build agent cards
+        list.innerHTML = '';
+        agentSelect.innerHTML = '<option value="">Select agent</option>';
+        (data.agents || []).forEach(function(a) {
+          // Agent card
+          var card = document.createElement('div');
+          card.className = 'settings-card';
+          card.style.marginTop = '10px';
+          var bindings = (data.bindings || []).filter(function(b) { return b.agentId === a.id; });
+          var chStatus = data.channelStatus || {};
+          // Show all bound channels — green if connected, grey if pending
+          var badgeContainer = document.createElement('div');
+          badgeContainer.style.cssText = 'padding:4px 16px 12px 16px;display:flex;flex-wrap:wrap;gap:4px;';
+          if (bindings.length) {
+            bindings.forEach(function(b) {
+              var ch = (b.match && b.match.channel) || b.channel || '?';
+              var st = chStatus[ch];
+              var isUp = st && (st.linked || st.connected || st.running);
+              var badge = document.createElement('span');
+              badge.style.cssText = 'display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:4px;font-size:11px;' +
+                (isUp ? 'background:rgba(34,197,94,0.15);color:#4ade80;' : 'background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.4);');
+              badge.textContent = ch;
+              var removeBtn = document.createElement('span');
+              removeBtn.textContent = '\u00D7';
+              removeBtn.title = 'Disconnect ' + ch;
+              removeBtn.style.cssText = 'cursor:pointer;opacity:0.5;font-size:13px;line-height:1;';
+              removeBtn.addEventListener('mouseenter', function() { this.style.opacity = '1'; });
+              removeBtn.addEventListener('mouseleave', function() { this.style.opacity = '0.5'; });
+              removeBtn.addEventListener('click', async function(e) {
+                e.stopPropagation();
+                if (!confirm('Disconnect ' + ch + ' from ' + (a.name || a.id) + '?')) return;
+                badge.style.opacity = '0.3';
+                try {
+                  var r = await oc.ocRemoveChannel(a.id, ch);
+                  loadAgentChannels();
+                  if (webview.style.display !== 'none' && webview.src) webview.reload();
+                } catch {}
+              });
+              badge.appendChild(removeBtn);
+              badgeContainer.appendChild(badge);
+            });
+          } else {
+            badgeContainer.innerHTML = '<span style="font-size:12px;color:rgba(255,255,255,0.3);">No channels</span>';
+          }
+
+          card.innerHTML = '<div class="settings-row"><span class="settings-row-label" style="font-weight:600;">' +
+            (a.name || a.id) + (a.isDefault ? ' <span style="font-size:10px;color:rgba(255,255,255,0.3);">(default)</span>' : '') +
+            '</span><span class="settings-row-value" style="font-size:12px;">' + (a.model || 'default model') + '</span></div>';
+          card.appendChild(badgeContainer);
+          list.appendChild(card);
+
+          // Agent dropdown option
+          var opt = document.createElement('option');
+          opt.value = a.id;
+          opt.textContent = a.name || a.id;
+          agentSelect.appendChild(opt);
+        });
+
+        // Restore form selections
+        if (prevAgent) agentSelect.value = prevAgent;
+        var chType = document.getElementById('oc-ch-type');
+        if (prevChannel && chType) chType.value = prevChannel;
+        updateChForm();
+      } catch { /* ok */ }
+    }
+
+    // Show/hide token field based on channel type
+    var chTypeSelect = document.getElementById('oc-ch-type');
+    var chAgentSelect = document.getElementById('oc-ch-agent');
+    function updateChForm() {
+      var ch = chTypeSelect?.value || '';
+      var agent = chAgentSelect?.value || '';
+      var tokenField = document.getElementById('oc-ch-token-field');
+      var waNote = document.getElementById('oc-ch-whatsapp-note');
+      var btn = document.getElementById('oc-ch-connect-btn');
+      var label = document.getElementById('oc-ch-token-label');
+      var input = document.getElementById('oc-ch-token');
+
+      var info = _channelTokenFields[ch];
+      var noToken = _channelNoToken.includes(ch);
+
+      if (tokenField) tokenField.style.display = (info && !noToken) ? 'block' : 'none';
+      if (waNote) waNote.style.display = noToken ? 'block' : 'none';
+      if (info && label) { label.textContent = info.label; }
+      if (info && input) { input.placeholder = info.placeholder; }
+      if (btn) btn.disabled = !ch || !agent;
+    }
+    if (chTypeSelect) chTypeSelect.addEventListener('change', updateChForm);
+    if (chAgentSelect) chAgentSelect.addEventListener('change', updateChForm);
+
+    // Connect button
+    document.getElementById('oc-ch-connect-btn')?.addEventListener('click', async function() {
+      var agent = chAgentSelect.value;
+      var channel = chTypeSelect.value;
+      var tokenInput = document.getElementById('oc-ch-token');
+      var statusEl = document.getElementById('oc-ch-status');
+      var btn = this;
+      if (!agent || !channel) return;
+
+      var needsToken = !_channelNoToken.includes(channel);
+      var token = tokenInput?.value?.trim() || '';
+
+      if (needsToken && !token) {
+        if (statusEl) { statusEl.textContent = 'Enter the bot token.'; statusEl.style.color = '#f87171'; }
+        return;
+      }
+
+      // WhatsApp/iMessage — add channel config first, then open terminal for interactive login
+      if (_channelNoToken.includes(channel)) {
+        btn.disabled = true; btn.textContent = 'Setting up…';
+        if (statusEl) statusEl.textContent = '';
+        try {
+          // Step 1: register channel config + bind to agent
+          var r = await oc.ocAddChannelNoToken(agent, channel);
+          if (!r?.ok) {
+            if (statusEl) { statusEl.textContent = r?.error || 'Failed to add channel'; statusEl.style.color = '#f87171'; }
+            btn.disabled = false; btn.textContent = 'Connect';
+            return;
+          }
+          // Refresh agents list and chat UI
+          loadAgentChannels();
+          if (webview.style.display !== 'none' && webview.src) webview.reload();
+          // Step 2: open terminal for interactive login (QR scan etc.)
+          if (statusEl) { statusEl.textContent = 'Opening terminal — scan QR code to link…'; statusEl.style.color = '#a3a3a3'; }
+          document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+          document.querySelectorAll('.panel').forEach(function(p) { p.classList.remove('active'); });
+          var termTab = document.querySelector('.tab[data-tab="terminal"]');
+          var termPanel = document.getElementById('terminal-panel');
+          if (termTab) termTab.classList.add('active');
+          if (termPanel) termPanel.classList.add('active');
+          var sessionId = await createSession('local');
+          if (sessionId) {
+            setTimeout(function() {
+              oc.terminalInput(sessionId, 'openclaw channels login --channel ' + channel + '\n');
+            }, 500);
+          }
+        } catch (e) {
+          if (statusEl) { statusEl.textContent = e?.message || 'Failed'; statusEl.style.color = '#f87171'; }
+        } finally {
+          btn.disabled = false; btn.textContent = 'Connect';
+        }
+        return;
+      }
+
+      btn.disabled = true; btn.textContent = 'Connecting…';
+      if (statusEl) statusEl.textContent = '';
+      try {
+        var r = await oc.ocAddChannel(agent, channel, token);
+        if (r?.ok) {
+          if (statusEl) { statusEl.textContent = channel + ' → ' + agent + ' connected!'; statusEl.style.color = '#4ade80'; }
+          if (tokenInput) tokenInput.value = '';
+          // Reset form after success
+          if (chAgentSelect) chAgentSelect.value = '';
+          if (chTypeSelect) chTypeSelect.value = '';
+          updateChForm();
+          // Clear success message after 3s
+          setTimeout(function() { if (statusEl) statusEl.textContent = ''; }, 3000);
+          loadAgentChannels();
+          if (webview.style.display !== 'none' && webview.src) webview.reload();
+        } else {
+          if (statusEl) { statusEl.textContent = r?.error || 'Failed'; statusEl.style.color = '#f87171'; }
+        }
+      } catch (e) {
+        if (statusEl) { statusEl.textContent = e?.message || 'Failed'; statusEl.style.color = '#f87171'; }
+      } finally {
+        btn.disabled = false; btn.textContent = 'Connect';
+      }
+    });
+
+    // ── Settings sidebar navigation ──
+    document.querySelectorAll('.stg-nav-item').forEach(function(item) {
+      item.addEventListener('click', function() {
+        document.querySelectorAll('.stg-nav-item').forEach(function(i) { i.classList.remove('active'); });
+        document.querySelectorAll('.stg-section').forEach(function(s) { s.classList.remove('active'); });
+        item.classList.add('active');
+        var section = document.getElementById('stg-' + item.dataset.section);
+        if (section) section.classList.add('active');
+
+        // Move model/channels blocks into the right section
+        if (item.dataset.section === 'ai-model') {
+          var target = document.getElementById('stg-ai-model');
+          var nemo = document.getElementById('settings-nemo-only-model-keys');
+          var oc = document.getElementById('settings-openclaw-model-keys');
+          if (target && nemo && !target.contains(nemo)) target.appendChild(nemo);
+          if (target && oc && !target.contains(oc)) target.appendChild(oc);
+        }
+        if (item.dataset.section === 'agents-channels') {
+          loadAgentChannels();
+        }
+        if (item.dataset.section === 'browser-relay') {
+          void refreshStgBrowserRelay();
+        }
+      });
+    });
+
+    async function refreshStgBrowserRelay() {
+      var dot = document.getElementById('stg-relay-dot');
+      var label = document.getElementById('stg-relay-status');
+      try {
+        var r = await fetch('http://127.0.0.1:18789/health', { signal: AbortSignal.timeout(2000) });
+        var j = await r.json();
+        if (j.ok) {
+          dot.style.background = '#22c55e';
+          label.textContent = 'Gateway running — extension will auto-connect';
+        } else {
+          dot.style.background = '#f59e0b';
+          label.textContent = 'Gateway responding but not ready';
+        }
+      } catch {
+        dot.style.background = 'rgba(255,255,255,0.15)';
+        label.textContent = 'Gateway not running — start the agent first';
+      }
+    }
+    document.getElementById('stg-chrome-store-btn')?.addEventListener('click', () => {
+      oc.openExternal('https://chromewebstore.google.com/detail/valnaa-browser-relay');
+    });
+    document.getElementById('stg-chrome-download-zip')?.addEventListener('click', async () => {
+      try {
+        var r = await oc.saveChromeExtensionZip();
+        if (r?.cancelled) return;
+        if (!r?.ok) { alert(r?.error || 'Could not create zip.'); return; }
+        showAppToast('Zip saved.');
+      } catch (e) { alert(e?.message || 'Save failed'); }
+    });
+    document.getElementById('stg-chrome-copy-downloads')?.addEventListener('click', async () => {
+      try {
+        var r = await oc.copyChromeExtensionToDownloads();
+        if (!r?.ok) { alert(r?.error || 'Could not copy.'); return; }
+        showAppToast('Extension copied to Downloads.');
+      } catch (e) { alert(e?.message || 'Copy failed'); }
+    });
+
+    // Update sidebar user info on settings load
+    function updateSidebarUser(email, plan) {
+      var emailEl = document.getElementById('stg-sidebar-email');
+      var planEl = document.getElementById('stg-sidebar-plan');
+      var avatarEl = document.getElementById('stg-avatar');
+      if (emailEl) emailEl.textContent = email || '—';
+      if (planEl) planEl.textContent = plan || '—';
+      if (avatarEl && email) avatarEl.textContent = email.charAt(0).toUpperCase();
+    }
+
+    // Also load OC model status and channels on settings tab click
+    document.querySelectorAll('.tab').forEach(function(t) {
+      t.addEventListener('click', function() {
+        if (t.dataset.tab === 'settings') { loadOcModelStatus(); loadAgentChannels(); }
+      });
+    });
+
     document.getElementById('settings-open-appdata').addEventListener('click', () => oc.openDataFolder('appdata'));
     document.getElementById('settings-open-logs').addEventListener('click', () => oc.openDataFolder('logs'));
     document.getElementById('settings-contact-support').addEventListener('click', async () => {
@@ -3161,6 +4425,18 @@
       const tokenChanged = normTok !== (lastWebviewToken || '');
       if (!webview.src || !webview.src.includes(':' + port) || runtimeChanged || tokenChanged) {
         webview.src = url;
+        // Electron webview may strip hash on initial load — inject token without full reload
+        if (token) {
+          webview.addEventListener('did-finish-load', function injectToken() {
+            webview.removeEventListener('did-finish-load', injectToken);
+            webview.executeJavaScript(`
+              if (window.location.hash !== '#token=${token.replace(/'/g, "\\'")}') {
+                window.location.hash = 'token=${token.replace(/'/g, "\\'")}';
+                window.dispatchEvent(new HashChangeEvent('hashchange'));
+              }
+            `).catch(function(){});
+          });
+        }
       }
       lastWebviewRuntime = runtime || lastWebviewRuntime;
       lastWebviewToken = normTok || null;
@@ -3609,6 +4885,56 @@
       }
     });
 
+    // ── Dashboard ──
+    async function updateDashboard() {
+      var el = document.getElementById('dash-agents');
+      var empty = document.getElementById('dash-empty');
+      try {
+        var res = await oc.agentsList();
+        var agents = (res.ok ? res.agents : []).filter(a => a.id !== 'main');
+        if (!agents.length) { el.innerHTML = ''; empty.style.display = ''; return; }
+        empty.style.display = 'none';
+
+        var healths = {};
+        try {
+          var results = await Promise.all(agents.map(a => oc.agentHealth(a.id).catch(() => ({sessions:0,lastActive:null,cronRuns:0}))));
+          agents.forEach((a, i) => { healths[a.id] = results[i]; });
+        } catch {}
+
+        el.innerHTML = agents.map(function(a) {
+          var h = healths[a.id] || {};
+          var active = h.lastActive;
+          var dotColor = active && (Date.now() - active < 86400000) ? '#22c55e' : active ? '#f59e0b' : 'rgba(255,255,255,0.15)';
+          var statusText = active && (Date.now() - active < 86400000) ? 'Active' : active ? 'Idle' : 'Never run';
+          var statusColor = active && (Date.now() - active < 86400000) ? '#22c55e' : active ? '#f59e0b' : 'rgba(255,255,255,0.25)';
+          return '<div style="background:#111;border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:16px;">' +
+            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">' +
+              '<div style="width:8px;height:8px;border-radius:50%;background:' + dotColor + ';"></div>' +
+              '<div style="font-size:14px;font-weight:500;color:#e0e0e0;">' + (a.name || a.id) + '</div>' +
+              '<span style="margin-left:auto;font-size:10px;color:' + statusColor + ';background:rgba(255,255,255,0.04);padding:2px 8px;border-radius:10px;">' + statusText + '</span>' +
+            '</div>' +
+            '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">' +
+              '<div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:10px;text-align:center;">' +
+                '<div style="font-size:18px;font-weight:600;color:#e0e0e0;">' + (h.sessions || 0) + '</div>' +
+                '<div style="font-size:10px;color:rgba(255,255,255,0.25);margin-top:2px;">Sessions</div>' +
+              '</div>' +
+              '<div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:10px;text-align:center;">' +
+                '<div style="font-size:18px;font-weight:600;color:#e0e0e0;">' + (h.cronRuns || 0) + '</div>' +
+                '<div style="font-size:10px;color:rgba(255,255,255,0.25);margin-top:2px;">Cron Runs</div>' +
+              '</div>' +
+              '<div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:10px;text-align:center;">' +
+                '<div style="font-size:18px;font-weight:600;color:#e0e0e0;">' + timeAgo(active) + '</div>' +
+                '<div style="font-size:10px;color:rgba(255,255,255,0.25);margin-top:2px;">Last Active</div>' +
+              '</div>' +
+            '</div>' +
+            '<div style="font-size:11px;color:rgba(255,255,255,0.2);margin-top:10px;">' + (a.model || 'default model') + '</div>' +
+          '</div>';
+        }).join('');
+      } catch { el.innerHTML = '<p style="color:rgba(255,255,255,0.2);">Failed to load agents.</p>'; }
+    }
+
+    document.getElementById('dash-refresh')?.addEventListener('click', () => updateDashboard());
+
     // ── Commands panel ──
     async function updateCommandsPanel() {
       const runtime = lastAppliedRuntime || 'openclaw';
@@ -3657,8 +4983,47 @@
       logsContent.textContent = logs;
       logsContent.scrollTop = logsContent.scrollHeight;
     }
-    document.getElementById('refresh-logs-btn').addEventListener('click', refreshLogs);
-    document.getElementById('open-log-file-btn').addEventListener('click', () => oc.openLogFile());
+    // Logs tab switching
+    document.querySelectorAll('.logs-tab').forEach(function(tab) {
+      tab.addEventListener('click', function() {
+        document.querySelectorAll('.logs-tab').forEach(function(t) { t.classList.remove('active'); });
+        tab.classList.add('active');
+        var isActivity = tab.dataset.logsTab === 'activity';
+        document.getElementById('logs-content').style.display = isActivity ? 'none' : '';
+        document.getElementById('activity-content').style.display = isActivity ? '' : 'none';
+        if (isActivity) loadActivityLog();
+        else refreshLogs();
+      });
+    });
+
+    async function loadActivityLog() {
+      var el = document.getElementById('activity-content');
+      if (!el || !oc.getActivityLog) return;
+      try {
+        var entries = await oc.getActivityLog();
+        if (!entries || !entries.length) {
+          el.innerHTML = '<div style="padding:20px;color:rgba(255,255,255,0.3);text-align:center;">No tool activity recorded yet. Start a conversation with your agent to see commands here.</div>';
+          return;
+        }
+        var html = entries.map(function(e) {
+          var time = e.ts ? new Date(e.ts).toLocaleTimeString() : '';
+          var toolClass = 'activity-tool';
+          if (e.tool === 'exec') toolClass += ' tool-exec';
+          else if (e.tool === 'web_fetch') toolClass += ' tool-web_fetch';
+          var detail = e.detail || '';
+          if (detail.length > 300) detail = detail.substring(0, 300) + '…';
+          return '<div class="activity-entry">' +
+            '<span class="activity-ts">' + time + '</span>' +
+            '<span class="' + toolClass + '">' + e.tool + '</span>' +
+            '<span class="activity-detail">' + detail.replace(/</g, '&lt;') + '</span>' +
+            '</div>';
+        }).join('');
+        el.innerHTML = html;
+        el.scrollTop = el.scrollHeight;
+      } catch {
+        el.innerHTML = '<div style="padding:20px;color:#f87171;">Failed to load activity log.</div>';
+      }
+    }
 
     // ── Version ──
     oc.getVersion().then(v => {
@@ -4028,64 +5393,282 @@
       }
       renderCategories();
       renderCatalogAgents();
+      renderInstalledAgents();
     }
 
-    function renderInstalledAgents() {
-      const el = document.getElementById('agents-installed-list');
-      if (_agentsInstalled.length === 0) {
-        el.innerHTML = '<p style="color: rgba(255,255,255,0.25); font-size: 13px;">No agents installed yet.</p>';
-        return;
-      }
-      el.innerHTML = _agentsInstalled.map(a => `
-        <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px;">
-          <div>
-            <div style="font-size: 14px; font-weight: 500; color: #f0efea;">${a.id || a.name}</div>
-            <div style="font-size: 11px; color: rgba(255,255,255,0.35); margin-top: 2px;">${a.model || 'default model'}${a.isDefault ? ' — default' : ''}</div>
-          </div>
-          <div style="display: flex; gap: 6px;">
-            ${a.id !== 'main' ? `<button class="agent-toolbar-btn" style="font-size: 11px; color: #f87171;" onclick="deleteAgent('${a.id}')">Remove</button>` : ''}
-          </div>
-        </div>
-      `).join('');
+    // Skill setup requirements per skill
+    var _skillReqs = {
+      'porteden-email': { label: 'Email (Porteden)', keys: [{env:'PE_API_KEY',label:'Porteden API Key',hint:'Run porteden auth login or get token from porteden.com'}] },
+      'notion-skill': { label: 'Notion', keys: [{env:'NOTION_API_KEY',label:'Notion API Key',hint:'Create at notion.so/my-integrations'}] },
+      'brainz-calendar': { label: 'Google Calendar', keys: [{env:'GOOGLE_CALENDAR_API_KEY',label:'Calendar API Key',hint:'Google Cloud Console'}] },
+      'google-search': { label: 'Google Search', keys: [{env:'GOOGLE_API_KEY',label:'Google API Key',hint:'Google Cloud Console'},{env:'GOOGLE_CSE_ID',label:'Search Engine ID',hint:'programmablesearchengine.google.com'}] },
+      'discord': { label: 'Discord', keys: [{env:'DISCORD_BOT_TOKEN',label:'Discord Bot Token',hint:'Discord Developer Portal'}] },
+      'github': { label: 'GitHub', keys: [{env:'GH_TOKEN',label:'GitHub Token',hint:'Run gh auth login or create at github.com/settings/tokens'}] },
+      'gh-issues': { label: 'GitHub Issues', keys: [{env:'GH_TOKEN',label:'GitHub Token',hint:'Same as GitHub token above'}] },
+      'figma-design-toolkit': { label: 'Figma', keys: [{env:'FIGMA_ACCESS_TOKEN',label:'Figma Token',hint:'Figma Settings > Personal access tokens'}] },
+      'canva-connect': { label: 'Canva', keys: [{env:'CANVA_CLIENT_ID',label:'Canva Client ID',hint:'canva.com/developers/integrations'},{env:'CANVA_CLIENT_SECRET',label:'Canva Client Secret',hint:'Same Canva integration page'}] },
+    };
+
+    function timeAgo(ts) {
+      if (!ts) return 'never';
+      var diff = Date.now() - ts;
+      if (diff < 60000) return 'just now';
+      if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
+      if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
+      return Math.floor(diff / 86400000) + 'd ago';
     }
+
+    async function renderInstalledAgents() {
+      const el = document.getElementById('agents-installed-list');
+      if (_agentsInstalled.length <= 1) { el.style.display = 'none'; return; }
+      el.style.display = '';
+
+      // Fetch health for all agents in parallel
+      var agents = _agentsInstalled.filter(a => a.id !== 'main');
+      var healths = {};
+      try {
+        var results = await Promise.all(agents.map(a => oc.agentHealth(a.id).catch(() => ({sessions:0,lastActive:null,cronRuns:0}))));
+        agents.forEach((a, i) => { healths[a.id] = results[i]; });
+      } catch {}
+
+      el.innerHTML = agents.map(a => {
+        var catAgent = _agentsCatalog.find(c => c.id === a.id);
+        var skills = catAgent ? (catAgent.skills || []) : [];
+        var needsSetup = skills.filter(s => _skillReqs[s]).length > 0;
+        var h = healths[a.id] || {};
+        var active = h.lastActive;
+        var dotColor = active && (Date.now() - active < 86400000) ? '#22c55e' : active ? '#f59e0b' : 'rgba(255,255,255,0.15)';
+        return `
+        <div>
+          <div class="ag-installed-item">
+            <div class="ag-installed-dot" style="background:${dotColor};"></div>
+            <div class="ag-installed-info">
+              <div class="ag-installed-name">${a.name || a.id}</div>
+              <div class="ag-installed-model" style="display:flex;gap:12px;">
+                <span>${a.model || 'default model'}</span>
+                <span style="color:rgba(255,255,255,0.2);">${h.sessions || 0} sessions</span>
+                <span style="color:rgba(255,255,255,0.2);">${h.cronRuns || 0} cron runs</span>
+                <span style="color:rgba(255,255,255,0.2);">active ${timeAgo(active)}</span>
+              </div>
+            </div>
+            ${needsSetup ? '<button class="ag-setup-btn" onclick="toggleAgentSetup(\'' + a.id + '\')">Setup</button>' : ''}
+            <button class="ag-remove-btn" onclick="deleteAgent('${a.id}')">Remove</button>
+          </div>
+          ${needsSetup ? '<div id="ag-setup-' + a.id + '" class="ag-setup-panel" style="display:none;"></div>' : ''}
+        </div>`;
+      }).join('');
+    }
+
+    window.toggleAgentSetup = async function(id) {
+      var panel = document.getElementById('ag-setup-' + id);
+      if (!panel) return;
+      if (panel.style.display !== 'none') { panel.style.display = 'none'; return; }
+      panel.style.display = 'block';
+
+      // Get current env values
+      var existing = {};
+      try { existing = (await oc.agentGetEnv(id)) || {}; } catch {}
+
+      var catAgent = _agentsCatalog.find(c => c.id === id);
+      var skills = catAgent ? (catAgent.skills || []) : [];
+      var reqs = skills.filter(s => _skillReqs[s]).map(s => _skillReqs[s]);
+
+      // Dedupe keys (github and gh-issues share GH_TOKEN)
+      var seen = new Set();
+      var allKeys = [];
+      for (var r of reqs) {
+        for (var k of r.keys) {
+          if (!seen.has(k.env)) { seen.add(k.env); allKeys.push({...k, skill: r.label}); }
+        }
+      }
+
+      panel.innerHTML = '<div style="padding:14px 20px 16px 36px;">' +
+        '<div style="border:1px solid rgba(255,255,255,0.06);border-radius:10px;overflow:hidden;">' +
+        allKeys.map(function(k, i) {
+          var val = existing[k.env] || '';
+          return '<div style="padding:12px 14px;background:#1c1c1c;' + (i < allKeys.length - 1 ? 'border-bottom:1px solid rgba(255,255,255,0.04);' : '') + '">' +
+            '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">' +
+              '<span style="font-size:12px;color:#ccc;font-weight:500;">' + k.label + '</span>' +
+              (val ? '<span style="font-size:10px;color:#22c55e;background:rgba(34,197,94,0.1);padding:2px 8px;border-radius:10px;">Connected</span>' : '<span style="font-size:10px;color:rgba(255,255,255,0.25);background:rgba(255,255,255,0.04);padding:2px 8px;border-radius:10px;">Not set</span>') +
+            '</div>' +
+            '<input type="password" data-env="' + k.env + '" data-agent="' + id + '" placeholder="' + k.hint + '" value="' + (val || '') + '" ' +
+              'style="width:100%;padding:8px 10px;background:#141414;border:1px solid rgba(255,255,255,0.08);border-radius:6px;color:#e0e0e0;font-size:12px;font-family:inherit;outline:none;" />' +
+          '</div>';
+        }).join('') +
+        '</div>' +
+        '<div style="display:flex;align-items:center;gap:10px;margin-top:12px;">' +
+          '<button style="padding:6px 20px;border-radius:6px;border:1px solid rgba(59,130,246,0.3);background:rgba(59,130,246,0.1);color:#60a5fa;font-size:12px;font-weight:500;cursor:pointer;font-family:inherit;" onclick="saveAgentSetup(\'' + id + '\')">Save keys</button>' +
+          '<span id="ag-setup-status-' + id + '" style="font-size:11px;color:rgba(255,255,255,0.3);"></span>' +
+        '</div>' +
+      '</div>';
+    };
+
+    window.saveAgentSetup = async function(id) {
+      var panel = document.getElementById('ag-setup-' + id);
+      var inputs = panel.querySelectorAll('input[data-env]');
+      var env = {};
+      inputs.forEach(function(inp) { if (inp.value.trim()) env[inp.dataset.env] = inp.value.trim(); });
+      try {
+        await oc.agentSaveEnv(id, env);
+        var status = document.getElementById('ag-setup-status-' + id);
+        status.textContent = 'Saved';
+        status.style.color = '#22c55e';
+        setTimeout(function() { status.textContent = ''; }, 2000);
+        renderInstalledAgents();
+      } catch (e) {
+        alert('Save failed: ' + (e.message || e));
+      }
+    };
 
     function renderCategories() {
       const el = document.getElementById('agents-categories');
       const cats = [...new Set(_agentsCatalog.map(a => a.category || 'other'))].sort();
-      el.innerHTML = `<button class="agent-toolbar-btn" style="font-size: 11px; ${!_agentsSelectedCategory ? 'background: rgba(255,255,255,0.12);' : ''}" onclick="filterCategory('')">All</button>` +
-        cats.map(c => `<button class="agent-toolbar-btn" style="font-size: 11px; text-transform: capitalize; ${_agentsSelectedCategory === c ? 'background: rgba(255,255,255,0.12);' : ''}" onclick="filterCategory('${c}')">${c}</button>`).join('');
+      el.innerHTML = '<button class="ag-tab' + (!_agentsSelectedCategory ? ' active' : '') + '" onclick="filterCategory(\'\')">All</button>' +
+        '<button class="ag-tab' + (_agentsSelectedCategory === '_installed' ? ' active' : '') + '" onclick="filterCategory(\'_installed\')">Installed</button>' +
+        cats.map(c => '<button class="ag-tab' + (_agentsSelectedCategory === c ? ' active' : '') + '" onclick="filterCategory(\'' + c + '\')">' + c + '</button>').join('');
     }
 
     function renderCatalogAgents() {
       const el = document.getElementById('agents-catalog-list');
       const search = (document.getElementById('agents-search')).value.toLowerCase();
       const installedIds = _agentsInstalled.map(a => a.id);
+      const installedList = document.getElementById('agents-installed-list');
+
+      // Show/hide installed section based on tab
+      if (_agentsSelectedCategory === '_installed') {
+        installedList.style.display = '';
+        renderInstalledAgents();
+        el.innerHTML = '';
+        return;
+      } else {
+        installedList.style.display = 'none';
+      }
+
       let filtered = _agentsCatalog.filter(a => {
-        if (_agentsSelectedCategory && (a.category || 'other') !== _agentsSelectedCategory) return false;
+        if (_agentsSelectedCategory && _agentsSelectedCategory !== '_installed' && (a.category || 'other') !== _agentsSelectedCategory) return false;
         if (search && !(a.name || '').toLowerCase().includes(search) && !(a.description || '').toLowerCase().includes(search) && !(a.category || '').toLowerCase().includes(search)) return false;
         return true;
       });
       if (filtered.length === 0) {
-        el.innerHTML = '<p style="color: rgba(255,255,255,0.25); font-size: 13px; text-align: center; padding: 20px;">No agents found.</p>';
+        el.innerHTML = '<p style="color: rgba(255,255,255,0.15); font-size: 13px; text-align: center; padding: 32px;">No agents found.</p>';
         return;
       }
-      el.innerHTML = filtered.slice(0, 50).map(a => {
+      // Tool logos mapped to SVG files in branding/ (must be accessible globally for openAgentModal)
+      window._toolLogos = window._toolLogos || {
+        'porteden-email': 'email', 'gog': 'google', 'brainz-calendar': 'google',
+        'notion-skill': 'notion', 'slack-personal': 'slack', 'discord': 'discord',
+        'github': 'github', 'gh-issues': 'github', 'web-pilot': 'browser',
+        'google-search': 'google', 'exa-web-search-free': 'search', 'x-research': 'x-twitter',
+        'agent-browser-clawdbot': 'browser', 'trello': 'trello',
+        'figma-design-toolkit': 'figma', 'canva-connect': 'canva',
+        'remotion-best-practices': 'remotion', 'video-frames': 'remotion',
+      };
+      function getAgentLogos(skills) {
+        var seen = new Set();
+        var result = [];
+        (skills || []).forEach(function(s) {
+          if (!_toolLogos[s]) return;
+          var logo = _toolLogos[s];
+          if (seen.has(logo)) return;
+          seen.add(logo);
+          var i = result.length;
+          if (i >= 4) return;
+          result.push('<span style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;background:#2a2a2a;border:1px solid rgba(255,255,255,0.1);border-radius:8px;' + (i > 0 ? 'margin-left:-5px;' : '') + 'position:relative;z-index:' + (10 - i) + ';"><img src="branding/' + logo + '.svg" width="18" height="18" /></span>');
+        });
+        return result;
+      }
+
+      el.innerHTML = '<div class="ag-grid">' + filtered.slice(0, 50).map(a => {
         const installed = installedIds.includes(a.id);
+        const cat = (a.category || 'other');
+        const desc = (a.description || a.role || '').slice(0, 100).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        const logos = getAgentLogos(a.skills || []);
         return `
-        <div style="padding: 14px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; transition: border-color 0.15s;" onmouseenter="this.style.borderColor='rgba(255,255,255,0.12)'" onmouseleave="this.style.borderColor='rgba(255,255,255,0.06)'">
-          <div style="display: flex; align-items: start; justify-content: space-between;">
-            <div style="flex: 1; min-width: 0;">
-              <div style="font-size: 14px; font-weight: 500; color: #f0efea;">${a.name || a.id}</div>
-              <span style="display: inline-block; font-size: 10px; color: rgba(255,255,255,0.35); background: rgba(255,255,255,0.05); padding: 2px 6px; border-radius: 4px; margin-top: 4px; text-transform: capitalize;">${a.category || 'other'}</span>
-              <p style="font-size: 12px; color: rgba(255,255,255,0.45); margin: 8px 0 0; line-height: 1.4;">${(a.description || '').slice(0, 120)}${(a.description || '').length > 120 ? '...' : ''}</p>
+          <div class="ag-card" onclick="openAgentModal('${a.id}')">
+            <div class="ag-card-name">${a.name || a.id}</div>
+            ${desc ? '<div class="ag-card-desc">' + desc + '</div>' : ''}
+            <div class="ag-card-footer">
+              <div style="display:flex;align-items:center;gap:8px;">
+                ${logos.length ? '<span style="display:flex;align-items:center;">' + logos.join('') + '</span>' : ''}
+                <span class="ag-card-cat">${cat}</span>
+              </div>
+              <button class="ag-card-action${installed ? ' installed' : ''}" ${installed ? 'disabled' : ''} onclick="event.stopPropagation(); installAgent('${a.id}')">
+                ${installed ? 'Installed' : 'Install'}
+              </button>
             </div>
-            <button class="agent-toolbar-btn${installed ? '' : ' primary'}" style="font-size: 11px; margin-left: 12px; flex-shrink: 0;" ${installed ? 'disabled' : ''} onclick="installAgent('${a.id}')">
-              ${installed ? 'Installed' : 'Install'}
-            </button>
-          </div>
-        </div>`;
-      }).join('');
+          </div>`;
+      }).join('') + '</div>';
     }
+
+    var _skillLabels = {
+      'porteden-email': 'Email', 'gog': 'Google Workspace', 'brainz-calendar': 'Google Calendar',
+      'notion-skill': 'Notion', 'slack-personal': 'Slack', 'discord': 'Discord',
+      'github': 'GitHub', 'gh-issues': 'GitHub Issues', 'web-pilot': 'Web Browser',
+      'google-search': 'Google Search', 'exa-web-search-free': 'Exa Search', 'x-research': 'X Research',
+      'agent-browser-clawdbot': 'Browser Agent', 'trello': 'Trello',
+      'coding-agent': 'Code Agent', 'deep-research-pro': 'Deep Research',
+      'summarize-pro': 'Summarizer', 'nano-pdf': 'PDF Reader',
+      'healthcheck': 'Security Audit', 'file-manager-secure': 'File Manager',
+      'byterover': 'Knowledge Base', 'capability-evolver': 'Self Evolution',
+      'canvas': 'Canvas',
+      'figma-design-toolkit': 'Figma', 'canva-connect': 'Canva',
+      'remotion-best-practices': 'Remotion', 'video-frames': 'Video/ffmpeg',
+    };
+
+    window.openAgentModal = function(id) {
+      console.log('openAgentModal called with:', id);
+      var a = _agentsCatalog.find(function(c) { return c.id === id; });
+      if (!a) { console.log('Agent not found in catalog!', id, _agentsCatalog.length); return; }
+      var installed = _agentsInstalled.some(function(i) { return i.id === id; });
+      var skills = a.skills || [];
+      var crons = a.cron || [];
+      var requires = skills.filter(function(s) { return _toolLogos[s]; });
+      var builtIn = skills.filter(function(s) { return !_toolLogos[s]; });
+
+      // Hide grid, show detail page
+      document.getElementById('agents-catalog-list').style.display = 'none';
+      document.getElementById('agents-installed-list').style.display = 'none';
+      document.getElementById('agents-categories').style.display = 'none';
+      document.querySelector('.ag-top').style.display = 'none';
+
+      var dp = document.getElementById('ag-detail-page');
+      dp.style.display = 'block';
+      dp.innerHTML =
+        '<button class="ag-dp-back" onclick="closeAgentDetail()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>Back</button>' +
+        '<div class="ag-dp-name">' + (a.name || a.id) + '</div>' +
+        '<div class="ag-dp-desc">' + (a.description || a.role || '') + '</div>' +
+
+        (requires.length ? '<div class="ag-dp-section"><div class="ag-dp-label">Integrations</div><div class="ag-dp-integrations">' +
+          requires.map(function(s) {
+            var logo = _toolLogos[s];
+            return '<div class="ag-dp-integ"><span class="ag-dp-integ-icon"><img src="branding/' + logo + '.svg" /></span>' + (_skillLabels[s] || s) + '</div>';
+          }).join('') + '</div></div>' : '') +
+
+        (crons.length ? '<div class="ag-dp-section"><div class="ag-dp-label">Scheduled Tasks</div><div class="ag-dp-tasks">' +
+          crons.map(function(c) {
+            return '<div class="ag-dp-task"><div class="ag-dp-task-name">' + (c.name || 'task') + '</div>' +
+              (c.schedule_label ? '<div class="ag-dp-task-meta">' + c.schedule_label + '</div>' : '') +
+              (c.description ? '<div class="ag-dp-task-meta">' + c.description + '</div>' : '') + '</div>';
+          }).join('') + '</div></div>' : '') +
+
+        (builtIn.length ? '<div class="ag-dp-section"><div class="ag-dp-label">Skills</div><div class="ag-dp-skills">' +
+          builtIn.map(function(s) { return '<span class="ag-dp-skill">' + (_skillLabels[s] || s) + '</span>'; }).join('') + '</div></div>' : '') +
+
+        '<div class="ag-dp-footer">' +
+          '<button class="ag-dp-install' + (installed ? ' installed' : '') + '" ' + (installed ? 'disabled' : '') + ' onclick="closeAgentDetail(); installAgent(\'' + a.id + '\')">' +
+            (installed ? 'Installed' : 'Install Agent') +
+          '</button>' +
+        '</div>';
+    };
+
+    window.closeAgentDetail = function() {
+      document.getElementById('ag-detail-page').style.display = 'none';
+      document.getElementById('agents-catalog-list').style.display = '';
+      document.getElementById('agents-installed-list').style.display = '';
+      document.getElementById('agents-categories').style.display = '';
+      document.querySelector('.ag-top').style.display = '';
+      renderInstalledAgents();
+    };
 
     window.filterCategory = function(cat) {
       _agentsSelectedCategory = cat;
@@ -4093,32 +5676,40 @@
       renderCatalogAgents();
     };
 
+    function agOverlay(label) {
+      var o = document.getElementById('ag-overlay');
+      var l = document.getElementById('ag-overlay-label');
+      l.textContent = label;
+      o.style.display = 'flex';
+    }
+    function agOverlayHide() {
+      document.getElementById('ag-overlay').style.display = 'none';
+    }
+
     window.installAgent = async function(id) {
       const agent = _agentsCatalog.find(a => a.id === id);
       if (!agent) return;
-      const btn = event.target;
-      btn.textContent = 'Installing...';
-      btn.disabled = true;
+      agOverlay('Installing ' + (agent.name || id) + '…');
       try {
         const soul = agent.soul || agent.content || `# Agent: ${agent.name}\n\n${agent.description || ''}`;
         const res = await oc.agentsInstall(id, soul, agent.name || id);
         if (res.ok) {
-          btn.textContent = 'Installed';
           await refreshAgentsPanel();
-        } else {
-          btn.textContent = 'Failed';
-          setTimeout(() => { btn.textContent = 'Install'; btn.disabled = false; }, 2000);
         }
-      } catch {
-        btn.textContent = 'Failed';
-        setTimeout(() => { btn.textContent = 'Install'; btn.disabled = false; }, 2000);
+      } finally {
+        agOverlayHide();
       }
     };
 
     window.deleteAgent = async function(id) {
-      if (!confirm(`Remove agent "${id}"? This will delete its workspace.`)) return;
-      await oc.agentsDelete(id);
-      await refreshAgentsPanel();
+      if (!await oc.showConfirm('Remove agent "' + id + '"? This will delete its workspace.')) return;
+      agOverlay('Removing ' + id + '…');
+      try {
+        await oc.agentsDelete(id);
+        await refreshAgentsPanel();
+      } finally {
+        agOverlayHide();
+      }
     };
 
     document.getElementById('agents-browser-relay-btn').addEventListener('click', async () => {
@@ -4185,6 +5776,28 @@
       });
     })();
   </script>
+
+  <!-- API key modal -->
+  <div id="api-key-modal-backdrop" class="api-key-modal-backdrop">
+    <div class="api-key-modal">
+      <h3 id="api-key-modal-title">API Key</h3>
+      <p class="modal-desc" id="api-key-modal-desc">Enter your API key for this provider</p>
+      <div id="api-key-modal-key-section">
+        <input type="password" id="oc-key-input" placeholder="" autocomplete="off" spellcheck="false" />
+        <div class="modal-label" id="oc-key-label"></div>
+      </div>
+      <div id="api-key-modal-oauth-section" style="display: none;">
+        <div class="modal-oauth-divider" id="api-key-modal-oauth-divider">or</div>
+        <button class="modal-btn" id="oc-oauth-btn" style="width: 100%;"><span id="oc-oauth-label">Login in browser</span></button>
+        <span id="oc-oauth-status" style="font-size:12px;color:rgba(255,255,255,0.4);display:block;margin-top:6px;"></span>
+      </div>
+      <div id="oc-key-status" class="modal-status"></div>
+      <div class="modal-actions">
+        <button class="modal-btn" id="api-key-modal-cancel">Cancel</button>
+        <button class="modal-btn modal-btn-primary" id="oc-key-save-btn">Save key</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Policy permissions now handled by native OS dialog in main process -->
 </body>

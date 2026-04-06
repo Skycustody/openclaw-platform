@@ -8,6 +8,15 @@ contextBridge.exposeInMainWorld('openclaw', {
   getLogs: () => ipcRenderer.invoke('agent:logs'),
   getLogPath: () => ipcRenderer.invoke('agent:log-path'),
   openLogFile: () => ipcRenderer.invoke('agent:open-log-file'),
+  getActivityLog: () => ipcRenderer.invoke('agent:activity-log'),
+  getExecAsk: () => ipcRenderer.invoke('settings:get-exec-ask'),
+  setExecAsk: (mode: string) => ipcRenderer.invoke('settings:set-exec-ask', mode),
+  claudeCodeStatus: () => ipcRenderer.invoke('settings:claude-code-status'),
+  claudeCodeConnect: () => ipcRenderer.invoke('settings:claude-code-connect'),
+  claudeCodeAuth: () => ipcRenderer.invoke('settings:claude-code-auth'),
+  claudeCodeDisconnect: () => ipcRenderer.invoke('settings:claude-code-disconnect'),
+  getClaudeThinking: () => ipcRenderer.invoke('settings:get-claude-thinking'),
+  setClaudeThinking: (level: string) => ipcRenderer.invoke('settings:set-claude-thinking', level),
   getVersion: () => ipcRenderer.invoke('app:version'),
   /** Windows: open native app submenu from in-window menubar (client coords). */
   popupWinMenubarSubmenu: (index: number, x: number, y: number) =>
@@ -157,6 +166,15 @@ contextBridge.exposeInMainWorld('openclaw', {
   setOptionalModelKeys: (body: { openai?: string; anthropic?: string; activeProvider?: string; activeModel?: string }) =>
     ipcRenderer.invoke('settings:set-optional-model-keys', body),
   getInferenceInfo: () => ipcRenderer.invoke('settings:get-inference-info'),
+  ocGetModelStatus: () => ipcRenderer.invoke('settings:oc-model-status'),
+  ocSetModel: (model: string) => ipcRenderer.invoke('settings:oc-set-model', model),
+  ocSetAgentModel: (agentId: string, model: string) => ipcRenderer.invoke('settings:oc-set-agent-model', agentId, model),
+  ocSaveApiKey: (provider: string, key: string) => ipcRenderer.invoke('settings:oc-save-api-key', provider, key),
+  ocRunOAuth: (provider: string) => ipcRenderer.invoke('settings:oc-run-oauth', provider),
+  ocGetAgents: () => ipcRenderer.invoke('settings:oc-get-agents'),
+  ocAddChannel: (agentId: string, channel: string, token: string) => ipcRenderer.invoke('settings:oc-add-channel', agentId, channel, token),
+  ocAddChannelNoToken: (agentId: string, channel: string) => ipcRenderer.invoke('settings:oc-add-channel-no-token', agentId, channel),
+  ocRemoveChannel: (agentId: string, channel: string) => ipcRenderer.invoke('settings:oc-remove-channel', agentId, channel),
   onShowApiKeyForm: (
     cb: (payload: { providers: any[]; sectionTitle?: string; sectionSubtitle?: string } | any[]) => void,
   ) => {
@@ -189,6 +207,10 @@ contextBridge.exposeInMainWorld('openclaw', {
   agentsCatalog: () => ipcRenderer.invoke('agents:catalog'),
   agentsInstall: (id: string, soul: string, name: string) => ipcRenderer.invoke('agents:install', id, soul, name),
   agentsDelete: (id: string) => ipcRenderer.invoke('agents:delete', id),
+  agentGetEnv: (id: string) => ipcRenderer.invoke('agents:get-env', id),
+  agentSaveEnv: (id: string, env: Record<string, string>) => ipcRenderer.invoke('agents:save-env', id, env),
+  agentHealth: (id: string) => ipcRenderer.invoke('agents:health', id),
+  showConfirm: (message: string) => ipcRenderer.invoke('dialog:confirm', message),
 
   // Update
   onUpdateAvailable: (cb: (info: { version: string; canAutoInstall: boolean }) => void) => {

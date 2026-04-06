@@ -96,8 +96,8 @@ export interface InstallProgress {
 type ProgressCallback = (progress: InstallProgress) => void;
 
 /**
- * Install openclaw globally via npm.
- * Uses the user-local prefix to avoid sudo/permission issues.
+ * Install openclaw using the official install script.
+ * The script auto-installs Node.js if missing, then installs OpenClaw via npm.
  */
 export async function installOpenClaw(onProgress: ProgressCallback): Promise<string> {
   onProgress({ stage: 'checking', message: 'Checking for existing installation...' });
@@ -109,21 +109,15 @@ export async function installOpenClaw(onProgress: ProgressCallback): Promise<str
     return existing;
   }
 
-  onProgress({ stage: 'downloading', message: 'Installing OpenClaw... This may take a minute.' });
-  logApp('info', 'Starting npm install -g openclaw@latest');
-
-  const prefix = getNpmGlobalPrefix();
+  const cmd = getInstallScriptCommand();
+  onProgress({ stage: 'downloading', message: 'Installing OpenClaw (includes Node.js if needed)... This may take a few minutes.' });
+  logApp('info', `Running official install script: ${cmd}`);
 
   return new Promise((resolve, reject) => {
-    const npmCmd = IS_WIN ? 'npm.cmd' : 'npm';
-    const args = ['install', '-g', 'openclaw@latest', '--prefix', prefix];
-
-    logApp('info', `Running: ${npmCmd} ${args.join(' ')}`);
-
-    const proc = spawn(npmCmd, args, {
-      env: { ...process.env, npm_config_prefix: prefix },
+    const proc = spawn('bash', ['-c', cmd], {
       stdio: ['ignore', 'pipe', 'pipe'],
-      shell: IS_WIN,
+      env: { ...process.env },
+      shell: false,
     });
 
     let stderr = '';
@@ -131,7 +125,11 @@ export async function installOpenClaw(onProgress: ProgressCallback): Promise<str
     proc.stdout?.on('data', (data: Buffer) => {
       const text = data.toString();
       logOpenclaw(text);
-      if (text.includes('added')) {
+      if (text.includes('Node.js')) {
+        onProgress({ stage: 'installing', message: 'Installing Node.js...' });
+      } else if (text.includes('openclaw')) {
+        onProgress({ stage: 'installing', message: 'Installing OpenClaw...' });
+      } else if (text.includes('added') || text.includes('installed')) {
         onProgress({ stage: 'installing', message: 'Finalizing installation...' });
       }
     });
@@ -150,7 +148,7 @@ export async function installOpenClaw(onProgress: ProgressCallback): Promise<str
           onProgress({ stage: 'done', message: 'OpenClaw installed successfully!' });
           resolve(bin);
         } else {
-          const err = classifyInstallError('Install succeeded but binary not found in PATH');
+          const err = classifyInstallError('Install script succeeded but binary not found in PATH');
           onProgress({ stage: 'error', message: err.userMessage, details: err.details });
           reject(err);
         }
@@ -164,7 +162,7 @@ export async function installOpenClaw(onProgress: ProgressCallback): Promise<str
 
     proc.on('error', (err) => {
       const appErr = classifyInstallError(err.message);
-      logApp('error', 'npm spawn error', err.message);
+      logApp('error', 'Install script spawn error', err.message);
       onProgress({ stage: 'error', message: appErr.userMessage, details: appErr.details });
       reject(appErr);
     });
