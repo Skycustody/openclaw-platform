@@ -598,7 +598,7 @@ export default function DesktopPage() {
         {/* Claude Code CLI Section */}
         <section className="border-t border-white/[0.06] px-5 py-20 md:py-28" style={{ backgroundColor: BG }}>
           <div className="mx-auto max-w-[1280px]">
-            <div className="grid items-center gap-12 md:grid-cols-[1fr_1.4fr] md:gap-16">
+            <div className="grid items-center gap-12 md:grid-cols-2 md:gap-16">
               <div className="flex flex-col justify-center md:py-10">
                 <p className="text-[12px] font-medium uppercase tracking-[0.12em]" style={{ color: TEXT_SEC }}>
                   AI Model
@@ -624,16 +624,14 @@ export default function DesktopPage() {
                 </ul>
               </div>
               <div>
-                <p className="mb-3 text-center text-[11px] font-medium uppercase tracking-[0.15em] text-white/[0.25]">
-                  Settings
-                </p>
-                <div className="overflow-hidden rounded-[10px]" style={{ boxShadow: '0 28px 70px rgba(0,0,0,0.4), 0 14px 32px rgba(0,0,0,0.25)' }}>
+                <div className="overflow-hidden rounded-[12px] border border-white/[0.08]" style={{ boxShadow: '0 28px 70px rgba(0,0,0,0.4), 0 14px 32px rgba(0,0,0,0.25)' }}>
                   <Image
                     src="/app-screenshots/claude-code-settings.png"
                     alt="Claude Code connected as AI model in Valnaa settings"
-                    width={1440}
-                    height={900}
-                    className="block w-full rounded-[10px]"
+                    width={2800}
+                    height={2304}
+                    quality={95}
+                    className="block w-full rounded-[12px]"
                   />
                 </div>
               </div>
