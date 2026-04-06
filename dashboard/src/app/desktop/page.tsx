@@ -631,7 +631,7 @@ export default function DesktopPage() {
                     width={2304}
                     height={2304}
                     quality={95}
-                    className="block h-full w-full object-cover object-[70%_0%] rounded-[12px]"
+                    className="block h-full w-full object-cover object-left-top rounded-[12px]"
                   />
                 </div>
               </div>
@@ -651,7 +651,7 @@ export default function DesktopPage() {
                     width={2304}
                     height={2304}
                     quality={95}
-                    className="block h-full w-full object-cover object-[50%_30%] rounded-[12px]"
+                    className="block h-full w-full object-cover object-left-top rounded-[12px]"
                   />
                 </div>
               </div>
