@@ -1,5 +1,6 @@
-; Valnaa dark theme for NSIS installer
-; electron-builder pre-defines several MUI constants — undef all before redefining
+; Valnaa dark theme for NSIS assisted installer
+; electron-builder pre-defines MUI constants — undef before redefining
+
 !macro customHeader
   !ifdef MUI_BGCOLOR
     !undef MUI_BGCOLOR
@@ -15,8 +16,4 @@
     !undef MUI_INSTFILESPAGE_COLORS
   !endif
   !define MUI_INSTFILESPAGE_COLORS "FAFAFA 18181B"
-
-  !ifdef MUI_INSTFILESPAGE_PROGRESSBAR_COLORS
-    !undef MUI_INSTFILESPAGE_PROGRESSBAR_COLORS
-  !endif
 !macroend

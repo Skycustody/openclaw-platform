@@ -67,14 +67,13 @@ win:
     codeSigningAccountName: "Valnaa"
 
 nsis:
-  oneClick: true
+  oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: false
   createDesktopShortcut: true
   createStartMenuShortcut: true
   installerSidebar: build/installerSidebar.bmp
   uninstallerSidebar: build/uninstallerSidebar.bmp
-  installerHeader: build/installerHeader.bmp
   installerHeaderIcon: assets/icon.ico
   include: build/installer.nsh
 
