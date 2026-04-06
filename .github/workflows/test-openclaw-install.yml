@@ -1,0 +1,90 @@
+name: Test OpenClaw Install (Windows)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-openclaw:
+    runs-on: windows-latest
+    steps:
+      - name: Test OpenClaw install via PowerShell (same command the app uses)
+        run: |
+          Write-Host "Running the exact command Valnaa uses to install OpenClaw..."
+          Write-Host ""
+          Write-Host "Command: cmd.exe /c powershell.exe -ExecutionPolicy Bypass -Command ..."
+          Write-Host "========================================="
+
+          $installCmd = 'powershell.exe -ExecutionPolicy Bypass -Command "& ([scriptblock]::Create((iwr -useb https://openclaw.ai/install.ps1))) -NoOnboard"'
+
+          $pinfo = New-Object System.Diagnostics.ProcessStartInfo
+          $pinfo.FileName = "$env:SystemRoot\System32\cmd.exe"
+          $pinfo.Arguments = "/c $installCmd"
+          $pinfo.RedirectStandardOutput = $true
+          $pinfo.RedirectStandardError = $true
+          $pinfo.UseShellExecute = $false
+          $pinfo.CreateNoWindow = $true
+
+          $proc = New-Object System.Diagnostics.Process
+          $proc.StartInfo = $pinfo
+          $proc.Start() | Out-Null
+
+          # Read output in real time
+          while (-not $proc.HasExited) {
+            $line = $proc.StandardOutput.ReadLine()
+            if ($line) { Write-Host $line }
+            $errLine = $proc.StandardError.ReadLine()
+            if ($errLine) { Write-Host "STDERR: $errLine" }
+          }
+          # Flush remaining
+          $remaining = $proc.StandardOutput.ReadToEnd()
+          if ($remaining) { Write-Host $remaining }
+          $remainingErr = $proc.StandardError.ReadToEnd()
+          if ($remainingErr) { Write-Host "STDERR: $remainingErr" }
+
+          Write-Host "========================================="
+          Write-Host "Exit code: $($proc.ExitCode)"
+
+          if ($proc.ExitCode -ne 0) {
+            Write-Host "FAIL: OpenClaw install command failed"
+            exit 1
+          } else {
+            Write-Host "SUCCESS: Install command completed"
+          }
+
+      - name: Check if openclaw binary exists
+        run: |
+          Write-Host "Checking for openclaw binary..."
+
+          # Check PATH
+          $which = Get-Command openclaw -ErrorAction SilentlyContinue
+          if ($which) {
+            Write-Host "SUCCESS: openclaw found in PATH at $($which.Source)"
+            & openclaw --version
+          } else {
+            Write-Host "Not in PATH, checking common locations..."
+          }
+
+          # Check npm global
+          $npmBin = Join-Path $env:APPDATA "npm\openclaw.cmd"
+          if (Test-Path $npmBin) {
+            Write-Host "SUCCESS: Found at $npmBin"
+            & $npmBin --version
+          }
+
+          # Check .local/bin
+          $localBin = Join-Path $env:USERPROFILE ".local\bin\openclaw.cmd"
+          if (Test-Path $localBin) {
+            Write-Host "SUCCESS: Found at $localBin"
+          }
+
+          # Broad search
+          $found = @()
+          $found += Get-ChildItem -Path "$env:APPDATA\npm" -Filter "openclaw*" -ErrorAction SilentlyContinue
+          $found += Get-ChildItem -Path "$env:USERPROFILE\.local\bin" -Filter "openclaw*" -ErrorAction SilentlyContinue
+          if ($found.Count -gt 0) {
+            Write-Host "Found openclaw files:"
+            $found | Format-Table FullName, Length
+          } else {
+            Write-Host "FAIL: openclaw binary not found anywhere"
+            exit 1
+          }
