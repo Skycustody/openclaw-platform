@@ -3704,6 +3704,36 @@ function setupAutoUpdater(): void {
     checkGitHubForUpdate();
   });
 
+  ipcMain.handle('app:send-error-report', async (_e, report: { stepId: string; errorMessage: string; logs: string }) => {
+    try {
+      const session = loadSession();
+      const { app: electronApp } = require('electron');
+      const body = {
+        email: session?.email || null,
+        appVersion: electronApp.getVersion(),
+        platform: process.platform,
+        arch: process.arch,
+        osVersion: process.getSystemVersion?.() || os.release(),
+        runtime: loadRuntime()?.runtime || 'unknown',
+        stepId: report.stepId,
+        errorMessage: report.errorMessage,
+        logs: report.logs,
+      };
+      const apiBase = process.env.VALNAA_API_URL || 'https://api.valnaa.com';
+      const resp = await fetch(`${apiBase}/error-reports/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const result = await resp.json() as { ok?: boolean };
+      logApp('info', `Error report sent: ${result.ok ? 'success' : 'failed'}`);
+      return { ok: !!result.ok };
+    } catch (err: any) {
+      logApp('warn', `Failed to send error report: ${err.message}`);
+      return { ok: false, error: err.message };
+    }
+  });
+
   ipcMain.handle('app:install-update', () => {
     if (updateDownloaded) {
       logApp('info', 'User clicked Install Now — quitting and installing update');

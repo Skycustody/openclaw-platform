@@ -3082,6 +3082,7 @@
     <div class="setup-bottom-bar">
       <span id="setup-status-text">Preparing...</span>
       <span class="setup-fail-actions" id="setup-fail-actions">
+        <button class="status-btn" id="setup-report-btn">Send Report</button>
         <button class="status-btn" id="setup-retry-btn">Retry</button>
         <button class="status-btn" id="setup-close-btn">Close</button>
         <button class="status-btn" id="setup-switch-btn">Switch Runtime</button>
@@ -5073,6 +5074,7 @@
       const failEl = document.getElementById('setup-fail-actions');
 
       if (error) {
+        _lastFailedStep = error;
         statusEl.textContent = error.detail || `Failed: ${error.label}`;
         failEl.classList.add('active');
       } else if (allDone) {
@@ -5174,6 +5176,39 @@
     });
 
     // Fail actions
+    let _lastFailedStep = null;
+
+    document.getElementById('setup-report-btn').addEventListener('click', async () => {
+      const btn = document.getElementById('setup-report-btn');
+      btn.disabled = true;
+      btn.textContent = 'Sending...';
+      try {
+        const termLines = setupXterm ? setupXterm.buffer.active : null;
+        let logs = '';
+        if (termLines) {
+          const lineCount = Math.min(termLines.length, 200);
+          for (let i = termLines.length - lineCount; i < termLines.length; i++) {
+            const line = termLines.getLine(i);
+            if (line) logs += line.translateToString(true) + '\n';
+          }
+        }
+        const result = await oc.sendErrorReport({
+          stepId: _lastFailedStep?.id || 'unknown',
+          errorMessage: _lastFailedStep?.detail || 'Unknown error',
+          logs: logs.trim(),
+        });
+        btn.textContent = result.ok ? 'Sent!' : 'Failed';
+        if (result.ok) {
+          setTimeout(() => { btn.textContent = 'Send Report'; btn.disabled = false; }, 3000);
+        } else {
+          setTimeout(() => { btn.textContent = 'Send Report'; btn.disabled = false; }, 2000);
+        }
+      } catch (e) {
+        btn.textContent = 'Failed';
+        setTimeout(() => { btn.textContent = 'Send Report'; btn.disabled = false; }, 2000);
+      }
+    });
+
     document.getElementById('setup-retry-btn').addEventListener('click', () => {
       document.getElementById('setup-fail-actions').classList.remove('active');
       oc.retryAutoStart();

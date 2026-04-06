@@ -65,6 +65,7 @@ import agentsRoutes from './routes/agents';
 import skillsRoutes from './routes/skills';
 import proxyRoutes from './routes/proxy';
 import feedbackRoutes from './routes/feedback';
+import errorReportRoutes from './routes/errorReports';
 import trackRoutes from './routes/track';
 
 import { startScheduler } from './jobs/scheduler';
@@ -176,6 +177,7 @@ app.use('/agents', agentsRoutes);
 app.use('/skills', skillsRoutes);
 app.use('/proxy', proxyRoutes);
 app.use('/feedback', feedbackRoutes);
+app.use('/error-reports', errorReportRoutes);
 app.use('/track', trackRoutes);
 
 // Health check

@@ -212,6 +212,10 @@ contextBridge.exposeInMainWorld('openclaw', {
   agentHealth: (id: string) => ipcRenderer.invoke('agents:health', id),
   showConfirm: (message: string) => ipcRenderer.invoke('dialog:confirm', message),
 
+  // Error reporting
+  sendErrorReport: (report: { stepId: string; errorMessage: string; logs: string }) =>
+    ipcRenderer.invoke('app:send-error-report', report),
+
   // Update
   onUpdateAvailable: (cb: (info: { version: string; canAutoInstall: boolean }) => void) => {
     const handler = (_: any, info: { version: string; canAutoInstall: boolean }) => cb(info);
