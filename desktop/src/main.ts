@@ -1701,8 +1701,13 @@ async function runSetupFlow(runtime: RuntimeType): Promise<void> {
             sendSteps(steps);
             try {
               const prefix = path.join(os.homedir(), '.local');
-              const nvmSource = 'source "$HOME/.nvm/nvm.sh" 2>/dev/null; ';
-              const npmCmd = `${nvmSource}npm install -g openclaw@latest --prefix "${prefix}"`;
+              let npmCmd: string;
+              if (process.platform === 'win32') {
+                npmCmd = `npm install -g openclaw@latest --prefix "${prefix}"`;
+              } else {
+                const nvmSource = 'source "$HOME/.nvm/nvm.sh" 2>/dev/null; ';
+                npmCmd = `${nvmSource}npm install -g openclaw@latest --prefix "${prefix}"`;
+              }
               const exitCode = await runCommandInSetupPty(npmCmd);
               logApp('info', `npm fallback exited with code ${exitCode}`);
             } catch (e: any) {
