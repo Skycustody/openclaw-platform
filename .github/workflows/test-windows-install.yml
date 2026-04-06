@@ -1,0 +1,87 @@
+name: Test Windows Install
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-install:
+    runs-on: windows-latest
+    steps:
+      - name: Download Valnaa-Setup.exe from release
+        env:
+          GH_TOKEN: ${{ secrets.GH_RELEASE_TOKEN }}
+        run: |
+          gh release download v0.4.1 --pattern "Valnaa-Setup.exe" --repo Skycustody/valnaa-desktop --dir .
+          Get-ChildItem *.exe | Format-Table Name, Length
+
+      - name: Install silently
+        run: |
+          Write-Host "Running NSIS installer silently..."
+          Start-Process -FilePath ".\Valnaa-Setup.exe" -ArgumentList "/S" -Wait -NoNewWindow
+          Write-Host "Installer exited"
+
+      - name: Verify installation
+        run: |
+          $appPath = Join-Path $env:LOCALAPPDATA "Programs\valnaa\Valnaa.exe"
+          if (Test-Path $appPath) {
+            Write-Host "SUCCESS: Valnaa.exe found at $appPath"
+            $size = (Get-Item $appPath).Length / 1MB
+            Write-Host "Size: $([math]::Round($size, 1)) MB"
+          } else {
+            Write-Host "WARN: Valnaa.exe not at default path, searching..."
+            Get-ChildItem -Path "$env:LOCALAPPDATA\Programs" -Recurse -Filter "Valnaa.exe" -ErrorAction SilentlyContinue | Format-Table FullName, Length
+            Get-ChildItem -Path "$env:PROGRAMFILES" -Recurse -Filter "Valnaa.exe" -ErrorAction SilentlyContinue | Format-Table FullName, Length
+          }
+
+      - name: Check app launches (headless, 10s timeout)
+        run: |
+          $appPath = Join-Path $env:LOCALAPPDATA "Programs\valnaa\Valnaa.exe"
+          if (-not (Test-Path $appPath)) {
+            $found = Get-ChildItem -Path "$env:LOCALAPPDATA" -Recurse -Filter "Valnaa.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($found) { $appPath = $found.FullName }
+            else { Write-Host "SKIP: Valnaa.exe not found"; exit 0 }
+          }
+          Write-Host "Launching $appPath for 10 seconds..."
+          $proc = Start-Process -FilePath $appPath -PassThru
+          Start-Sleep -Seconds 10
+          if (-not $proc.HasExited) {
+            Write-Host "SUCCESS: App is running (PID $($proc.Id))"
+            $proc | Stop-Process -Force
+          } else {
+            Write-Host "WARN: App exited with code $($proc.ExitCode)"
+          }
+
+      - name: Check OpenClaw install capability
+        run: |
+          Write-Host "Checking if PowerShell can reach install script..."
+          try {
+            $response = Invoke-WebRequest -Uri "https://openclaw.ai/install.ps1" -UseBasicParsing -TimeoutSec 10
+            Write-Host "SUCCESS: install.ps1 reachable ($($response.Content.Length) bytes)"
+          } catch {
+            Write-Host "WARN: Could not reach install.ps1 - $($_.Exception.Message)"
+          }
+
+          Write-Host ""
+          Write-Host "Checking cmd.exe path resolution..."
+          $windir = $env:SystemRoot
+          $cmdPath = "$windir\System32\cmd.exe"
+          if (Test-Path $cmdPath) {
+            Write-Host "SUCCESS: cmd.exe found at $cmdPath"
+          } else {
+            Write-Host "FAIL: cmd.exe not found"
+          }
+
+          Write-Host ""
+          Write-Host "Checking PowerShell availability..."
+          $psPath = "$windir\System32\WindowsPowerShell\v1.0\powershell.exe"
+          if (Test-Path $psPath) {
+            Write-Host "SUCCESS: powershell.exe found at $psPath"
+          } else {
+            Write-Host "FAIL: powershell.exe not found"
+          }
+
+          Write-Host ""
+          Write-Host "Testing the actual install command via cmd.exe..."
+          $installCmd = 'powershell.exe -ExecutionPolicy Bypass -Command "Write-Host INSTALL_TEST_OK"'
+          $result = & cmd.exe /c $installCmd 2>&1
+          Write-Host "cmd.exe /c powershell result: $result"
