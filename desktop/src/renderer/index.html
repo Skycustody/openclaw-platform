@@ -5485,7 +5485,7 @@
           <div class="ag-installed-item">
             <div class="ag-installed-dot" style="background:${dotColor};"></div>
             <div class="ag-installed-info">
-              <div class="ag-installed-name">${a.name || a.id}</div>
+              <div class="ag-installed-name">${a.name || a.id}${catAgent ? '<span style="color:rgba(255,255,255,0.3);font-weight:400;font-size:12px;margin-left:8px;">' + (catAgent.role || catAgent.name || '') + '</span>' : ''}</div>
               <div class="ag-installed-model" style="display:flex;gap:12px;">
                 <span>${a.model || 'default model'}</span>
                 <span style="color:rgba(255,255,255,0.2);">${h.sessions || 0} sessions</span>
@@ -5501,48 +5501,124 @@
       }).join('');
     }
 
-    window.toggleAgentSetup = async function(id) {
-      var panel = document.getElementById('ag-setup-' + id);
-      if (!panel) return;
-      if (panel.style.display !== 'none') { panel.style.display = 'none'; return; }
-      panel.style.display = 'block';
+    // Skill descriptions for the setup page
+    var _skillDescriptions = {
+      'resend-email-sender': { what: 'Send emails on your behalf', why: 'Lets agents send cold outreach, follow-ups, and notifications via email.', steps: '1. Go to <a href="#" onclick="oc.openExternal(\'https://resend.com/api-keys\')">resend.com/api-keys</a>\n2. Click "Create API Key"\n3. Copy the key (starts with re_)\n4. Paste below', free: 'Free: 100 emails/day' },
+      'bland': { what: 'Make AI phone calls', why: 'Agent can call leads with an AI voice that has real conversations and returns transcripts.', steps: '1. Go to <a href="#" onclick="oc.openExternal(\'https://app.bland.ai\')">app.bland.ai</a>\n2. Sign up (free $2 credit)\n3. Copy your API key from the dashboard\n4. Paste below', free: 'Free: $2 credit (~30 calls)' },
+      'calendly-api': { what: 'Book meetings and check availability', why: 'Agent can schedule demos and meetings with leads via your Calendly.', steps: '1. Go to <a href="#" onclick="oc.openExternal(\'https://maton.ai\')">maton.ai</a>\n2. Connect your Calendly account\n3. Copy the Maton API key\n4. Paste below', free: '' },
+      'stripe-api': { what: 'Send invoices and payment links', why: 'Agent can create Stripe invoices and collect payments from clients.', steps: '1. Go to <a href="#" onclick="oc.openExternal(\'https://maton.ai\')">maton.ai</a>\n2. Connect your Stripe account\n3. Copy the Maton API key\n4. Paste below', free: '' },
+      'x-api': { what: 'Post to X (Twitter)', why: 'Agent can tweet, post threads, and engage on your behalf.', steps: '1. Go to <a href="#" onclick="oc.openExternal(\'https://developer.x.com\')">developer.x.com</a>\n2. Create a project + app\n3. Generate OAuth 1.0a keys (4 keys total)\n4. Paste all 4 below', free: 'Free tier available' },
+      'whatsapp-business': { what: 'Send WhatsApp messages', why: 'Agent can text leads on WhatsApp — less aggressive than calls, higher response rate.', steps: '1. Go to <a href="#" onclick="oc.openExternal(\'https://maton.ai\')">maton.ai</a>\n2. Connect your WhatsApp Business\n3. Copy the Maton API key\n4. Paste below', free: '' },
+      'notion-skill': { what: 'Read and write Notion pages', why: 'Agent can manage content calendars, CRM databases, and project boards in Notion.', steps: '1. Go to <a href="#" onclick="oc.openExternal(\'https://notion.so/my-integrations\')">notion.so/my-integrations</a>\n2. Create a new integration\n3. Copy the API key\n4. Paste below', free: 'Free with Notion account' },
+      'google-search': { what: 'Search Google programmatically', why: 'Agent can research leads, competitors, and topics using Google Custom Search.', steps: '1. Go to <a href="#" onclick="oc.openExternal(\'https://console.cloud.google.com\')">Google Cloud Console</a>\n2. Enable Custom Search API\n3. Create API key + Search Engine ID\n4. Paste both below', free: 'Free: 100 searches/day' },
+      'github': { what: 'Access GitHub repos and issues', why: 'Agent can review PRs, create issues, and monitor repositories.', steps: '1. Go to <a href="#" onclick="oc.openExternal(\'https://github.com/settings/tokens\')">github.com/settings/tokens</a>\n2. Generate a personal access token\n3. Paste below', free: 'Free with GitHub account' },
+      'gh-issues': { what: 'Manage GitHub issues', why: 'Same token as GitHub — manages issues and project boards.', steps: 'Same GitHub token as above', free: '' },
+      'porteden-email': { what: 'Send emails via Porteden', why: 'Alternative email provider for agents.', steps: '1. Run porteden auth login or get token from porteden.com\n2. Paste below', free: '' },
+      'discord': { what: 'Send Discord messages', why: 'Agent can post updates and alerts to Discord channels.', steps: '1. Go to <a href="#" onclick="oc.openExternal(\'https://discord.com/developers/applications\')">Discord Developer Portal</a>\n2. Create a bot\n3. Copy the bot token\n4. Paste below', free: 'Free' },
+      'brainz-calendar': { what: 'Google Calendar access', why: 'Agent can check schedules and create events.', steps: '1. Go to Google Cloud Console\n2. Enable Calendar API\n3. Create API key\n4. Paste below', free: '' },
+      'imsg': { what: 'Send iMessage and SMS from your Mac', why: 'Agent can text leads directly from your Mac — no setup needed.', steps: 'No setup required — works automatically on macOS with iMessage enabled.', free: 'Free — uses your Mac' },
+    };
 
-      // Get current env values
+    window.toggleAgentSetup = async function(id) {
+      // Create full-page setup overlay
+      var overlay = document.getElementById('agent-setup-overlay');
+      if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'agent-setup-overlay';
+        overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:#111;overflow-y:auto;display:none;';
+        document.body.appendChild(overlay);
+      }
+      if (overlay.style.display !== 'none' && overlay.dataset.agent === id) {
+        overlay.style.display = 'none'; return;
+      }
+      overlay.dataset.agent = id;
+      overlay.style.display = 'block';
+
       var existing = {};
       try { existing = (await oc.agentGetEnv(id)) || {}; } catch {}
 
       var catAgent = _agentsCatalog.find(c => c.id === id);
+      var agentName = catAgent ? (catAgent.nickname || catAgent.name || id) : id;
+      var agentRole = catAgent ? (catAgent.role || catAgent.description || '') : '';
       var skills = catAgent ? (catAgent.skills || []) : [];
-      var reqs = skills.filter(s => _skillReqs[s]).map(s => _skillReqs[s]);
+      var reqs = skills.filter(s => _skillReqs[s]).map(s => ({..._skillReqs[s], skillId: s}));
 
-      // Dedupe keys (github and gh-issues share GH_TOKEN)
       var seen = new Set();
       var allKeys = [];
       for (var r of reqs) {
-        for (var k of r.keys) {
-          if (!seen.has(k.env)) { seen.add(k.env); allKeys.push({...k, skill: r.label}); }
+        for (var k of (r.keys || [])) {
+          if (!seen.has(k.env)) {
+            seen.add(k.env);
+            allKeys.push({...k, skill: r.label, skillId: r.skillId});
+          }
         }
       }
 
-      panel.innerHTML = '<div style="padding:14px 20px 16px 36px;">' +
-        '<div style="border:1px solid rgba(255,255,255,0.06);border-radius:10px;overflow:hidden;">' +
-        allKeys.map(function(k, i) {
-          var val = existing[k.env] || '';
-          return '<div style="padding:12px 14px;background:#1c1c1c;' + (i < allKeys.length - 1 ? 'border-bottom:1px solid rgba(255,255,255,0.04);' : '') + '">' +
-            '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">' +
-              '<span style="font-size:12px;color:#ccc;font-weight:500;">' + k.label + '</span>' +
-              (val ? '<span style="font-size:10px;color:#22c55e;background:rgba(34,197,94,0.1);padding:2px 8px;border-radius:10px;">Connected</span>' : '<span style="font-size:10px;color:rgba(255,255,255,0.25);background:rgba(255,255,255,0.04);padding:2px 8px;border-radius:10px;">Not set</span>') +
-            '</div>' +
-            '<input type="password" data-env="' + k.env + '" data-agent="' + id + '" placeholder="' + k.hint + '" value="' + (val || '') + '" ' +
-              'style="width:100%;padding:8px 10px;background:#141414;border:1px solid rgba(255,255,255,0.08);border-radius:6px;color:#e0e0e0;font-size:12px;font-family:inherit;outline:none;" />' +
-          '</div>';
-        }).join('') +
-        '</div>' +
-        '<div style="display:flex;align-items:center;gap:10px;margin-top:12px;">' +
-          '<button style="padding:6px 20px;border-radius:6px;border:1px solid rgba(59,130,246,0.3);background:rgba(59,130,246,0.1);color:#60a5fa;font-size:12px;font-weight:500;cursor:pointer;font-family:inherit;" onclick="saveAgentSetup(\'' + id + '\')">Save keys</button>' +
-          '<span id="ag-setup-status-' + id + '" style="font-size:11px;color:rgba(255,255,255,0.3);"></span>' +
-        '</div>' +
-      '</div>';
+      var configuredCount = allKeys.filter(k => existing[k.env]).length;
+
+      overlay.innerHTML =
+        '<div style="max-width:640px;margin:0 auto;padding:40px 24px 60px;">' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:32px;">' +
+            '<button onclick="document.getElementById(\'agent-setup-overlay\').style.display=\'none\'" style="background:none;border:none;color:rgba(255,255,255,0.4);font-size:14px;cursor:pointer;padding:6px 12px;border-radius:6px;font-family:inherit;">← Back to Agents</button>' +
+            '<span style="font-size:11px;color:rgba(255,255,255,0.2);">' + configuredCount + '/' + allKeys.length + ' connected</span>' +
+          '</div>' +
+
+          '<h2 style="font-size:24px;font-weight:600;color:#fff;margin:0 0 6px;">' + agentName + ' Setup</h2>' +
+          '<p style="font-size:13px;color:rgba(255,255,255,0.4);margin:0 0 32px;line-height:1.5;">' + agentRole + '</p>' +
+
+          (allKeys.length === 0
+            ? '<div style="padding:24px;background:#1a1a1a;border-radius:10px;text-align:center;"><p style="color:rgba(255,255,255,0.4);font-size:13px;margin:0;">No API keys needed — this agent is ready to go.</p></div>'
+            : allKeys.map(function(k, i) {
+                var val = existing[k.env] || '';
+                var desc = _skillDescriptions[k.skillId] || {};
+                var connected = !!val;
+                return '<div style="background:#1a1a1a;border:1px solid ' + (connected ? 'rgba(34,197,94,0.2)' : 'rgba(255,255,255,0.06)') + ';border-radius:10px;padding:20px;margin-bottom:12px;">' +
+                  '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">' +
+                    '<span style="font-size:14px;font-weight:500;color:#e8e8e8;">' + k.skill + '</span>' +
+                    (connected
+                      ? '<span style="font-size:10px;color:#22c55e;background:rgba(34,197,94,0.1);padding:3px 10px;border-radius:10px;">Connected</span>'
+                      : '<span style="font-size:10px;color:#f59e0b;background:rgba(245,158,11,0.1);padding:3px 10px;border-radius:10px;">Not configured</span>') +
+                  '</div>' +
+                  (desc.what ? '<p style="font-size:12px;color:rgba(255,255,255,0.5);margin:6px 0 2px;">' + desc.what + '</p>' : '') +
+                  (desc.why ? '<p style="font-size:12px;color:rgba(255,255,255,0.3);margin:0 0 14px;line-height:1.5;">' + desc.why + '</p>' : '') +
+                  (desc.steps ? '<div style="background:#141414;border-radius:6px;padding:12px 14px;margin-bottom:14px;"><p style="font-size:11px;color:rgba(255,255,255,0.4);margin:0;line-height:1.8;white-space:pre-line;">' + desc.steps + '</p></div>' : '') +
+                  (desc.free ? '<p style="font-size:10px;color:rgba(59,130,246,0.7);margin:0 0 10px;">' + desc.free + '</p>' : '') +
+                  (k.env
+                    ? '<div style="display:flex;gap:8px;align-items:center;">' +
+                        '<input type="password" data-env="' + k.env + '" data-agent="' + id + '" placeholder="Paste ' + k.label + ' here" value="' + (val || '') + '" ' +
+                          'style="flex:1;padding:9px 12px;background:#0f0f0f;border:1px solid rgba(255,255,255,0.08);border-radius:6px;color:#e0e0e0;font-size:12px;font-family:inherit;outline:none;" ' +
+                          'onfocus="this.type=\'text\'" onblur="this.type=\'password\'" />' +
+                        '<button onclick="this.previousElementSibling.type=this.previousElementSibling.type===\'password\'?\'text\':\'password\'" style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:8px 10px;color:rgba(255,255,255,0.3);cursor:pointer;font-size:11px;">Show</button>' +
+                      '</div>'
+                    : '<p style="font-size:11px;color:#22c55e;margin:0;">Ready — no key needed</p>') +
+                '</div>';
+              }).join('')) +
+
+          '<div style="display:flex;align-items:center;gap:12px;margin-top:24px;">' +
+            '<button style="padding:10px 28px;border-radius:8px;border:none;background:#3b82f6;color:#fff;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;" onclick="saveAgentSetupOverlay(\'' + id + '\')">Save All</button>' +
+            '<button style="padding:10px 20px;border-radius:8px;border:1px solid rgba(255,255,255,0.08);background:transparent;color:rgba(255,255,255,0.4);font-size:13px;cursor:pointer;font-family:inherit;" onclick="document.getElementById(\'agent-setup-overlay\').style.display=\'none\'">Cancel</button>' +
+            '<span id="ag-setup-status-overlay" style="font-size:12px;color:rgba(255,255,255,0.3);"></span>' +
+          '</div>' +
+        '</div>';
+    };
+
+    window.saveAgentSetupOverlay = async function(id) {
+      var overlay = document.getElementById('agent-setup-overlay');
+      var inputs = overlay.querySelectorAll('input[data-env]');
+      var env = {};
+      inputs.forEach(function(inp) { if (inp.value.trim()) env[inp.dataset.env] = inp.value.trim(); });
+      try {
+        await oc.agentSaveEnv(id, env);
+        var status = document.getElementById('ag-setup-status-overlay');
+        status.textContent = 'Saved!';
+        status.style.color = '#22c55e';
+        setTimeout(function() {
+          overlay.style.display = 'none';
+          renderInstalledAgents();
+        }, 800);
+      } catch (e) {
+        alert('Save failed: ' + (e.message || e));
+      }
     };
 
     window.saveAgentSetup = async function(id) {
@@ -5734,7 +5810,7 @@
       agOverlay('Installing ' + (agent.name || id) + '…');
       try {
         const soul = agent.soul || agent.content || `# Agent: ${agent.name}\n\n${agent.description || ''}`;
-        const displayName = agent.nickname ? agent.nickname + ' (' + (agent.name || id) + ')' : (agent.name || id);
+        const displayName = agent.nickname || agent.name || id;
         const res = await oc.agentsInstall(id, soul, displayName);
         if (res.ok) {
           await refreshAgentsPanel();
