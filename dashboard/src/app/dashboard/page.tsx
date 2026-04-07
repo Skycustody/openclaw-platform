@@ -321,17 +321,16 @@ export default function DashboardHome() {
           </div>
         )}
 
-        {phase === 'ready' && gatewayWsUrl && gatewayToken && (
-          <GatewayChat
-            gatewayUrl={gatewayWsUrl}
-            token={gatewayToken}
-            onModelChange={(brainMode, manualModel) => {
-              setSettings(prev => prev ? { ...prev, brain_mode: brainMode, manual_model: manualModel } : prev);
-            }}
+        {phase === 'ready' && agentUrl && (
+          <iframe
+            src={agentUrl}
+            className="w-full h-full border-0"
+            allow="clipboard-write; microphone"
+            title="OpenClaw Control UI"
           />
         )}
 
-        {phase === 'ready' && (!gatewayWsUrl || !gatewayToken) && (
+        {phase === 'ready' && !agentUrl && (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-center z-10 px-6">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/[0.04] mb-5">
               <Bot className="h-6 w-6 text-white/20" />
