@@ -127,12 +127,19 @@ export async function restartContainer(serverIp: string, containerName: string, 
 }
 
 /**
- * Re-apply gateway config to a RUNNING container via `openclaw config merge`.
+ * Re-apply gateway config to a RUNNING container.
  *
  * This is necessary because existing containers run `openclaw doctor --fix`
  * at startup, which strips gateway auth keys (dangerouslyDisableDeviceAuth,
- * allowInsecureAuth, etc.) from openclaw.json. Without these keys the gateway
- * demands device pairing, breaking the browser tool and iframe embed.
+ * allowInsecureAuth, auth.mode, auth.token) from openclaw.json. Without these
+ * keys the gateway demands device pairing, breaking the iframe embed with
+ * "unauthorized: gateway token missing".
+ *
+ * Two-pronged approach:
+ * 1. Write directly to the host-side config file (bind-mounted into container)
+ *    so the config persists even if the CLI merge fails.
+ * 2. Merge via `openclaw config merge` inside the container to notify the
+ *    running gateway process of the change.
  *
  * Call this AFTER the container has fully started (gateway is listening).
  */
@@ -152,7 +159,44 @@ export async function reapplyGatewayConfig(
 
   const token = tokenRow.gateway_token;
 
+  // 1. Write gateway auth config directly to the host-side config file.
+  //    The bind mount means this IS the container's /root/.openclaw/openclaw.json.
+  try {
+    const config = await readContainerConfig(serverIp, userId);
+    if (!config.gateway) config.gateway = {};
+    config.gateway.auth = {
+      mode: 'token',
+      token,
+      rateLimit: { maxAttempts: 10, windowMs: 60000, lockoutMs: 300000 },
+    };
+    if (!config.gateway.controlUi) config.gateway.controlUi = {};
+    config.gateway.controlUi.enabled = true;
+    config.gateway.controlUi.allowInsecureAuth = true;
+    config.gateway.controlUi.dangerouslyDisableDeviceAuth = true;
+    config.gateway.controlUi.dangerouslyAllowHostHeaderOriginFallback = true;
+    config.gateway.controlUi.allowedOrigins = ['https://valnaa.com', 'https://www.valnaa.com'];
+    await writeContainerConfig(serverIp, userId, config);
+  } catch (err: any) {
+    console.warn(`[reapplyGatewayConfig] host config write failed for ${userId}:`, err.message);
+  }
+
+  // 2. Merge via CLI to update the running gateway process + set browser config
+  const gatewayOverlay = JSON.stringify({
+    gateway: {
+      auth: { mode: 'token', token },
+      controlUi: {
+        enabled: true,
+        allowInsecureAuth: true,
+        dangerouslyDisableDeviceAuth: true,
+        dangerouslyAllowHostHeaderOriginFallback: true,
+        allowedOrigins: ['https://valnaa.com', 'https://www.valnaa.com'],
+      },
+    },
+  });
+  const mergeB64 = Buffer.from(gatewayOverlay).toString('base64');
+
   const commands = [
+    `echo '${mergeB64}' | base64 -d | openclaw config merge -`,
     `openclaw config set browser.defaultProfile openclaw`,
     `openclaw config set browser.headless true`,
     `openclaw config set browser.noSandbox true`,
