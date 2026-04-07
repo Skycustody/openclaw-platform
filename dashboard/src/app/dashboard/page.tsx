@@ -257,32 +257,8 @@ export default function DashboardHome() {
       )}
 
       {/* Minimal status bar */}
-      <div className="flex items-center justify-between px-5 py-3 shrink-0">
-        <div className="flex items-center gap-3">
-          <span className={cn(
-            'h-2 w-2 rounded-full shrink-0',
-            isOnline ? 'bg-[#4ade80]' : agentStatus === 'provisioning' || agentStatus === 'sleeping' ? 'bg-[#fbbf24]' : 'bg-white/20'
-          )} />
-          <span className="text-[13px] font-medium text-white/70">
-            {settings?.agent_name || 'Your Agent'}
-          </span>
-          <StatusBadge status={agentStatus} className="!text-[10px] !py-0 !px-1.5" />
-        </div>
-
-        <div className="flex items-center gap-2">
-          {previewUrl && phase === 'ready' && (
-            <button onClick={() => window.open(previewUrl, '_blank')}
-              className="flex items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-1.5 hover:bg-white/[0.04] transition-all"
-              title="Preview websites built by your agent">
-              <Globe className="h-3.5 w-3.5 text-white/30" />
-              <span className="text-[12px] font-medium text-white/40">Preview</span>
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Main content area */}
-      <div className="flex-1 min-h-0 overflow-hidden border-t border-white/[0.06] relative flex flex-col">
+      {/* Main content area — full screen, no status bar */}
+      <div className="flex-1 min-h-0 overflow-hidden relative flex flex-col">
         {(phase === 'loading' || phase === 'starting' || phase === 'provisioning' || phase === 'polling') && (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-center z-10">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/[0.04] mb-5">
@@ -323,7 +299,7 @@ export default function DashboardHome() {
 
         {phase === 'ready' && agentUrl && (
           <iframe
-            src={agentUrl}
+            src={gatewayToken ? `${agentUrl}${agentUrl.includes('?') ? '&' : '?'}token=${gatewayToken}` : agentUrl}
             className="w-full h-full border-0"
             allow="clipboard-write; microphone"
             title="OpenClaw Control UI"
