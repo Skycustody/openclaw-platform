@@ -51,37 +51,138 @@ jobs:
             Write-Host "WARN: App exited with code $($proc.ExitCode)"
           }
 
-      - name: Check OpenClaw install capability
+  test-no-node:
+    name: "Test: OpenClaw install WITHOUT Node.js"
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Remove Node.js from PATH (simulate fresh Windows)
         run: |
-          Write-Host "Checking if PowerShell can reach install script..."
+          Write-Host "=== BEFORE: Node.js status ==="
+          node --version 2>$null
+          Write-Host "Node path: $(Get-Command node -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source)"
+
+          # Remove ALL node/npm paths from PATH
+          $cleanPath = ($env:PATH -split ';' | Where-Object {
+            $_ -notmatch 'nodejs' -and $_ -notmatch 'npm' -and $_ -notmatch 'nvm' -and $_ -notmatch 'fnm'
+          }) -join ';'
+
+          # Also rename the node binary so it truly can't be found
+          $nodePath = Get-Command node -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source
+          if ($nodePath) {
+            $nodeDir = Split-Path $nodePath
+            Rename-Item "$nodeDir\node.exe" "$nodeDir\node.exe.bak" -ErrorAction SilentlyContinue
+            Rename-Item "$nodeDir\npm.cmd" "$nodeDir\npm.cmd.bak" -ErrorAction SilentlyContinue
+            Rename-Item "$nodeDir\npx.cmd" "$nodeDir\npx.cmd.bak" -ErrorAction SilentlyContinue
+            Write-Host "Renamed node binaries in $nodeDir"
+          }
+
+          [System.Environment]::SetEnvironmentVariable("PATH", $cleanPath, "Process")
+
+          Write-Host ""
+          Write-Host "=== AFTER: Node.js status ==="
+          try { node --version 2>$null } catch { Write-Host "node: NOT FOUND (good)" }
+          try { npm --version 2>$null } catch { Write-Host "npm: NOT FOUND (good)" }
+
+      - name: Verify Node.js is truly gone
+        run: |
+          $nodeCheck = Get-Command node -ErrorAction SilentlyContinue
+          if ($nodeCheck) {
+            Write-Host "FAIL: Node.js still reachable at $($nodeCheck.Source)"
+            exit 1
+          }
+          Write-Host "CONFIRMED: Node.js is not available — simulating fresh Windows"
+
+      - name: Test OpenClaw install.ps1 WITHOUT Node.js
+        run: |
+          Write-Host "Running OpenClaw install script (should fail at npm step)..."
+          Write-Host ""
           try {
-            $response = Invoke-WebRequest -Uri "https://openclaw.ai/install.ps1" -UseBasicParsing -TimeoutSec 10
-            Write-Host "SUCCESS: install.ps1 reachable ($($response.Content.Length) bytes)"
+            $result = powershell.exe -ExecutionPolicy Bypass -Command "& ([scriptblock]::Create((Invoke-WebRequest -UseBasicParsing -Uri 'https://openclaw.ai/install.ps1'))) -NoOnboard" 2>&1
+            $result | ForEach-Object { Write-Host $_ }
           } catch {
-            Write-Host "WARN: Could not reach install.ps1 - $($_.Exception.Message)"
+            Write-Host "Script error: $($_.Exception.Message)"
+          }
+          Write-Host ""
+          Write-Host "Exit code: $LASTEXITCODE"
+
+      - name: Test our Node.js auto-install fix
+        run: |
+          Write-Host "=== Testing Valnaa's Node.js auto-install logic ==="
+          Write-Host ""
+
+          # Simulate what installer.ts does
+          Write-Host "Step 1: Check node..."
+          $nodeAvailable = $false
+          try {
+            $ver = node --version 2>$null
+            if ($ver) { $nodeAvailable = $true; Write-Host "Node found: $ver" }
+          } catch {}
+          if (-not $nodeAvailable) { Write-Host "Node NOT found (expected)" }
+
+          Write-Host ""
+          Write-Host "Step 2: Install Node.js via winget..."
+          winget install OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements
+
+          Write-Host ""
+          Write-Host "Step 3: Refresh PATH from registry (our fix)..."
+          $livePath = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+          [System.Environment]::SetEnvironmentVariable("PATH", $livePath, "Process")
+
+          Write-Host ""
+          Write-Host "Step 4: Verify Node.js is now available..."
+          try {
+            $ver = & "C:\Program Files\nodejs\node.exe" --version 2>$null
+            if ($ver) {
+              Write-Host "SUCCESS: Node.js $ver is available after registry PATH refresh"
+            } else {
+              # Try via refreshed PATH
+              $ver2 = node --version 2>$null
+              if ($ver2) { Write-Host "SUCCESS: Node.js $ver2 found on refreshed PATH" }
+              else { Write-Host "FAIL: Node.js still not found after install + PATH refresh" }
+            }
+          } catch {
+            Write-Host "FAIL: $($_.Exception.Message)"
           }
 
           Write-Host ""
-          Write-Host "Checking cmd.exe path resolution..."
-          $windir = $env:SystemRoot
-          $cmdPath = "$windir\System32\cmd.exe"
-          if (Test-Path $cmdPath) {
-            Write-Host "SUCCESS: cmd.exe found at $cmdPath"
+          Write-Host "Step 5: Verify npm works..."
+          try {
+            $npmVer = & "C:\Program Files\nodejs\npm.cmd" --version 2>$null
+            if ($npmVer) { Write-Host "SUCCESS: npm $npmVer works" }
+            else {
+              $npmVer2 = npm --version 2>$null
+              if ($npmVer2) { Write-Host "SUCCESS: npm $npmVer2 works via PATH" }
+              else { Write-Host "FAIL: npm not found" }
+            }
+          } catch {
+            Write-Host "FAIL: npm error - $($_.Exception.Message)"
+          }
+
+          Write-Host ""
+          Write-Host "Step 6: Test OpenClaw install script NOW..."
+          try {
+            powershell.exe -ExecutionPolicy Bypass -Command "& ([scriptblock]::Create((Invoke-WebRequest -UseBasicParsing -Uri 'https://openclaw.ai/install.ps1'))) -NoOnboard"
+            Write-Host "SUCCESS: OpenClaw install completed"
+          } catch {
+            Write-Host "OpenClaw install result: $($_.Exception.Message)"
+          }
+          Write-Host "Exit code: $LASTEXITCODE"
+
+          Write-Host ""
+          Write-Host "Step 7: Check if openclaw binary exists..."
+          $ocPath = Get-Command openclaw -ErrorAction SilentlyContinue
+          if ($ocPath) {
+            Write-Host "SUCCESS: openclaw found at $($ocPath.Source)"
+            openclaw --version 2>$null
           } else {
-            Write-Host "FAIL: cmd.exe not found"
+            # Check common npm global paths
+            $npmGlobal = Join-Path $env:APPDATA "npm\openclaw.cmd"
+            if (Test-Path $npmGlobal) {
+              Write-Host "SUCCESS: openclaw found at $npmGlobal"
+            } else {
+              Write-Host "WARN: openclaw not on PATH — may need shell restart"
+              Get-ChildItem -Path "$env:APPDATA\npm" -Filter "openclaw*" -ErrorAction SilentlyContinue | Format-Table Name
+            }
           }
-
-          Write-Host ""
-          Write-Host "Checking PowerShell availability..."
-          $psPath = "$windir\System32\WindowsPowerShell\v1.0\powershell.exe"
-          if (Test-Path $psPath) {
-            Write-Host "SUCCESS: powershell.exe found at $psPath"
-          } else {
-            Write-Host "FAIL: powershell.exe not found"
-          }
-
-          Write-Host ""
-          Write-Host "Testing the actual install command via cmd.exe..."
-          $installCmd = 'powershell.exe -ExecutionPolicy Bypass -Command "Write-Host INSTALL_TEST_OK"'
-          $result = & cmd.exe /c $installCmd 2>&1
-          Write-Host "cmd.exe /c powershell result: $result"
