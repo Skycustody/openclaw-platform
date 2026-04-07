@@ -13,7 +13,7 @@ import api from '@/lib/api';
 import { DASHBOARD_ALLOWED_STATUSES } from '@/lib/constants';
 import {
   Loader2, Mail, RefreshCw, MessageSquare, Bot,
-  Radio, Clock, Settings, CreditCard, HelpCircle,
+  Radio, KeyRound, Settings, CreditCard, HelpCircle,
   LogOut, PanelLeftClose, PanelLeft,
 } from 'lucide-react';
 
@@ -23,9 +23,7 @@ const NAV_ITEMS = [
   { href: '/dashboard', label: 'Chat', icon: MessageSquare },
   { href: '/dashboard/agents', label: 'Agents', icon: Bot },
   { href: '/dashboard/channels', label: 'Channels', icon: Radio },
-  { href: '/dashboard/cron', label: 'Schedule', icon: Clock },
-  { href: '/dashboard/settings', label: 'Settings', icon: Settings },
-  { href: '/dashboard/billing', label: 'Billing', icon: CreditCard },
+  { href: '/dashboard/cron', label: 'API Keys', icon: KeyRound },
 ];
 
 function ConfigChangeToast() {
@@ -157,13 +155,31 @@ function Sidebar() {
                   <p className="text-[12px] text-white/30 truncate">{user.email}</p>
                 </div>
               )}
-              <button
-                onClick={() => { localStorage.removeItem('token'); window.location.href = '/auth/login'; }}
-                className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-white/50 hover:text-red-400/70 hover:bg-white/[0.06] transition-colors"
+              <Link
+                href="/dashboard/settings"
+                onClick={() => setUserMenuOpen(false)}
+                className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-white/50 hover:text-white/70 hover:bg-white/[0.06] transition-colors"
               >
-                <LogOut className="h-4 w-4" />
-                Sign Out
-              </button>
+                <Settings className="h-4 w-4" />
+                Settings
+              </Link>
+              <Link
+                href="/dashboard/billing"
+                onClick={() => setUserMenuOpen(false)}
+                className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-white/50 hover:text-white/70 hover:bg-white/[0.06] transition-colors"
+              >
+                <CreditCard className="h-4 w-4" />
+                Billing
+              </Link>
+              <div className="border-t border-white/[0.06] mt-1 pt-1">
+                <button
+                  onClick={() => { localStorage.removeItem('token'); window.location.href = '/auth/login'; }}
+                  className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-white/50 hover:text-red-400/70 hover:bg-white/[0.06] transition-colors"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Sign Out
+                </button>
+              </div>
             </div>
           )}
         </div>
