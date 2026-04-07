@@ -1,0 +1,86 @@
+name: Build Desktop (macOS)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version tag (e.g. v0.4.1) — leave empty to auto-detect from package.json'
+        required: false
+        default: ''
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: desktop
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Detect version
+        id: version
+        run: |
+          INPUT_VERSION="${{ github.event.inputs.version }}"
+          if [ -n "$INPUT_VERSION" ]; then
+            TAG="$INPUT_VERSION"
+          else
+            TAG="v$(node -p "require('./package.json').version")"
+          fi
+          echo "Release tag: $TAG"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Install dependencies
+        run: npm ci || npm install
+
+      - name: Build TypeScript
+        run: npm run build
+
+      - name: Build macOS DMG + ZIP (signed & notarized)
+        env:
+          CSC_LINK: ${{ secrets.MAC_CERTIFICATE_P12 }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: npx electron-builder --mac --publish never
+
+      - name: List build output
+        run: ls -lhR release/
+
+      - name: Upload DMGs to release
+        env:
+          GH_TOKEN: ${{ secrets.GH_RELEASE_TOKEN }}
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          REPO="Skycustody/valnaa-desktop"
+
+          # Upload all DMG files
+          for dmg in release/*.dmg; do
+            if [ -f "$dmg" ]; then
+              echo "Uploading $(basename "$dmg") ($(du -h "$dmg" | cut -f1)) to $TAG"
+              gh release upload "$TAG" "$dmg" --repo "$REPO" --clobber
+            fi
+          done
+
+          # Upload latest-mac.yml for electron-updater auto-update
+          if [ -f "release/latest-mac.yml" ]; then
+            echo "Uploading latest-mac.yml for macOS auto-update"
+            gh release upload "$TAG" "release/latest-mac.yml" --repo "$REPO" --clobber
+          fi
+
+          # Upload ZIP files (needed by electron-updater for differential updates)
+          for zip in release/*.zip; do
+            if [ -f "$zip" ]; then
+              echo "Uploading $(basename "$zip") to $TAG"
+              gh release upload "$TAG" "$zip" --repo "$REPO" --clobber
+            fi
+          done
