@@ -110,38 +110,57 @@ export async function installOpenClaw(onProgress: ProgressCallback): Promise<str
   }
 
   // On Windows, the OpenClaw install script expects npm to be available.
-  // If Node.js isn't installed, install it first via winget or direct download.
+  // If Node.js isn't installed, install it first via winget or direct MSI.
+  // Key issue: after installing Node, the current process.env.PATH is stale.
+  // We must read the live system+user PATH from the registry so the spawned
+  // PowerShell process can find node/npm.
   if (IS_WIN && !isNodeInstalled()) {
     onProgress({ stage: 'downloading', message: 'Installing Node.js (required for OpenClaw)...' });
     logApp('info', 'Node.js not found on Windows — installing before OpenClaw');
     try {
       const { execSync } = require('child_process');
       const windir = process.env.SystemRoot || 'C:\\Windows';
+      const psEnv = { ...process.env, PATH: `${process.env.PATH};${windir}\\System32;${windir}\\System32\\WindowsPowerShell\\v1.0` };
       // Try winget first (available on Windows 10 1709+)
       try {
         execSync('winget install OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements', {
-          timeout: 300000,
-          stdio: 'pipe',
-          env: { ...process.env, PATH: `${process.env.PATH};${windir}\\System32;${windir}\\System32\\WindowsPowerShell\\v1.0` },
+          timeout: 300000, stdio: 'pipe', env: psEnv,
         });
         logApp('info', 'Node.js installed via winget');
       } catch {
-        // Fallback: direct MSI download
-        logApp('info', 'winget failed, trying direct Node.js download');
+        // Fallback: direct MSI download (silent install, no restart)
+        logApp('info', 'winget failed, trying direct Node.js MSI download');
         const nodeUrl = 'https://nodejs.org/dist/v22.12.0/node-v22.12.0-x64.msi';
         const msiPath = path.join(os.tmpdir(), 'node-install.msi');
-        execSync(`powershell.exe -Command "Invoke-WebRequest -Uri '${nodeUrl}' -OutFile '${msiPath}'"`, { timeout: 120000, stdio: 'pipe' });
+        execSync(`powershell.exe -Command "Invoke-WebRequest -Uri '${nodeUrl}' -OutFile '${msiPath}'"`, { timeout: 120000, stdio: 'pipe', env: psEnv });
         execSync(`msiexec /i "${msiPath}" /qn /norestart`, { timeout: 300000, stdio: 'pipe' });
         logApp('info', 'Node.js installed via MSI');
       }
-      // Refresh PATH to pick up newly installed Node.js
-      const nodePaths = [
-        'C:\\Program Files\\nodejs',
-        path.join(process.env.APPDATA || '', 'npm'),
-      ];
-      process.env.PATH = `${process.env.PATH};${nodePaths.join(';')}`;
+      // Read the LIVE system+user PATH from the Windows registry.
+      // This is what a newly opened terminal would see — picks up Node.js.
+      try {
+        const livePath = execSync(
+          'powershell.exe -Command "[System.Environment]::GetEnvironmentVariable(\'Path\',\'Machine\') + \';\' + [System.Environment]::GetEnvironmentVariable(\'Path\',\'User\')"',
+          { encoding: 'utf-8', timeout: 5000, env: psEnv },
+        ).trim();
+        process.env.PATH = livePath;
+        logApp('info', 'Refreshed process PATH from Windows registry');
+      } catch {
+        // Fallback: just add the standard Node.js install paths
+        const nodePaths = ['C:\\Program Files\\nodejs', path.join(process.env.APPDATA || '', 'npm')];
+        process.env.PATH = `${process.env.PATH};${nodePaths.join(';')}`;
+        logApp('info', 'Appended default Node.js paths to process PATH');
+      }
+      // Verify Node.js is now reachable
+      if (!isNodeInstalled()) {
+        logApp('warn', 'Node.js installed but still not found on PATH after refresh');
+        throw new Error('restart-required');
+      }
     } catch (nodeErr: any) {
-      logApp('warn', `Failed to auto-install Node.js: ${nodeErr.message}`);
+      logApp('warn', `Node.js auto-install issue: ${nodeErr.message}`);
+      if (nodeErr.message === 'restart-required') {
+        throw Object.assign(new Error('Node.js was installed but requires an app restart to take effect. Please close and reopen Valnaa.'), { recoverable: true });
+      }
       throw Object.assign(new Error('Node.js is required but could not be installed automatically. Please install Node.js from https://nodejs.org and try again.'), { recoverable: true });
     }
   }
