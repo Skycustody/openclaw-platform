@@ -43,6 +43,9 @@ function safeContainerName(name: string | null | undefined, fallbackUserId: stri
 /** Track in-flight provisioning so we never duplicate work for the same user. */
 const provisioningInFlight = new Map<string, Promise<User>>();
 
+/** Rate-limit background reapplyGatewayConfig calls (once per 5min per user). */
+const reapplyLastRun = new Map<string, number>();
+
 /**
  * Ensure Traefik on a worker has DOCKER_API_VERSION set.
  * Without it, Traefik v3 can't talk to Docker and returns 404 for everything.
@@ -266,6 +269,19 @@ router.get('/embed-url', requireActiveSubscription, async (req: AuthRequest, res
       : null;
 
     const parts = await agentUrlParts(user.subdomain, user.id, server);
+
+    // Self-heal: re-apply gateway auth config in background (doctor --fix strips it).
+    // Rate-limited to once per 5 minutes per user to avoid hammering the worker.
+    if (server && parts.gatewayToken && user.container_name) {
+      const now = Date.now();
+      const last = reapplyLastRun.get(user.id) || 0;
+      if (now - last > 5 * 60 * 1000) {
+        reapplyLastRun.set(user.id, now);
+        const cn = safeContainerName(user.container_name, user.id);
+        reapplyGatewayConfig(server.ip, user.id, cn).catch(() => {});
+      }
+    }
+
     const domain = process.env.DOMAIN || 'yourdomain.com';
     return res.json({
       available: true,
