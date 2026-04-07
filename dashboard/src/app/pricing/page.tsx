@@ -7,7 +7,7 @@ import api from '@/lib/api';
 import { DASHBOARD_ALLOWED_STATUSES } from '@/lib/constants';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
-import { Zap, Check, ArrowRight, Loader2, Coins } from 'lucide-react';
+import { Zap, Check, ArrowRight, Loader2 } from 'lucide-react';
 
 type PlanId = 'starter' | 'pro' | 'business';
 
@@ -15,7 +15,6 @@ const PLANS: Array<{
   id: PlanId;
   name: string;
   price: number;
-  tokens: string;
   ram: string;
   cpus: string;
   storage: string;
@@ -26,16 +25,14 @@ const PLANS: Array<{
     id: 'starter',
     name: 'Starter',
     price: 15,
-    tokens: '$2',
     ram: '2 GB',
     cpus: '1 vCPU',
     storage: '10 GB',
     features: [
-      '$2 of AI credits every month',
-      '2 GB RAM · 1 vCPU',
+      'Bring your own API keys',
+      '2 GB RAM · 1 vCPU · 10 GB storage',
       '1 AI agent',
-      'Smart AI routing & cost optimization',
-      '20+ AI models',
+      'Unlimited usage with your own keys',
       'All skills, tools & messaging apps',
     ],
   },
@@ -44,16 +41,14 @@ const PLANS: Array<{
     name: 'Pro',
     price: 25,
     popular: true,
-    tokens: '$5',
     ram: '4 GB',
     cpus: '2 vCPU',
     storage: '50 GB',
     features: [
-      '$5 of AI credits every month',
-      '4 GB RAM · 2 vCPU',
+      'Bring your own API keys',
+      '4 GB RAM · 2 vCPU · 50 GB storage',
       '2 AI agents',
-      'Smart AI routing & cost optimization',
-      '20+ AI models',
+      'Unlimited usage with your own keys',
       'All skills, tools & messaging apps',
     ],
   },
@@ -61,16 +56,14 @@ const PLANS: Array<{
     id: 'business',
     name: 'Business',
     price: 50,
-    tokens: '$10',
     ram: '8 GB',
     cpus: '4 vCPU',
     storage: '100 GB',
     features: [
-      '$10 of AI credits every month',
-      '8 GB RAM · 4 vCPU',
+      'Bring your own API keys',
+      '8 GB RAM · 4 vCPU · 100 GB storage',
       '4 AI agents',
-      'Smart AI routing & cost optimization',
-      '20+ AI models',
+      'Unlimited usage with your own keys',
       'All skills, tools & messaging apps',
     ],
   },
@@ -147,7 +140,7 @@ function PricingContent() {
       <section className="mx-auto max-w-5xl px-6 py-20">
         <div className="mx-auto max-w-2xl text-center">
           <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs text-muted-foreground">
-            <Coins className="size-3" />
+            <Zap className="size-3" />
             Choose your plan
           </div>
           <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
@@ -194,7 +187,7 @@ function PricingContent() {
                 <span className="text-sm text-muted-foreground">/month</span>
               </p>
               <p className="mt-2 text-[12px] text-muted-foreground">
-                {plan.ram} RAM · {plan.cpus} · {plan.storage} storage · {plan.tokens}/mo AI
+                {plan.ram} RAM · {plan.cpus} · {plan.storage} storage
               </p>
 
               <ul className="mt-6 flex-1 space-y-3">

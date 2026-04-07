@@ -4,7 +4,6 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/Button';
 import { StatusBadge } from '@/components/ui/Badge';
 import api from '@/lib/api';
-import { formatUsd } from '@/lib/utils';
 import { useStore } from '@/lib/store';
 import GatewayChat from '@/components/dashboard/GatewayChat';
 import {
@@ -34,7 +33,6 @@ export default function DashboardHome() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const [settings, setSettings] = useState<UserSettings | null>(null);
-  const [balanceUsd, setBalanceUsd] = useState<number | null>(null);
   const [agentStatus, setAgentStatus] = useState<AgentDisplayStatus>('offline');
 
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -325,9 +323,7 @@ export default function DashboardHome() {
             className="flex items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-1.5 hover:border-white/15 hover:bg-white/[0.04] transition-all"
             title="Billing">
             <Sparkles className="h-3.5 w-3.5 text-white/20" />
-            <span className={`text-[12px] font-medium tabular-nums ${balanceUsd != null && balanceUsd < 0.50 ? 'text-amber-400' : 'text-white/50'}`}>
-              {balanceUsd != null ? `${formatUsd(balanceUsd)} left` : 'Billing'}
-            </span>
+            <span className="text-[12px] font-medium text-white/50">Billing</span>
           </button>
         </div>
       </div>

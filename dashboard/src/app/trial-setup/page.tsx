@@ -216,7 +216,7 @@ export default function TrialSetupPage() {
             Connect your subscription
           </h2>
           <p className="text-xs text-muted-foreground -mt-2">
-            Already pay for ChatGPT Plus or Claude Pro? Use those credits here — no API key needed.
+            Already pay for ChatGPT Plus or Claude Pro? Connect your account here — no API key needed.
           </p>
 
           {/* OpenAI (ChatGPT) subscription */}
@@ -235,13 +235,13 @@ export default function TrialSetupPage() {
                   )}
                 </div>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  Use your ChatGPT subscription credits for GPT-4o, o3, and more
+                  Use your ChatGPT subscription for GPT-4o, o3, and more
                 </p>
               </div>
             </div>
 
             {subAuthStatus['openai-codex']?.connected ? (
-              <p className="mt-3 text-xs text-green-400/80">OpenAI account connected. Your subscription credits are active.</p>
+              <p className="mt-3 text-xs text-green-400/80">OpenAI account connected. Your subscription is active.</p>
             ) : !openaiOAuthUrl ? (
               <div className="mt-3">
                 <Button
@@ -312,13 +312,13 @@ export default function TrialSetupPage() {
                   )}
                 </div>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  Use your Claude subscription credits for Sonnet 4, Opus 4, and Haiku
+                  Use your Claude subscription for Sonnet 4, Opus 4, and Haiku
                 </p>
               </div>
             </div>
 
             {subAuthStatus.anthropic?.connected ? (
-              <p className="mt-3 text-xs text-green-400/80">Claude account connected. Your subscription credits are active.</p>
+              <p className="mt-3 text-xs text-green-400/80">Claude account connected. Your subscription is active.</p>
             ) : (
               <div className="mt-3 space-y-3">
                 <div className="rounded-lg bg-foreground/5 p-3 text-xs text-muted-foreground">

@@ -13,7 +13,6 @@ interface PlanDetail {
   count: number;
   priceUsdCents: number;
   revenueUsdCents: number;
-  nexosCostUsdCents: number;
   serverCostUsdCents: number;
   totalCostUsdCents: number;
   profitUsdCents: number;
@@ -23,7 +22,6 @@ interface PlanDetail {
 interface Financials {
   currency: string;
   monthlySubscriptionRevenue: number;
-  monthlyCreditRevenue: number;
   totalMonthlyRevenue: number;
   monthlyServerCosts: number;
   monthlyServerCostsNet: number;
@@ -32,8 +30,6 @@ interface Financials {
   serverCostVatPerMonth: number;
   serverCostGrossPerMonth: number;
   vatRate: number;
-  monthlyNexosCosts: number;
-  monthlyCreditCosts: number;
   totalCosts: number;
   monthlyProfit: number;
   profitMarginPercent: number;
@@ -67,8 +63,6 @@ interface Overview {
   };
   metrics: Metrics;
   servers: { total: string; total_ram: string; used_ram: string };
-  revenue: { month_credit_purchases: string; total_credit_purchases: string };
-  credits: { total_used: string; total_balance: string; total_purchased: string };
   recentSignups: Array<{ id: string; email: string; plan: string; status: string; created_at: string }>;
   plans: { starter: string; pro: string; business: string };
   financials: Financials;
@@ -87,7 +81,6 @@ interface AdminUser {
   last_active: string | null; is_admin: boolean; has_paid: boolean;
   has_desktop: boolean; has_desktop_trial: boolean; has_vps: boolean;
   desktop_subscription_id: string | null; desktop_trial_ends_at: string | null;
-  credit_balance: number | null; total_used: number | null; total_purchased: number | null;
   server_ip: string | null; server_hostname: string | null;
 }
 
@@ -112,7 +105,6 @@ interface DownloadStats {
 interface RevenueData {
   currency: string;
   totalRevenueUsdCents: number;
-  totalNexosCostUsdCents: number;
   totalServerCostUsdCents: number;
   totalServerCostNet: number;
   totalServerCostVat: number;
@@ -123,7 +115,7 @@ interface RevenueData {
   totalProfitUsdCents: number;
   profitMarginPercent: number;
   profitMarginTarget: number;
-  subscriptionRevenue: Record<string, { count: number; revenueUsdCents: number; nexosCostUsdCents: number; profitUsdCents: number }>;
+  subscriptionRevenue: Record<string, { count: number; revenueUsdCents: number; profitUsdCents: number }>;
   topUsers: Array<{ email: string; plan: string; status: string; last_active: string | null }>;
   signupsByMonth: Array<{ month: string; signups: string; paid: string; paying_active: string }>;
 }
@@ -131,19 +123,8 @@ interface RevenueData {
 interface FinancialsData {
   currency: string;
   main: { totalRevenueUsdCents: number; totalProfitUsdCents: number; totalAiCostUsdCents: number };
-  subscriptions: { revenueUsdCents: number; aiCostUsdCents: number; vpsCostUsdCents: number };
-  credits: {
-    revenueUsdCents: number;
-    monthRevenueUsdCents: number;
-    costUsdCents: number;
-    monthCostUsdCents: number;
-    profitUsdCents: number;
-    monthProfitUsdCents: number;
-    fromStripe: boolean;
-    costBreakdown?: { creditsBaseUsdCents: number; openRouterFeeUsdCents: number; vatUsdCents: number };
-  };
+  subscriptions: { revenueUsdCents: number; vpsCostUsdCents: number };
   vps: { costUsdCents: number; serverCount: number; costPerServerUsdCents: number };
-  openRouterUsageUsdCents: number;
 }
 
 interface ServerInfo {
@@ -225,7 +206,6 @@ interface UserDetail {
     is_admin: boolean;
     created_at: string;
     last_active: string | null;
-    api_budget_addon_usd?: number;
     desktop_subscription_id: string | null;
     desktop_trial_ends_at: string | null;
     desktop_trial_active: boolean;
@@ -233,11 +213,8 @@ interface UserDetail {
     server_ip: string | null;
     server_hostname: string | null;
   };
-  tokens: { balance: number; total_used: number; total_purchased: number } | null;
   activity: Array<Record<string, unknown>>;
   transactions: Array<Record<string, unknown>>;
-  creditPurchases: Array<{ id: string; amount_eur_cents: number; credits_usd: number; stripe_session_id: string | null; created_at: string }>;
-  nexosUsage: { usedUsd: number; remainingUsd: number; limitUsd: number; displayAmountBought: number } | null;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -292,7 +269,7 @@ export default function AdminPanel() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [editUser, setEditUser] = useState<AdminUser | null>(null);
-  const [editForm, setEditForm] = useState({ plan: '', status: '', is_admin: false, credit_balance: '' });
+  const [editForm, setEditForm] = useState({ plan: '', status: '', is_admin: false });
   const [saving, setSaving] = useState(false);
   const [actionMsg, setActionMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [feedbackList, setFeedbackList] = useState<FeedbackEntry[]>([]);
@@ -466,7 +443,6 @@ export default function AdminPanel() {
       plan: u.plan,
       status: u.status,
       is_admin: u.is_admin,
-      credit_balance: String(u.credit_balance ?? 0),
     });
   };
 
@@ -493,7 +469,6 @@ export default function AdminPanel() {
         plan: editForm.plan,
         status: editForm.status,
         is_admin: editForm.is_admin,
-        token_balance: parseInt(editForm.credit_balance) || 0,
       });
       setEditUser(null);
       showMsg('success', 'User updated');
@@ -630,11 +605,9 @@ export default function AdminPanel() {
           <div className="space-y-6">
             <div className="grid grid-cols-4 gap-4">
               <StatCard icon={DollarSign} label="Monthly Revenue" value={formatUsd(f.totalMonthlyRevenue)}
-                sub={`Subs ${formatUsd(f.monthlySubscriptionRevenue)}${f.monthlyCreditRevenue > 0 ? ` + Credits ${formatUsd(f.monthlyCreditRevenue)}` : ''}`} color="green" />
+                sub={`Subscriptions ${formatUsd(f.monthlySubscriptionRevenue)}`} color="green" />
               <StatCard icon={HardDrive} label="Server Costs" value={formatUsd(f.monthlyServerCosts)}
                 sub={`${o.servers.total} server × ${formatUsd(f.serverCostGrossPerMonth)} (incl. ${Math.round(f.vatRate * 100)}% VAT)`} color="red" />
-              <StatCard icon={Coins} label="AI Costs" value={formatUsd(f.monthlyCreditCosts)}
-                sub={`${formatUsdVal(o.credits.total_used)} used`} color="amber" />
               <StatCard icon={TrendingUp} label="Monthly Profit"
                 value={formatUsd(f.monthlyProfit)}
                 sub={`${f.profitMarginPercent}% margin (target: ${f.profitMarginTarget}%)`}
@@ -682,14 +655,10 @@ export default function AdminPanel() {
                         <span className="text-[13px] font-medium text-white">{p.name} (${PLAN_PRICE_USD[p.name.toLowerCase()] ?? 0}/mo)</span>
                         <span className="text-[12px] text-white/40">{p.data.count} users</span>
                       </div>
-                      <div className="grid grid-cols-4 gap-2 text-[11px]">
+                      <div className="grid grid-cols-3 gap-2 text-[11px]">
                         <div>
                           <p className="text-white/25">Revenue</p>
                           <p className="text-green-400 font-medium">{formatUsd(p.data.revenueUsdCents)}</p>
-                        </div>
-                        <div>
-                          <p className="text-white/25">AI Cost</p>
-                          <p className="text-red-400/70">{formatUsd(p.data.nexosCostUsdCents)}</p>
                         </div>
                         <div>
                           <p className="text-white/25">Server Cost</p>
@@ -772,10 +741,6 @@ export default function AdminPanel() {
                       <span className="text-white/50">Subscription Revenue</span>
                       <span className="text-green-400 font-medium">{formatUsd(f.monthlySubscriptionRevenue)}</span>
                     </div>
-                    <div className="flex justify-between text-[13px]">
-                      <span className="text-white/50">Extra Credit Purchases (this month)</span>
-                      <span className="text-green-400/70">{formatUsdVal(o.revenue.month_credit_purchases)}</span>
-                    </div>
                     {(o.desktop?.subscribers ?? 0) > 0 && (
                       <div className="flex justify-between text-[13px]">
                         <span className="text-white/50">Desktop Subscriptions ({o.desktop.subscribers}×)</span>
@@ -801,10 +766,6 @@ export default function AdminPanel() {
                     <div className="flex justify-between text-[13px] font-medium">
                       <span className="text-white/60">Total Server Costs (gross)</span>
                       <span className="text-red-400">-{formatUsd(f.monthlyServerCosts)}</span>
-                    </div>
-                    <div className="flex justify-between text-[13px]">
-                      <span className="text-white/50">AI Provider Costs (OpenRouter)</span>
-                      <span className="text-red-400">-{formatUsd(f.monthlyCreditCosts)}</span>
                     </div>
                     <div className="flex justify-between text-[13px] font-medium">
                       <span className="text-white/60">Total Costs</span>
@@ -913,7 +874,6 @@ export default function AdminPanel() {
                     <th className="px-4 py-3 text-left text-[11px] font-medium text-white/30 uppercase tracking-wider">User</th>
                     <th className="px-4 py-3 text-left text-[11px] font-medium text-white/30 uppercase tracking-wider">Plan</th>
                     <th className="px-4 py-3 text-left text-[11px] font-medium text-white/30 uppercase tracking-wider">Status</th>
-                    <th className="px-4 py-3 text-left text-[11px] font-medium text-white/30 uppercase tracking-wider">Balance</th>
                     <th className="px-4 py-3 text-left text-[11px] font-medium text-white/30 uppercase tracking-wider">Revenue</th>
                     <th className="px-4 py-3 text-left text-[11px] font-medium text-white/30 uppercase tracking-wider">Server</th>
                     <th className="px-4 py-3 text-left text-[11px] font-medium text-white/30 uppercase tracking-wider">Joined</th>
@@ -962,10 +922,6 @@ export default function AdminPanel() {
                               <span className="text-[10px] px-1.5 py-0.5 rounded-full text-white/20 bg-white/5">unpaid</span>
                             )}
                           </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <p className="text-[12px] text-white/50 tabular-nums">{formatUsdVal(u.credit_balance)}</p>
-                          <p className="text-[10px] text-white/20">used: {formatUsdVal(u.total_used)}</p>
                         </td>
                         <td className="px-4 py-3">
                           <div>
@@ -1202,54 +1158,22 @@ export default function AdminPanel() {
                 <h3 className="text-[14px] font-semibold text-white mb-4">Overview</h3>
                 <div className="grid grid-cols-2 gap-4">
                   <StatCard icon={DollarSign} label="Total Revenue" value={formatUsd(financialsData.main.totalRevenueUsdCents)}
-                    sub="Subscriptions + Credits" color="green" />
+                    sub="Subscriptions" color="green" />
                   <StatCard icon={TrendingUp} label="Total Profit"
                     value={formatUsd(financialsData.main.totalProfitUsdCents)}
-                    sub={`AI cost: ${formatUsd(financialsData.main.totalAiCostUsdCents)} (OpenRouter)`}
+                    sub="Revenue minus server costs"
                     color={financialsData.main.totalProfitUsdCents >= 0 ? 'green' : 'red'} />
                 </div>
               </div>
             )}
 
-            {/* Credits: Revenue & Profit from Stripe */}
-            {financialsData && (
-              <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
-                <h3 className="text-[14px] font-semibold text-white mb-4">Credits {financialsData.credits.fromStripe && <span className="text-[11px] text-green-400/70 font-normal">(from Stripe)</span>}</h3>
-                <div className="grid grid-cols-3 gap-4">
-                  <StatCard icon={DollarSign} label="Credit Revenue" value={formatUsd(financialsData.credits.revenueUsdCents)}
-                    sub={`${formatUsd(financialsData.credits.monthRevenueUsdCents)} this month`} color="green" />
-                  <StatCard icon={Coins} label="Credit Cost" value={formatUsd(financialsData.credits.costUsdCents)}
-                    sub="Credits (50%) + 6% OR fee + VAT (we absorb)" color="amber" />
-                  <StatCard icon={TrendingUp} label="Credit Profit"
-                    value={formatUsd(financialsData.credits.profitUsdCents)}
-                    sub={`${formatUsd(financialsData.credits.monthProfitUsdCents)} this month`}
-                    color={financialsData.credits.profitUsdCents >= 0 ? 'green' : 'red'} />
-                </div>
-                <div className="mt-4 rounded-lg border border-white/[0.04] bg-white/[0.01] p-3">
-                  <p className="text-[12px] font-medium text-white/70 mb-2">Credit model</p>
-                  <p className="text-[11px] text-white/40 mb-2">
-                    Split: 50% user credits (API limit) · 6% OpenRouter fee · 44% platform margin. Users see what they paid; actual API limit is 50% of that. Consumption scales proportionally.
-                  </p>
-                  {financialsData.credits.costBreakdown && (
-                    <div className="flex flex-wrap gap-4 text-[11px] text-white/30">
-                      <span>Credits base: {formatUsd(financialsData.credits.costBreakdown.creditsBaseUsdCents)}</span>
-                      <span>OR fee: {formatUsd(financialsData.credits.costBreakdown.openRouterFeeUsdCents)}</span>
-                      <span>VAT: {formatUsd(financialsData.credits.costBreakdown.vatUsdCents)}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Subscriptions: Revenue, AI Cost, VPS Cost */}
+            {/* Subscriptions: Revenue & VPS Cost */}
             {financialsData && (
               <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
                 <h3 className="text-[14px] font-semibold text-white mb-4">Subscriptions</h3>
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 gap-4">
                   <StatCard icon={DollarSign} label="Subscription Revenue" value={formatUsd(financialsData.subscriptions.revenueUsdCents)}
                     sub="Monthly recurring" color="green" />
-                  <StatCard icon={Coins} label="AI Cost (Subscriptions)" value={formatUsd(financialsData.subscriptions.aiCostUsdCents)}
-                    sub="Plan allocation (OpenRouter)" color="amber" />
                   <StatCard icon={HardDrive} label="VPS Cost" value={formatUsd(financialsData.subscriptions.vpsCostUsdCents)}
                     sub={`${financialsData.vps.serverCount} server${financialsData.vps.serverCount !== 1 ? 's' : ''}`} color="red" />
                 </div>
@@ -1265,14 +1189,10 @@ export default function AdminPanel() {
                       <span className="text-[13px] font-medium text-white capitalize">{plan}</span>
                       <span className="text-[12px] text-white/30">{data.count} users</span>
                     </div>
-                    <div className="grid grid-cols-3 gap-3 text-[11px]">
+                    <div className="grid grid-cols-2 gap-3 text-[11px]">
                       <div>
                         <p className="text-white/25">Revenue</p>
                         <p className="text-green-400 font-medium">{formatUsd(data.revenueUsdCents)}</p>
-                      </div>
-                      <div>
-                        <p className="text-white/25">AI Cost</p>
-                        <p className="text-red-400/70">{formatUsd(data.nexosCostUsdCents)}</p>
                       </div>
                       <div>
                         <p className="text-white/25">Profit</p>
@@ -1915,44 +1835,6 @@ export default function AdminPanel() {
                     </div>
                   </div>
 
-                  {userDetail.nexosUsage && (
-                    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
-                      <h4 className="text-[13px] font-medium text-white mb-3">API Spend (OpenRouter)</h4>
-                      <div className="grid grid-cols-3 gap-4">
-                        <div>
-                          <p className="text-[11px] text-white/30">Used</p>
-                          <p className="text-[15px] font-semibold text-amber-400 tabular-nums">${userDetail.nexosUsage.usedUsd.toFixed(2)}</p>
-                        </div>
-                        <div>
-                          <p className="text-[11px] text-white/30">Remaining</p>
-                          <p className="text-[15px] font-semibold text-green-400 tabular-nums">${userDetail.nexosUsage.remainingUsd.toFixed(2)}</p>
-                        </div>
-                        <div>
-                          <p className="text-[11px] text-white/30">Limit</p>
-                          <p className="text-[15px] font-semibold text-white tabular-nums">${userDetail.nexosUsage.limitUsd.toFixed(2)}</p>
-                        </div>
-                      </div>
-                      {userDetail.nexosUsage.displayAmountBought > 0 && (
-                        <p className="text-[11px] text-white/30 mt-2">Credit top-ups: ${userDetail.nexosUsage.displayAmountBought.toFixed(2)}</p>
-                      )}
-                    </div>
-                  )}
-
-                  {userDetail.creditPurchases && userDetail.creditPurchases.length > 0 && (
-                    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
-                      <h4 className="text-[13px] font-medium text-white mb-3">Credit purchases</h4>
-                      <div className="space-y-2 max-h-40 overflow-y-auto">
-                        {userDetail.creditPurchases.map(cp => (
-                          <div key={cp.id} className="flex justify-between items-center text-[12px] py-1.5 border-b border-white/[0.04] last:border-0">
-                            <span className="text-white/50">{new Date(cp.created_at).toLocaleDateString()}</span>
-                            <span className="text-green-400 tabular-nums">+${cp.credits_usd.toFixed(2)} API</span>
-                            <span className="text-white/30">${(cp.amount_eur_cents / 100).toFixed(2)} paid</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
                   <div className="flex justify-end">
                     <button onClick={e => openEdit(e, selectedUser)}
                       className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/10 text-[13px] text-white hover:bg-white/15 transition-all">
@@ -1994,13 +1876,6 @@ export default function AdminPanel() {
                   <option value="cancelled">Cancelled</option>
                   <option value="grace_period">Grace Period</option>
                 </select>
-              </div>
-              <div>
-                <label className="text-[12px] text-white/30 block mb-1">AI Balance ($)</label>
-                <input type="number" value={editForm.credit_balance}
-                  onChange={e => setEditForm({ ...editForm, credit_balance: e.target.value })}
-                  className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[13px] text-white focus:border-white/20 focus:outline-none"
-                />
               </div>
               <div className="flex items-center gap-3">
                 <input type="checkbox" checked={editForm.is_admin}

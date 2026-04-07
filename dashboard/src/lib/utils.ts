@@ -10,10 +10,6 @@ export function formatUsd(usd: number): string {
   return `$${usd.toFixed(2)}`;
 }
 
-/** @deprecated Alias for backwards compat */
-export const formatCredits = (n: number) => formatUsd(n);
-export const formatTokens = formatCredits;
-
 export function formatDollars(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
 }

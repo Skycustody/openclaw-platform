@@ -48,8 +48,8 @@ const features = [
   },
   {
     icon: Brain,
-    title: 'Smart AI Routing',
-    desc: 'Our router picks the cheapest model that can handle each task. Simple chat uses a $0.10 model, complex coding gets Claude or GPT-4o. You save 50-80% automatically.',
+    title: 'Bring Your Own API Keys',
+    desc: 'Use your own OpenRouter, OpenAI, Anthropic, or Gemini key. Full control over which models you use and how much you spend.',
   },
   {
     icon: Globe,
@@ -68,32 +68,30 @@ const features = [
   },
   {
     icon: Coins,
-    title: 'Bring Your Own Key',
-    desc: 'Want unlimited usage? Plug in your own OpenRouter API key and use any model directly, no platform limits.',
+    title: 'Unlimited Usage',
+    desc: 'No per-token fees, no credit limits. Your subscription covers the server — AI usage goes through your own API keys.',
   },
 ];
 
 const howItWorks = [
   { step: '1', title: 'Pick a plan', desc: 'Choose the VPS size you need. Pay in 30 seconds.' },
   { step: '2', title: 'OpenClaw deploys', desc: 'We provision a dedicated VPS with OpenClaw pre-installed and configured.' },
-  { step: '3', title: 'Use the dashboard', desc: 'Chat with your agent, connect messaging apps, configure skills — all from the web.' },
-  { step: '4', title: 'Save on AI costs', desc: 'Smart routing and cost optimization work automatically. Or bring your own API key.' },
+  { step: '3', title: 'Connect your API key', desc: 'Add your OpenRouter, OpenAI, Anthropic, or Gemini key. Use any model you want.' },
+  { step: '4', title: 'Use the dashboard', desc: 'Chat with your agent, connect messaging apps, configure skills — all from the web.' },
 ];
 
 const plans = [
   {
     name: 'Starter',
     price: 15,
-    tokens: '$2',
     ram: '2 GB',
     cpus: '1 vCPU',
     storage: '10 GB',
     features: [
-      '$2 of AI credits every month',
-      '2 GB RAM · 1 vCPU',
+      'Bring your own API keys',
+      '2 GB RAM · 1 vCPU · 10 GB storage',
       '1 AI agent',
-      'Smart AI routing & cost optimization',
-      '20+ AI models (Claude, GPT-4o, Gemini…)',
+      'Unlimited usage with your own keys',
       'All skills & tools',
       'All messaging apps',
       'Web browser & file storage',
@@ -103,16 +101,14 @@ const plans = [
     name: 'Pro',
     price: 25,
     popular: true,
-    tokens: '$5',
     ram: '4 GB',
     cpus: '2 vCPU',
     storage: '50 GB',
     features: [
-      '$5 of AI credits every month',
-      '4 GB RAM · 2 vCPU',
+      'Bring your own API keys',
+      '4 GB RAM · 2 vCPU · 50 GB storage',
       '2 AI agents',
-      'Smart AI routing & cost optimization',
-      '20+ AI models (Claude, GPT-4o, Gemini…)',
+      'Unlimited usage with your own keys',
       'All skills & tools',
       'All messaging apps',
       'Web browser & file storage',
@@ -122,16 +118,14 @@ const plans = [
     name: 'Business',
     price: 50,
     popular: false,
-    tokens: '$10',
     ram: '8 GB',
     cpus: '4 vCPU',
     storage: '100 GB',
     features: [
-      '$10 of AI credits every month',
-      '8 GB RAM · 4 vCPU',
+      'Bring your own API keys',
+      '8 GB RAM · 4 vCPU · 100 GB storage',
       '4 AI agents',
-      'Smart AI routing & cost optimization',
-      '20+ AI models (Claude, GPT-4o, Gemini…)',
+      'Unlimited usage with your own keys',
       'All skills & tools',
       'All messaging apps',
       'Web browser & file storage',
@@ -202,8 +196,8 @@ function HeroSection() {
         </h1>
 
         <p className="fade-in slide-in-from-bottom-10 mx-auto max-w-lg animate-in fill-mode-backwards text-center text-base tracking-wider text-foreground/70 delay-200 duration-500 ease-out sm:text-lg">
-          Get a dedicated VPS running OpenClaw in under 2 minutes. Smart AI routing picks
-          the best model for each task and cuts your costs automatically.
+          Get a dedicated VPS running OpenClaw in under 2 minutes. Bring your own API keys
+          and get unlimited AI agent usage on your own server.
         </p>
 
         <div className="fade-in slide-in-from-bottom-10 flex animate-in flex-row flex-wrap items-center justify-center gap-3 fill-mode-backwards pt-2 delay-300 duration-500 ease-out">
@@ -252,15 +246,15 @@ function WhatIsItSection() {
               and ready to go — no server setup, no Docker, no config files.
             </p>
             <p className="mt-3 text-base leading-relaxed text-muted-foreground">
-              On top of that, we add smart AI routing that automatically picks the cheapest model
-              that can handle each task, so you get great results without burning through credits.
+              Bring your own API keys (OpenRouter, OpenAI, Anthropic, Gemini) and get unlimited
+              usage. You pay for the server, you control your AI spend directly.
             </p>
           </div>
           <div className="space-y-4">
             {[
               { icon: Terminal, label: 'Your own VPS', desc: 'Dedicated container with guaranteed RAM, CPU, and isolated storage' },
-              { icon: Coins, label: 'Optimized AI costs', desc: 'Smart routing picks cheap models for simple tasks, powerful ones only when needed' },
-              { icon: Cpu, label: '20+ AI models', desc: 'Claude, GPT-4o, Gemini, DeepSeek, Llama — all available, auto-selected' },
+              { icon: Coins, label: 'Your own API keys', desc: 'Bring your OpenRouter, OpenAI, Anthropic, or Gemini key. No platform markup.' },
+              { icon: Cpu, label: 'Any AI model', desc: 'Claude, GPT-4o, Gemini, DeepSeek, Llama — use whichever models you prefer' },
             ].map(item => (
               <div key={item.label} className="flex items-start gap-3 rounded-xl border border-border bg-card p-4">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-secondary">
@@ -428,7 +422,7 @@ function PricingSection() {
         </div>
         <h2 className="text-3xl font-bold tracking-tight md:text-4xl">Pick your plan</h2>
         <p className="mt-3 text-base text-muted-foreground">
-          Every plan includes a dedicated server, smart routing, and AI credits starting at $3/mo.
+          Every plan includes a dedicated server with all features. Bring your own API keys for unlimited usage.
         </p>
       </div>
 
@@ -458,7 +452,6 @@ function PricingSection() {
                 <div className="mt-2 flex items-center gap-3 text-[13px] text-muted-foreground">
                   <span className="flex items-center gap-1"><HardDrive className="h-3 w-3" /> {plan.ram} RAM</span>
                   <span className="flex items-center gap-1"><Cpu className="h-3 w-3" /> {plan.cpus}</span>
-                  <span className="flex items-center gap-1"><Coins className="h-3 w-3" /> {plan.tokens}</span>
                 </div>
 
                 <ul className="mt-6 flex-1 space-y-2.5">
@@ -484,11 +477,11 @@ function PricingSection() {
       <div className="mx-auto mt-10 max-w-xl rounded-xl border border-border bg-card p-6 text-center">
         <p className="text-sm font-medium text-foreground">All plans include</p>
         <p className="mt-2 text-sm text-muted-foreground">
-          All messaging apps (Telegram, Discord, Slack, WhatsApp) · Web browser · Smart AI routing ·
+          All messaging apps (Telegram, Discord, Slack, WhatsApp) · Web browser ·
           All skills & tools · Scheduled tasks · Persistent memory · File storage
         </p>
         <p className="mt-3 text-xs text-muted-foreground">
-          Need more AI credits? Add credits anytime, or bring your own OpenRouter API key for unlimited usage.
+          Bring your own API keys (OpenRouter, OpenAI, Anthropic, Gemini) for unlimited AI usage with any model.
         </p>
       </div>
     </section>
@@ -528,7 +521,7 @@ function Footer() {
       <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-4 px-6 py-8 sm:flex-row">
         <div className="flex items-center gap-2">
           <Image src="/favicon.png" alt="Valnaa" width={18} height={18} className="rounded-sm" />
-          <span className="text-sm text-muted-foreground">Valnaa — Hosted OpenClaw, smart routing, your server</span>
+          <span className="text-sm text-muted-foreground">Valnaa — Hosted OpenClaw, your server, your API keys</span>
         </div>
         <div className="flex items-center gap-6">
           <a href="#features" className="text-sm text-muted-foreground transition-colors hover:text-foreground">Features</a>

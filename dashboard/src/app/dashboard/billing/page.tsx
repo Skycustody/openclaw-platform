@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import api from '@/lib/api';
-import { Card, CardDescription, CardTitle, GlassPanel } from '@/components/ui/Card';
+import { Card, CardDescription, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { formatCents, formatDate } from '@/lib/utils';
@@ -12,7 +12,6 @@ type BillingOverview = {
   plan: string;
   status: string;
   stripeCustomerId?: string | null;
-  creditSpendThisMonth: number;
   isInTrial?: boolean;
   trialEndsAt?: string | null;
 };
@@ -140,15 +139,6 @@ export default function BillingPage() {
               Trial ends {new Date(overview.trialEndsAt).toLocaleDateString()}
             </p>
           )}
-
-          <div className="mt-5">
-            <GlassPanel>
-              <p className="text-[13px] text-white/40">Top-up purchases this month</p>
-              <p className="mt-1 text-[20px] font-semibold text-white tabular-nums">
-                {formatCents(overview?.creditSpendThisMonth || 0)}
-              </p>
-            </GlassPanel>
-          </div>
 
           <div className="mt-5 flex flex-wrap gap-2">
             {overview?.stripeCustomerId ? (

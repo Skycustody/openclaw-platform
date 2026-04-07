@@ -10,7 +10,7 @@ import { useStore } from '@/lib/store';
 import {
   ExternalLink, RotateCcw, Square, MessageSquare,
   Zap, Moon, AlertTriangle, Loader2,
-  Coins, Sparkles, Activity,
+  Sparkles, Activity,
   CheckCircle, Bot, XCircle,
   Clock, ArrowRight, Eye,
   Calendar, Radio, Wifi, WifiOff,
@@ -26,7 +26,7 @@ interface ApiStatus {
   isInTrial?: boolean;
   lastActive: string;
   createdAt: string;
-  stats: { messagesToday: number; tokensToday?: number; aiRequestsToday?: number; activeSkills: number };
+  stats: { messagesToday: number; activeSkills: number };
 }
 
 interface ActivityEntry {
@@ -150,7 +150,7 @@ export default function MissionControlPage() {
   const displayStatus: AgentDisplayStatus = (dbStatus === 'active' || dbStatus === 'online') && gatewayReady === false
     ? 'starting' : dbStatus;
   const sc = STATUS_CONFIG[displayStatus] || STATUS_CONFIG.offline;
-  const stats = apiData?.stats || { messagesToday: 0, tokensToday: 0, activeSkills: 0 };
+  const stats = apiData?.stats || { messagesToday: 0, activeSkills: 0 };
   const subdomain = apiData?.subdomain || user?.subdomain || 'your-agent';
   const isRunning = displayStatus === 'active' || displayStatus === 'online';
 
