@@ -13,7 +13,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     return (
       <div className="space-y-2">
         {label && (
-          <label htmlFor={id} className="block text-[13px] font-medium text-white/60">
+          <label htmlFor={id} className="block text-[13px] font-medium text-white/50">
             {label}
           </label>
         )}
@@ -21,7 +21,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           ref={ref}
           id={id}
           className={cn(
-            'w-full bg-transparent border border-white/10 rounded-lg px-4 py-3 text-[14px] text-white placeholder:text-white/25 focus:border-white/30 focus:outline-none transition-colors',
+            'w-full bg-white/[0.02] border border-white/[0.06] rounded-lg px-4 py-3 text-[14px] text-[#e8e8e8] placeholder:text-white/20 focus:border-white/[0.15] focus:outline-none transition-colors',
             error && 'border-red-400/50 focus:border-red-400',
             className
           )}
@@ -55,14 +55,14 @@ export function Textarea({
 }) {
   return (
     <div className="space-y-2">
-      {label && <label className="block text-[13px] font-medium text-white/60">{label}</label>}
+      {label && <label className="block text-[13px] font-medium text-white/50">{label}</label>}
       <textarea
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         rows={rows}
         className={cn(
-          'w-full bg-transparent border border-white/10 rounded-lg px-4 py-3 text-[14px] text-white placeholder:text-white/25 resize-none leading-relaxed focus:border-white/30 focus:outline-none transition-colors',
+          'w-full bg-white/[0.02] border border-white/[0.06] rounded-lg px-4 py-3 text-[14px] text-[#e8e8e8] placeholder:text-white/20 resize-none leading-relaxed focus:border-white/[0.15] focus:outline-none transition-colors',
           className
         )}
       />

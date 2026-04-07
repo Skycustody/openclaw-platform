@@ -5,10 +5,10 @@ import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, Smartphone, Clock,
   Cpu, CreditCard, LogOut, ChevronLeft, HelpCircle, Settings,
+  Store, Terminal, Globe,
 } from 'lucide-react';
 import Image from 'next/image';
 import { useStore } from '@/lib/store';
-import { GlowingEffect } from '@/components/ui/glowing-effect';
 import { useEffect } from 'react';
 
 const navItems = [
@@ -18,6 +18,9 @@ const navItems = [
   { href: '/dashboard/cron', label: 'Schedule', icon: Clock },
   { href: '/dashboard/settings', label: 'Settings', icon: Settings },
   { href: '/dashboard/billing', label: 'Billing', icon: CreditCard },
+  { href: '/dashboard/agent-store', label: 'Agent Store', icon: Store },
+  { href: '/dashboard/claude', label: 'Claude CLI', icon: Terminal },
+  { href: '/dashboard/browser-relay', label: 'Browser Relay', icon: Globe },
 ];
 
 export function Sidebar() {
@@ -40,14 +43,14 @@ export function Sidebar() {
       {/* Backdrop for mobile drawer */}
       {mobileSidebarOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm md:hidden"
+          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm md:hidden"
           onClick={() => setMobileSidebarOpen(false)}
         />
       )}
 
       <aside
         className={cn(
-          'fixed left-0 top-0 z-50 flex h-screen flex-col bg-black border-r border-white/[0.06] transition-all duration-300',
+          'fixed left-0 top-0 z-50 flex h-screen flex-col bg-[#2a2a28] border-r border-white/[0.06] transition-all duration-300',
           // Desktop: always visible, width depends on sidebarOpen
           'max-md:w-[260px]',
           sidebarOpen ? 'md:w-[220px]' : 'md:w-[68px]',
@@ -60,19 +63,19 @@ export function Sidebar() {
             <Image src="/favicon.png" alt="Valnaa" width={18} height={18} className="rounded-sm" />
           </div>
           {(showLabel || mobileSidebarOpen) && (
-            <span className="text-[15px] font-semibold text-white tracking-tight">Valnaa</span>
+            <span className="text-[15px] font-semibold text-white/85 tracking-tight">Valnaa</span>
           )}
           {/* Desktop: collapse toggle */}
           <button
             onClick={toggleSidebar}
-            className="ml-auto rounded-md p-1.5 text-white/20 hover:text-white/60 hover:bg-white/5 transition-colors hidden md:block"
+            className="ml-auto rounded-md p-1.5 text-white/20 hover:text-white/50 hover:bg-white/[0.04] transition-colors hidden md:block"
           >
             <ChevronLeft className={cn('h-4 w-4 transition-transform duration-300', !sidebarOpen && 'rotate-180')} />
           </button>
           {/* Mobile: close button */}
           <button
             onClick={() => setMobileSidebarOpen(false)}
-            className="ml-auto rounded-md p-1.5 text-white/20 hover:text-white/60 hover:bg-white/5 transition-colors md:hidden"
+            className="ml-auto rounded-md p-1.5 text-white/20 hover:text-white/50 hover:bg-white/[0.04] transition-colors md:hidden"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
@@ -87,24 +90,14 @@ export function Sidebar() {
                 href={item.href}
                 onClick={() => setMobileSidebarOpen(false)}
                 className={cn(
-                  'relative flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition-colors border-l-2 border-transparent',
+                  'relative flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition-colors',
                   isActive
-                    ? 'bg-white/10 text-white border-white'
-                    : 'text-white/40 hover:text-white/70 hover:bg-white/[0.04]'
+                    ? 'bg-white/[0.06] text-white/85'
+                    : 'text-white/40 hover:text-white/60 hover:bg-white/[0.04]'
                 )}
                 title={!showLabel && !mobileSidebarOpen ? item.label : undefined}
               >
-                {isActive && (
-                  <GlowingEffect
-                    spread={40}
-                    glow={true}
-                    disabled={false}
-                    proximity={80}
-                    inactiveZone={0.01}
-                    borderWidth={2}
-                  />
-                )}
-                <item.icon className={cn('h-[18px] w-[18px] shrink-0', isActive && 'text-white')} />
+                <item.icon className={cn('h-[18px] w-[18px] shrink-0', isActive ? 'text-white/70' : 'text-white/40')} />
                 {(showLabel || mobileSidebarOpen) && <span>{item.label}</span>}
               </Link>
             );
@@ -115,7 +108,7 @@ export function Sidebar() {
           <Link
             href="/help"
             onClick={() => setMobileSidebarOpen(false)}
-            className="flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] text-white/30 hover:text-white/60 hover:bg-white/[0.04] transition-colors"
+            className="flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] text-white/30 hover:text-white/50 hover:bg-white/[0.04] transition-colors"
           >
             <HelpCircle className="h-[18px] w-[18px] shrink-0" />
             {(showLabel || mobileSidebarOpen) && <span>Help</span>}
@@ -125,7 +118,7 @@ export function Sidebar() {
               localStorage.removeItem('token');
               window.location.href = '/auth/login';
             }}
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-[13px] text-white/30 hover:text-red-400 hover:bg-red-400/5 transition-colors"
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-[13px] text-white/30 hover:text-red-400/70 hover:bg-white/[0.04] transition-colors"
           >
             <LogOut className="h-[18px] w-[18px] shrink-0" />
             {(showLabel || mobileSidebarOpen) && <span>Sign Out</span>}

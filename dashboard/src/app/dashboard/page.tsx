@@ -5,9 +5,10 @@ import { Button } from '@/components/ui/Button';
 import { StatusBadge } from '@/components/ui/Badge';
 import api from '@/lib/api';
 import { useStore } from '@/lib/store';
+import { cn } from '@/lib/utils';
 import GatewayChat from '@/components/dashboard/GatewayChat';
 import {
-  Bot, Sparkles, Loader2,
+  Bot, Loader2,
   AlertTriangle, RefreshCw, ExternalLink, Globe,
 } from 'lucide-react';
 
@@ -241,66 +242,53 @@ export default function DashboardHome() {
     startAgent();
   };
 
+  const isOnline = agentStatus === 'active' || agentStatus === 'online';
+
   return (
     <div className="flex flex-col flex-1 min-h-0 w-full overflow-hidden">
       {agentStatus === 'paused' && (
-        <div className="border border-red-500/20 bg-red-500/5 rounded-xl px-5 py-3 flex items-center gap-3 mb-3 shrink-0">
-          <AlertTriangle className="h-4 w-4 text-red-400 shrink-0" />
-          <p className="text-[13px] text-red-400 flex-1">Agent paused — update your subscription or payment to resume</p>
+        <div className="border border-red-500/15 bg-red-500/[0.04] rounded-lg px-4 py-3 flex items-center gap-3 mb-3 shrink-0 mx-4 mt-3">
+          <AlertTriangle className="h-4 w-4 text-red-400/70 shrink-0" />
+          <p className="text-[13px] text-red-400/80 flex-1">Agent paused — update your subscription or payment to resume</p>
           <Button variant="danger" size="sm" onClick={() => window.location.href = '/dashboard/billing'}>
             Billing
           </Button>
         </div>
       )}
 
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 shrink-0">
+      {/* Minimal status bar */}
+      <div className="flex items-center justify-between px-5 py-3 shrink-0">
         <div className="flex items-center gap-3">
-          <div className="relative">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/[0.06]">
-              <Bot className="h-4.5 w-4.5 text-white/50" />
-            </div>
-            {(agentStatus === 'active' || agentStatus === 'online') && (
-              <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-green-400 ring-2 ring-[#0a0a0a]" />
-            )}
-          </div>
-          <div>
-            <span className="text-[15px] font-semibold text-white">
-              {settings?.agent_name || 'Your AI'}
-            </span>
-            <div className="flex items-center gap-2 mt-0.5">
-              <StatusBadge status={agentStatus} className="!text-[10px] !py-0 !px-1.5" />
-            </div>
-          </div>
+          <span className={cn(
+            'h-2 w-2 rounded-full shrink-0',
+            isOnline ? 'bg-[#4ade80]' : agentStatus === 'provisioning' || agentStatus === 'sleeping' ? 'bg-[#fbbf24]' : 'bg-white/20'
+          )} />
+          <span className="text-[13px] font-medium text-white/70">
+            {settings?.agent_name || 'Your Agent'}
+          </span>
+          <StatusBadge status={agentStatus} className="!text-[10px] !py-0 !px-1.5" />
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap justify-end">
+        <div className="flex items-center gap-2">
           {previewUrl && phase === 'ready' && (
             <button onClick={() => window.open(previewUrl, '_blank')}
-              className="flex items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-1.5 hover:border-white/15 hover:bg-white/[0.04] transition-all"
+              className="flex items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-1.5 hover:bg-white/[0.04] transition-all"
               title="Preview websites built by your agent">
-              <Globe className="h-3.5 w-3.5 text-white/20" />
-              <span className="text-[12px] font-medium text-white/50">Preview</span>
+              <Globe className="h-3.5 w-3.5 text-white/30" />
+              <span className="text-[12px] font-medium text-white/40">Preview</span>
             </button>
           )}
-
-          <button onClick={() => window.location.href = '/dashboard/billing'}
-            className="flex items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-1.5 hover:border-white/15 hover:bg-white/[0.04] transition-all"
-            title="Billing">
-            <Sparkles className="h-3.5 w-3.5 text-white/20" />
-            <span className="text-[12px] font-medium text-white/50">Billing</span>
-          </button>
         </div>
       </div>
 
-      {/* Main content — full width edge-to-edge */}
-      <div className="flex-1 min-h-0 overflow-hidden border-t border-white/[0.06] bg-white/[0.01] relative flex flex-col">
+      {/* Main content area */}
+      <div className="flex-1 min-h-0 overflow-hidden border-t border-white/[0.06] relative flex flex-col">
         {(phase === 'loading' || phase === 'starting' || phase === 'provisioning' || phase === 'polling') && (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-center z-10">
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/[0.04] mb-5">
-              <Loader2 className="h-8 w-8 animate-spin text-white/20" />
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/[0.04] mb-5">
+              <Loader2 className="h-6 w-6 animate-spin text-white/20" />
             </div>
-            <p className="text-[15px] font-medium text-white/40">{statusMsg}</p>
+            <p className="text-[14px] font-medium text-white/40">{statusMsg}</p>
             <p className="text-[12px] text-white/20 mt-2 max-w-sm">
               {phase === 'provisioning'
                 ? 'A new server is being created for your agent. This usually takes 3-5 minutes.'
@@ -314,18 +302,18 @@ export default function DashboardHome() {
         )}
 
         {phase === 'error' && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-center z-10">
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-red-500/10 mb-5">
-              <AlertTriangle className="h-8 w-8 text-red-400/60" />
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-center z-10 px-6">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#f87171]/[0.06] mb-5">
+              <AlertTriangle className="h-6 w-6 text-[#f87171]/50" />
             </div>
-            <p className="text-[15px] font-medium text-white/50">{errorMsg}</p>
+            <p className="text-[14px] font-medium text-white/50 max-w-md">{errorMsg}</p>
             <div className="flex items-center gap-3 mt-5">
-              <Button variant="primary" size="sm" onClick={handleRetry}>
-                <RefreshCw className="h-4 w-4 mr-1.5" />
+              <Button variant="glass" size="sm" onClick={handleRetry}>
+                <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
                 Retry
               </Button>
               {agentStatus === 'paused' && (
-                <Button variant="danger" size="sm" onClick={() => window.location.href = '/dashboard/billing'}>
+                <Button variant="glass" size="sm" onClick={() => window.location.href = '/dashboard/billing'}>
                   Billing
                 </Button>
               )}
@@ -344,22 +332,22 @@ export default function DashboardHome() {
         )}
 
         {phase === 'ready' && (!gatewayWsUrl || !gatewayToken) && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-center z-10">
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/[0.04] mb-5">
-              <Bot className="h-8 w-8 text-white/20" />
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-center z-10 px-6">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/[0.04] mb-5">
+              <Bot className="h-6 w-6 text-white/20" />
             </div>
-            <p className="text-[15px] font-medium text-white/40">Connecting to agent gateway...</p>
+            <p className="text-[14px] font-medium text-white/40">Connecting to agent gateway...</p>
             <p className="text-[12px] text-white/20 mt-2 max-w-sm">
               Could not establish WebSocket connection. The agent may still be starting up.
             </p>
             <div className="flex items-center gap-3 mt-5">
-              <Button variant="primary" size="sm" onClick={handleRetry}>
-                <RefreshCw className="h-4 w-4 mr-1.5" />
+              <Button variant="glass" size="sm" onClick={handleRetry}>
+                <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
                 Retry
               </Button>
               {agentUrl && (
-                <Button variant="secondary" size="sm" onClick={() => window.open(agentUrl, '_blank')}>
-                  <ExternalLink className="h-4 w-4 mr-1.5" />
+                <Button variant="glass" size="sm" onClick={() => window.open(agentUrl, '_blank')}>
+                  <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
                   Open Gateway
                 </Button>
               )}

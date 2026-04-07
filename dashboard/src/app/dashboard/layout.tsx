@@ -35,7 +35,7 @@ function ConfigChangeToast() {
 
   return (
     <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] animate-in fade-in slide-in-from-top-2 duration-300">
-      <div className="flex items-center gap-2.5 rounded-xl border border-white/10 bg-[#111] px-4 py-2.5 shadow-2xl">
+      <div className="flex items-center gap-2.5 rounded-xl border border-white/[0.06] bg-[#2a2a28] px-4 py-2.5 shadow-2xl">
         <RefreshCw className="h-3.5 w-3.5 text-amber-400 animate-spin" />
         <span className="text-[13px] text-white/70">Applying changes... your agent will be back in a few seconds</span>
       </div>
@@ -103,19 +103,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   if (checking) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-black">
+      <div className="flex min-h-screen items-center justify-center bg-[#30302E]">
         <Loader2 className="h-6 w-6 animate-spin text-white/40" />
       </div>
     );
   }
 
   return (
-    <div className="h-screen overflow-hidden bg-black text-white" style={{ backgroundImage: 'none' }}>
+    <div className="h-screen overflow-hidden bg-[#30302E] text-[#e8e8e8]" style={{ backgroundImage: 'none' }}>
       <ConfigChangeToast />
       <Sidebar />
 
       {/* Mobile top bar — visible only below md */}
-      <header className="fixed top-0 left-0 right-0 z-30 flex h-[56px] items-center gap-3 border-b border-white/[0.06] bg-black px-4 md:hidden">
+      <header className="fixed top-0 left-0 right-0 z-30 flex h-[56px] items-center gap-3 border-b border-white/[0.06] bg-[#2a2a28] px-4 md:hidden">
         <button
           onClick={() => setMobileSidebarOpen(true)}
           className="rounded-md p-1.5 text-white/50 hover:text-white hover:bg-white/5 transition-colors"
@@ -124,7 +124,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <Menu className="h-5 w-5" />
         </button>
         <Image src="/favicon.png" alt="Valnaa" width={18} height={18} className="rounded-sm" />
-        <span className="text-[15px] font-semibold text-white tracking-tight">Valnaa</span>
+        <span className="text-[15px] font-semibold text-[#e8e8e8] tracking-tight">Valnaa</span>
       </header>
 
       <main

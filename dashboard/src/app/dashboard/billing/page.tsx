@@ -88,7 +88,7 @@ export default function BillingPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader2 className="h-6 w-6 animate-spin text-white/40" />
+        <Loader2 className="h-6 w-6 animate-spin text-white/30" />
       </div>
     );
   }
@@ -96,18 +96,18 @@ export default function BillingPage() {
   return (
     <div className="space-y-6">
       <div className="animate-fade-up">
-        <h1 className="text-[26px] font-bold text-white tracking-tight">Billing</h1>
-        <p className="mt-1 text-[15px] text-white/40">Manage your subscription and invoices</p>
+        <h1 className="text-[22px] font-semibold text-[#e8e8e8] tracking-tight">Billing</h1>
+        <p className="mt-1 text-[14px] text-white/40">Manage your subscription and invoices</p>
       </div>
 
       {error && (
-        <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-3 text-[13px] text-red-400">
+        <div className="rounded-lg bg-[#f87171]/[0.04] border border-[#f87171]/15 px-4 py-3 text-[13px] text-[#f87171]/80">
           {error}
         </div>
       )}
 
       {successMsg && (
-        <div className="rounded-lg bg-green-500/10 border border-green-500/20 p-3 text-[13px] text-green-400">
+        <div className="rounded-lg bg-[#4ade80]/[0.04] border border-[#4ade80]/15 px-4 py-3 text-[13px] text-[#4ade80]/80">
           {successMsg}
         </div>
       )}
@@ -119,14 +119,14 @@ export default function BillingPage() {
               <CardTitle>Subscription</CardTitle>
               <CardDescription>Your current plan and status</CardDescription>
             </div>
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/[0.06] border border-white/[0.08]">
-              <CreditCard className="h-4 w-4 text-white/50" />
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/[0.04] border border-white/[0.06]">
+              <CreditCard className="h-4 w-4 text-white/40" />
             </div>
           </div>
 
           <div className="mt-5 flex items-center gap-3 flex-wrap">
             {overview?.isInTrial && (
-              <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30">Free trial</Badge>
+              <Badge className="bg-[#fbbf24]/[0.08] text-[#fbbf24]/80 border-[#fbbf24]/15">Free trial</Badge>
             )}
             <Badge>{overview?.plan || 'unknown'}</Badge>
             <Badge variant={overview?.status === 'active' ? 'green' : overview?.status === 'grace_period' ? 'amber' : 'red'}>
@@ -135,19 +135,19 @@ export default function BillingPage() {
           </div>
 
           {overview?.isInTrial && overview?.trialEndsAt && (
-            <p className="mt-3 text-[13px] text-white/50">
+            <p className="mt-3 text-[13px] text-white/40">
               Trial ends {new Date(overview.trialEndsAt).toLocaleDateString()}
             </p>
           )}
 
           <div className="mt-5 flex flex-wrap gap-2">
             {overview?.stripeCustomerId ? (
-              <Button variant="primary" onClick={openPortal} loading={portalLoading}>
+              <Button variant="glass" onClick={openPortal} loading={portalLoading}>
                 <ExternalLink className="h-4 w-4" />
                 Manage in Stripe
               </Button>
             ) : (
-              <Button variant="primary" onClick={() => { window.location.href = '/pricing'; }}>
+              <Button variant="glass" onClick={() => { window.location.href = '/pricing'; }}>
                 <CreditCard className="h-4 w-4" />
                 Upgrade to paid plan
               </Button>
@@ -162,13 +162,13 @@ export default function BillingPage() {
               {!cancelConfirm ? (
                 <button
                   onClick={() => setCancelConfirm(true)}
-                  className="text-[13px] text-white/30 hover:text-red-400 transition-colors"
+                  className="text-[13px] text-white/20 hover:text-[#f87171]/70 transition-colors"
                 >
                   Cancel subscription
                 </button>
               ) : (
-                <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-4">
-                  <p className="text-[13px] text-white/60">
+                <div className="rounded-lg border border-[#f87171]/15 bg-[#f87171]/[0.04] p-4">
+                  <p className="text-[13px] text-white/50">
                     Are you sure? Your agent will stay active until the end of your billing period, then be deactivated.
                   </p>
                   <div className="mt-3 flex gap-2">
@@ -176,7 +176,7 @@ export default function BillingPage() {
                       variant="glass"
                       onClick={cancelSubscription}
                       loading={cancelLoading}
-                      className="!border-red-500/30 !text-red-400 hover:!bg-red-500/10"
+                      className="!border-[#f87171]/20 !text-[#f87171]/70 hover:!bg-[#f87171]/[0.06]"
                     >
                       Yes, cancel
                     </Button>
@@ -196,27 +196,27 @@ export default function BillingPage() {
               <CardTitle>Invoices</CardTitle>
               <CardDescription>Download recent invoices</CardDescription>
             </div>
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/[0.06] border border-white/[0.08]">
-              <FileText className="h-4 w-4 text-white/50" />
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/[0.04] border border-white/[0.06]">
+              <FileText className="h-4 w-4 text-white/40" />
             </div>
           </div>
 
           <div className="mt-5 space-y-2">
             {invoices.length === 0 ? (
-              <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-4 text-[13px] text-white/40">
+              <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-4 py-4 text-[13px] text-white/30">
                 No invoices yet.
               </div>
             ) : (
               invoices.map((inv) => (
                 <div key={inv.id} className="flex items-center justify-between rounded-lg border border-white/[0.06] bg-white/[0.02] px-4 py-3">
                   <div className="min-w-0">
-                    <p className="text-[13px] text-white/70 truncate">{inv.id}</p>
-                    <p className="text-[12px] text-white/30 mt-0.5">
+                    <p className="text-[13px] text-white/60 truncate">{inv.id}</p>
+                    <p className="text-[12px] text-white/25 mt-0.5">
                       {formatDate(inv.date)} · {inv.status}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-[13px] text-white/60 tabular-nums">
+                    <span className="text-[13px] text-white/50 tabular-nums">
                       {formatCents(inv.amount)}
                     </span>
                     {inv.pdf && (
@@ -224,7 +224,7 @@ export default function BillingPage() {
                         href={inv.pdf}
                         target="_blank"
                         rel="noreferrer"
-                        className="btn-glass px-3 py-2 text-[13px] rounded-lg"
+                        className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-1.5 text-[12px] text-white/40 hover:bg-white/[0.04] hover:text-white/60 transition-all"
                       >
                         PDF
                       </a>

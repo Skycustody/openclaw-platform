@@ -6,30 +6,26 @@ import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const buttonVariants = cva(
-  'inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50',
+  'inline-flex items-center justify-center whitespace-nowrap rounded-lg text-[13px] font-medium transition-all duration-150 ease-out focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/20 disabled:pointer-events-none disabled:opacity-40',
   {
     variants: {
       variant: {
-        default: 'bg-primary text-primary-foreground hover:bg-primary/90',
-        destructive:
-          'bg-destructive text-destructive-foreground hover:bg-destructive/90',
-        outline:
-          'border border-input bg-background hover:bg-accent hover:text-accent-foreground',
-        secondary:
-          'bg-secondary text-secondary-foreground hover:bg-secondary/80',
-        ghost: 'hover:bg-accent hover:text-accent-foreground',
-        link: 'text-primary underline-offset-4 hover:underline',
-        primary: 'bg-primary text-primary-foreground hover:bg-primary/90',
-        glass:
-          'border border-input bg-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground',
-        danger: 'bg-destructive text-destructive-foreground hover:bg-destructive/90',
+        default: 'bg-white/[0.06] border border-white/[0.12] text-[#e0e0e0] hover:bg-white/[0.1] hover:border-white/[0.18]',
+        primary: 'bg-white/[0.06] border border-white/[0.12] text-[#e0e0e0] hover:bg-white/[0.1] hover:border-white/[0.18]',
+        secondary: 'bg-white/[0.04] border border-white/[0.08] text-white/60 hover:bg-white/[0.06] hover:text-white/80',
+        glass: 'bg-transparent border border-white/[0.08] text-white/50 hover:bg-white/[0.04] hover:text-white/70 hover:border-white/[0.12]',
+        ghost: 'text-white/40 hover:text-white/60 hover:bg-white/[0.04]',
+        link: 'text-white/50 underline-offset-4 hover:underline hover:text-white/70',
+        destructive: 'bg-transparent border border-[#f87171]/20 text-[#f87171]/70 hover:bg-[#f87171]/[0.06] hover:border-[#f87171]/30',
+        outline: 'border border-white/[0.08] bg-transparent text-white/50 hover:bg-white/[0.04] hover:text-white/70',
+        danger: 'bg-transparent border border-[#f87171]/20 text-[#f87171]/70 hover:bg-[#f87171]/[0.06] hover:border-[#f87171]/30',
       },
       size: {
-        default: 'h-10 px-4 py-2',
-        sm: 'h-9 rounded-md px-3',
-        lg: 'h-11 rounded-md px-8',
-        icon: 'h-10 w-10',
-        md: 'h-10 px-4 py-2',
+        default: 'h-9 px-4 py-2',
+        sm: 'h-8 px-3',
+        lg: 'h-10 px-6',
+        icon: 'h-9 w-9',
+        md: 'h-9 px-4 py-2',
       },
     },
     defaultVariants: {
@@ -38,8 +34,6 @@ const buttonVariants = cva(
     },
   }
 );
-
-const noGlassVariants = new Set(['ghost', 'link']);
 
 export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>,
@@ -63,35 +57,16 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     ref
   ) => {
     const Comp = asChild ? Slot : 'button';
-    const showGlass = !asChild && !noGlassVariants.has(variant ?? 'default');
 
     return (
       <Comp
-        className={cn(
-          buttonVariants({ variant, size, className }),
-          showGlass && 'relative overflow-hidden'
-        )}
+        className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
         disabled={disabled || loading}
         {...props}
       >
-        {showGlass && (
-          <>
-            <span
-              className="pointer-events-none absolute inset-0 z-0 rounded-[inherit]"
-              style={{ background: 'rgba(255, 255, 255, 0.06)' }}
-            />
-            <span
-              className="pointer-events-none absolute inset-0 z-[1] overflow-hidden rounded-[inherit]"
-              style={{
-                boxShadow:
-                  'inset 1px 1px 1px 0 rgba(255,255,255,0.15), inset -1px -1px 1px 0 rgba(255,255,255,0.08)',
-              }}
-            />
-          </>
-        )}
-        <span className={cn('inline-flex items-center gap-2', showGlass && 'relative z-[3]')}>
-          {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+        <span className="inline-flex items-center gap-2">
+          {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
           {children}
         </span>
       </Comp>

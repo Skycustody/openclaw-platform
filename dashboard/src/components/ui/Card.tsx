@@ -1,27 +1,19 @@
 'use client';
 import { cn } from '@/lib/utils';
 import { ReactNode } from 'react';
-import { GlowingEffect } from '@/components/ui/glowing-effect';
 
-export function Card({ children, className, glow = true, onClick }: { children: ReactNode; className?: string; glow?: boolean; onClick?: () => void }) {
+export function Card({ children, className, glow = false, onClick }: { children: ReactNode; className?: string; glow?: boolean; onClick?: () => void }) {
   return (
-    <div className="relative rounded-[1.25rem] border-[0.75px] border-white/[0.08] p-2 animate-fade-up" onClick={onClick} role={onClick ? 'button' : undefined}>
-      {glow && (
-        <GlowingEffect
-          spread={40}
-          glow={true}
-          disabled={false}
-          proximity={64}
-          inactiveZone={0.01}
-          borderWidth={3}
-        />
-      )}
-      <div className={cn(
-        'relative bg-white/[0.03] border-[0.75px] border-white/[0.08] rounded-xl p-6',
+    <div
+      className={cn(
+        'rounded-xl border border-white/[0.06] bg-white/[0.04] p-6 animate-fade-up',
+        onClick && 'cursor-pointer hover:bg-white/[0.06] transition-colors',
         className
-      )}>
-        {children}
-      </div>
+      )}
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+    >
+      {children}
     </div>
   );
 }
@@ -31,16 +23,16 @@ export function CardHeader({ children, className }: { children: ReactNode; class
 }
 
 export function CardTitle({ children, className }: { children: ReactNode; className?: string }) {
-  return <h3 className={cn('text-[17px] font-semibold text-white tracking-tight', className)}>{children}</h3>;
+  return <h3 className={cn('text-[16px] font-semibold text-[#e8e8e8] tracking-tight', className)}>{children}</h3>;
 }
 
 export function CardDescription({ children, className }: { children: ReactNode; className?: string }) {
-  return <p className={cn('mt-1.5 text-[14px] leading-relaxed text-white/50', className)}>{children}</p>;
+  return <p className={cn('mt-1.5 text-[13px] leading-relaxed text-white/40', className)}>{children}</p>;
 }
 
 export function GlassPanel({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <div className={cn('bg-white/[0.02] border border-white/[0.05] rounded-lg p-5', className)}>
+    <div className={cn('bg-white/[0.02] border border-white/[0.06] rounded-lg p-5', className)}>
       {children}
     </div>
   );

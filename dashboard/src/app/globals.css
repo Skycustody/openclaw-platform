@@ -12,25 +12,25 @@
 }
 
 @theme {
-  --color-background: #09090b;
-  --color-foreground: #fafafa;
-  --color-card: #0c0c0e;
-  --color-card-foreground: #fafafa;
-  --color-popover: #09090b;
-  --color-popover-foreground: #fafafa;
-  --color-primary: #fafafa;
-  --color-primary-foreground: #18181b;
-  --color-secondary: #27272a;
-  --color-secondary-foreground: #fafafa;
-  --color-muted: #27272a;
-  --color-muted-foreground: #a1a1aa;
-  --color-accent: #27272a;
-  --color-accent-foreground: #fafafa;
+  --color-background: #30302E;
+  --color-foreground: #e8e8e8;
+  --color-card: #2a2a28;
+  --color-card-foreground: #e8e8e8;
+  --color-popover: #2a2a28;
+  --color-popover-foreground: #e8e8e8;
+  --color-primary: #e8e8e8;
+  --color-primary-foreground: #1a1a18;
+  --color-secondary: #363633;
+  --color-secondary-foreground: #e8e8e8;
+  --color-muted: #363633;
+  --color-muted-foreground: rgba(255, 255, 255, 0.4);
+  --color-accent: rgba(255, 255, 255, 0.08);
+  --color-accent-foreground: #e8e8e8;
   --color-destructive: #7f1d1d;
-  --color-destructive-foreground: #fafafa;
-  --color-border: rgba(255, 255, 255, 0.1);
-  --color-input: rgba(255, 255, 255, 0.1);
-  --color-ring: #d4d4d8;
+  --color-destructive-foreground: #e8e8e8;
+  --color-border: rgba(255, 255, 255, 0.06);
+  --color-input: rgba(255, 255, 255, 0.06);
+  --color-ring: rgba(255, 255, 255, 0.12);
   --radius: 0.625rem;
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
 
@@ -117,15 +117,15 @@ body {
 
 /* Legacy CSS classes for dashboard backward compatibility */
 :root {
-  --black: #000000;
+  --black: #30302E;
   --surface: rgba(255, 255, 255, 0.04);
   --surface-hover: rgba(255, 255, 255, 0.06);
   --surface-active: rgba(255, 255, 255, 0.08);
-  --border-legacy: rgba(255, 255, 255, 0.08);
-  --border-hover: rgba(255, 255, 255, 0.14);
-  --text-primary: #ffffff;
-  --text-secondary: rgba(255, 255, 255, 0.5);
-  --text-tertiary: rgba(255, 255, 255, 0.3);
+  --border-legacy: rgba(255, 255, 255, 0.06);
+  --border-hover: rgba(255, 255, 255, 0.12);
+  --text-primary: #e8e8e8;
+  --text-secondary: rgba(255, 255, 255, 0.4);
+  --text-tertiary: rgba(255, 255, 255, 0.2);
   --green: #4ade80;
   --green-soft: rgba(74, 222, 128, 0.12);
   --amber: #fbbf24;
@@ -191,16 +191,17 @@ body {
 }
 
 .btn-primary {
-  background: #ffffff;
-  border: 1px solid #ffffff;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 10px;
-  color: #000000;
-  font-weight: 600;
-  transition: opacity 0.15s ease;
+  color: #e0e0e0;
+  font-weight: 500;
+  transition: all 0.15s ease;
 }
 
 .btn-primary:hover {
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.18);
 }
 
 .btn-danger {
@@ -259,9 +260,9 @@ input[type='range']::-webkit-slider-thumb {
   height: 18px;
   width: 18px;
   border-radius: 50%;
-  background: #ffffff;
+  background: #e8e8e8;
   cursor: pointer;
-  border: 3px solid #000;
+  border: 3px solid #30302E;
 }
 
 @keyframes moveBackground {
@@ -307,14 +308,14 @@ input[type='range']::-webkit-slider-thumb {
   transition: background 0.2s ease;
 }
 
-.toggle-track[data-state="on"] { background: #ffffff; }
+.toggle-track[data-state="on"] { background: rgba(255, 255, 255, 0.5); }
 .toggle-track[data-state="off"] { background: rgba(255, 255, 255, 0.1); }
 
 .toggle-thumb {
   width: 22px;
   height: 22px;
   border-radius: 11px;
-  background: #000;
+  background: #30302E;
   transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 

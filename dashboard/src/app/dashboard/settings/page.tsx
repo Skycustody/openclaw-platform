@@ -314,9 +314,9 @@ export default function SettingsPage() {
                 onChange={e => setManualModel(e.target.value)}
                 className="w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-[14px] text-white focus:border-white/25 focus:outline-none transition-colors appearance-none"
               >
-                <option value="" className="bg-black">Choose a model...</option>
+                <option value="" className="bg-[#2a2a28]">Choose a model...</option>
                 {MODEL_OPTIONS.filter(m => m.value !== 'auto').map(m => (
-                  <option key={m.value} value={m.value} className="bg-black">{m.label}</option>
+                  <option key={m.value} value={m.value} className="bg-[#2a2a28]">{m.label}</option>
                 ))}
               </select>
             </div>
