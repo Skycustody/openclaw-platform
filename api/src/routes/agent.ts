@@ -142,9 +142,10 @@ async function agentUrlParts(subdomain: string, userId: string, server?: Server 
   if (token) {
     const gatewayWsUrl = `wss://${subdomain}.${domain}`;
     const gatewayUrl = `${gatewayWsUrl}?token=${token}`;
-    // OpenClaw Control UI reads the token from the URL hash fragment (#token=...),
-    // NOT from query parameters. See: `openclaw dashboard --no-open` output format.
-    return { url: `${baseUrl}/#token=${token}`, baseUrl, gatewayUrl, gatewayToken: token, gatewayWsUrl };
+    // Don't pass the token in the iframe URL — with dangerouslyDisableDeviceAuth=true
+    // the Control UI connects without auth. Sending a token that doesn't match the
+    // gateway's internal state causes "token mismatch" rejection (worse than no token).
+    return { url: baseUrl, baseUrl, gatewayUrl, gatewayToken: token, gatewayWsUrl };
   }
 
   return { url: baseUrl, baseUrl, gatewayUrl: null, gatewayToken: null, gatewayWsUrl: null };
