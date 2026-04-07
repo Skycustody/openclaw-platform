@@ -67,6 +67,7 @@ import proxyRoutes from './routes/proxy';
 import feedbackRoutes from './routes/feedback';
 import errorReportRoutes from './routes/errorReports';
 import trackRoutes from './routes/track';
+import callRoutes from './routes/calls';
 
 import { startScheduler } from './jobs/scheduler';
 import redis from './lib/redis';
@@ -179,6 +180,7 @@ app.use('/proxy', proxyRoutes);
 app.use('/feedback', feedbackRoutes);
 app.use('/error-reports', errorReportRoutes);
 app.use('/track', trackRoutes);
+app.use('/calls', callRoutes);
 
 // Health check
 app.get('/health', (_req, res) => {
