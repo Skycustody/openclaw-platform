@@ -64,7 +64,7 @@ const STATUS_CONFIG: Record<string, { message: string; color: string; dot: strin
   active:       { message: 'Running and ready',            color: 'text-green-400',  dot: 'bg-green-400' },
   online:       { message: 'Running and ready',            color: 'text-green-400',  dot: 'bg-green-400' },
   sleeping:     { message: 'Sleeping — wakes on message',  color: 'text-blue-400',   dot: 'bg-blue-400' },
-  paused:       { message: 'Paused — top up balance',      color: 'text-red-400',    dot: 'bg-red-400' },
+  paused:       { message: 'Paused',                        color: 'text-red-400',    dot: 'bg-red-400' },
   provisioning: { message: 'Setting up...',                color: 'text-amber-400',  dot: 'bg-amber-400' },
   starting:     { message: 'Starting up — almost ready',   color: 'text-amber-400',  dot: 'bg-amber-400 animate-pulse' },
   cancelled:    { message: 'Subscription cancelled',       color: 'text-red-400',    dot: 'bg-red-400' },
@@ -94,7 +94,7 @@ const typeIcon = (type: string) => {
 
 export default function MissionControlPage() {
   const [apiData, setApiData] = useState<ApiStatus | null>(null);
-  const [balanceUsd, setBalanceUsd] = useState<number>(0);
+  const [channels, setChannels] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [provisionMsg, setProvisionMsg] = useState<string | null>(null);
@@ -108,12 +108,13 @@ export default function MissionControlPage() {
 
   const fetchAll = useCallback(async () => {
     try {
-      const [statusRes, activityRes, cronRes, agentsRes, readyRes] = await Promise.allSettled([
+      const [statusRes, activityRes, cronRes, agentsRes, readyRes, channelsRes] = await Promise.allSettled([
         api.get<any>('/agent/status'),
         api.get<{ activities: ActivityEntry[] }>('/activity?limit=20&offset=0'),
         api.get<{ jobs: CronJob[] }>('/cron'),
         api.get<{ agents: AgentInfo[] }>('/agents'),
         api.get<{ ready: boolean }>('/agent/ready'),
+        api.get<{ channels: any[] }>('/channels'),
       ]);
       if (statusRes.status === 'fulfilled') setApiData(statusRes.value);
       if (activityRes.status === 'fulfilled') setRecentActivity(activityRes.value.activities || []);
@@ -130,6 +131,9 @@ export default function MissionControlPage() {
       }
       if (readyRes.status === 'fulfilled') {
         setGatewayReady(readyRes.value.ready);
+      }
+      if (channelsRes.status === 'fulfilled') {
+        setChannels((channelsRes.value.channels || channelsRes.value || []) as any[]);
       }
       setLastFetch(new Date());
     } catch {} finally { setLoading(false); }
@@ -225,8 +229,8 @@ export default function MissionControlPage() {
       {displayStatus === 'paused' && (
         <div className="border border-red-500/20 bg-red-500/5 rounded-xl px-4 py-3 flex items-center gap-3 animate-fade-up">
           <AlertTriangle className="h-4 w-4 text-red-400 shrink-0" />
-          <p className="text-[13px] text-red-400 flex-1">Agent paused — your AI balance is empty</p>
-          <Button variant="danger" size="sm" onClick={() => window.location.href = '/dashboard/billing'}>Top Up</Button>
+          <p className="text-[13px] text-red-400 flex-1">Agent paused — check your subscription</p>
+          <Button variant="danger" size="sm" onClick={() => window.location.href = '/dashboard/billing'}>Manage</Button>
         </div>
       )}
 
@@ -316,28 +320,16 @@ export default function MissionControlPage() {
           <p className="text-[24px] font-bold text-white tabular-nums">{stats.messagesToday}</p>
           <p className="text-[11px] text-white/20 mt-0.5">today</p>
         </Card>
-        <Card className="!p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-500/10">
-              <Zap className="h-4 w-4 text-purple-400" />
-            </div>
-            <span className="text-[12px] text-white/30">AI Calls</span>
-          </div>
-          <p className="text-[24px] font-bold text-white tabular-nums">{stats.aiRequestsToday ?? stats.tokensToday ?? 0}</p>
-          <p className="text-[11px] text-white/20 mt-0.5">today</p>
-        </Card>
-        <button className="text-left w-full" onClick={() => window.location.href = '/dashboard/billing'}>
+        <button className="text-left w-full" onClick={() => window.location.href = '/dashboard/channels'}>
           <Card className="!p-4 hover:!border-white/20 transition-colors h-full">
             <div className="flex items-center gap-2 mb-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/10">
-                <Coins className="h-4 w-4 text-amber-400" />
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-500/10">
+                <Radio className="h-4 w-4 text-purple-400" />
               </div>
-              <span className="text-[12px] text-white/30">Balance</span>
+              <span className="text-[12px] text-white/30">Channels</span>
             </div>
-            <p className={`text-[24px] font-bold tabular-nums ${balanceUsd < 0.50 ? 'text-amber-400' : 'text-white'}`}>
-              {formatUsd(balanceUsd)}
-            </p>
-            <p className="text-[11px] text-white/20 mt-0.5">remaining</p>
+            <p className="text-[24px] font-bold text-white tabular-nums">{channels.length}</p>
+            <p className="text-[11px] text-white/20 mt-0.5">connected</p>
           </Card>
         </button>
         <button className="text-left w-full" onClick={() => window.location.href = '/dashboard/skills'}>
