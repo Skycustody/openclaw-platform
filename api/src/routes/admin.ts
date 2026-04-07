@@ -7,8 +7,6 @@ import { provisionUser } from '../services/provisioning';
 import { User, PLAN_LIMITS, PROFIT_MARGIN_TARGET } from '../types';
 import { sshExec } from '../services/ssh';
 import { injectApiKeys } from '../services/apiKeys';
-import { ensureNexosKey, RETAIL_MARKUP, AVG_COST_PER_1M_USD, fetchOpenRouterTotalUsage, getNexosUsage } from '../services/nexos';
-import { fetchCreditRevenueFromStripe } from '../services/stripe';
 import { updateImageOnAllWorkers } from '../services/dockerImage';
 
 const router = Router();
@@ -144,13 +142,8 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
     const monthlyServerCostsVat = serverCount * serverCostVatPerMonth;
     const monthlyServerCosts = serverCount * serverCostGrossPerMonth;
 
-    const monthlyNexosCosts = Object.entries(planCounts).reduce(
-      (sum, [plan, count]) => sum + count * (PLAN_LIMITS[plan as keyof typeof PLAN_LIMITS]?.nexosCreditBudgetUsdCents || 0), 0
-    );
-
-    const monthlyCreditRevenue = parseInt(revenueRow?.month_credit_purchases ?? '0');
-    const totalMonthlyRevenue = monthlySubscriptionRevenue + monthlyCreditRevenue;
-    const totalCosts = monthlyServerCosts + monthlyNexosCosts;
+    const totalMonthlyRevenue = monthlySubscriptionRevenue;
+    const totalCosts = monthlyServerCosts;
     const monthlyProfit = totalMonthlyRevenue - totalCosts;
     const profitMarginPercent = totalMonthlyRevenue > 0
       ? Math.round((monthlyProfit / totalMonthlyRevenue) * 100) : 0;
@@ -168,7 +161,6 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
     const financials = {
       currency: 'USD',
       monthlySubscriptionRevenue,
-      monthlyCreditRevenue,
       totalMonthlyRevenue,
       monthlyServerCosts,
       monthlyServerCostsNet,
@@ -177,28 +169,23 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
       serverCostVatPerMonth,
       serverCostGrossPerMonth,
       vatRate,
-      monthlyNexosCosts,
-      monthlyCreditCosts: monthlyNexosCosts,
       totalCosts,
       monthlyProfit,
       profitMarginPercent,
       profitMarginTarget: Math.round(PROFIT_MARGIN_TARGET * 100),
-      retailMarkup: RETAIL_MARKUP,
       perPlan: Object.fromEntries(
         Object.entries(planCounts).map(([plan, count]) => {
           const limits = PLAN_LIMITS[plan as keyof typeof PLAN_LIMITS];
           const revenue = count * (limits?.priceUsdCents || 0);
-          const nexosCost = count * (limits?.nexosCreditBudgetUsdCents || 0);
           const serverCost = count * (limits?.serverCostShareUsdCents || 0);
           return [plan, {
             count,
             priceUsdCents: limits?.priceUsdCents || 0,
             revenueUsdCents: revenue,
-            nexosCostUsdCents: nexosCost,
             serverCostUsdCents: serverCost,
-            totalCostUsdCents: nexosCost + serverCost,
-            profitUsdCents: revenue - nexosCost - serverCost,
-            marginPercent: revenue > 0 ? Math.round(((revenue - nexosCost - serverCost) / revenue) * 100) : 0,
+            totalCostUsdCents: serverCost,
+            profitUsdCents: revenue - serverCost,
+            marginPercent: revenue > 0 ? Math.round(((revenue - serverCost) / revenue) * 100) : 0,
           }];
         })
       ),
@@ -527,9 +514,8 @@ router.get('/revenue', async (_req: AuthRequest, res: Response, next: NextFuncti
       `, [ADMIN_EMAIL]),
     ]);
 
-    const subscriptionRevenue: Record<string, { count: number; revenueUsdCents: number; nexosCostUsdCents: number; profitUsdCents: number }> = {};
+    const subscriptionRevenue: Record<string, { count: number; revenueUsdCents: number; profitUsdCents: number }> = {};
     let totalRevenueUsdCents = 0;
-    let totalNexosCostUsdCents = 0;
 
     for (const s of subscriptions) {
       const count = parseInt(s.count);
@@ -537,18 +523,15 @@ router.get('/revenue', async (_req: AuthRequest, res: Response, next: NextFuncti
       if (!limits) continue;
 
       const revenue = count * limits.priceUsdCents;
-      const nexosCost = count * limits.nexosCreditBudgetUsdCents;
       const serverCost = count * limits.serverCostShareUsdCents;
 
       subscriptionRevenue[s.plan] = {
         count,
         revenueUsdCents: revenue,
-        nexosCostUsdCents: nexosCost,
-        profitUsdCents: revenue - nexosCost - serverCost,
+        profitUsdCents: revenue - serverCost,
       };
 
       totalRevenueUsdCents += revenue;
-      totalNexosCostUsdCents += nexosCost;
     }
 
     // Server costs with VAT (tracked in USD cents)
@@ -561,14 +544,13 @@ router.get('/revenue', async (_req: AuthRequest, res: Response, next: NextFuncti
     const totalServerCostGross = sCount * sGrossPerMonth;
     const totalServerCostVat = sCount * sVatPerMonth;
 
-    const totalProfitUsdCents = totalRevenueUsdCents - totalNexosCostUsdCents - totalServerCostGross;
+    const totalProfitUsdCents = totalRevenueUsdCents - totalServerCostGross;
     const profitMarginPercent = totalRevenueUsdCents > 0
       ? Math.round((totalProfitUsdCents / totalRevenueUsdCents) * 100) : 0;
 
     res.json({
       currency: 'USD',
-      totalRevenueUsdCents: totalRevenueUsdCents,
-      totalNexosCostUsdCents,
+      totalRevenueUsdCents,
       totalServerCostUsdCents: totalServerCostGross,
       totalServerCostNet: sCount * sNetPerMonth,
       totalServerCostVat,
@@ -579,7 +561,6 @@ router.get('/revenue', async (_req: AuthRequest, res: Response, next: NextFuncti
       totalProfitUsdCents,
       profitMarginPercent,
       profitMarginTarget: Math.round(PROFIT_MARGIN_TARGET * 100),
-      retailMarkup: RETAIL_MARKUP,
       subscriptionRevenue,
       topUsers,
       signupsByMonth,
@@ -589,28 +570,12 @@ router.get('/revenue', async (_req: AuthRequest, res: Response, next: NextFuncti
   }
 });
 
-// ── Financials (credits from Stripe, API usage from OpenRouter) ──
+// ── Financials (subscription revenue + server costs) ──
 router.get('/financials', async (_req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || '').toLowerCase();
 
-    const [
-      stripeCredits,
-      openRouterUsage,
-      creditDb,
-      subscriptions,
-      serverRow,
-    ] = await Promise.all([
-      fetchCreditRevenueFromStripe().catch(() => ({ monthUsdCents: 0, totalUsdCents: 0 })),
-      fetchOpenRouterTotalUsage().then((usd) => Math.round(usd * 100)).catch(() => 0),
-      db.getOne<any>(`
-        SELECT
-          COALESCE(SUM(CASE WHEN created_at >= DATE_TRUNC('month', NOW()) THEN amount_eur_cents ELSE 0 END), 0)::text as month_revenue,
-          COALESCE(SUM(amount_eur_cents), 0)::text as total_revenue,
-          COALESCE(SUM(CASE WHEN created_at >= DATE_TRUNC('month', NOW()) THEN credits_usd ELSE 0 END), 0)::text as month_credits_usd,
-          COALESCE(SUM(credits_usd), 0)::text as total_credits_usd
-        FROM credit_purchases
-      `).catch(() => ({ month_revenue: '0', total_revenue: '0', month_credits_usd: '0', total_credits_usd: '0' })),
+    const [subscriptions, serverRow] = await Promise.all([
       db.getMany<any>(`
         SELECT plan, COUNT(*) as count
         FROM users WHERE stripe_customer_id IS NOT NULL
@@ -630,9 +595,6 @@ router.get('/financials', async (_req: AuthRequest, res: Response, next: NextFun
     const subscriptionRevenue = Object.entries(planCounts).reduce(
       (sum, [plan, count]) => sum + count * (PLAN_LIMITS[plan as keyof typeof PLAN_LIMITS]?.priceUsdCents || 0), 0
     );
-    const subscriptionAiCost = Object.entries(planCounts).reduce(
-      (sum, [plan, count]) => sum + count * (PLAN_LIMITS[plan as keyof typeof PLAN_LIMITS]?.nexosCreditBudgetUsdCents || 0), 0
-    );
 
     const sCount = parseInt(serverRow?.total || '0');
     const sNetPerMonth = parseInt(process.env.SERVER_COST_USD_CENTS || process.env.SERVER_COST_EUR_CENTS || '4300');
@@ -641,62 +603,24 @@ router.get('/financials', async (_req: AuthRequest, res: Response, next: NextFun
     const sGrossPerMonth = sNetPerMonth + sVatPerMonth;
     const vpsCostUsdCents = sCount * sGrossPerMonth;
 
-    const creditRevenueMonth = stripeCredits.monthUsdCents || parseInt(creditDb?.month_revenue ?? '0');
-    const creditRevenueTotal = stripeCredits.totalUsdCents || parseInt(creditDb?.total_revenue ?? '0');
-    // Cost derived from revenue (50% credits + 6% OR + VAT). DB credits_usd can be stale (old 69%).
-    const USER_CREDIT_RATE = 0.50;
-    const OPENROUTER_FEE_RATE = 0.06;
-    const VAT_RATE = parseFloat(process.env.CREDIT_VAT_RATE || '0.203');
-    const creditCostBaseMonth = Math.round(creditRevenueMonth * USER_CREDIT_RATE);
-    const creditCostBaseTotal = Math.round(creditRevenueTotal * USER_CREDIT_RATE);
-    const openRouterFeeMonth = Math.round(creditRevenueMonth * OPENROUTER_FEE_RATE);
-    const openRouterFeeTotal = Math.round(creditRevenueTotal * OPENROUTER_FEE_RATE);
-    const vatCostMonth = Math.round(creditRevenueMonth * VAT_RATE);
-    const vatCostTotal = Math.round(creditRevenueTotal * VAT_RATE);
-    const creditCostMonth = creditCostBaseMonth + openRouterFeeMonth + vatCostMonth;
-    const creditCostTotal = creditCostBaseTotal + openRouterFeeTotal + vatCostTotal;
-
-    const credits = {
-      revenueUsdCents: creditRevenueTotal,
-      monthRevenueUsdCents: creditRevenueMonth,
-      costUsdCents: creditCostTotal,
-      monthCostUsdCents: creditCostMonth,
-      costBreakdown: {
-        creditsBaseUsdCents: creditCostBaseTotal,
-        openRouterFeeUsdCents: openRouterFeeTotal,
-        vatUsdCents: vatCostTotal,
-      },
-      profitUsdCents: creditRevenueTotal - creditCostTotal,
-      monthProfitUsdCents: creditRevenueMonth - creditCostMonth,
-      fromStripe: stripeCredits.totalUsdCents > 0,
-    };
-
-    const subs = {
-      revenueUsdCents: subscriptionRevenue,
-      aiCostUsdCents: subscriptionAiCost,
-      vpsCostUsdCents,
-    };
-
-    const totalRevenue = subscriptionRevenue + creditRevenueTotal;
-    const totalAiCost = openRouterUsage;
-    const totalCosts = totalAiCost + vpsCostUsdCents;
-    const totalProfit = totalRevenue - totalCosts;
+    const totalRevenue = subscriptionRevenue;
+    const totalProfit = totalRevenue - vpsCostUsdCents;
 
     res.json({
       currency: 'USD',
       main: {
         totalRevenueUsdCents: totalRevenue,
         totalProfitUsdCents: totalProfit,
-        totalAiCostUsdCents: totalAiCost,
       },
-      subscriptions: subs,
-      credits,
+      subscriptions: {
+        revenueUsdCents: subscriptionRevenue,
+        vpsCostUsdCents,
+      },
       vps: {
         costUsdCents: vpsCostUsdCents,
         serverCount: sCount,
         costPerServerUsdCents: sGrossPerMonth,
       },
-      openRouterUsageUsdCents: openRouterUsage,
     });
   } catch (err: any) {
     console.error('[admin/financials]', err?.message || err);
@@ -893,11 +817,11 @@ router.get('/users/:userId', async (req: AuthRequest, res: Response, next: NextF
   try {
     const { userId } = req.params;
     if (!validateUuid(userId)) return res.status(400).json({ error: 'Invalid user ID format' });
-    const [user, tokens, activity, transactions, creditPurchases, nexosUsage] = await Promise.all([
+    const [user, activity] = await Promise.all([
       db.getOne<any>(
         `SELECT u.id, u.email, u.display_name, u.plan, u.status, u.subdomain,
                 u.container_name, u.server_id, u.stripe_customer_id, u.referral_code,
-                u.is_admin, u.created_at, u.last_active, u.api_budget_addon_usd,
+                u.is_admin, u.created_at, u.last_active,
                 u.desktop_subscription_id, u.desktop_trial_ends_at,
                 (u.desktop_trial_ends_at IS NOT NULL AND u.desktop_trial_ends_at > NOW()) as desktop_trial_active,
                 (u.status NOT IN ('pending', 'cancelled') AND u.server_id IS NOT NULL) as has_vps,
@@ -907,38 +831,16 @@ router.get('/users/:userId', async (req: AuthRequest, res: Response, next: NextF
          WHERE u.id = $1`,
         [userId]
       ),
-      db.getOne<any>(
-        'SELECT * FROM token_balances WHERE user_id = $1',
-        [userId]
-      ),
       db.getMany<any>(
         'SELECT * FROM activity_log WHERE user_id = $1 ORDER BY created_at DESC LIMIT 20',
         [userId]
       ),
-      db.getMany<any>(
-        'SELECT * FROM token_transactions WHERE user_id = $1 ORDER BY created_at DESC LIMIT 20',
-        [userId]
-      ),
-      db.getMany<any>(
-        'SELECT id, amount_eur_cents, credits_usd, stripe_session_id, created_at FROM credit_purchases WHERE user_id = $1 ORDER BY created_at DESC',
-        [userId]
-      ),
-      getNexosUsage(userId),
     ]);
 
     if (!user) return res.status(404).json({ error: 'User not found' });
     res.json({
       user,
-      tokens,
       activity,
-      transactions,
-      creditPurchases: creditPurchases || [],
-      nexosUsage: nexosUsage ? {
-        usedUsd: nexosUsage.usedUsd,
-        remainingUsd: nexosUsage.remainingUsd,
-        limitUsd: nexosUsage.limitUsd,
-        displayAmountBought: nexosUsage.displayAmountBought,
-      } : null,
     });
   } catch (err) {
     next(err);
@@ -1108,10 +1010,9 @@ router.post('/inject-keys', async (req: AuthRequest, res: Response, next: NextFu
     for (const user of users) {
       try {
         const cn = safeContainerName(user.container_name, user.id);
-        const nexosKey = await ensureNexosKey(user.id);
         await injectApiKeys(user.server_ip, user.id, cn, user.plan || 'starter');
         await sshExec(user.server_ip, `docker restart ${cn} 2>/dev/null || true`);
-        results.push({ userId: user.id, email: user.email, nexosKey: nexosKey.slice(0, 6) + '...', status: 'success' });
+        results.push({ userId: user.id, email: user.email, status: 'success' });
       } catch (err: any) {
         console.error(`[inject-keys] Failed for ${user.id}:`, err.message);
         results.push({ userId: user.id, email: user.email, status: 'failed', error: 'Key injection failed' });

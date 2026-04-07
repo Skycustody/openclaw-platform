@@ -308,7 +308,7 @@ export default function ProtectionPage() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => window.location.href = '/dashboard/tokens'}
+            onClick={() => window.location.href = '/dashboard/billing'}
           >
             Go to Balance
             <ArrowRight className="h-4 w-4" />

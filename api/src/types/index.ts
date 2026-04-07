@@ -1,8 +1,6 @@
 export type Plan = 'starter' | 'pro' | 'business';
 export type UserStatus = 'pending' | 'provisioning' | 'starting' | 'active' | 'sleeping' | 'paused' | 'cancelled' | 'grace_period' | 'trial_expired';
 export type ServerStatus = 'active' | 'provisioning' | 'draining' | 'offline';
-/** @deprecated Legacy token type — billing now uses credits */
-export type TokenTransactionType = 'purchase' | 'usage' | 'bonus' | 'refund' | 'subscription_grant' | 'auto_topup';
 export type MemoryType = 'fact' | 'preference' | 'episode' | 'skill' | 'person' | 'context';
 export type TaskComplexity = 'simple' | 'medium' | 'complex';
 export type AgentTone = 'professional' | 'casual' | 'friendly' | 'balanced' | 'custom';
@@ -72,17 +70,6 @@ export interface UserSettings {
   own_openrouter_key: string | null;
 }
 
-export interface TokenBalance {
-  user_id: string;
-  balance: number;
-  total_purchased: number;
-  total_used: number;
-  auto_topup: boolean;
-  auto_topup_amount: number;
-  auto_topup_threshold: number;
-  low_balance_alert: number;
-}
-
 export interface Memory {
   id: string;
   user_id: string;
@@ -144,41 +131,15 @@ export interface PlanLimits {
   maxSkills: number;
   maxCronJobs: number;
   storageGb: number;
-  /** Monthly AI budget in USD (matches OpenRouter key limit) */
-  includedBudgetUsd: number;
   /** Plan retail price in USD cents */
   priceUsdCents: number;
   hasBrowser: boolean;
   allChannels: boolean;
   maxAgents: number;
-  /**
-   * OpenRouter credit budget per user per month (our wholesale cost in USD cents).
-   * This is what OpenRouter charges us (no markup on provider pricing).
-   * Plan retail price must be ≥1.5× this + server cost for ≥50% profit margin.
-   */
-  nexosCreditBudgetUsdCents: number;
   /** Estimated server cost share per user per month in USD cents */
   serverCostShareUsdCents: number;
 }
 
-/**
- * ┌────────────────────────────────────────────────────────────────────────┐
- * │ PLAN PRICING (USD) — 50%+ profit target                               │
- * │                                                                       │
- * │ Formula:  retailPrice ≥ (nexosCost + serverCost) × 1.5               │
- * │                                                                       │
- * │ Plan      AI$(real) Server$ Total$  Retail$  Margin                   │
- * │ starter    1.38     4.00    5.38    15.00    64% ✓                    │
- * │ pro        3.45     8.00   11.45    25.00    54% ✓                    │
- * │ business   6.90    11.00   17.90    50.00    64% ✓                    │
- * │                                                                       │
- * │ Smart routing (cheap default models) further reduces API costs       │
- * │ by 40-60%, improving actual margins above targets.                    │
- * │                                                                       │
- * │ Credit purchases: 6% OpenRouter fee + 44% platform margin.           │
- * │ User pays $5 → $2.50 API budget. User sees $5 in dashboard.         │
- * └────────────────────────────────────────────────────────────────────────┘
- */
 export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
   starter: {
     ramMb: 2048,
@@ -186,9 +147,7 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     maxSkills: 10,
     maxCronJobs: 3,
     storageGb: 10,
-    includedBudgetUsd: 2,
     priceUsdCents: 1500,
-    nexosCreditBudgetUsdCents: 100,   // $2 × 0.50 (after 6% OR + 44% platform)
     serverCostShareUsdCents: 400,
     hasBrowser: false,
     allChannels: false,
@@ -200,9 +159,7 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     maxSkills: 53,
     maxCronJobs: 20,
     storageGb: 50,
-    includedBudgetUsd: 5,
     priceUsdCents: 2500,
-    nexosCreditBudgetUsdCents: 250,   // $5 × 0.50 (after 6% OR + 44% platform)
     serverCostShareUsdCents: 800,
     hasBrowser: true,
     allChannels: true,
@@ -214,9 +171,7 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     maxSkills: 53,
     maxCronJobs: 100,
     storageGb: 100,
-    includedBudgetUsd: 10,
     priceUsdCents: 5000,
-    nexosCreditBudgetUsdCents: 500,   // $10 × 0.50 (after 6% OR + 44% platform)
     serverCostShareUsdCents: 1100,
     hasBrowser: true,
     allChannels: true,
@@ -226,42 +181,3 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
 
 /** Minimum profit margin target (50% = 1.5× cost) */
 export const PROFIT_MARGIN_TARGET = 0.50;
-
-/** @deprecated Token packages removed — OpenRouter handles billing via credits */
-export const TOKEN_PACKAGES: any[] = [];
-
-export interface CreditPurchase {
-  id: string;
-  user_id: string;
-  /** Stored as USD cents (DB column is still named amount_eur_cents for compat) */
-  amount_usd_cents: number;
-  credits_usd: number;
-  stripe_session_id: string | null;
-  created_at: Date;
-}
-
-/**
- * Credit top-up packs. Backend split: 6% OpenRouter, 44% platform, 50% → API limit.
- * orBudgetUsd = (1 - 0.06 - 0.44) * usd = 0.50 * usd
- * Frontend shows amount paid ($5 → "$5 bought") and consumption reduces proportionally.
- */
-const OPENROUTER_FEE = 0.06;
-const PLATFORM_FEE = 0.44;
-const TO_API_FRACTION = 1 - OPENROUTER_FEE - PLATFORM_FEE; // 0.50
-
-function orBudgetFromUsd(usd: number): number {
-  return Math.round(usd * TO_API_FRACTION * 100) / 100;
-}
-
-export const CREDIT_PACKS: Record<string, {
-  priceUsdCents: number;
-  label: string;
-  orBudgetUsd: number;
-  displayAmount: number;
-  envKey: string;
-}> = {
-  '500k':  { priceUsdCents: 500,  label: '$5 Credits',  orBudgetUsd: orBudgetFromUsd(5),  displayAmount: 5,  envKey: 'STRIPE_PRICE_CREDITS_500K'  },
-  '1200k': { priceUsdCents: 1000, label: '$10 Credits', orBudgetUsd: orBudgetFromUsd(10), displayAmount: 10, envKey: 'STRIPE_PRICE_CREDITS_1200K' },
-  '3500k': { priceUsdCents: 2500, label: '$25 Credits', orBudgetUsd: orBudgetFromUsd(25), displayAmount: 25, envKey: 'STRIPE_PRICE_CREDITS_3500K' },
-  '8m':    { priceUsdCents: 5000, label: '$50 Credits', orBudgetUsd: orBudgetFromUsd(50), displayAmount: 50, envKey: 'STRIPE_PRICE_CREDITS_8M'    },
-};

@@ -50,13 +50,10 @@ import settingsRoutes from './routes/settings';
 import channelRoutes from './routes/channels';
 import memoryRoutes from './routes/memories';
 import cronRoutes from './routes/cron';
-import routerRoutes from './routes/router';
 import activityRoutes from './routes/activity';
 import conversationRoutes from './routes/conversations';
 import fileRoutes from './routes/files';
 import billingRoutes from './routes/billing';
-import desktopBillingRoutes from './routes/desktopBilling';
-import referralRoutes from './routes/referrals';
 import templateRoutes from './routes/templates';
 import webhookRoutes from './routes/webhooks';
 import adminRoutes from './routes/admin';
@@ -163,13 +160,10 @@ app.use('/settings', settingsRoutes);
 app.use('/channels', channelRoutes);
 app.use('/memories', memoryRoutes);
 app.use('/cron', cronRoutes);
-app.use('/router', routerRoutes);
 app.use('/activity', activityRoutes);
 app.use('/conversations', conversationRoutes);
 app.use('/files', fileRoutes);
 app.use('/billing', billingRoutes);
-app.use('/desktop-billing', desktopBillingRoutes);
-app.use('/referrals', referralRoutes);
 app.use('/templates', templateRoutes);
 app.use('/webhooks', webhookRoutes);
 app.use('/admin', adminRoutes);
@@ -199,14 +193,6 @@ app.use(errorHandler);
 const PORT = parseInt(process.env.PORT || '4000');
 
 async function start() {
-  try {
-    const { verifyCreditMathAtStartup } = await import('./services/creditAudit');
-    verifyCreditMathAtStartup();
-    console.log('Credit math verified');
-  } catch (err) {
-    console.warn('Credit math verification failed (non-fatal):', err);
-  }
-
   // Ensure activity_log has status column (safe migration — no-op if exists)
   try {
     await db.query(`ALTER TABLE activity_log ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'completed'`);

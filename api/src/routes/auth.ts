@@ -27,14 +27,14 @@ import { generateToken, generateDesktopToken, refreshToken as issueRefreshToken 
 import { rateLimitAuth, rateLimitSignup } from '../middleware/rateLimit';
 import { BadRequestError, UnauthorizedError } from '../lib/errors';
 import { v4 as uuid } from 'uuid';
-import { PLAN_LIMITS, Plan } from '../types';
+import { Plan } from '../types';
 
 const router = Router();
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
-export async function grantInitialTokens(userId: string, plan: Plan): Promise<void> {
-  const limits = PLAN_LIMITS[plan];
+/** Create initial settings and channel rows for a new user. */
+export async function grantInitialTokens(userId: string, _plan: Plan): Promise<void> {
   await Promise.all([
     db.query(
       `INSERT INTO user_settings (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING`,
@@ -43,16 +43,6 @@ export async function grantInitialTokens(userId: string, plan: Plan): Promise<vo
     db.query(
       `INSERT INTO user_channels (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING`,
       [userId]
-    ),
-    db.query(
-      `INSERT INTO token_balances (user_id, balance, total_purchased)
-       VALUES ($1, $2, $2) ON CONFLICT (user_id) DO NOTHING`,
-      [userId, limits.includedBudgetUsd]
-    ),
-    db.query(
-      `INSERT INTO token_transactions (user_id, amount, type, description)
-       VALUES ($1, $2, 'subscription_grant', $3)`,
-      [userId, limits.includedBudgetUsd, `${plan} plan signup bonus`]
     ),
   ]);
 }

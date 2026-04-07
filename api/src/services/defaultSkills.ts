@@ -10,7 +10,6 @@ import path from 'path';
 import { sshUploadDir } from './ssh';
 import { readContainerConfig, writeContainerConfig, restartContainer } from './containerConfig';
 import { PLATFORM_SKILLS } from '../data/platformSkills';
-import { cacheUserSkills } from './smartRouter';
 
 const INSTANCE_DIR = '/opt/openclaw/instances';
 const UUID_RE = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
@@ -56,7 +55,6 @@ export async function preInstallSkills(
       config.skills.entries[skill.id] = { enabled: true };
     }
     await writeContainerConfig(serverIp, userId, config);
-    cacheUserSkills(userId, PLATFORM_SKILLS.map(s => s.id)).catch(() => {});
     console.log(`[provision] Pre-installed default skills for ${userId}`);
   } catch (err) {
     console.warn(`[provision] Failed to pre-install default skills (non-fatal):`, err);
@@ -93,7 +91,6 @@ export async function installDefaultSkills(
       config.skills.entries[skill.id] = { enabled: true };
     }
     await writeContainerConfig(serverIp, userId, config);
-    cacheUserSkills(userId, PLATFORM_SKILLS.map(s => s.id)).catch(() => {});
 
     await restartContainer(serverIp, containerName);
     console.log(`[provision] Installed default skills for ${userId}`);

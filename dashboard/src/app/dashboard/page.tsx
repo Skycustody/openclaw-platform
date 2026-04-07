@@ -8,7 +8,7 @@ import { formatUsd } from '@/lib/utils';
 import { useStore } from '@/lib/store';
 import GatewayChat from '@/components/dashboard/GatewayChat';
 import {
-  Bot, Sparkles, Loader2, Cpu, Zap,
+  Bot, Sparkles, Loader2,
   AlertTriangle, RefreshCw, ExternalLink, Globe,
 } from 'lucide-react';
 
@@ -45,13 +45,11 @@ export default function DashboardHome() {
 
   const fetchContext = useCallback(async () => {
     try {
-      const [settingsRes, usageRes, statusRes] = await Promise.allSettled([
+      const [settingsRes, statusRes] = await Promise.allSettled([
         api.get<{ settings: UserSettings }>('/settings'),
-        api.get<{ usage?: { remainingUsd: number } }>('/settings/nexos-usage'),
         api.get<any>('/agent/status'),
       ]);
       if (settingsRes.status === 'fulfilled') setSettings(settingsRes.value.settings);
-      if (usageRes.status === 'fulfilled' && usageRes.value.usage) setBalanceUsd(usageRes.value.usage.remainingUsd);
       if (statusRes.status === 'fulfilled') {
         setAgentStatus((statusRes.value.subscriptionStatus || statusRes.value.status || 'offline') as AgentDisplayStatus);
       }
@@ -185,17 +183,6 @@ export default function DashboardHome() {
   }, [pollUntilReady, storeGatewayInfo]);
 
   useEffect(() => {
-    if (phase !== 'ready') return;
-    const interval = setInterval(async () => {
-      try {
-        const res = await api.get<{ usage?: { remainingUsd: number } }>('/settings/nexos-usage');
-        if (res.usage?.remainingUsd !== undefined) setBalanceUsd(res.usage.remainingUsd);
-      } catch {}
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [phase]);
-
-  useEffect(() => {
     pollAbort.current = new AbortController();
     fetchContext();
 
@@ -283,27 +270,7 @@ export default function DashboardHome() {
     input.click();
   }, []);
 
-  const getModeLabel = () => {
-    if (!settings) return { label: 'Auto', icon: Cpu, desc: 'Smart model routing', variant: 'green' as const };
 
-    if (settings.brain_mode === 'manual' && settings.manual_model) {
-      return {
-        label: settings.manual_model.length > 20 ? settings.manual_model.slice(0, 18) + '...' : settings.manual_model,
-        icon: Zap,
-        desc: settings.has_own_openrouter_key ? 'Using your API key' : 'Fixed model',
-        variant: settings.has_own_openrouter_key ? 'amber' as const : 'blue' as const,
-      };
-    }
-
-    return {
-      label: 'Auto',
-      icon: Cpu,
-      desc: settings.has_own_openrouter_key ? 'Smart routing + your key' : 'Smart model routing',
-      variant: 'green' as const,
-    };
-  };
-
-  const mode = getModeLabel();
 
   const handleRetry = () => {
     setErrorMsg(null);
@@ -317,7 +284,7 @@ export default function DashboardHome() {
         <div className="border border-red-500/20 bg-red-500/5 rounded-xl px-5 py-3 flex items-center gap-3 mb-3 shrink-0">
           <AlertTriangle className="h-4 w-4 text-red-400 shrink-0" />
           <p className="text-[13px] text-red-400 flex-1">Agent paused — update your subscription or payment to resume</p>
-          <Button variant="danger" size="sm" onClick={() => window.location.href = '/dashboard/tokens'}>
+          <Button variant="danger" size="sm" onClick={() => window.location.href = '/dashboard/billing'}>
             Billing
           </Button>
         </div>
@@ -345,16 +312,6 @@ export default function DashboardHome() {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap justify-end">
-          <button onClick={() => window.location.href = '/dashboard/router'}
-            className="hidden sm:flex items-center gap-2 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-1.5 hover:border-white/15 hover:bg-white/[0.04] transition-all"
-            title="Change model settings">
-            <mode.icon className="h-3.5 w-3.5 text-white/30" />
-            <div className="text-left">
-              <p className="text-[11px] font-medium text-white/50">{mode.label}</p>
-              <p className="text-[9px] text-white/20">{mode.desc}</p>
-            </div>
-          </button>
-
           {previewUrl && phase === 'ready' && (
             <button onClick={() => window.open(previewUrl, '_blank')}
               className="flex items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-1.5 hover:border-white/15 hover:bg-white/[0.04] transition-all"
@@ -364,12 +321,12 @@ export default function DashboardHome() {
             </button>
           )}
 
-          <button onClick={() => window.location.href = '/dashboard/tokens'}
+          <button onClick={() => window.location.href = '/dashboard/billing'}
             className="flex items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-1.5 hover:border-white/15 hover:bg-white/[0.04] transition-all"
-            title="AI Balance">
+            title="Billing">
             <Sparkles className="h-3.5 w-3.5 text-white/20" />
             <span className={`text-[12px] font-medium tabular-nums ${balanceUsd != null && balanceUsd < 0.50 ? 'text-amber-400' : 'text-white/50'}`}>
-              {balanceUsd != null ? `${formatUsd(balanceUsd)} left` : 'Balance'}
+              {balanceUsd != null ? `${formatUsd(balanceUsd)} left` : 'Billing'}
             </span>
           </button>
         </div>
@@ -407,7 +364,7 @@ export default function DashboardHome() {
                 Retry
               </Button>
               {agentStatus === 'paused' && (
-                <Button variant="danger" size="sm" onClick={() => window.location.href = '/dashboard/tokens'}>
+                <Button variant="danger" size="sm" onClick={() => window.location.href = '/dashboard/billing'}>
                   Billing
                 </Button>
               )}

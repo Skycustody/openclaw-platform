@@ -2,29 +2,9 @@ import cron from 'node-cron';
 import { runSleepCycle } from '../services/sleepWake';
 import { runDueCronJobs } from '../services/cronScheduler';
 import { checkCapacity } from '../services/serverRegistry';
-import { processGracePeriods } from '../services/gracePeriod';
 import { processTrialExpiry } from '../services/trialExpiry';
-import { migrateKeyToNoReset } from '../services/nexos';
 import { sendFeedbackRequest } from '../services/email';
 import db from '../lib/db';
-
-async function migrateExistingKeysOnce() {
-  try {
-    const users = await db.getMany<{ id: string }>(
-      "SELECT id FROM users WHERE nexos_api_key IS NOT NULL AND status IN ('active', 'grace_period', 'sleeping')"
-    );
-    let migrated = 0;
-    for (const u of users) {
-      const ok = await migrateKeyToNoReset(u.id);
-      if (ok) migrated++;
-    }
-    if (migrated > 0) {
-      console.log(`[scheduler] Migrated ${migrated}/${users.length} OpenRouter keys to limitReset:none`);
-    }
-  } catch (err: any) {
-    console.error('[scheduler] Key migration error:', err.message);
-  }
-}
 
 export function startScheduler() {
   // Sleep/wake cycle — every 5 minutes
@@ -64,17 +44,6 @@ export function startScheduler() {
     }
   });
 
-  // Grace period processing — every 6 hours
-  cron.schedule('0 */6 * * *', async () => {
-    const start = Date.now();
-    try {
-      await processGracePeriods();
-      console.log(`[scheduler] Grace period check completed (${Date.now() - start}ms)`);
-    } catch (err: any) {
-      console.error(`[scheduler] Grace period check error (${Date.now() - start}ms):`, err.message);
-    }
-  });
-
   // Trial expiry — daily: remove container on day 4, delete data on day 34
   cron.schedule('0 4 * * *', async () => {
     const start = Date.now();
@@ -111,8 +80,5 @@ export function startScheduler() {
     }
   });
 
-  // One-time migration: convert existing keys from monthly auto-reset to no-reset
-  setTimeout(() => migrateExistingKeysOnce(), 10_000);
-
-  console.log('[scheduler] Started: sleep=*/5min, cron=*/1min, capacity=*/10min, grace=*/6h, trial=4am daily, feedback=*/1h');
+  console.log('[scheduler] Started: sleep=*/5min, cron=*/1min, capacity=*/10min, trial=4am daily, feedback=*/1h');
 }

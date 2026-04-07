@@ -28,7 +28,6 @@ import fs from 'fs';
 import { sshExec, sshUploadDir } from '../services/ssh';
 import { PLATFORM_SKILLS } from '../data/platformSkills';
 import { PLATFORM_SKILLS_DIR } from '../services/defaultSkills';
-import { cacheUserSkills } from '../services/smartRouter';
 
 const router = Router();
 const INSTANCE_DIR = '/opt/openclaw/instances';
@@ -40,13 +39,8 @@ function validateUserId(userId: string): void {
 
 router.use(authenticate);
 
-async function refreshSkillsCache(userId: string, config: any): Promise<void> {
-  const entries = config?.skills?.entries || {};
-  const enabled = Object.entries(entries)
-    .filter(([, v]: [string, any]) => v && (v === true || v.enabled !== false))
-    .map(([k]) => k);
-  await cacheUserSkills(userId, enabled);
-}
+// No-op — skills cache was only used by the smart router (now removed)
+async function refreshSkillsCache(_userId: string, _config: any): Promise<void> {}
 
 // GET /skills/marketplace — list of installable platform skills (no container needed)
 router.get('/marketplace', (req: AuthRequest, res: Response) => {

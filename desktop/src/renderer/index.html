@@ -5485,7 +5485,7 @@
           <div class="ag-installed-item">
             <div class="ag-installed-dot" style="background:${dotColor};"></div>
             <div class="ag-installed-info">
-              <div class="ag-installed-name">${a.name || a.id}${catAgent ? '<span style="color:rgba(255,255,255,0.3);font-weight:400;font-size:12px;margin-left:8px;">' + (catAgent.role || catAgent.name || '') + '</span>' : ''}</div>
+              <div class="ag-installed-name">${a.name || a.id}${catAgent ? '<span style="color:rgba(255,255,255,0.3);font-weight:400;font-size:12px;margin-left:8px;">' + (catAgent.name || '') + '</span>' : ''}</div>
               <div class="ag-installed-model" style="display:flex;gap:12px;">
                 <span>${a.model || 'default model'}</span>
                 <span style="color:rgba(255,255,255,0.2);">${h.sessions || 0} sessions</span>
@@ -5567,36 +5567,36 @@
           '<p style="font-size:13px;color:rgba(255,255,255,0.4);margin:0 0 32px;line-height:1.5;">' + agentRole + '</p>' +
 
           (allKeys.length === 0
-            ? '<div style="padding:24px;background:#1a1a1a;border-radius:10px;text-align:center;"><p style="color:rgba(255,255,255,0.4);font-size:13px;margin:0;">No API keys needed — this agent is ready to go.</p></div>'
+            ? '<div style="padding:24px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;text-align:center;"><p style="color:rgba(255,255,255,0.4);font-size:13px;margin:0;">No API keys needed — this agent is ready to go.</p></div>'
             : allKeys.map(function(k, i) {
                 var val = existing[k.env] || '';
                 var desc = _skillDescriptions[k.skillId] || {};
                 var connected = !!val;
-                return '<div style="background:#1a1a1a;border:1px solid ' + (connected ? 'rgba(34,197,94,0.2)' : 'rgba(255,255,255,0.06)') + ';border-radius:10px;padding:20px;margin-bottom:12px;">' +
+                return '<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:20px;margin-bottom:12px;">' +
                   '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">' +
                     '<span style="font-size:14px;font-weight:500;color:#e8e8e8;">' + k.skill + '</span>' +
                     (connected
-                      ? '<span style="font-size:10px;color:#22c55e;background:rgba(34,197,94,0.1);padding:3px 10px;border-radius:10px;">Connected</span>'
-                      : '<span style="font-size:10px;color:#f59e0b;background:rgba(245,158,11,0.1);padding:3px 10px;border-radius:10px;">Not configured</span>') +
+                      ? '<span style="font-size:10px;color:rgba(255,255,255,0.5);background:rgba(255,255,255,0.06);padding:3px 10px;border-radius:10px;">Connected</span>'
+                      : '<span style="font-size:10px;color:rgba(255,255,255,0.25);background:rgba(255,255,255,0.04);padding:3px 10px;border-radius:10px;">Not configured</span>') +
                   '</div>' +
-                  (desc.what ? '<p style="font-size:12px;color:rgba(255,255,255,0.5);margin:6px 0 2px;">' + desc.what + '</p>' : '') +
-                  (desc.why ? '<p style="font-size:12px;color:rgba(255,255,255,0.3);margin:0 0 14px;line-height:1.5;">' + desc.why + '</p>' : '') +
-                  (desc.steps ? '<div style="background:#141414;border-radius:6px;padding:12px 14px;margin-bottom:14px;"><p style="font-size:11px;color:rgba(255,255,255,0.4);margin:0;line-height:1.8;white-space:pre-line;">' + desc.steps + '</p></div>' : '') +
-                  (desc.free ? '<p style="font-size:10px;color:rgba(59,130,246,0.7);margin:0 0 10px;">' + desc.free + '</p>' : '') +
+                  (desc.what ? '<p style="font-size:12px;color:rgba(255,255,255,0.45);margin:6px 0 2px;">' + desc.what + '</p>' : '') +
+                  (desc.why ? '<p style="font-size:12px;color:rgba(255,255,255,0.25);margin:0 0 14px;line-height:1.5;">' + desc.why + '</p>' : '') +
+                  (desc.steps ? '<div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);border-radius:6px;padding:12px 14px;margin-bottom:14px;"><p style="font-size:11px;color:rgba(255,255,255,0.35);margin:0;line-height:1.8;white-space:pre-line;">' + desc.steps + '</p></div>' : '') +
+                  (desc.free ? '<p style="font-size:10px;color:rgba(255,255,255,0.3);margin:0 0 10px;">' + desc.free + '</p>' : '') +
                   (k.env
                     ? '<div style="display:flex;gap:8px;align-items:center;">' +
                         '<input type="password" data-env="' + k.env + '" data-agent="' + id + '" placeholder="Paste ' + k.label + ' here" value="' + (val || '') + '" ' +
-                          'style="flex:1;padding:9px 12px;background:#0f0f0f;border:1px solid rgba(255,255,255,0.08);border-radius:6px;color:#e0e0e0;font-size:12px;font-family:inherit;outline:none;" ' +
+                          'style="flex:1;padding:9px 12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.08);border-radius:6px;color:#e0e0e0;font-size:12px;font-family:inherit;outline:none;" ' +
                           'onfocus="this.type=\'text\'" onblur="this.type=\'password\'" />' +
                         '<button onclick="this.previousElementSibling.type=this.previousElementSibling.type===\'password\'?\'text\':\'password\'" style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:8px 10px;color:rgba(255,255,255,0.3);cursor:pointer;font-size:11px;">Show</button>' +
                       '</div>'
-                    : '<p style="font-size:11px;color:#22c55e;margin:0;">Ready — no key needed</p>') +
+                    : '<p style="font-size:11px;color:rgba(255,255,255,0.4);margin:0;">Ready — no key needed</p>') +
                 '</div>';
               }).join('')) +
 
           '<div style="display:flex;align-items:center;gap:12px;margin-top:24px;">' +
-            '<button style="padding:10px 28px;border-radius:8px;border:none;background:#3b82f6;color:#fff;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;" onclick="saveAgentSetupOverlay(\'' + id + '\')">Save All</button>' +
-            '<button style="padding:10px 20px;border-radius:8px;border:1px solid rgba(255,255,255,0.08);background:transparent;color:rgba(255,255,255,0.4);font-size:13px;cursor:pointer;font-family:inherit;" onclick="document.getElementById(\'agent-setup-overlay\').style.display=\'none\'">Cancel</button>' +
+            '<button style="padding:10px 28px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.06);color:#e0e0e0;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;" onclick="saveAgentSetupOverlay(\'' + id + '\')">Save All</button>' +
+            '<button style="padding:10px 20px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:rgba(255,255,255,0.3);font-size:13px;cursor:pointer;font-family:inherit;" onclick="document.getElementById(\'agent-setup-overlay\').style.display=\'none\'">Cancel</button>' +
             '<span id="ag-setup-status-overlay" style="font-size:12px;color:rgba(255,255,255,0.3);"></span>' +
           '</div>' +
         '</div>';

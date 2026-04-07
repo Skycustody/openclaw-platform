@@ -14,7 +14,6 @@ export function Header() {
 
   const links = [
     { label: 'Features', href: '#features' },
-    { label: 'Desktop', href: '/desktop' },
     { label: 'Pricing', href: '#pricing' },
     { label: 'About', href: '#about' },
   ];

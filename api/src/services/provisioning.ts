@@ -41,7 +41,6 @@ import { cloudflareDNS } from './cloudflare';
 import { v4 as uuid } from 'uuid';
 import { buildOpenclawConfig, injectApiKeys } from './apiKeys';
 import { reapplyGatewayConfig, writeContainerConfig } from './containerConfig';
-import { ensureNexosKey, deleteNexosKey } from './nexos';
 import { preInstallSkills } from './defaultSkills';
 import { ensureDockerImage } from './dockerImage';
 import { UserSettings } from '../types';
@@ -290,11 +289,9 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
   console.log(`[provision] Base config written for ${userId}`);
 
   // Ensure Docker image exists (pre-built at server registration, fallback build here)
-  // Run in parallel with API key creation — neither depends on the other
-  const [, nexosKey] = await Promise.all([
-    ensureDockerImage(server.ip),
-    ensureNexosKey(userId),
-  ]);
+  await ensureDockerImage(server.ip);
+
+  const apiKey = process.env.OPENROUTER_API_KEY || '';
 
   // Inject API keys + model config into openclaw.json BEFORE container starts
   await injectApiKeys(server.ip, userId, containerName, plan);
@@ -386,7 +383,7 @@ export async function provisionUser(params: ProvisionParams): Promise<User> {
     `-e CONTAINER_SECRET=${generateContainerSecret(userId)}`,
     `-e "BROWSERLESS_URL=wss://production-sfo.browserless.io?token=${browserlessToken}"`,
     `-e OPENCLAW_GATEWAY_TOKEN=${gatewayToken}`,
-    `-e OPENROUTER_API_KEY=${nexosKey}`,
+    `-e OPENROUTER_API_KEY=${apiKey}`,
     `-e PREVIEW_PORT=8080`,
     `-e "PREVIEW_URL=https://${previewHost}"`,
     `-v /opt/openclaw/instances/${userId}:/root/.openclaw`,
@@ -543,11 +540,6 @@ export async function removeTrialContainer(userId: string): Promise<void> {
       cloudflareDNS.deleteRecord(`preview-${user.subdomain}`).catch(() => {}),
     ]);
   }
-
-  // Revoke OpenRouter key (prevents leaked key usage)
-  await deleteNexosKey(userId).catch((err) =>
-    console.warn(`[provision] OpenRouter key cleanup failed for ${userId}:`, err.message)
-  );
 
   const retentionUntil = user.trial_ends_at
     ? new Date(new Date(user.trial_ends_at).getTime() + 30 * 24 * 60 * 60 * 1000)

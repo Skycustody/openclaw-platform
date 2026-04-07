@@ -213,10 +213,10 @@ function HeroSection() {
               <ArrowRight className="size-4" />
             </Button>
           </Link>
-          <Link href="/desktop">
+          <Link href="/auth/signup">
             <Button className="rounded-full" size="lg" variant="secondary">
               <Download className="size-4" />
-              Desktop App
+              Get Started Free
             </Button>
           </Link>
         </div>
@@ -406,8 +406,8 @@ function DesktopAppSection() {
 
               <p className="mt-6 text-xs text-muted-foreground">
                 &euro;5/mo + VAT &middot; 3-day free trial &middot; Separate from cloud plans.{' '}
-                <Link href="/desktop" className="underline underline-offset-2 hover:text-foreground">
-                  See desktop pricing &amp; details
+                <Link href="/pricing" className="underline underline-offset-2 hover:text-foreground">
+                  See pricing &amp; details
                 </Link>
               </p>
             </div>

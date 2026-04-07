@@ -108,16 +108,14 @@ export default function MissionControlPage() {
 
   const fetchAll = useCallback(async () => {
     try {
-      const [statusRes, tokensRes, activityRes, cronRes, agentsRes, readyRes] = await Promise.allSettled([
+      const [statusRes, activityRes, cronRes, agentsRes, readyRes] = await Promise.allSettled([
         api.get<any>('/agent/status'),
-        api.get<any>('/settings/nexos-usage'),
         api.get<{ activities: ActivityEntry[] }>('/activity?limit=20&offset=0'),
         api.get<{ jobs: CronJob[] }>('/cron'),
         api.get<{ agents: AgentInfo[] }>('/agents'),
         api.get<{ ready: boolean }>('/agent/ready'),
       ]);
       if (statusRes.status === 'fulfilled') setApiData(statusRes.value);
-      if (tokensRes.status === 'fulfilled' && tokensRes.value.usage) setBalanceUsd(tokensRes.value.usage.remainingUsd ?? 0);
       if (activityRes.status === 'fulfilled') setRecentActivity(activityRes.value.activities || []);
       if (cronRes.status === 'fulfilled') {
         const jobs = (cronRes.value.jobs || cronRes.value || []) as CronJob[];
@@ -228,7 +226,7 @@ export default function MissionControlPage() {
         <div className="border border-red-500/20 bg-red-500/5 rounded-xl px-4 py-3 flex items-center gap-3 animate-fade-up">
           <AlertTriangle className="h-4 w-4 text-red-400 shrink-0" />
           <p className="text-[13px] text-red-400 flex-1">Agent paused — your AI balance is empty</p>
-          <Button variant="danger" size="sm" onClick={() => window.location.href = '/dashboard/tokens'}>Top Up</Button>
+          <Button variant="danger" size="sm" onClick={() => window.location.href = '/dashboard/billing'}>Top Up</Button>
         </div>
       )}
 
@@ -328,7 +326,7 @@ export default function MissionControlPage() {
           <p className="text-[24px] font-bold text-white tabular-nums">{stats.aiRequestsToday ?? stats.tokensToday ?? 0}</p>
           <p className="text-[11px] text-white/20 mt-0.5">today</p>
         </Card>
-        <button className="text-left w-full" onClick={() => window.location.href = '/dashboard/tokens'}>
+        <button className="text-left w-full" onClick={() => window.location.href = '/dashboard/billing'}>
           <Card className="!p-4 hover:!border-white/20 transition-colors h-full">
             <div className="flex items-center gap-2 mb-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/10">
@@ -522,7 +520,7 @@ export default function MissionControlPage() {
         {[
           { label: 'Connect Apps',   href: '/dashboard/channels',      icon: MessageSquare, desc: 'Telegram, Discord, WhatsApp' },
           { label: 'Skills & Tools', href: '/dashboard/skills',        icon: Sparkles,      desc: 'Browser, search, memory' },
-          { label: 'Model Router',   href: '/dashboard/router',        icon: Cpu,           desc: 'Smart model selection' },
+          { label: 'Settings',        href: '/dashboard/settings',      icon: Cpu,           desc: 'Agent configuration' },
           { label: 'Conversations',  href: '/dashboard/conversations', icon: Terminal,       desc: 'Full chat history' },
         ].map(link => (
           <button key={link.href} onClick={() => window.location.href = link.href}

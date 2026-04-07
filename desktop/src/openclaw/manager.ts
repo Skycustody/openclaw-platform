@@ -306,6 +306,17 @@ class OpenClawManager extends EventEmitter {
     this.setState('starting');
     this.stderrBuffer = '';
 
+    // Restore port from config if cleared (e.g. after stop() during auto-restart)
+    if (this.port == null) {
+      try {
+        const cfgPath = path.join(os.homedir(), '.openclaw', 'openclaw.json');
+        const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+        this.port = cfg.gateway?.port || OPENCLAW_PORT;
+      } catch {
+        this.port = OPENCLAW_PORT;
+      }
+    }
+
     // Start Claude Code proxy if available
     this.startClaudeProxy();
 

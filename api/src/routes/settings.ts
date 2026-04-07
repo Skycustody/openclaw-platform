@@ -1,9 +1,7 @@
 /**
  * Settings routes — user preferences and agent configuration.
  *
- * API key management has been replaced by OpenRouter integration.
- * Each user gets an OpenRouter API key (managed by services/nexos.ts) that provides
- * access to multiple AI models through OpenRouter's credit-based billing.
+ * Users either bring their own OpenRouter key or use the platform's shared key.
  */
 import { Router, Response, NextFunction } from 'express';
 import { AuthRequest, authenticate, requireActiveSubscription } from '../middleware/auth';
@@ -11,8 +9,6 @@ import db from '../lib/db';
 import { UserSettings } from '../types';
 import { getUserContainer, requireRunningContainer, readContainerConfig, writeContainerConfig, restartContainer } from '../services/containerConfig';
 import { sshExec } from '../services/ssh';
-import { getNexosUsage } from '../services/nexos';
-import { VALID_CATEGORY_KEYS, MODEL_MAP } from '../services/smartRouter';
 import { invalidateProxyCache } from './proxy';
 import redis from '../lib/redis';
 import {
@@ -126,16 +122,6 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
     if (!safeSettings.routing_preferences) safeSettings.routing_preferences = {};
 
     res.json({ settings: safeSettings });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// Get OpenRouter credit usage
-router.get('/nexos-usage', async (req: AuthRequest, res: Response, next: NextFunction) => {
-  try {
-    const usage = await getNexosUsage(req.userId!);
-    res.json({ usage });
   } catch (err) {
     next(err);
   }
@@ -342,7 +328,7 @@ router.post('/onboarding', async (req: AuthRequest, res: Response, next: NextFun
   }
 });
 
-// Update per-task routing preferences
+// Update per-task routing preferences (legacy — smart router removed, kept for API compat)
 router.put('/routing-preferences', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { preferences } = req.body;
@@ -350,17 +336,9 @@ router.put('/routing-preferences', async (req: AuthRequest, res: Response, next:
       return res.status(400).json({ error: 'preferences must be an object mapping category keys to model IDs' });
     }
 
-    const validModelIds = new Set(Object.keys(MODEL_MAP));
     const cleaned: Record<string, string> = {};
-
     for (const [key, value] of Object.entries(preferences)) {
-      if (!VALID_CATEGORY_KEYS.has(key)) {
-        return res.status(400).json({ error: `Unknown task category: ${key}` });
-      }
       if (typeof value !== 'string' || !value) continue;
-      if (!validModelIds.has(value)) {
-        return res.status(400).json({ error: `Invalid model ID for ${key}: ${value}` });
-      }
       cleaned[key] = value;
     }
 
@@ -368,18 +346,6 @@ router.put('/routing-preferences', async (req: AuthRequest, res: Response, next:
       'UPDATE user_settings SET routing_preferences = $1 WHERE user_id = $2',
       [JSON.stringify(cleaned), req.userId]
     );
-
-    // Invalidate cached routing decisions for this user
-    const userKey = req.userId!.slice(0, 12);
-    const pattern = `aiRoute7:${userKey}:*`;
-    try {
-      let cursor = '0';
-      do {
-        const [next, keys] = await redis.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
-        cursor = next;
-        if (keys.length > 0) await redis.del(...keys);
-      } while (cursor !== '0');
-    } catch { /* non-critical */ }
 
     invalidateProxyCache(req.userId!);
     res.json({ ok: true, preferences: cleaned });

@@ -1,9 +1,7 @@
 import db from '../lib/db';
 import redis from '../lib/redis';
 import { CronJob } from '../types';
-import { autoWorkExecute } from './tokenBudget';
 import { getUserContainer, sendContainerMessage } from './containerConfig';
-import { v4 as uuid } from 'uuid';
 
 export function parseToCron(schedule: string): string {
   const lower = schedule.toLowerCase().trim();
@@ -139,15 +137,7 @@ export async function runDueCronJobs(): Promise<number> {
     try {
       console.log(`Running cron job: ${job.name} for user ${job.user_id}`);
 
-      const result = await autoWorkExecute(
-        job.user_id,
-        {
-          description: job.description || job.name,
-          type: inferTaskType(job.name),
-          tokenBudget: job.token_budget,
-        },
-        async (budget) => executeJobTask(job, budget)
-      );
+      const result = await executeJobTask(job, job.token_budget);
 
       const nextRun = getNextRun(job.schedule);
       await db.query(
@@ -185,15 +175,7 @@ export async function runCronJobNow(userId: string, jobId: string): Promise<{ ok
   if (!locked) return { ok: false, result: 'Job is already running' };
 
   try {
-    const result = await autoWorkExecute(
-      userId,
-      {
-        description: job.description || job.name,
-        type: inferTaskType(job.name),
-        tokenBudget: job.token_budget,
-      },
-      async (budget) => executeJobTask(job, budget)
-    );
+    const result = await executeJobTask(job, job.token_budget);
 
     await db.query(
       `UPDATE cron_jobs

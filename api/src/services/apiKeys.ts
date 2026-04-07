@@ -4,9 +4,9 @@
  * ┌─────────────────────────────────────────────────────────────────────────┐
  * │ ARCHITECTURE — Smart Model Routing via Platform Proxy                  │
  * │                                                                        │
- * │ 1. Each user gets an OpenRouter API key (stored in users.nexos_api_key │
- * │    column). OpenRouter provides access to Claude, GPT, Gemini, etc.   │
- * │    with no markup on provider pricing.                                 │
+ * │ 1. Users either bring their own OpenRouter key or use the platform's  │
+ * │    shared key (OPENROUTER_API_KEY env var). OpenRouter provides access │
+ * │    to Claude, GPT, Gemini, etc. with no markup on provider pricing.   │
  * │                                                                        │
  * │ 2. Containers route ALL AI requests through our smart proxy at         │
  * │    https://api.valnaa.com/proxy/v1. The proxy:                        │
@@ -30,7 +30,6 @@
  * └─────────────────────────────────────────────────────────────────────────┘
  */
 import { sshExec } from './ssh';
-import { ensureNexosKey } from './nexos';
 import { Plan } from '../types';
 import { writeContainerConfig as writeConfigAtomic } from './containerConfig';
 import db from '../lib/db';
@@ -72,7 +71,11 @@ export async function injectApiKeys(
     [userId]
   );
   const usingOwnKey = !!settings?.own_openrouter_key;
-  const apiKey = usingOwnKey ? settings!.own_openrouter_key! : await ensureNexosKey(userId);
+  const sharedKey = process.env.OPENROUTER_API_KEY || '';
+  if (!usingOwnKey && !sharedKey) {
+    throw new Error('OPENROUTER_API_KEY env var is required when user has no own key');
+  }
+  const apiKey = usingOwnKey ? settings!.own_openrouter_key! : sharedKey;
 
   const configResult = await sshExec(
     serverIp,
