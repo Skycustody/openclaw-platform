@@ -142,8 +142,9 @@ async function agentUrlParts(subdomain: string, userId: string, server?: Server 
   if (token) {
     const gatewayWsUrl = `wss://${subdomain}.${domain}`;
     const gatewayUrl = `${gatewayWsUrl}?token=${token}`;
-    const wsUrl = encodeURIComponent(gatewayUrl);
-    return { url: `${baseUrl}/?gatewayUrl=${wsUrl}&token=${token}`, baseUrl, gatewayUrl, gatewayToken: token, gatewayWsUrl };
+    // OpenClaw Control UI reads the token from the URL hash fragment (#token=...),
+    // NOT from query parameters. See: `openclaw dashboard --no-open` output format.
+    return { url: `${baseUrl}/#token=${token}`, baseUrl, gatewayUrl, gatewayToken: token, gatewayWsUrl };
   }
 
   return { url: baseUrl, baseUrl, gatewayUrl: null, gatewayToken: null, gatewayWsUrl: null };
