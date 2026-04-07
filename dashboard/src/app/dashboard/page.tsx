@@ -299,7 +299,7 @@ export default function DashboardHome() {
 
         {phase === 'ready' && agentUrl && (
           <iframe
-            src={gatewayToken ? `${agentUrl}${agentUrl.includes('?') ? '&' : '?'}token=${gatewayToken}` : agentUrl}
+            src={agentUrl}
             className="w-full h-full border-0"
             allow="clipboard-write; microphone"
             title="OpenClaw Control UI"
