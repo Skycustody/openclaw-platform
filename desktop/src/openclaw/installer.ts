@@ -109,8 +109,45 @@ export async function installOpenClaw(onProgress: ProgressCallback): Promise<str
     return existing;
   }
 
+  // On Windows, the OpenClaw install script expects npm to be available.
+  // If Node.js isn't installed, install it first via winget or direct download.
+  if (IS_WIN && !isNodeInstalled()) {
+    onProgress({ stage: 'downloading', message: 'Installing Node.js (required for OpenClaw)...' });
+    logApp('info', 'Node.js not found on Windows — installing before OpenClaw');
+    try {
+      const { execSync } = require('child_process');
+      const windir = process.env.SystemRoot || 'C:\\Windows';
+      // Try winget first (available on Windows 10 1709+)
+      try {
+        execSync('winget install OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements', {
+          timeout: 300000,
+          stdio: 'pipe',
+          env: { ...process.env, PATH: `${process.env.PATH};${windir}\\System32;${windir}\\System32\\WindowsPowerShell\\v1.0` },
+        });
+        logApp('info', 'Node.js installed via winget');
+      } catch {
+        // Fallback: direct MSI download
+        logApp('info', 'winget failed, trying direct Node.js download');
+        const nodeUrl = 'https://nodejs.org/dist/v22.12.0/node-v22.12.0-x64.msi';
+        const msiPath = path.join(os.tmpdir(), 'node-install.msi');
+        execSync(`powershell.exe -Command "Invoke-WebRequest -Uri '${nodeUrl}' -OutFile '${msiPath}'"`, { timeout: 120000, stdio: 'pipe' });
+        execSync(`msiexec /i "${msiPath}" /qn /norestart`, { timeout: 300000, stdio: 'pipe' });
+        logApp('info', 'Node.js installed via MSI');
+      }
+      // Refresh PATH to pick up newly installed Node.js
+      const nodePaths = [
+        'C:\\Program Files\\nodejs',
+        path.join(process.env.APPDATA || '', 'npm'),
+      ];
+      process.env.PATH = `${process.env.PATH};${nodePaths.join(';')}`;
+    } catch (nodeErr: any) {
+      logApp('warn', `Failed to auto-install Node.js: ${nodeErr.message}`);
+      throw Object.assign(new Error('Node.js is required but could not be installed automatically. Please install Node.js from https://nodejs.org and try again.'), { recoverable: true });
+    }
+  }
+
   const cmd = getInstallScriptCommand();
-  onProgress({ stage: 'downloading', message: 'Installing OpenClaw (includes Node.js if needed)... This may take a few minutes.' });
+  onProgress({ stage: 'downloading', message: 'Installing OpenClaw... This may take a few minutes.' });
   logApp('info', `Running official install script: ${cmd}`);
 
   return new Promise((resolve, reject) => {
