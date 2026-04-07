@@ -3,9 +3,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import {
-  LayoutDashboard, Activity, Smartphone, Puzzle, Brain, Clock,
-  Globe, Cpu, User, Shield, MessageSquare, FileText,
-  CreditCard, Store, LogOut, ChevronLeft, Zap, HelpCircle,
+  LayoutDashboard, Smartphone, Clock,
+  Cpu, CreditCard, LogOut, ChevronLeft, HelpCircle, Settings,
 } from 'lucide-react';
 import Image from 'next/image';
 import { useStore } from '@/lib/store';
@@ -14,20 +13,11 @@ import { useEffect } from 'react';
 
 const navItems = [
   { href: '/dashboard', label: 'Home', icon: LayoutDashboard },
-  { href: '/dashboard/mission-control', label: 'Control', icon: Zap },
   { href: '/dashboard/agents', label: 'Agents', icon: Cpu },
-  { href: '/dashboard/activity', label: 'Activity', icon: Activity },
-  { href: '/dashboard/channels', label: 'Connect', icon: Smartphone },
-  { href: '/dashboard/skills', label: 'Skills', icon: Puzzle },
-  { href: '/dashboard/memories', label: 'Memory', icon: Brain },
+  { href: '/dashboard/channels', label: 'Channels', icon: Smartphone },
   { href: '/dashboard/cron', label: 'Schedule', icon: Clock },
-  { href: '/dashboard/browser', label: 'Browser', icon: Globe },
-  { href: '/dashboard/personality', label: 'Persona', icon: User },
-  { href: '/dashboard/protection', label: 'Shield', icon: Shield },
-  { href: '/dashboard/conversations', label: 'History', icon: MessageSquare },
-  { href: '/dashboard/files', label: 'Files', icon: FileText },
+  { href: '/dashboard/settings', label: 'Settings', icon: Settings },
   { href: '/dashboard/billing', label: 'Billing', icon: CreditCard },
-  { href: '/dashboard/templates', label: 'Templates', icon: Store },
 ];
 
 export function Sidebar() {

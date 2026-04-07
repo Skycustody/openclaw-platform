@@ -36,8 +36,6 @@ export default function DashboardHome() {
   const [agentStatus, setAgentStatus] = useState<AgentDisplayStatus>('offline');
 
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [uploadingFile, setUploadingFile] = useState(false);
-  const [uploadMsg, setUploadMsg] = useState<string | null>(null);
 
   const pollAbort = useRef<AbortController | null>(null);
 
@@ -236,39 +234,6 @@ export default function DashboardHome() {
       pollAbort.current?.abort();
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const handleFileUpload = useCallback(async () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.onchange = async () => {
-      const file = input.files?.[0];
-      if (!file) return;
-      setUploadingFile(true);
-      setUploadMsg(null);
-      try {
-        const reader = new FileReader();
-        const content = await new Promise<string>((resolve, reject) => {
-          reader.onload = () => {
-            const result = reader.result as string;
-            resolve(result.split(',')[1] || '');
-          };
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
-        await api.post('/files/upload', { filename: file.name, content });
-        setUploadMsg(`${file.name} uploaded to workspace`);
-        setTimeout(() => setUploadMsg(null), 4000);
-      } catch (err: any) {
-        setUploadMsg(`Upload failed: ${err.message}`);
-        setTimeout(() => setUploadMsg(null), 5000);
-      } finally {
-        setUploadingFile(false);
-      }
-    };
-    input.click();
-  }, []);
-
-
 
   const handleRetry = () => {
     setErrorMsg(null);
