@@ -2794,6 +2794,20 @@ function setupIPC(): void {
         logApp('info', `agents:install — registered agent ${id} via CLI`);
       }
 
+      // Set display name to nickname (e.g. "Atlas (Research)") so Control UI shows it
+      if (name) {
+        try {
+          const cfgPath = path.join(home, '.openclaw', 'openclaw.json');
+          const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+          const entry = (cfg.agents?.list || []).find((a: any) => a.id === id);
+          if (entry) {
+            entry.name = name;
+            fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+            logApp('info', `agents:install — set display name to "${name}"`);
+          }
+        } catch { /* non-fatal */ }
+      }
+
       // Bootstrap sessions.json so agent appears in Control UI chat dropdown
       const agentSessionsDir = path.join(home, '.openclaw', 'agents', id, 'sessions');
       fs.mkdirSync(agentSessionsDir, { recursive: true });

@@ -5734,7 +5734,8 @@
       agOverlay('Installing ' + (agent.name || id) + '…');
       try {
         const soul = agent.soul || agent.content || `# Agent: ${agent.name}\n\n${agent.description || ''}`;
-        const res = await oc.agentsInstall(id, soul, agent.name || id);
+        const displayName = agent.nickname ? agent.nickname + ' (' + (agent.name || id) + ')' : (agent.name || id);
+        const res = await oc.agentsInstall(id, soul, displayName);
         if (res.ok) {
           await refreshAgentsPanel();
         }
