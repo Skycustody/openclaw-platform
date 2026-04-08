@@ -209,10 +209,7 @@ export async function getProviderAuthStatus(
 ): Promise<Record<string, { connected: boolean; email?: string }>> {
   validateUserId(userId);
 
-  const status: Record<string, { connected: boolean; email?: string }> = {
-    'openai-codex': { connected: false },
-    anthropic: { connected: false },
-  };
+  const status: Record<string, { connected: boolean; email?: string; type?: string }> = {};
 
   try {
     const { serverIp } = await getUserContainer(userId);
@@ -232,21 +229,62 @@ export async function getProviderAuthStatus(
     }
 
     for (const key of Object.keys(profiles)) {
-      if (key.startsWith('openai-codex')) {
-        const parts = key.split(':');
-        const email = parts.length > 1 && parts[1] !== 'default' ? parts.slice(1).join(':') : undefined;
-        status['openai-codex'] = { connected: true, email };
-      } else if (key.startsWith('anthropic')) {
-        const parts = key.split(':');
-        const email = parts.length > 1 && parts[1] !== 'default' ? parts.slice(1).join(':') : undefined;
-        status.anthropic = { connected: true, email };
-      }
+      if (key === 'version' || key === 'lastGood' || key === 'usageStats') continue;
+      const parts = key.split(':');
+      const provider = parts[0];
+      const email = parts.length > 1 && parts[1] !== 'default' ? parts.slice(1).join(':') : undefined;
+      const entry = profiles[key];
+      status[provider] = { connected: true, email, type: entry?.type || 'api_key' };
     }
   } catch {
     // Container not provisioned — all disconnected
   }
 
   return status;
+}
+
+// ── Save API key for any provider (writes to auth-profiles.json) ──
+
+export async function saveProviderApiKey(
+  userId: string,
+  provider: string,
+  key: string,
+): Promise<{ success: boolean; error?: string }> {
+  validateUserId(userId);
+  if (!key || !key.trim()) return { success: false, error: 'API key is required' };
+  if (!provider || !provider.trim()) return { success: false, error: 'Provider is required' };
+
+  const { serverIp } = await getUserContainer(userId);
+
+  const result = await sshExec(
+    serverIp,
+    `cat ${INSTANCE_DIR}/${userId}/agents/main/agent/auth-profiles.json 2>/dev/null || echo '{}'`,
+    1,
+    10000,
+  );
+
+  let profiles: Record<string, any>;
+  try {
+    profiles = JSON.parse(result.stdout || '{}');
+  } catch {
+    profiles = {};
+  }
+
+  const profileKey = `${provider}:default`;
+  profiles[profileKey] = { type: 'api_key', provider, key: key.trim() };
+
+  if (!profiles.lastGood) profiles.lastGood = {};
+  profiles.lastGood[provider] = profileKey;
+  if (!profiles.version) profiles.version = 1;
+
+  const json = JSON.stringify(profiles, null, 2);
+  const b64 = Buffer.from(json).toString('base64');
+  await sshExec(
+    serverIp,
+    `mkdir -p ${INSTANCE_DIR}/${userId}/agents/main/agent && echo '${b64}' | base64 -d > ${INSTANCE_DIR}/${userId}/agents/main/agent/auth-profiles.json`,
+  );
+
+  return { success: true };
 }
 
 // ── Disconnect: remove auth profile entries for a provider ──

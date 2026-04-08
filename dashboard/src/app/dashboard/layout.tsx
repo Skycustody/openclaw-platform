@@ -23,7 +23,7 @@ const NAV_ITEMS = [
   { href: '/dashboard', label: 'Chat', icon: MessageSquare },
   { href: '/dashboard/agents', label: 'Agents', icon: Bot },
   { href: '/dashboard/channels', label: 'Channels', icon: Radio },
-  { href: '/dashboard/cron', label: 'API Keys', icon: KeyRound },
+  { href: '/dashboard/api-keys', label: 'API Keys', icon: KeyRound },
 ];
 
 function ConfigChangeToast() {

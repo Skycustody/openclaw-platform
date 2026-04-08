@@ -447,10 +447,29 @@ router.post('/provider-auth/openai/complete', async (req: AuthRequest, res: Resp
 router.delete('/provider-auth/:provider', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const provider = req.params.provider as string;
-    if (!['openai-codex', 'anthropic'].includes(provider)) {
-      return res.status(400).json({ error: 'Invalid provider' });
-    }
     await disconnectProviderAuth(req.userId!, provider);
+    res.json({ ok: true });
+  } catch (err: any) {
+    if (err.statusCode === 409) return res.status(409).json({ error: err.message });
+    next(err);
+  }
+});
+
+// Save API key for any provider (writes to container auth-profiles.json)
+router.post('/provider-auth/save-key', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { provider, key } = req.body;
+    if (!provider || typeof provider !== 'string') {
+      return res.status(400).json({ error: 'Provider is required' });
+    }
+    if (!key || typeof key !== 'string' || key.trim().length < 5) {
+      return res.status(400).json({ error: 'Valid API key is required' });
+    }
+    const { saveProviderApiKey } = await import('../services/providerAuth');
+    const result = await saveProviderApiKey(req.userId!, provider, key);
+    if (!result.success) {
+      return res.status(400).json({ error: result.error });
+    }
     res.json({ ok: true });
   } catch (err: any) {
     if (err.statusCode === 409) return res.status(409).json({ error: err.message });
