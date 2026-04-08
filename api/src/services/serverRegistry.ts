@@ -215,7 +215,7 @@ export async function updateServerRam(serverId: string): Promise<void> {
       CASE u.plan
         WHEN 'starter' THEN 2048
         WHEN 'pro' THEN 4096
-        WHEN 'business' THEN 8192
+        WHEN 'business' THEN 2048
         ELSE 2048
       END
     ), 0) as total
