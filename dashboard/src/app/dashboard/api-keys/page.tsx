@@ -29,7 +29,7 @@ function ClaudeCodeLogo({ className }: { className?: string }) {
   return <svg className={className} viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h16v2H4V4zm0 4h10v2H4V8zm0 4h16v2H4v-2zm0 4h10v2H4v-2zm14-4l4 3-4 3v-6z"/></svg>;
 }
 
-const PROVIDER_LOGOS: Record<string, (props: { className?: string }) => JSX.Element> = {
+const PROVIDER_LOGOS: Record<string, (props: { className?: string }) => React.ReactElement> = {
   'openai': OpenAILogo,
   'openai-codex': OpenAILogo,
   'anthropic': AnthropicLogo,
