@@ -12,11 +12,16 @@ function OpenAILogo({ className }: { className?: string }) {
 }
 function AnthropicLogo({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none">
-      <circle cx="12" cy="12" r="1.8" fill="#D97757"/>
-      {[0,45,90,135,180,225,270,315].map(deg => (
-        <rect key={deg} x="11" y="2" width="2" height="6" rx="1" fill="#D97757" transform={`rotate(${deg} 12 12)`}/>
-      ))}
+    <svg className={className} viewBox="0 0 256 256" fill="#D97757">
+      <path d="M128 116a12 12 0 1 1 0 24 12 12 0 0 1 0-24z"/>
+      <path d="M128 8c5 0 9 4 9 9v40c0 5-4 9-9 9s-9-4-9-9V17c0-5 4-9 9-9z"/>
+      <path d="M128 190c5 0 9 4 9 9v40c0 5-4 9-9 9s-9-4-9-9v-40c0-5 4-9 9-9z"/>
+      <path d="M248 128c0 5-4 9-9 9h-40c-5 0-9-4-9-9s4-9 9-9h40c5 0 9 4 9 9z"/>
+      <path d="M66 128c0 5-4 9-9 9H17c-5 0-9-4-9-9s4-9 9-9h40c5 0 9 4 9 9z"/>
+      <path d="M212.85 43.15a9 9 0 0 1 0 12.73l-28.28 28.28a9 9 0 0 1-12.73-12.73l28.28-28.28a9 9 0 0 1 12.73 0z"/>
+      <path d="M84.16 171.84a9 9 0 0 1 0 12.73l-28.28 28.28a9 9 0 1 1-12.73-12.73l28.28-28.28a9 9 0 0 1 12.73 0z"/>
+      <path d="M212.85 212.85a9 9 0 0 1-12.73 0l-28.28-28.28a9 9 0 0 1 12.73-12.73l28.28 28.28a9 9 0 0 1 0 12.73z"/>
+      <path d="M84.16 84.16a9 9 0 0 1-12.73 0L43.15 55.88a9 9 0 0 1 12.73-12.73l28.28 28.28a9 9 0 0 1 0 12.73z"/>
     </svg>
   );
 }
@@ -50,14 +55,7 @@ function GroqLogo({ className }: { className?: string }) {
   return <svg className={className} viewBox="0 0 24 24" fill="#F55036"><path d="M12 1.5C6.21 1.5 1.5 6.21 1.5 12S6.21 22.5 12 22.5 22.5 17.79 22.5 12 17.79 1.5 12 1.5zm0 3.938a6.563 6.563 0 1 1 0 13.124 6.563 6.563 0 0 1 0-13.124zm0 2.624a3.938 3.938 0 1 0 0 7.876 3.938 3.938 0 0 0 0-7.876zm3.938 3.938h3.28v2.625a6.563 6.563 0 0 1-3.28 5.688V12z"/></svg>;
 }
 function ClaudeCodeLogo({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none">
-      <circle cx="12" cy="12" r="1.8" fill="#D97757"/>
-      {[0,45,90,135,180,225,270,315].map(deg => (
-        <rect key={deg} x="11" y="2" width="2" height="6" rx="1" fill="#D97757" transform={`rotate(${deg} 12 12)`}/>
-      ))}
-    </svg>
-  );
+  return <AnthropicLogo className={className} />;
 }
 
 const PROVIDER_LOGOS: Record<string, (props: { className?: string }) => React.ReactElement> = {
