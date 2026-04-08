@@ -264,52 +264,37 @@ export default function ApiKeysPage() {
               <Button variant="glass" size="sm" onClick={handleCcDisconnect} disabled={ccLoading}>
                 {ccLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Disconnect'}
               </Button>
+            ) : ccShowInput ? (
+              <Button size="sm" onClick={handleCcConnect} disabled={ccLoading || !ccToken.trim()}>
+                {ccLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : null}
+                Save
+              </Button>
             ) : (
-              <Button size="sm" onClick={handleCcOAuth} disabled={ccLoading}>
-                {ccLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <LogIn className="h-3.5 w-3.5 mr-1.5" />}
+              <Button size="sm" onClick={() => setCcShowInput(true)}>
                 Connect
               </Button>
             )}
           </div>
         </div>
-        {!ccStatus?.authenticated && (
-          <div className="mt-3 space-y-3">
-            {ccShowInput ? (
-              <>
-                <div className="rounded-lg bg-white/[0.03] border border-white/[0.06] px-4 py-3">
-                  <p className="text-[13px] text-white/60">Run this in your terminal to get a setup token:</p>
-                  <code className="block mt-2 bg-white/[0.04] rounded-lg px-3 py-2 text-[13px] text-white/70 font-mono select-all">claude setup-token</code>
-                  <p className="text-[11px] text-white/30 mt-2">Signs in via browser and gives you a token (sk-ant-oat01-...). Token lasts 1 year.</p>
-                </div>
-                <input
-                  type="password"
-                  value={ccToken}
-                  onChange={e => setCcToken(e.target.value)}
-                  placeholder="sk-ant-oat01-..."
-                  autoComplete="off"
-                  autoFocus
-                  onKeyDown={e => e.key === 'Enter' && ccToken.trim() && handleCcConnect()}
-                  className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 text-[14px] text-white/80 placeholder:text-white/20 focus:border-white/[0.15] focus:outline-none transition-colors font-mono"
-                />
-                <div className="flex justify-end">
-                  <Button size="sm" onClick={handleCcConnect} disabled={ccLoading || !ccToken.trim()}>
-                    {ccLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : null}
-                    Save Token
-                  </Button>
-                </div>
-              </>
-            ) : (
-              <button
-                onClick={() => setCcShowInput(true)}
-                className="text-[12px] text-white/30 hover:text-white/50 transition-colors"
-              >
-                Or paste a setup token manually...
-              </button>
-            )}
+        {ccShowInput && !ccStatus?.authenticated && (
+          <div className="mt-3 space-y-2">
+            <div className="rounded-lg bg-white/[0.03] border border-white/[0.06] px-4 py-3">
+              <p className="text-[13px] text-white/60">Run this in your terminal to get a setup token:</p>
+              <code className="block mt-2 bg-white/[0.04] rounded-lg px-3 py-2 text-[13px] text-white/70 font-mono select-all">claude setup-token</code>
+              <p className="text-[11px] text-white/30 mt-2">Opens your browser to sign in, then gives you a token. Lasts 1 year.</p>
+            </div>
+            <input
+              type="password"
+              value={ccToken}
+              onChange={e => setCcToken(e.target.value)}
+              placeholder="sk-ant-oat01-..."
+              autoComplete="off"
+              autoFocus
+              onKeyDown={e => e.key === 'Enter' && ccToken.trim() && handleCcConnect()}
+              className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 text-[14px] text-white/80 placeholder:text-white/20 focus:border-white/[0.15] focus:outline-none transition-colors font-mono"
+            />
             {ccError && (
-              <div className="rounded-lg bg-red-500/10 px-3 py-2 text-[13px] text-red-400/80">
-                {ccError}
-              </div>
+              <div className="rounded-lg bg-red-500/10 px-3 py-2 text-[13px] text-red-400/80">{ccError}</div>
             )}
           </div>
         )}
