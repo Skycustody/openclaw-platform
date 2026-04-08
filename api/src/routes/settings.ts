@@ -455,6 +455,121 @@ router.delete('/provider-auth/:provider', async (req: AuthRequest, res: Response
   }
 });
 
+// ── Claude Code: install CLI + auth in container ──
+
+router.get('/claude-code/status', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { serverIp, containerName } = await getUserContainer(req.userId!);
+    // Check if claude CLI exists and is authenticated
+    const check = await sshExec(serverIp,
+      `docker exec ${containerName} sh -c 'claude --version 2>/dev/null && claude auth status 2>/dev/null || echo NOT_AUTHED'`,
+      1, 15000
+    ).catch(() => null);
+    const output = check?.stdout || '';
+    const hasVersion = /\d+\.\d+/.test(output.split('\n')[0] || '');
+    const isAuthed = output.includes('"loggedIn":true') || output.includes('"loggedIn": true');
+    res.json({
+      installed: hasVersion,
+      version: hasVersion ? output.split('\n')[0].trim() : null,
+      authenticated: isAuthed,
+    });
+  } catch (err: any) {
+    if (err.statusCode === 409) return res.json({ installed: false, version: null, authenticated: false });
+    next(err);
+  }
+});
+
+router.post('/claude-code/connect', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { serverIp, containerName } = await requireRunningContainer(req.userId!);
+
+    // Step 1: Install claude CLI if not present
+    const versionCheck = await sshExec(serverIp,
+      `docker exec ${containerName} claude --version 2>/dev/null`,
+      1, 10000
+    ).catch(() => null);
+
+    if (!versionCheck || !/\d+\.\d+/.test(versionCheck.stdout)) {
+      await sshExec(serverIp,
+        `docker exec ${containerName} npm install -g @anthropic-ai/claude-code 2>&1`,
+        3, 120000
+      );
+    }
+
+    // Step 2: Check auth status
+    const authCheck = await sshExec(serverIp,
+      `docker exec ${containerName} claude auth status 2>/dev/null`,
+      1, 10000
+    ).catch(() => null);
+
+    const isAuthed = authCheck?.stdout?.includes('"loggedIn":true') || authCheck?.stdout?.includes('"loggedIn": true');
+    if (isAuthed) {
+      return res.json({ ok: true, authenticated: true });
+    }
+
+    // Step 3: Start auth login and capture the URL
+    const loginResult = await sshExec(serverIp,
+      `docker exec ${containerName} timeout 15 claude auth login --no-open 2>&1 || true`,
+      1, 20000
+    ).catch(() => null);
+
+    const output = loginResult?.stdout || '';
+    const urlMatch = output.match(/https:\/\/[^\s\n"']+/);
+
+    if (urlMatch) {
+      return res.json({ ok: false, needsAuth: true, authUrl: urlMatch[0] });
+    }
+
+    return res.json({ ok: false, error: 'Could not get auth URL. Output: ' + output.slice(0, 200) });
+  } catch (err: any) {
+    if (err.statusCode === 409) return res.status(409).json({ error: err.message });
+    next(err);
+  }
+});
+
+router.post('/claude-code/complete', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { serverIp, containerName } = await requireRunningContainer(req.userId!);
+
+    // Check if auth succeeded
+    const authCheck = await sshExec(serverIp,
+      `docker exec ${containerName} claude auth status 2>/dev/null`,
+      1, 10000
+    ).catch(() => null);
+
+    const isAuthed = authCheck?.stdout?.includes('"loggedIn":true') || authCheck?.stdout?.includes('"loggedIn": true');
+    if (!isAuthed) {
+      return res.json({ ok: false, error: 'Authentication not completed yet. Please sign in via the browser link.' });
+    }
+
+    // Write to auth-profiles.json so OpenClaw picks it up
+    const { saveProviderApiKey } = await import('../services/providerAuth');
+    await saveProviderApiKey(req.userId!, 'claude-code', 'claude-max-subscription');
+
+    res.json({ ok: true });
+  } catch (err: any) {
+    if (err.statusCode === 409) return res.status(409).json({ error: err.message });
+    next(err);
+  }
+});
+
+router.post('/claude-code/disconnect', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { serverIp, containerName } = await getUserContainer(req.userId!);
+    // Logout claude in container
+    await sshExec(serverIp,
+      `docker exec ${containerName} claude auth logout 2>/dev/null || true`,
+      1, 10000
+    ).catch(() => null);
+    // Remove from auth-profiles
+    await disconnectProviderAuth(req.userId!, 'claude-code');
+    res.json({ ok: true });
+  } catch (err: any) {
+    if (err.statusCode === 409) return res.status(409).json({ error: err.message });
+    next(err);
+  }
+});
+
 // Save API key for any provider (writes to container auth-profiles.json)
 router.post('/provider-auth/save-key', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
