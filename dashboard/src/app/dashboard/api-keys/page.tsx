@@ -107,7 +107,7 @@ export default function ApiKeysPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Badge variant="success" dot>Connected</Badge>
+                    <Badge variant="green" dot>Connected</Badge>
                     <button
                       onClick={() => handleDelete(id)}
                       disabled={deleting === id}
