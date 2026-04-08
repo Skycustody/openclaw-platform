@@ -507,9 +507,9 @@ router.post('/claude-code/connect', async (req: AuthRequest, res: Response, next
       return res.json({ ok: true, authenticated: true });
     }
 
-    // Step 3: Start auth login and capture the URL
+    // Step 3: Start auth login and capture the URL (BROWSER=echo prevents opening a browser)
     const loginResult = await sshExec(serverIp,
-      `docker exec ${containerName} timeout 15 claude auth login --no-open 2>&1 || true`,
+      `docker exec -e BROWSER=echo ${containerName} timeout 15 claude auth login 2>&1 || true`,
       1, 20000
     ).catch(() => null);
 
