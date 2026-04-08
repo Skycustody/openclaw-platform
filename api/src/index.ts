@@ -46,7 +46,7 @@ import jwt from 'jsonwebtoken';
 
 import authRoutes from './routes/auth';
 import agentRoutes from './routes/agent';
-import settingsRoutes from './routes/settings';
+import settingsRoutes, { handleClaudeOAuthCallback } from './routes/settings';
 import channelRoutes from './routes/channels';
 import memoryRoutes from './routes/memories';
 import cronRoutes from './routes/cron';
@@ -155,6 +155,10 @@ app.use((req, res, next) => {
 });
 
 // ── Routes ──
+// OAuth callback must be BEFORE /settings (which applies auth middleware).
+// This is a browser redirect from Claude's OAuth server — no Bearer token.
+app.get('/settings/claude-code/oauth-callback', handleClaudeOAuthCallback);
+
 app.use('/auth', authRoutes);
 app.use('/agent', agentRoutes);
 app.use('/settings', settingsRoutes);

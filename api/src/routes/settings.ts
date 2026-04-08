@@ -3,7 +3,8 @@
  *
  * Users either bring their own OpenRouter key or use the platform's shared key.
  */
-import { Router, Response, NextFunction } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
+import crypto from 'crypto';
 import { AuthRequest, authenticate, requireActiveSubscription } from '../middleware/auth';
 import db from '../lib/db';
 import { UserSettings } from '../types';
@@ -583,5 +584,216 @@ router.post('/provider-auth/save-key', async (req: AuthRequest, res: Response, n
     next(err);
   }
 });
+
+// ── Claude Code: OAuth PKCE flow (server-side) ──
+
+const CLAUDE_OAUTH_CLIENT_ID = '9d1c250a-e61b-44d9-88ed-5944d1962f5e';
+const CLAUDE_OAUTH_AUTHORIZE_URL = 'https://claude.com/cai/oauth/authorize';
+const CLAUDE_OAUTH_TOKEN_URL = 'https://platform.claude.com/v1/oauth/token';
+const CLAUDE_OAUTH_REDIRECT_URI = 'https://api.valnaa.com/settings/claude-code/oauth-callback';
+const CLAUDE_OAUTH_SCOPES = 'user:inference user:profile user:sessions:claude_code user:mcp_servers user:file_upload';
+const PKCE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+// In-memory PKCE verifier store (keyed by userId, auto-expires)
+const pkceStore = new Map<string, { verifier: string; timer: ReturnType<typeof setTimeout> }>();
+
+function base64url(buf: Buffer): string {
+  return buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function signState(userId: string): string {
+  const secret = process.env.INTERNAL_SECRET;
+  if (!secret) throw new Error('INTERNAL_SECRET required');
+  const hmac = crypto.createHmac('sha256', secret).update(userId).digest();
+  // state = userId.hmacHex  (userId is a UUID, safe for URL)
+  return `${userId}.${hmac.toString('hex').slice(0, 16)}`;
+}
+
+function verifyState(state: string): string | null {
+  const secret = process.env.INTERNAL_SECRET;
+  if (!secret) return null;
+  const dot = state.indexOf('.');
+  if (dot < 1) return null;
+  const userId = state.slice(0, dot);
+  const sig = state.slice(dot + 1);
+  const expected = crypto.createHmac('sha256', secret).update(userId).digest().toString('hex').slice(0, 16);
+  if (sig.length !== expected.length) return null;
+  if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
+  return userId;
+}
+
+// Authenticated: start the OAuth flow, return auth URL for the frontend to open
+router.get('/claude-code/start-oauth', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.userId!;
+
+    // Generate PKCE code_verifier (32 random bytes, base64url)
+    const verifierBytes = crypto.randomBytes(32);
+    const codeVerifier = base64url(verifierBytes);
+
+    // code_challenge = base64url(SHA256(code_verifier))
+    const challengeHash = crypto.createHash('sha256').update(codeVerifier).digest();
+    const codeChallenge = base64url(challengeHash);
+
+    // Store verifier with TTL
+    const existing = pkceStore.get(userId);
+    if (existing) clearTimeout(existing.timer);
+    const timer = setTimeout(() => pkceStore.delete(userId), PKCE_TTL_MS);
+    pkceStore.set(userId, { verifier: codeVerifier, timer });
+
+    // Build signed state
+    const state = signState(userId);
+
+    // Build authorization URL
+    const params = new URLSearchParams({
+      response_type: 'code',
+      client_id: CLAUDE_OAUTH_CLIENT_ID,
+      redirect_uri: CLAUDE_OAUTH_REDIRECT_URI,
+      scope: CLAUDE_OAUTH_SCOPES,
+      state,
+      code_challenge: codeChallenge,
+      code_challenge_method: 'S256',
+    });
+
+    const authUrl = `${CLAUDE_OAUTH_AUTHORIZE_URL}?${params.toString()}`;
+    res.json({ authUrl });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Unauthenticated callback handler — mounted separately in index.ts (no auth middleware)
+export async function handleClaudeOAuthCallback(req: Request, res: Response): Promise<void> {
+  const { code, state, error: oauthError } = req.query as Record<string, string>;
+
+  if (oauthError) {
+    res.status(400).send(oauthErrorPage(`OAuth error: ${oauthError}`));
+    return;
+  }
+
+  if (!code || !state) {
+    res.status(400).send(oauthErrorPage('Missing code or state parameter'));
+    return;
+  }
+
+  // Verify state signature and extract userId
+  const userId = verifyState(state);
+  if (!userId) {
+    res.status(400).send(oauthErrorPage('Invalid or tampered state parameter'));
+    return;
+  }
+
+  // Look up PKCE verifier
+  const pkce = pkceStore.get(userId);
+  if (!pkce) {
+    res.status(400).send(oauthErrorPage('OAuth session expired. Please try connecting again.'));
+    return;
+  }
+
+  const codeVerifier = pkce.verifier;
+  // Clean up immediately
+  clearTimeout(pkce.timer);
+  pkceStore.delete(userId);
+
+  try {
+    // Exchange authorization code for tokens
+    const tokenRes = await fetch(CLAUDE_OAUTH_TOKEN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: CLAUDE_OAUTH_REDIRECT_URI,
+        client_id: CLAUDE_OAUTH_CLIENT_ID,
+        code_verifier: codeVerifier,
+      }),
+    });
+
+    if (!tokenRes.ok) {
+      const errBody = await tokenRes.text().catch(() => '');
+      console.error(`[claude-oauth] Token exchange failed (${tokenRes.status}):`, errBody);
+      res.status(400).send(oauthErrorPage(`Token exchange failed (${tokenRes.status}). Please try again or use a setup token instead.`));
+      return;
+    }
+
+    const tokenData = await tokenRes.json() as { access_token?: string; refresh_token?: string; expires_in?: number };
+    const accessToken = tokenData.access_token;
+
+    if (!accessToken) {
+      res.status(400).send(oauthErrorPage('No access token received from Claude'));
+      return;
+    }
+
+    // Save token to the user's container (same logic as POST /claude-code/connect)
+    try {
+      const { serverIp, containerName } = await requireRunningContainer(userId);
+
+      // Install claude CLI if not present
+      const versionCheck = await sshExec(serverIp,
+        `docker exec ${containerName} claude --version 2>/dev/null`,
+        1, 10000
+      ).catch(() => null);
+
+      if (!versionCheck || !/\d+\.\d+/.test(versionCheck.stdout)) {
+        await sshExec(serverIp,
+          `docker exec ${containerName} npm install -g @anthropic-ai/claude-code 2>&1`,
+          3, 120000
+        );
+      }
+
+      const tokenB64 = Buffer.from(accessToken).toString('base64');
+      await sshExec(serverIp, [
+        `docker exec ${containerName} sh -c 'mkdir -p /root/.claude && echo "{\\"hasCompletedOnboarding\\":true}" > /root/.claude.json'`,
+        `docker exec ${containerName} sh -c 'echo "export CLAUDE_CODE_OAUTH_TOKEN=\\"$(echo ${tokenB64} | base64 -d)\\"" > /root/.claude/.env'`,
+      ].join(' && '));
+
+      // Persist token for container restarts
+      const instanceDir = `/opt/openclaw/instances/${userId}`;
+      await sshExec(serverIp,
+        `echo '${tokenB64}' | base64 -d > ${instanceDir}/.claude-token && chmod 600 ${instanceDir}/.claude-token`
+      );
+
+      await sshExec(serverIp, [
+        `echo '#!/bin/sh' > ${instanceDir}/claude-wrapper.sh`,
+        `echo 'export CLAUDE_CODE_OAUTH_TOKEN="$(cat /root/.openclaw/.claude-token 2>/dev/null)"' >> ${instanceDir}/claude-wrapper.sh`,
+        `echo 'exec claude "$@"' >> ${instanceDir}/claude-wrapper.sh`,
+        `chmod +x ${instanceDir}/claude-wrapper.sh`,
+      ].join(' && '));
+
+      // Mark as connected
+      const { saveProviderApiKey } = await import('../services/providerAuth');
+      await saveProviderApiKey(userId, 'claude-code', 'oauth');
+    } catch (containerErr: any) {
+      console.error(`[claude-oauth] Container setup failed for ${userId}:`, containerErr.message);
+      res.status(500).send(oauthErrorPage('Connected to Claude but failed to save to your container. Please try again.'));
+      return;
+    }
+
+    // Success — close popup and notify parent
+    res.send(`<!DOCTYPE html>
+<html><head><title>Claude Code Connected</title>
+<style>body{background:#1a1a18;color:#e0e0d8;font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}
+.box{text-align:center;}.check{font-size:48px;margin-bottom:16px;}p{opacity:0.6;font-size:14px;}</style></head>
+<body><div class="box"><div class="check">&#10003;</div><h2>Connected!</h2><p>This window will close automatically...</p></div>
+<script>
+window.opener?.postMessage({type:'claude-code-auth',success:true},'*');
+setTimeout(()=>window.close(),1500);
+</script></body></html>`);
+  } catch (err: any) {
+    console.error('[claude-oauth] Unexpected error:', err);
+    res.status(500).send(oauthErrorPage('An unexpected error occurred. Please try again.'));
+  }
+}
+
+function oauthErrorPage(message: string): string {
+  return `<!DOCTYPE html>
+<html><head><title>Claude Code - Error</title>
+<style>body{background:#1a1a18;color:#e0e0d8;font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}
+.box{text-align:center;max-width:400px;}.icon{font-size:48px;margin-bottom:16px;}p{opacity:0.6;font-size:14px;line-height:1.5;}
+button{margin-top:16px;padding:8px 24px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:#e0e0d8;cursor:pointer;font-size:14px;}
+button:hover{background:rgba(255,255,255,0.1);}</style></head>
+<body><div class="box"><div class="icon">&#9888;</div><h2>Connection Failed</h2><p>${message.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
+<button onclick="window.opener?.postMessage({type:'claude-code-auth',success:false},'*');window.close();">Close</button></div></body></html>`;
+}
 
 export default router;

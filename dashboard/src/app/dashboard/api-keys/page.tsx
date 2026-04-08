@@ -47,6 +47,7 @@ export default function ApiKeysPage() {
   const [ccLoading, setCcLoading] = useState(false);
   const [ccShowInput, setCcShowInput] = useState(false);
   const [ccToken, setCcToken] = useState('');
+  const [ccError, setCcError] = useState<string | null>(null);
 
   const loadStatus = async () => {
     try {
@@ -61,6 +62,24 @@ export default function ApiKeysPage() {
       const res = await api.get<{ installed: boolean; authenticated: boolean; version: string | null }>('/settings/claude-code/status');
       setCcStatus(res);
     } catch { setCcStatus({ installed: false, authenticated: false, version: null }); }
+  };
+
+  const handleCcOAuth = async () => {
+    setCcLoading(true);
+    setCcError(null);
+    try {
+      const res = await api.get<{ authUrl: string }>('/settings/claude-code/start-oauth');
+      if (res.authUrl) {
+        // Open popup for Claude OAuth
+        const w = 600, h = 700;
+        const left = window.screenX + (window.outerWidth - w) / 2;
+        const top = window.screenY + (window.outerHeight - h) / 2;
+        window.open(res.authUrl, 'claude-oauth', `width=${w},height=${h},left=${left},top=${top}`);
+      }
+    } catch (err: any) {
+      setCcError(err.message || 'Failed to start OAuth');
+    }
+    setCcLoading(false);
   };
 
   const handleCcConnect = async () => {
@@ -81,6 +100,26 @@ export default function ApiKeysPage() {
     }
     setCcLoading(false);
   };
+
+  // Listen for OAuth popup completion
+  useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      if (event.data?.type === 'claude-code-auth') {
+        if (event.data.success) {
+          setCcShowInput(false);
+          setCcToken('');
+          setCcError(null);
+          loadCcStatus();
+          loadStatus();
+        } else {
+          setCcError('OAuth connection failed. Try using a setup token instead.');
+          setCcShowInput(true);
+        }
+      }
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, []);
 
   const handleCcDisconnect = async () => {
     setCcLoading(true);
@@ -226,30 +265,52 @@ export default function ApiKeysPage() {
                 {ccLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Disconnect'}
               </Button>
             ) : (
-              <Button size="sm" onClick={handleCcConnect} disabled={ccLoading || (ccShowInput && !ccToken.trim())}>
-                {ccLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : null}
+              <Button size="sm" onClick={handleCcOAuth} disabled={ccLoading}>
+                {ccLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <LogIn className="h-3.5 w-3.5 mr-1.5" />}
                 Connect
               </Button>
             )}
           </div>
         </div>
-        {ccShowInput && !ccStatus?.authenticated && (
+        {!ccStatus?.authenticated && (
           <div className="mt-3 space-y-3">
-            <div className="rounded-lg bg-white/[0.03] border border-white/[0.06] px-4 py-3">
-              <p className="text-[13px] text-white/60">Run this in your terminal to get a setup token:</p>
-              <code className="block mt-2 bg-white/[0.04] rounded-lg px-3 py-2 text-[13px] text-white/70 font-mono select-all">claude setup-token</code>
-              <p className="text-[11px] text-white/30 mt-2">Signs in via browser and gives you a token (sk-ant-oat01-...). Token lasts 1 year.</p>
-            </div>
-            <input
-              type="password"
-              value={ccToken}
-              onChange={e => setCcToken(e.target.value)}
-              placeholder="sk-ant-oat01-..."
-              autoComplete="off"
-              autoFocus
-              onKeyDown={e => e.key === 'Enter' && ccToken.trim() && handleCcConnect()}
-              className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 text-[14px] text-white/80 placeholder:text-white/20 focus:border-white/[0.15] focus:outline-none transition-colors font-mono"
-            />
+            {ccShowInput ? (
+              <>
+                <div className="rounded-lg bg-white/[0.03] border border-white/[0.06] px-4 py-3">
+                  <p className="text-[13px] text-white/60">Run this in your terminal to get a setup token:</p>
+                  <code className="block mt-2 bg-white/[0.04] rounded-lg px-3 py-2 text-[13px] text-white/70 font-mono select-all">claude setup-token</code>
+                  <p className="text-[11px] text-white/30 mt-2">Signs in via browser and gives you a token (sk-ant-oat01-...). Token lasts 1 year.</p>
+                </div>
+                <input
+                  type="password"
+                  value={ccToken}
+                  onChange={e => setCcToken(e.target.value)}
+                  placeholder="sk-ant-oat01-..."
+                  autoComplete="off"
+                  autoFocus
+                  onKeyDown={e => e.key === 'Enter' && ccToken.trim() && handleCcConnect()}
+                  className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 text-[14px] text-white/80 placeholder:text-white/20 focus:border-white/[0.15] focus:outline-none transition-colors font-mono"
+                />
+                <div className="flex justify-end">
+                  <Button size="sm" onClick={handleCcConnect} disabled={ccLoading || !ccToken.trim()}>
+                    {ccLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : null}
+                    Save Token
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <button
+                onClick={() => setCcShowInput(true)}
+                className="text-[12px] text-white/30 hover:text-white/50 transition-colors"
+              >
+                Or paste a setup token manually...
+              </button>
+            )}
+            {ccError && (
+              <div className="rounded-lg bg-red-500/10 px-3 py-2 text-[13px] text-red-400/80">
+                {ccError}
+              </div>
+            )}
           </div>
         )}
       </div>
