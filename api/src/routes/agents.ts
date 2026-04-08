@@ -27,6 +27,8 @@ import {
 import { sshExec } from '../services/ssh';
 import { encrypt, decrypt } from '../lib/encryption';
 import { injectApiKeys } from '../services/apiKeys';
+import catalogData from '../data/agent-catalog.json';
+import fullCatalogData from '../data/agent-store-full.json';
 
 const router = Router();
 router.use(authenticate);
@@ -475,6 +477,175 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
         sharedRam: true,
       },
       plan,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── GET /agents/marketplace ─── Return the agent catalog for the store ───
+
+router.get('/marketplace', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    res.json({ agents: catalogData });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── POST /agents/install-from-marketplace ─── Install an agent from the catalog ───
+
+router.post('/install-from-marketplace', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const user = await db.getOne<User>('SELECT * FROM users WHERE id = $1', [req.userId]);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const plan = user.plan || 'starter';
+    const maxAgents = MAX_AGENTS[plan] || 1;
+
+    const existingCount = await db.getOne<{ count: string }>(
+      'SELECT COUNT(*) as count FROM agents WHERE user_id = $1',
+      [req.userId]
+    );
+
+    const count = parseInt(existingCount?.count || '0');
+    if (count >= maxAgents) {
+      return res.status(403).json({
+        error: `Your ${plan} plan allows up to ${maxAgents} agent${maxAgents > 1 ? 's' : ''}. Upgrade to add more.`,
+      });
+    }
+
+    const { agentId: catalogAgentId } = req.body;
+    if (!catalogAgentId) {
+      return res.status(400).json({ error: 'agentId is required' });
+    }
+
+    // Find the agent in the full catalog (has soul + heartbeat)
+    const catalogEntry = (fullCatalogData as any[]).find((a: any) => a.id === catalogAgentId);
+    if (!catalogEntry) {
+      return res.status(404).json({ error: 'Agent not found in marketplace catalog' });
+    }
+
+    // Check if user already installed this catalog agent
+    const existing = await db.getOne<Agent>(
+      `SELECT * FROM agents WHERE user_id = $1 AND openclaw_agent_id = $2`,
+      [req.userId, catalogAgentId]
+    );
+    if (existing) {
+      return res.status(409).json({ error: `${catalogEntry.name} is already installed` });
+    }
+
+    let container;
+    try {
+      container = await getUserContainer(req.userId!);
+    } catch {
+      return res.status(409).json({
+        error: 'Your primary agent must be set up first. Go to the chat page to provision it.',
+      });
+    }
+
+    const agentId = uuid();
+    const openclawId = catalogAgentId; // use the catalog id directly as the openclaw id
+
+    // Write DB record
+    await db.query(
+      `INSERT INTO agents (id, user_id, name, purpose, instructions, status, ram_mb, is_primary, openclaw_agent_id)
+       VALUES ($1, $2, $3, $4, $5, 'active', 0, false, $6)`,
+      [agentId, req.userId, catalogEntry.name, catalogEntry.role, catalogEntry.description, openclawId]
+    );
+
+    // Create workspace + write SOUL.md from catalog (not user-provided)
+    validateUserId(req.userId!);
+    validatePathSegment(openclawId);
+
+    const config = await readContainerConfig(container.serverIp, req.userId!);
+    if (!config.agents) config.agents = {};
+    if (!Array.isArray(config.agents.list)) config.agents.list = [];
+
+    const agentEntry: Record<string, any> = {
+      id: openclawId,
+      workspace: `~/.openclaw/workspace-${openclawId}`,
+      agentDir: `~/.openclaw/agents/${openclawId}/agent`,
+      identity: { name: catalogEntry.name, emoji: catalogEntry.icon },
+    };
+
+    const existingIdx = config.agents.list.findIndex((a: any) => a.id === openclawId);
+    if (existingIdx >= 0) {
+      config.agents.list[existingIdx] = { ...config.agents.list[existingIdx], ...agentEntry };
+    } else {
+      config.agents.list.push(agentEntry);
+    }
+
+    // Ensure 'main' stays first
+    const mainIdx = config.agents.list.findIndex((a: any) => a.id === 'main');
+    if (mainIdx > 0) {
+      const main = config.agents.list.splice(mainIdx, 1)[0];
+      main.default = true;
+      config.agents.list.unshift(main);
+    } else if (mainIdx === 0) {
+      config.agents.list[0].default = true;
+    }
+
+    // Register cron jobs if the catalog entry has them
+    if (catalogEntry.cron && Array.isArray(catalogEntry.cron)) {
+      if (!config.cron) config.cron = {};
+      if (!config.cron.jobs) config.cron.jobs = [];
+
+      for (const job of catalogEntry.cron) {
+        const cronEntry = {
+          name: `${openclawId}--${job.name}`,
+          schedule: job.schedule,
+          agentId: openclawId,
+          task: job.description || job.name,
+        };
+        // Avoid duplicates
+        const existingJobIdx = config.cron.jobs.findIndex(
+          (j: any) => j.name === cronEntry.name
+        );
+        if (existingJobIdx >= 0) {
+          config.cron.jobs[existingJobIdx] = cronEntry;
+        } else {
+          config.cron.jobs.push(cronEntry);
+        }
+      }
+    }
+
+    await writeContainerConfig(container.serverIp, req.userId!, config);
+
+    // Create directories and write SOUL.md + HEARTBEAT.md via SSH
+    const wsDir = `${INSTANCE_DIR}/${req.userId}/workspace-${openclawId}`;
+    const agentDir = `${INSTANCE_DIR}/${req.userId}/agents/${openclawId}/agent`;
+
+    const soulContent = catalogEntry.soul || buildSoulContent({
+      name: catalogEntry.name,
+      purpose: catalogEntry.role,
+      instructions: catalogEntry.description,
+    });
+    const soulB64 = Buffer.from(soulContent).toString('base64');
+
+    const sshCmds = [
+      `mkdir -p ${wsDir}`,
+      `mkdir -p ${agentDir}`,
+      `echo '${soulB64}' | base64 -d > ${wsDir}/SOUL.md`,
+    ];
+
+    if (catalogEntry.heartbeat) {
+      const heartbeatB64 = Buffer.from(catalogEntry.heartbeat).toString('base64');
+      sshCmds.push(`echo '${heartbeatB64}' | base64 -d > ${wsDir}/HEARTBEAT.md`);
+    }
+
+    await sshExec(container.serverIp, sshCmds.join(' && '));
+
+    // Full config sync: API keys, model routing, gateway config
+    await injectApiKeys(container.serverIp, req.userId!, container.containerName, plan as any);
+    await restartContainerHelper(container.serverIp, container.containerName, 15000);
+    await reapplyGatewayConfig(container.serverIp, req.userId!, container.containerName);
+
+    const agent = await db.getOne<Agent>('SELECT * FROM agents WHERE id = $1 AND user_id = $2', [agentId, req.userId]);
+
+    res.json({
+      agent: { ...agent, openclawAgentId: openclawId },
+      message: `${catalogEntry.name} installed into your OpenClaw container.`,
     });
   } catch (err) {
     next(err);

@@ -1,0 +1,1684 @@
+[
+  {
+    "id": "social-media",
+    "name": "Social Media Manager",
+    "category": "marketing",
+    "icon": "📱",
+    "role": "Manages social media presence across platforms",
+    "description": "Runs your entire social media operation on autopilot. Drafts platform-native posts for X, LinkedIn, and Instagram every morning, schedules them at peak-engagement windows, monitors mentions and replie",
+    "salary": "$3,500/mo equivalent",
+    "skills": [
+      "self-improving",
+      "elite-longterm-memory",
+      "daily-report-writer",
+      "inter-agent-communication",
+      "session-logs",
+      "model-usage",
+      "capability-evolver",
+      "social-media-scheduler",
+      "web-pilot",
+      "x-research",
+      "google-search",
+      "exa-web-search-free",
+      "summarize-pro",
+      "notion-skill",
+      "slack-personal",
+      "agent-browser-clawdbot",
+      "brainz-calendar",
+      "canvas",
+      "deep-research-pro",
+      "x-api"
+    ],
+    "cron": [
+      {
+        "name": "morning-content-draft",
+        "schedule": "0 7 * * 1-5"
+      },
+      {
+        "name": "midday-engagement-sweep",
+        "schedule": "0 12 * * 1-5"
+      },
+      {
+        "name": "afternoon-trend-scout",
+        "schedule": "0 15 * * 1-5"
+      },
+      {
+        "name": "evening-performance-snapshot",
+        "schedule": "0 19 * * 1-5"
+      },
+      {
+        "name": "weekly-analytics-report",
+        "schedule": "0 9 * * 1"
+      },
+      {
+        "name": "content-calendar-planning",
+        "schedule": "0 10 * * 0"
+      },
+      {
+        "name": "monthly-strategy-review",
+        "schedule": "0 10 1 * *"
+      }
+    ],
+    "requiredKeys": [
+      "X_API_KEY (for auto-posting — browser relay works without it)"
+    ],
+    "hasSoul": true,
+    "hasHeartbeat": true
+  },
+  {
+    "id": "email-sequence",
+    "name": "Email Sequence Designer",
+    "category": "marketing",
+    "icon": "✉️",
+    "role": "Writes and sends personalized email sequences to prospects",
+    "description": "Designs and manages high-converting email sequences from scratch. Writes welcome series, nurture campaigns, cart abandonment flows, and re-engagement sequences. Handles A/B subject line testing, send-",
+    "salary": "$3,000/mo equivalent",
+    "skills": [
+      "self-improving",
+      "elite-longterm-memory",
+      "daily-report-writer",
+      "inter-agent-communication",
+      "session-logs",
+      "model-usage",
+      "capability-evolver",
+      "porteden-email",
+      "deep-research-pro",
+      "web-pilot",
+      "google-search",
+      "summarize-pro",
+      "notion-skill",
+      "slack-personal",
+      "brainz-calendar",
+      "canvas",
+      "himalaya",
+      "resend-email-sender"
+    ],
+    "cron": [
+      {
+        "name": "morning-campaign-check",
+        "schedule": "0 7 * * 1-5"
+      },
+      {
+        "name": "sequence-writing-block",
+        "schedule": "0 10 * * 1-5"
+      },
+      {
+        "name": "ab-test-analysis",
+        "schedule": "0 14 * * 1-5"
+      },
+      {
+        "name": "evening-send-prep",
+        "schedule": "0 17 * * 1-5"
+      },
+      {
+        "name": "weekly-funnel-report",
+        "schedule": "0 9 * * 1"
+      },
+      {
+        "name": "list-hygiene-audit",
+        "schedule": "0 11 * * 3"
+      },
+      {
+        "name": "monthly-strategy-review",
+        "schedule": "0 10 1 * *"
+      }
+    ],
+    "requiredKeys": [
+      "PE_API_KEY or RESEND_API_KEY (for sending — browser relay works without it)"
+    ],
+    "hasSoul": true,
+    "hasHeartbeat": true
+  },
+  {
+    "id": "linkedin-content",
+    "name": "LinkedIn Content Creator",
+    "category": "marketing",
+    "icon": "💼",
+    "role": "Creates LinkedIn content and grows professional presence",
+    "description": "Your dedicated LinkedIn ghostwriter and growth strategist. Crafts daily posts tailored to the LinkedIn algorithm — story-driven, insight-rich content that builds authority and drives engagement. Manag",
+    "salary": "$3,200/mo equivalent",
+    "skills": [
+      "self-improving",
+      "elite-longterm-memory",
+      "daily-report-writer",
+      "inter-agent-communication",
+      "session-logs",
+      "model-usage",
+      "capability-evolver",
+      "social-media-scheduler",
+      "web-pilot",
+      "x-research",
+      "google-search",
+      "exa-web-search-free",
+      "summarize-pro",
+      "deep-research-pro",
+      "notion-skill",
+      "slack-personal",
+      "canvas",
+      "agent-browser-clawdbot",
+      "brainz-calendar"
+    ],
+    "cron": [
+      {
+        "name": "morning-post-draft",
+        "schedule": "0 7 * * 1-5"
+      },
+      {
+        "name": "engagement-window",
+        "schedule": "0 10 * * 1-5"
+      },
+      {
+        "name": "afternoon-metrics",
+        "schedule": "0 15 * * 1-5"
+      },
+      {
+        "name": "evening-research",
+        "schedule": "0 19 * * 1-5"
+      },
+      {
+        "name": "weekly-analytics",
+        "schedule": "0 9 * * 1"
+      },
+      {
+        "name": "content-strategy-session",
+        "schedule": "0 10 * * 0"
+      },
+      {
+        "name": "monthly-audience-analysis",
+        "schedule": "0 10 1 * *"
+      }
+    ],
+    "requiredKeys": [],
+    "hasSoul": true,
+    "hasHeartbeat": true
+  },
+  {
+    "id": "sales-assistant",
+    "name": "Sales Assistant",
+    "category": "business",
+    "icon": "💰",
+    "role": "Handles sales outreach, follow-ups, and deal closing",
+    "description": "A full-cycle sales assistant that handles everything from prospecting to close. Researches leads using live web data, writes personalized outreach emails, manages your pipeline in Notion, books discov",
+    "salary": "$4,500/mo equivalent",
+    "skills": [
+      "self-improving",
+      "elite-longterm-memory",
+      "daily-report-writer",
+      "inter-agent-communication",
+      "session-logs",
+      "model-usage",
+      "capability-evolver",
+      "porteden-email",
+      "deep-research-pro",
+      "web-pilot",
+      "google-search",
+      "exa-web-search-free",
+      "summarize-pro",
+      "notion-skill",
+      "slack-personal",
+      "brainz-calendar",
+      "agent-browser-clawdbot",
+      "mh-wacli",
+      "voice-call",
+      "resend-email-sender",
+      "calendly-api",
+      "stripe-api",
+      "bland",
+      "whatsapp-business",
+      "imsg"
+    ],
+    "cron": [
+      {
+        "name": "morning-pipeline-review",
+        "schedule": "0 7 * * 1-5"
+      },
+      {
+        "name": "lead-research-block",
+        "schedule": "0 9 * * 1-5"
+      },
+      {
+        "name": "outreach-sends",
+        "schedule": "0 11 * * 1-5"
+      },
+      {
+        "name": "afternoon-followup",
+        "schedule": "0 15 * * 1-5"
+      },
+      {
+        "name": "daily-pipeline-update",
+        "schedule": "0 18 * * 1-5"
+      },
+      {
+        "name": "weekly-forecast",
+        "schedule": "0 9 * * 1"
+      },
+      {
+        "name": "monthly-win-loss-analysis",
+        "schedule": "0 10 1 * *"
+      }
+    ],
+    "requiredKeys": [
+      "PE_API_KEY (for email — browser relay works without it)"
+    ],
+    "hasSoul": true,
+    "hasHeartbeat": true
+  },
+  {
+    "id": "customer-support",
+    "name": "Customer Support Agent",
+    "category": "business",
+    "icon": "🎯",
+    "role": "Handles customer tickets with empathy and speed",
+    "description": "Handles Tier-1 and Tier-2 customer support across email, Slack, and Discord. Auto-resolves common questions using your knowledge base, escalates complex issues with full context, tracks ticket pattern",
+    "salary": "$3,000/mo equivalent",
+    "skills": [
+      "self-improving",
+      "elite-longterm-memory",
+      "daily-report-writer",
+      "inter-agent-communication",
+      "session-logs",
+      "model-usage",
+      "capability-evolver",
+      "porteden-email",
+      "deep-research-pro",
+      "web-pilot",
+      "google-search",
+      "summarize-pro",
+      "notion-skill",
+      "slack-personal",
+      "file-manager-secure",
+      "mh-wacli",
+      "voice-call"
+    ],
+    "cron": [
+      {
+        "name": "morning-ticket-triage",
+        "schedule": "0 7 * * 1-5"
+      },
+      {
+        "name": "midday-queue-check",
+        "schedule": "0 12 * * 1-5"
+      },
+      {
+        "name": "afternoon-escalation-review",
+        "schedule": "0 16 * * 1-5"
+      },
+      {
+        "name": "evening-knowledge-update",
+        "schedule": "0 19 * * 1-5"
+      },
+      {
+        "name": "weekly-support-report",
+        "schedule": "0 9 * * 1"
+      },
+      {
+        "name": "bug-pattern-analysis",
+        "schedule": "0 14 * * 4"
+      },
+      {
+        "name": "monthly-quality-audit",
+        "schedule": "0 10 1 * *"
+      }
+    ],
+    "requiredKeys": [
+      "PE_API_KEY (for email — browser relay works without it)"
+    ],
+    "hasSoul": true,
+    "hasHeartbeat": true
+  },
+  {
+    "id": "lead-gen",
+    "name": "Lead Generation Specialist",
+    "category": "business",
+    "icon": "🎯",
+    "role": "Finds and qualifies leads from web sources for any business",
+    "description": "Finds and qualifies leads around the clock. Scrapes the web for companies matching your ideal customer profile, enriches them with contact details and tech stack data, scores them by fit, and delivers",
+    "salary": "$4,000/mo equivalent",
+    "skills": [
+      "self-improving",
+      "elite-longterm-memory",
+      "daily-report-writer",
+      "inter-agent-communication",
+      "session-logs",
+      "model-usage",
+      "capability-evolver",
+      "deep-research-pro",
+      "web-pilot",
+      "google-search",
+      "exa-web-search-free",
+      "summarize-pro",
+      "notion-skill",
+      "porteden-email",
+      "slack-personal",
+      "agent-browser-clawdbot",
+      "x-research",
+      "brainz-calendar",
+      "coding-agent",
+      "whatsapp-business",
+      "imsg",
+      "bland"
+    ],
+    "cron": [
+      {
+        "name": "morning-prospecting",
+        "schedule": "0 7 * * 1-5"
+      },
+      {
+        "name": "lead-enrichment",
+        "schedule": "0 10 * * 1-5"
+      },
+      {
+        "name": "intent-signal-scan",
+        "schedule": "0 13 * * 1-5"
+      },
+      {
+        "name": "lead-scoring-update",
+        "schedule": "0 16 * * 1-5"
+      },
+      {
+        "name": "daily-lead-digest",
+        "schedule": "0 18 * * 1-5"
+      },
+      {
+        "name": "weekly-icp-refinement",
+        "schedule": "0 9 * * 1"
+      },
+      {
+        "name": "monthly-pipeline-report",
+        "schedule": "0 10 1 * *"
+      }
+    ],
+    "requiredKeys": [],
+    "hasSoul": true,
+    "hasHeartbeat": true
+  },
+  {
+    "id": "personal-crm",
+    "name": "Personal CRM Manager",
+    "category": "business",
+    "icon": "🤝",
+    "role": "Tracks professional relationships and follow-ups",
+    "description": "Manages your professional relationships like a personal chief of staff. Tracks every contact, logs interactions, sets follow-up reminders, and surfaces people you're losing touch with. Integrates with",
+    "salary": "$2,500/mo equivalent",
+    "skills": [
+      "self-improving",
+      "elite-longterm-memory",
+      "daily-report-writer",
+      "inter-agent-communication",
+      "session-logs",
+      "model-usage",
+      "capability-evolver",
+      "notion-skill",
+      "porteden-email",
+      "brainz-calendar",
+      "slack-personal",
+      "deep-research-pro",
+      "web-pilot",
+      "google-search",
+      "summarize-pro",
+      "file-manager-secure",
+      "voice-call"
+    ],
+    "cron": [
+      {
+        "name": "morning-relationship-check",
+        "schedule": "0 7 * * 1-5"
+      },
+      {
+        "name": "email-interaction-capture",
+        "schedule": "0 11 * * 1-5"
+      },
+      {
+        "name": "meeting-prep-briefs",
+        "schedule": "0 14 * * 1-5"
+      },
+      {
+        "name": "relationship-health-update",
+        "schedule": "0 17 * * 1-5"
+      },
+      {
+        "name": "weekly-network-report",
+        "schedule": "0 9 * * 1"
+      },
+      {
+        "name": "reconnection-suggestions",
+        "schedule": "0 10 * * 3"
+      },
+      {
+        "name": "monthly-network-audit",
+        "schedule": "0 10 1 * *"
+      }
+    ],
+    "requiredKeys": [],
+    "hasSoul": true,
+    "hasHeartbeat": true
+  },
+  {
+    "id": "expense-tracker",
+    "name": "Expense Tracker",
+    "category": "finance",
+    "icon": "💸",
+    "role": "Categorizes expenses and tracks budgets",
+    "description": "Your always-on financial assistant that tracks every expense, categorizes spending automatically, monitors budget limits, and produces detailed financial reports. Logs expenses from receipts and email",
+    "salary": "$2,000/mo equivalent",
+    "skills": [
+      "self-improving",
+      "elite-longterm-memory",
+      "daily-report-writer",
+      "inter-agent-communication",
+      "session-logs",
+      "model-usage",
+      "capability-evolver",
+      "notion-skill",
+      "file-manager-secure",
+      "slack-personal",
+      "coding-agent",
+      "summarize-pro",
+      "porteden-email",
+      "brainz-calendar",
+      "nano-pdf",
+      "canvas"
+    ],
+    "cron": [
+      {
+        "name": "morning-expense-scan",
+        "schedule": "0 7 * * 1-5"
+      },
+      {
+        "name": "midday-budget-check",
+        "schedule": "0 12 * * 1-5"
+      },
+      {
+        "name": "daily-expense-summary",
+        "schedule": "0 19 * * 1-5"
+      },
+      {
+        "name": "weekly-spending-report",
+        "schedule": "0 9 * * 1"
+      },
+      {
+        "name": "subscription-audit",
+        "schedule": "0 10 * * 3"
+      },
+      {
+        "name": "monthly-financial-report",
+        "schedule": "0 9 1 * *"
+      },
+      {
+        "name": "quarterly-tax-prep",
+        "schedule": "0 10 1 1,4,7,10 *"
+      }
+    ],
+    "requiredKeys": [],
+    "hasSoul": true,
+    "hasHeartbeat": true
+  },
+  {
+    "id": "invoice-manager",
+    "name": "Invoice Manager",
+    "category": "finance",
+    "icon": "📄",
+    "role": "Creates invoices and manages accounts receivable",
+    "description": "Handles your entire invoicing workflow. Creates professional invoices from project details, sends them via email, tracks payment status, sends automatic reminders for overdue invoices, and maintains a",
+    "salary": "$2,500/mo equivalent",
+    "skills": [
+      "self-improving",
+      "elite-longterm-memory",
+      "daily-report-writer",
+      "inter-agent-communication",
+      "session-logs",
+      "model-usage",
+      "capability-evolver",
+      "notion-skill",
+      "porteden-email",
+      "file-manager-secure",
+      "coding-agent",
+      "slack-personal",
+      "nano-pdf",
+      "summarize-pro",
+      "brainz-calendar",
+      "canvas"
+    ],
+    "cron": [
+      {
+        "name": "morning-ar-review",
+        "schedule": "0 7 * * 1-5"
+      },
+      {
+        "name": "invoice-creation-queue",
+        "schedule": "0 10 * * 1-5"
+      },
+      {
+        "name": "payment-reconciliation",
+        "schedule": "0 14 * * 1-5"
+      },
+      {
+        "name": "overdue-reminders",
+        "schedule": "0 9 * * 2,5"
+      },
+      {
+        "name": "weekly-revenue-report",
+        "schedule": "0 9 * * 1"
+      },
+      {
+        "name": "aging-report",
+        "schedule": "0 10 * * 4"
+      },
+      {
+        "name": "monthly-financial-summary",
+        "schedule": "0 9 1 * *"
+      }
+    ],
+    "requiredKeys": [],
+    "hasSoul": true,
+    "hasHeartbeat": true
+  },
+  {
+    "id": "github-pr-reviewer",
+    "name": "GitHub PR Reviewer",
+    "category": "development",
+    "icon": "🔏",
+    "role": "Reviews pull requests for quality, security, and performance",
+    "description": "Reviews every pull request on your GitHub repos with the thoroughness of a senior engineer. Analyzes code quality, security vulnerabilities, performance implications, and test coverage. Posts detailed",
+    "salary": "$5,000/mo equivalent",
+    "skills": [
+      "self-improving",
+      "elite-longterm-memory",
+      "daily-report-writer",
+      "inter-agent-communication",
+      "session-logs",
+      "model-usage",
+      "capability-evolver",
+      "github",
+      "gh-issues",
+      "coding-agent",
+      "deep-research-pro",
+      "summarize-pro",
+      "slack-personal",
+      "notion-skill",
+      "file-manager-secure",
+      "byterover",
+      "healthcheck",
+      "discord"
+    ],
+    "cron": [
+      {
+        "name": "morning-pr-sweep",
+        "schedule": "0 7 * * 1-5"
+      },
+      {
+        "name": "midday-review-check",
+        "schedule": "0 12 * * 1-5"
+      },
+      {
+        "name": "stale-pr-cleanup",
+        "schedule": "0 16 * * 1-5"
+      },
+      {
+        "name": "security-scan",
+        "schedule": "0 10 * * 1-5"
+      },
+      {
+        "name": "weekly-code-quality-report",
+        "schedule": "0 9 * * 1"
+      },
+      {
+        "name": "dependency-audit",
+        "schedule": "0 11 * * 3"
+      },
+      {
+        "name": "monthly-codebase-health",
+        "schedule": "0 10 1 * *"
+      }
+    ],
+    "requiredKeys": [
+      "gh CLI authenticated (run: gh auth login)"
+    ],
+    "hasSoul": true,
+    "hasHeartbeat": true
+  },
+  {
+    "id": "docs-writer",
+    "name": "Documentation Writer",
+    "category": "development",
+    "icon": "📝",
+    "role": "Writes and maintains technical documentation",
+    "description": "Keeps your documentation perfectly in sync with your codebase. Reads source code to generate API references, writes tutorials and guides, maintains a Notion-based docs site, and auto-detects when code",
+    "salary": "$3,500/mo equivalent",
+    "skills": [
+      "self-improving",
+      "elite-longterm-memory",
+      "daily-report-writer",
+      "inter-agent-communication",
+      "session-logs",
+      "model-usage",
+      "capability-evolver",
+      "notion-skill",
+      "github",
+      "gh-issues",
+      "coding-agent",
+      "deep-research-pro",
+      "web-pilot",
+      "google-search",
+      "summarize-pro",
+      "file-manager-secure",
+      "slack-personal",
+      "byterover",
+      "obsidian"
+    ],
+    "cron": [
+      {
+        "name": "morning-docs-sync",
+        "schedule": "0 8 * * 1-5"
+      },
+      {
+        "name": "doc-writing-session",
+        "schedule": "0 10 * * 1-5"
+      },
+      {
+        "name": "pr-docs-review",
+        "schedule": "0 14 * * 1-5"
+      },
+      {
+        "name": "link-checker",
+        "schedule": "0 16 * * 2,5"
+      },
+      {
+        "name": "weekly-docs-report",
+        "schedule": "0 9 * * 1"
+      },
+      {
+        "name": "api-reference-refresh",
+        "schedule": "0 11 * * 3"
+      },
+      {
+        "name": "monthly-docs-audit",
+        "schedule": "0 10 1 * *"
+      }
+    ],
+    "requiredKeys": [
+      "gh CLI authenticated (run: gh auth login)"
+    ],
+    "hasSoul": true,
+    "hasHeartbeat": true
+  },
+  {
+    "id": "infra-monitor",
+    "name": "Infrastructure Monitor",
+    "category": "devops",
+    "icon": "🛡️",
+    "role": "Monitors servers, containers, and cloud resources",
+    "description": "Monitors your infrastructure 24/7 with checks every 5 minutes. Tests endpoint health, tracks response times, monitors disk/CPU/memory usage, and auto-restarts crashed services. Files GitHub issues for",
+    "salary": "$5,500/mo equivalent",
+    "skills": [
+      "self-improving",
+      "elite-longterm-memory",
+      "daily-report-writer",
+      "inter-agent-communication",
+      "session-logs",
+      "model-usage",
+      "capability-evolver",
+      "healthcheck",
+      "coding-agent",
+      "github",
+      "gh-issues",
+      "slack-personal",
+      "slack",
+      "deep-research-pro",
+      "file-manager-secure",
+      "byterover",
+      "atxp-cli",
+      "summarize-pro"
+    ],
+    "cron": [
+      {
+        "name": "health-check",
+        "schedule": "*/5 * * * *"
+      },
+      {
+        "name": "response-time-analysis",
+        "schedule": "*/15 * * * *"
+      },
+      {
+        "name": "morning-infra-brief",
+        "schedule": "0 7 * * *"
+      },
+      {
+        "name": "disk-and-resource-check",
+        "schedule": "0 3 * * *"
+      },
+      {
+        "name": "weekly-uptime-report",
+        "schedule": "0 9 * * 1"
+      },
+      {
+        "name": "ssl-cert-check",
+        "schedule": "0 10 * * 3"
+      },
+      {
+        "name": "monthly-infrastructure-review",
+        "schedule": "0 10 1 * *"
+      }
+    ],
+    "requiredKeys": [],
+    "hasSoul": true,
+    "hasHeartbeat": true
+  },
+  {
+    "id": "recruiter",
+    "name": "Recruiting Assistant",
+    "category": "hr",
+    "icon": "👥",
+    "role": "Screens resumes and manages the hiring pipeline",
+    "description": "Your AI recruiting team member who sources candidates, screens resumes, manages the pipeline, and coordinates interviews. Searches the web and LinkedIn for qualified candidates matching your job requi",
+    "salary": "$4,000/mo equivalent",
+    "skills": [
+      "self-improving",
+      "elite-longterm-memory",
+      "daily-report-writer",
+      "inter-agent-communication",
+      "session-logs",
+      "model-usage",
+      "capability-evolver",
+      "deep-research-pro",
+      "web-pilot",
+      "google-search",
+      "exa-web-search-free",
+      "summarize-pro",
+      "notion-skill",
+      "porteden-email",
+      "slack-personal",
+      "brainz-calendar",
+      "file-manager-secure",
+      "agent-browser-clawdbot",
+      "voice-call"
+    ],
+    "cron": [
+      {
+        "name": "morning-pipeline-review",
+        "schedule": "0 7 * * 1-5"
+      },
+      {
+        "name": "candidate-sourcing",
+        "schedule": "0 9 * * 1-5"
+      },
+      {
+        "name": "resume-screening",
+        "schedule": "0 11 * * 1-5"
+      },
+      {
+        "name": "outreach-sends",
+        "schedule": "0 14 * * 1-5"
+      },
+      {
+        "name": "interview-coordination",
+        "schedule": "0 16 * * 1-5"
+      },
+      {
+        "name": "weekly-recruiting-report",
+        "schedule": "0 9 * * 1"
+      },
+      {
+        "name": "monthly-hiring-analysis",
+        "schedule": "0 10 1 * *"
+      }
+    ],
+    "requiredKeys": [],
+    "hasSoul": true,
+    "hasHeartbeat": true
+  },
+  {
+    "id": "copywriter",
+    "name": "Conversion Copywriter",
+    "category": "creative",
+    "icon": "✍️",
+    "role": "Writes high-converting landing pages, headlines, and CTAs",
+    "description": "A senior conversion copywriter who writes landing pages, sales pages, email sequences, and ad copy that actually convert. Researches your audience's pain points and desires, applies proven copywriting",
+    "salary": "$3,500/mo equivalent",
+    "skills": [
+      "self-improving",
+      "elite-longterm-memory",
+      "daily-report-writer",
+      "inter-agent-communication",
+      "session-logs",
+      "model-usage",
+      "capability-evolver",
+      "deep-research-pro",
+      "web-pilot",
+      "google-search",
+      "exa-web-search-free",
+      "summarize-pro",
+      "notion-skill",
+      "slack-personal",
+      "canvas",
+      "file-manager-secure",
+      "x-research",
+      "coding-agent",
+      "stripe-api"
+    ],
+    "cron": [
+      {
+        "name": "morning-copy-queue",
+        "schedule": "0 8 * * 1-5"
+      },
+      {
+        "name": "writing-block",
+        "schedule": "0 10 * * 1-5"
+      },
+      {
+        "name": "conversion-data-review",
+        "schedule": "0 14 * * 1-5"
+      },
+      {
+        "name": "competitor-copy-analysis",
+        "schedule": "0 16 * * 2"
+      },
+      {
+        "name": "weekly-copy-performance",
+        "schedule": "0 9 * * 1"
+      },
+      {
+        "name": "swipe-file-update",
+        "schedule": "0 11 * * 5"
+      },
+      {
+        "name": "monthly-copy-audit",
+        "schedule": "0 10 1 * *"
+      }
+    ],
+    "requiredKeys": [],
+    "hasSoul": true,
+    "hasHeartbeat": true
+  },
+  {
+    "id": "daily-standup",
+    "name": "Daily Standup Bot",
+    "category": "productivity",
+    "icon": "📋",
+    "role": "Collects team standups and tracks blockers",
+    "description": "Runs asynchronous daily standups across Slack and Discord. Collects updates from team members, compiles them into a structured summary, identifies blockers, tracks project velocity, and flags risks. I",
+    "salary": "$1,500/mo equivalent",
+    "skills": [
+      "self-improving",
+      "elite-longterm-memory",
+      "daily-report-writer",
+      "inter-agent-communication",
+      "session-logs",
+      "model-usage",
+      "capability-evolver",
+      "slack",
+      "slack-personal",
+      "discord",
+      "notion-skill",
+      "github",
+      "gh-issues",
+      "brainz-calendar",
+      "summarize-pro",
+      "trello"
+    ],
+    "cron": [
+      {
+        "name": "standup-collection",
+        "schedule": "0 8 * * 1-5"
+      },
+      {
+        "name": "standup-summary",
+        "schedule": "0 9 * * 1-5"
+      },
+      {
+        "name": "blocker-followup",
+        "schedule": "0 11 * * 1-5"
+      },
+      {
+        "name": "afternoon-progress-check",
+        "schedule": "0 15 * * 1-5"
+      },
+      {
+        "name": "eod-report",
+        "schedule": "0 18 * * 1-5"
+      },
+      {
+        "name": "weekly-velocity-report",
+        "schedule": "0 9 * * 1"
+      },
+      {
+        "name": "sprint-retrospective-prep",
+        "schedule": "0 16 * * 5"
+      }
+    ],
+    "requiredKeys": [
+      "Slack bot token or Discord bot token"
+    ],
+    "hasSoul": true,
+    "hasHeartbeat": true
+  },
+  {
+    "id": "client-manager",
+    "name": "Client Manager",
+    "category": "freelance",
+    "icon": "📅",
+    "role": "Manages freelance client relationships and project health",
+    "description": "Manages all client relationships, projects, and communications in one place. Tracks project milestones and deliverables, sends progress updates, manages feedback loops, and ensures no client communica",
+    "salary": "$2,500/mo equivalent",
+    "skills": [
+      "self-improving",
+      "elite-longterm-memory",
+      "daily-report-writer",
+      "inter-agent-communication",
+      "session-logs",
+      "model-usage",
+      "capability-evolver",
+      "notion-skill",
+      "porteden-email",
+      "slack-personal",
+      "brainz-calendar",
+      "deep-research-pro",
+      "web-pilot",
+      "summarize-pro",
+      "file-manager-secure",
+      "mh-wacli",
+      "voice-call"
+    ],
+    "cron": [
+      {
+        "name": "morning-client-check",
+        "schedule": "0 7 * * 1-5"
+      },
+      {
+        "name": "project-status-update",
+        "schedule": "0 11 * * 1-5"
+      },
+      {
+        "name": "client-followup",
+        "schedule": "0 14 * * 1-5"
+      },
+      {
+        "name": "meeting-prep",
+        "schedule": "0 16 * * 1-5"
+      },
+      {
+        "name": "weekly-client-report",
+        "schedule": "0 9 * * 1"
+      },
+      {
+        "name": "satisfaction-check",
+        "schedule": "0 10 * * 4"
+      },
+      {
+        "name": "monthly-account-review",
+        "schedule": "0 10 1 * *"
+      }
+    ],
+    "requiredKeys": [],
+    "hasSoul": true,
+    "hasHeartbeat": true
+  },
+  {
+    "id": "inventory-tracker",
+    "name": "Inventory Tracker",
+    "category": "ecommerce",
+    "icon": "📦",
+    "role": "Monitors stock levels and predicts reorder points",
+    "description": "Manages your inventory with real-time stock tracking, automated reorder alerts, and demand forecasting. Monitors stock levels across locations, triggers purchase orders when items hit reorder points, ",
+    "salary": "$2,500/mo equivalent",
+    "skills": [
+      "self-improving",
+      "elite-longterm-memory",
+      "daily-report-writer",
+      "inter-agent-communication",
+      "session-logs",
+      "model-usage",
+      "capability-evolver",
+      "notion-skill",
+      "file-manager-secure",
+      "slack-personal",
+      "coding-agent",
+      "summarize-pro",
+      "porteden-email",
+      "deep-research-pro",
+      "brainz-calendar",
+      "nano-pdf",
+      "canvas"
+    ],
+    "cron": [
+      {
+        "name": "morning-stock-check",
+        "schedule": "0 7 * * 1-5"
+      },
+      {
+        "name": "order-processing",
+        "schedule": "0 10 * * 1-5"
+      },
+      {
+        "name": "stock-movement-log",
+        "schedule": "0 14 * * 1-5"
+      },
+      {
+        "name": "reorder-check",
+        "schedule": "0 16 * * 1-5"
+      },
+      {
+        "name": "weekly-inventory-report",
+        "schedule": "0 9 * * 1"
+      },
+      {
+        "name": "demand-forecast",
+        "schedule": "0 10 * * 3"
+      },
+      {
+        "name": "monthly-inventory-audit",
+        "schedule": "0 9 1 * *"
+      }
+    ],
+    "requiredKeys": [],
+    "hasSoul": true,
+    "hasHeartbeat": true
+  },
+  {
+    "id": "brand-monitor",
+    "name": "Brand Monitor",
+    "category": "marketing",
+    "icon": "📡",
+    "role": "Tracks brand mentions and monitors online reputation",
+    "description": "Monitors your brand reputation across the entire internet 24/7. Tracks mentions on X, Reddit, Hacker News, review sites, and news outlets. Classifies sentiment, identifies PR risks in real-time, and a",
+    "salary": "$3,000/mo equivalent",
+    "skills": [
+      "self-improving",
+      "elite-longterm-memory",
+      "daily-report-writer",
+      "inter-agent-communication",
+      "session-logs",
+      "model-usage",
+      "capability-evolver",
+      "deep-research-pro",
+      "web-pilot",
+      "google-search",
+      "exa-web-search-free",
+      "x-research",
+      "summarize-pro",
+      "notion-skill",
+      "slack-personal",
+      "agent-browser-clawdbot",
+      "social-media-scheduler",
+      "discord",
+      "x-api"
+    ],
+    "cron": [
+      {
+        "name": "morning-mention-sweep",
+        "schedule": "0 7 * * *"
+      },
+      {
+        "name": "midday-mention-check",
+        "schedule": "0 12 * * *"
+      },
+      {
+        "name": "afternoon-sentiment-scan",
+        "schedule": "0 16 * * 1-5"
+      },
+      {
+        "name": "evening-digest",
+        "schedule": "0 19 * * *"
+      },
+      {
+        "name": "weekly-brand-report",
+        "schedule": "0 9 * * 1"
+      },
+      {
+        "name": "competitor-tracking",
+        "schedule": "0 11 * * 3"
+      },
+      {
+        "name": "monthly-brand-audit",
+        "schedule": "0 10 1 * *"
+      }
+    ],
+    "requiredKeys": [],
+    "hasSoul": true,
+    "hasHeartbeat": true
+  },
+  {
+    "id": "research-assistant",
+    "name": "Research Assistant",
+    "category": "productivity",
+    "icon": "🔍",
+    "role": "Verifies leads, enriches contact data, produces research reports",
+    "description": "Your tireless research analyst who digs deep into any topic. Conducts multi-source research using web search, academic databases, social media, and news — then synthesizes findings into clear, cited r",
+    "salary": "$2,000/mo equivalent",
+    "skills": [
+      "self-improving",
+      "elite-longterm-memory",
+      "daily-report-writer",
+      "inter-agent-communication",
+      "session-logs",
+      "model-usage",
+      "capability-evolver",
+      "deep-research-pro",
+      "web-pilot",
+      "google-search",
+      "exa-web-search-free",
+      "x-research",
+      "summarize-pro",
+      "notion-skill",
+      "file-manager-secure",
+      "agent-browser-clawdbot",
+      "coding-agent",
+      "byterover",
+      "obsidian"
+    ],
+    "cron": [
+      {
+        "name": "morning-news-scan",
+        "schedule": "0 7 * * 1-5"
+      },
+      {
+        "name": "research-execution",
+        "schedule": "0 9 * * 1-5"
+      },
+      {
+        "name": "source-verification",
+        "schedule": "0 13 * * 1-5"
+      },
+      {
+        "name": "research-synthesis",
+        "schedule": "0 16 * * 1-5"
+      },
+      {
+        "name": "weekly-research-digest",
+        "schedule": "0 9 * * 1"
+      },
+      {
+        "name": "trend-analysis",
+        "schedule": "0 11 * * 3"
+      },
+      {
+        "name": "monthly-knowledge-review",
+        "schedule": "0 10 1 * *"
+      }
+    ],
+    "requiredKeys": [],
+    "hasSoul": true,
+    "hasHeartbeat": true
+  },
+  {
+    "id": "video-editor",
+    "name": "Video Editor",
+    "category": "creative",
+    "icon": "🤖",
+    "role": "Edits videos programmatically using code and CLI tools",
+    "description": "Creates and edits videos programmatically using Remotion and ffmpeg. Builds React-based video compositions with animated text, transitions, 3D elements, and data-driven graphics. Generates social medi",
+    "salary": "",
+    "skills": [
+      "self-improving",
+      "elite-longterm-memory",
+      "daily-report-writer",
+      "inter-agent-communication",
+      "session-logs",
+      "model-usage",
+      "capability-evolver",
+      "coding-agent",
+      "file-manager-secure",
+      "summarize-pro",
+      "canvas",
+      "deep-research-pro",
+      "web-pilot",
+      "google-search",
+      "notion-skill",
+      "slack-personal",
+      "byterover",
+      "agent-browser-clawdbot",
+      "video-frames"
+    ],
+    "cron": [
+      {
+        "name": "morning-project-queue",
+        "schedule": "0 8 * * 1-5"
+      },
+      {
+        "name": "render-execution",
+        "schedule": "0 10 * * 1-5"
+      },
+      {
+        "name": "asset-organization",
+        "schedule": "0 14 * * 1-5"
+      },
+      {
+        "name": "quality-review",
+        "schedule": "0 16 * * 1-5"
+      },
+      {
+        "name": "weekly-video-report",
+        "schedule": "0 9 * * 1"
+      },
+      {
+        "name": "template-library-update",
+        "schedule": "0 11 * * 3"
+      },
+      {
+        "name": "monthly-style-refresh",
+        "schedule": "0 10 1 * *"
+      }
+    ],
+    "requiredKeys": [
+      "ffmpeg (auto-installed via brew)"
+    ],
+    "hasSoul": true,
+    "hasHeartbeat": true
+  },
+  {
+    "id": "graphic-designer",
+    "name": "Graphic Designer",
+    "category": "creative",
+    "icon": "🤖",
+    "role": "Creates visual assets, social graphics, and design mockups",
+    "description": "Creates visual assets using Figma and Canva APIs, plus programmatic design with HTML/CSS Canvas. Extracts design tokens from Figma, generates social media graphics, builds brand-consistent templates, ",
+    "salary": "",
+    "skills": [
+      "self-improving",
+      "elite-longterm-memory",
+      "daily-report-writer",
+      "inter-agent-communication",
+      "session-logs",
+      "model-usage",
+      "capability-evolver",
+      "canvas",
+      "web-pilot",
+      "coding-agent",
+      "google-search",
+      "deep-research-pro",
+      "notion-skill",
+      "slack-personal",
+      "file-manager-secure",
+      "agent-browser-clawdbot",
+      "byterover",
+      "camsnap"
+    ],
+    "cron": [
+      {
+        "name": "morning-design-queue",
+        "schedule": "0 8 * * 1-5"
+      },
+      {
+        "name": "design-execution",
+        "schedule": "0 10 * * 1-5"
+      },
+      {
+        "name": "brand-consistency-check",
+        "schedule": "0 14 * * 1-5"
+      },
+      {
+        "name": "asset-organization",
+        "schedule": "0 16 * * 1-5"
+      },
+      {
+        "name": "weekly-design-report",
+        "schedule": "0 9 * * 1"
+      },
+      {
+        "name": "design-trend-research",
+        "schedule": "0 11 * * 4"
+      },
+      {
+        "name": "monthly-brand-audit",
+        "schedule": "0 10 1 * *"
+      }
+    ],
+    "requiredKeys": [],
+    "hasSoul": true,
+    "hasHeartbeat": true
+  },
+  {
+    "id": "code-review-pipeline",
+    "name": "Code Review Pipeline",
+    "category": "development",
+    "icon": "🤖",
+    "role": "Three-agent code review team: programmer, reviewer, tester",
+    "description": "A three-agent code review pipeline: Programmer writes code, Reviewer checks quality and security, Tester validates with automated tests. Runs up to 3 review iterations using deterministic workflows. A",
+    "salary": "",
+    "skills": [
+      "self-improving",
+      "elite-longterm-memory",
+      "daily-report-writer",
+      "inter-agent-communication",
+      "session-logs",
+      "model-usage",
+      "capability-evolver",
+      "github",
+      "gh-issues",
+      "coding-agent",
+      "byterover",
+      "deep-research-pro",
+      "summarize-pro",
+      "slack-personal",
+      "slack",
+      "notion-skill",
+      "file-manager-secure",
+      "healthcheck",
+      "agent-orchestrator",
+      "clawflow"
+    ],
+    "cron": [
+      {
+        "name": "pr-review-sweep",
+        "schedule": "0 7 * * 1-5"
+      },
+      {
+        "name": "midday-review-cycle",
+        "schedule": "0 12 * * 1-5"
+      },
+      {
+        "name": "test-coverage-check",
+        "schedule": "0 15 * * 1-5"
+      },
+      {
+        "name": "security-deep-scan",
+        "schedule": "0 10 * * 2,4"
+      },
+      {
+        "name": "weekly-quality-report",
+        "schedule": "0 9 * * 1"
+      },
+      {
+        "name": "codebase-health-scan",
+        "schedule": "0 14 * * 3"
+      },
+      {
+        "name": "monthly-engineering-metrics",
+        "schedule": "0 10 1 * *"
+      }
+    ],
+    "requiredKeys": [
+      "gh CLI authenticated (run: gh auth login)"
+    ],
+    "hasSoul": true,
+    "hasHeartbeat": true
+  },
+  {
+    "id": "self-healing-server",
+    "name": "Self Healing Server",
+    "category": "devops",
+    "icon": "🤖",
+    "role": "Monitors infrastructure, auto-fixes issues, and files bug reports",
+    "description": "Monitors server health every 5 minutes and auto-fixes issues before they become outages. Restarts crashed services, clears disk space, rotates logs, fixes common misconfigurations, and files GitHub is",
+    "salary": "",
+    "skills": [
+      "self-improving",
+      "elite-longterm-memory",
+      "daily-report-writer",
+      "inter-agent-communication",
+      "session-logs",
+      "model-usage",
+      "capability-evolver",
+      "github",
+      "gh-issues",
+      "coding-agent",
+      "healthcheck",
+      "slack-personal",
+      "slack",
+      "byterover",
+      "atxp-cli",
+      "file-manager-secure",
+      "deep-research-pro",
+      "summarize-pro"
+    ],
+    "cron": [
+      {
+        "name": "health-sweep",
+        "schedule": "*/5 * * * *"
+      },
+      {
+        "name": "response-time-monitor",
+        "schedule": "*/10 * * * *"
+      },
+      {
+        "name": "morning-health-brief",
+        "schedule": "0 7 * * *"
+      },
+      {
+        "name": "disk-cleanup",
+        "schedule": "0 3 * * *"
+      },
+      {
+        "name": "weekly-uptime-report",
+        "schedule": "0 9 * * 1"
+      },
+      {
+        "name": "security-patch-check",
+        "schedule": "0 10 * * 3"
+      },
+      {
+        "name": "monthly-infrastructure-review",
+        "schedule": "0 10 1 * *"
+      }
+    ],
+    "requiredKeys": [],
+    "hasSoul": true,
+    "hasHeartbeat": true
+  },
+  {
+    "id": "idea-logger",
+    "name": "Daily Idea Logger",
+    "category": "productivity",
+    "icon": "🤖",
+    "role": "Captures ideas throughout the day and researches them overnight",
+    "description": "Captures your ideas throughout the day and turns them into actionable insights overnight. Log any idea via chat — product concepts, business models, feature requests, creative projects — and this agen",
+    "salary": "",
+    "skills": [
+      "self-improving",
+      "elite-longterm-memory",
+      "daily-report-writer",
+      "inter-agent-communication",
+      "session-logs",
+      "model-usage",
+      "capability-evolver",
+      "deep-research-pro",
+      "web-pilot",
+      "google-search",
+      "exa-web-search-free",
+      "notion-skill",
+      "coding-agent",
+      "summarize-pro",
+      "slack-personal",
+      "file-manager-secure",
+      "obsidian",
+      "clawflow"
+    ],
+    "cron": [
+      {
+        "name": "morning-idea-brief",
+        "schedule": "0 7 * * 1-5"
+      },
+      {
+        "name": "idea-categorization",
+        "schedule": "0 10 * * 1-5"
+      },
+      {
+        "name": "quick-validation",
+        "schedule": "0 13 * * 1-5"
+      },
+      {
+        "name": "deep-research-session",
+        "schedule": "0 23 * * 0-4"
+      },
+      {
+        "name": "weekly-idea-review",
+        "schedule": "0 9 * * 1"
+      },
+      {
+        "name": "idea-connection-analysis",
+        "schedule": "0 14 * * 3"
+      },
+      {
+        "name": "monthly-idea-audit",
+        "schedule": "0 10 1 * *"
+      }
+    ],
+    "requiredKeys": [],
+    "hasSoul": true,
+    "hasHeartbeat": true
+  },
+  {
+    "id": "coding-team",
+    "name": "Multi Agent Coding Team",
+    "category": "development",
+    "icon": "🤖",
+    "role": "Full software team: PM, developer, QA as separate agents",
+    "description": "A complete software development team in one agent: Product Manager, Developer, and QA as separate sub-agents collaborating via shared workspace. The PM breaks down requirements, the Developer writes c",
+    "salary": "",
+    "skills": [
+      "self-improving",
+      "elite-longterm-memory",
+      "daily-report-writer",
+      "inter-agent-communication",
+      "session-logs",
+      "model-usage",
+      "capability-evolver",
+      "github",
+      "gh-issues",
+      "coding-agent",
+      "byterover",
+      "deep-research-pro",
+      "summarize-pro",
+      "slack-personal",
+      "slack",
+      "notion-skill",
+      "file-manager-secure",
+      "healthcheck",
+      "agent-orchestrator",
+      "clawflow"
+    ],
+    "cron": [
+      {
+        "name": "morning-sprint-standup",
+        "schedule": "0 8 * * 1-5"
+      },
+      {
+        "name": "development-session",
+        "schedule": "0 10 * * 1-5"
+      },
+      {
+        "name": "qa-validation",
+        "schedule": "0 14 * * 1-5"
+      },
+      {
+        "name": "code-integration",
+        "schedule": "0 16 * * 1-5"
+      },
+      {
+        "name": "weekly-sprint-review",
+        "schedule": "0 9 * * 1"
+      },
+      {
+        "name": "backlog-grooming",
+        "schedule": "0 14 * * 3"
+      },
+      {
+        "name": "monthly-engineering-review",
+        "schedule": "0 10 1 * *"
+      }
+    ],
+    "requiredKeys": [
+      "gh CLI authenticated (run: gh auth login)"
+    ],
+    "hasSoul": true,
+    "hasHeartbeat": true
+  },
+  {
+    "id": "pr-watcher",
+    "name": "GitHub PR Watcher",
+    "category": "development",
+    "icon": "🤖",
+    "role": "Monitors GitHub PRs and delivers summaries to Telegram",
+    "description": "Monitors your GitHub repositories for new PRs every 15 minutes. Summarizes changes in plain English, auto-assigns labels based on file paths and content, flags security risks and breaking changes, and",
+    "salary": "",
+    "skills": [
+      "self-improving",
+      "elite-longterm-memory",
+      "daily-report-writer",
+      "inter-agent-communication",
+      "session-logs",
+      "model-usage",
+      "capability-evolver",
+      "github",
+      "gh-issues",
+      "summarize-pro",
+      "slack-personal",
+      "slack",
+      "coding-agent",
+      "deep-research-pro",
+      "notion-skill",
+      "file-manager-secure",
+      "byterover",
+      "discord",
+      "healthcheck"
+    ],
+    "cron": [
+      {
+        "name": "pr-scan",
+        "schedule": "*/15 * * * *"
+      },
+      {
+        "name": "morning-pr-digest",
+        "schedule": "0 7 * * 1-5"
+      },
+      {
+        "name": "stale-pr-reminder",
+        "schedule": "0 11 * * 1-5"
+      },
+      {
+        "name": "afternoon-pr-status",
+        "schedule": "0 15 * * 1-5"
+      },
+      {
+        "name": "weekly-dev-activity",
+        "schedule": "0 9 * * 1"
+      },
+      {
+        "name": "review-bottleneck-check",
+        "schedule": "0 14 * * 3"
+      },
+      {
+        "name": "monthly-repo-health",
+        "schedule": "0 10 1 * *"
+      }
+    ],
+    "requiredKeys": [
+      "gh CLI authenticated (run: gh auth login)"
+    ],
+    "hasSoul": true,
+    "hasHeartbeat": true
+  },
+  {
+    "id": "manager",
+    "name": "Operations Manager",
+    "category": "productivity",
+    "icon": "🤖",
+    "role": "Operations chief — orchestrates agents, evaluates performance, personalizes strategy, installs new agents, designs pipelines, has full system visibility",
+    "description": "Your AI operations chief with full system access. Reads the entire OpenClaw platform like a backend engineer — config, logs, agent workspaces, cron jobs, pipelines. Evaluates every agent's output with",
+    "salary": "$8,000/mo equivalent",
+    "skills": [
+      "self-improving",
+      "elite-longterm-memory",
+      "daily-report-writer",
+      "inter-agent-communication",
+      "session-logs",
+      "model-usage",
+      "capability-evolver",
+      "deep-research-pro",
+      "web-pilot",
+      "google-search",
+      "summarize-pro",
+      "notion-skill",
+      "slack-personal",
+      "file-manager-secure",
+      "coding-agent",
+      "brainz-calendar",
+      "resend-email-sender",
+      "bland"
+    ],
+    "cron": [],
+    "requiredKeys": [],
+    "hasSoul": true,
+    "hasHeartbeat": true
+  }
+]

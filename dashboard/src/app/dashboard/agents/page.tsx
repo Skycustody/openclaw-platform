@@ -12,6 +12,7 @@ import {
   HardDrive, ArrowRight, ChevronRight,
   Sparkles, AlertTriangle, Crown, Info, X,
   MessageSquare, Radio, Send, Settings2,
+  Store, Download, Check, Search,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useStore } from '@/lib/store';
@@ -45,6 +46,21 @@ interface AgentsResponse {
   plan: string;
 }
 
+interface MarketplaceAgent {
+  id: string;
+  name: string;
+  category: string;
+  icon: string;
+  role: string;
+  description: string;
+  salary: string;
+  skills: string[];
+  cron: { name: string; schedule: string }[];
+  requiredKeys: string[];
+  hasSoul: boolean;
+  hasHeartbeat: boolean;
+}
+
 const statusConfig: Record<string, { label: string; color: string; dotColor: string }> = {
   active:       { label: 'Running',      color: 'text-green-400',  dotColor: 'bg-green-400' },
   sleeping:     { label: 'Sleeping',     color: 'text-blue-400',   dotColor: 'bg-blue-400' },
@@ -70,6 +86,33 @@ const ONBOARDING_STEPS = [
   },
 ];
 
+const CATEGORY_LABELS: Record<string, string> = {
+  all: 'All',
+  marketing: 'Marketing',
+  business: 'Business',
+  finance: 'Finance',
+  development: 'Development',
+  devops: 'DevOps',
+  hr: 'HR',
+  creative: 'Creative',
+  productivity: 'Productivity',
+  freelance: 'Freelance',
+  ecommerce: 'E-Commerce',
+};
+
+const CATEGORY_COLORS: Record<string, string> = {
+  marketing: 'border-pink-500/20 text-pink-400',
+  business: 'border-amber-500/20 text-amber-400',
+  finance: 'border-green-500/20 text-green-400',
+  development: 'border-blue-500/20 text-blue-400',
+  devops: 'border-orange-500/20 text-orange-400',
+  hr: 'border-purple-500/20 text-purple-400',
+  creative: 'border-rose-500/20 text-rose-400',
+  productivity: 'border-cyan-500/20 text-cyan-400',
+  freelance: 'border-teal-500/20 text-teal-400',
+  ecommerce: 'border-indigo-500/20 text-indigo-400',
+};
+
 export default function AgentsPage() {
   const [data, setData] = useState<AgentsResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -89,6 +132,14 @@ export default function AgentsPage() {
   const [deleteAgent, setDeleteAgent] = useState<Agent | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  // Marketplace state
+  const [marketplace, setMarketplace] = useState<MarketplaceAgent[]>([]);
+  const [marketplaceLoading, setMarketplaceLoading] = useState(true);
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [installingId, setInstallingId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [previewAgent, setPreviewAgent] = useState<MarketplaceAgent | null>(null);
+
   const fetchAgents = useCallback(async () => {
     try {
       const res = await api.get<AgentsResponse>('/agents');
@@ -96,7 +147,14 @@ export default function AgentsPage() {
     } catch {} finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { fetchAgents(); }, [fetchAgents]);
+  const fetchMarketplace = useCallback(async () => {
+    try {
+      const res = await api.get<{ agents: MarketplaceAgent[] }>('/agents/marketplace');
+      setMarketplace(res.agents);
+    } catch {} finally { setMarketplaceLoading(false); }
+  }, []);
+
+  useEffect(() => { fetchAgents(); fetchMarketplace(); }, [fetchAgents, fetchMarketplace]);
 
   const handleCreate = async () => {
     if (!newAgent.name.trim()) return;
@@ -145,6 +203,32 @@ export default function AgentsPage() {
       setActionError(err.message || 'Failed to delete agent');
     } finally { setDeleting(false); }
   };
+
+  const handleInstall = async (catalogAgentId: string) => {
+    setInstallingId(catalogAgentId);
+    setActionError(null);
+    try {
+      await api.post('/agents/install-from-marketplace', { agentId: catalogAgentId });
+      await fetchAgents();
+    } catch (err: any) {
+      setActionError(err.message || 'Failed to install agent');
+    } finally { setInstallingId(null); }
+  };
+
+  const installedOpenclawIds = new Set(
+    (data?.agents || []).map(a => a.openclawAgentId)
+  );
+
+  // Filter marketplace agents
+  const categories = ['all', ...Array.from(new Set(marketplace.map(a => a.category)))];
+  const filteredMarketplace = marketplace.filter(agent => {
+    const matchesCategory = selectedCategory === 'all' || agent.category === selectedCategory;
+    const matchesSearch = !searchQuery ||
+      agent.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      agent.role.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      agent.category.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesCategory && matchesSearch;
+  });
 
   if (loading) {
     return (
@@ -343,6 +427,210 @@ export default function AgentsPage() {
           );
         })}
       </div>
+
+      {/* ─── Agent Store / Marketplace ─── */}
+      <div className="pt-4 animate-fade-up">
+        <div className="flex items-center gap-3 mb-5">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/[0.04]">
+            <Store className="h-5 w-5 text-white/30" />
+          </div>
+          <div>
+            <h2 className="text-[20px] font-bold text-white tracking-tight">Agent Store</h2>
+            <p className="text-[13px] text-white/35">Pre-built agents with personality, skills, and schedules — install in one click</p>
+          </div>
+        </div>
+
+        {/* Search */}
+        <div className="relative mb-4">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-white/20" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Search agents..."
+            className="w-full rounded-xl border border-white/[0.08] bg-white/[0.03] pl-10 pr-4 py-2.5 text-[14px] text-white placeholder:text-white/20 focus:border-white/20 focus:outline-none transition-colors"
+          />
+        </div>
+
+        {/* Category filter pills */}
+        <div className="flex flex-wrap gap-2 mb-5">
+          {categories.map(cat => (
+            <button
+              key={cat}
+              onClick={() => setSelectedCategory(cat)}
+              className={`px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-all ${
+                selectedCategory === cat
+                  ? 'bg-white/10 border-white/20 text-white'
+                  : 'bg-white/[0.02] border-white/[0.06] text-white/40 hover:border-white/[0.12] hover:text-white/60'
+              }`}
+            >
+              {CATEGORY_LABELS[cat] || cat.charAt(0).toUpperCase() + cat.slice(1)}
+            </button>
+          ))}
+        </div>
+
+        {/* Marketplace Grid */}
+        {marketplaceLoading ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="h-5 w-5 animate-spin text-white/30" />
+          </div>
+        ) : filteredMarketplace.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <Store className="h-10 w-10 text-white/10 mb-3" />
+            <p className="text-[14px] text-white/40">No agents found</p>
+            <p className="text-[12px] text-white/20 mt-1">Try a different category or search term</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            {filteredMarketplace.map(agent => {
+              const isInstalled = installedOpenclawIds.has(agent.id);
+              const isInstalling = installingId === agent.id;
+              const catColor = CATEGORY_COLORS[agent.category] || 'border-white/10 text-white/50';
+
+              return (
+                <div
+                  key={agent.id}
+                  className="group rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 hover:border-white/[0.12] hover:bg-white/[0.04] transition-all cursor-pointer"
+                  onClick={() => setPreviewAgent(agent)}
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/[0.04] border border-white/[0.06] text-xl">
+                        {agent.icon}
+                      </div>
+                      <div>
+                        <h3 className="text-[14px] font-semibold text-white leading-tight">{agent.name}</h3>
+                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border mt-1 ${catColor}`}>
+                          {CATEGORY_LABELS[agent.category] || agent.category}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <p className="text-[12px] text-white/35 leading-relaxed line-clamp-2 mb-3 min-h-[2.5rem]">
+                    {agent.role}
+                  </p>
+
+                  <div className="flex items-center justify-between pt-3 border-t border-white/[0.04]">
+                    <span className="text-[11px] text-white/20 font-medium">{agent.salary}</span>
+
+                    {isInstalled ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium text-green-400/70 bg-green-500/5 border border-green-500/10">
+                        <Check className="h-3 w-3" /> Installed
+                      </span>
+                    ) : (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!isInstalling && canAddAgent) handleInstall(agent.id);
+                        }}
+                        disabled={isInstalling || !canAddAgent}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all ${
+                          !canAddAgent
+                            ? 'text-white/20 bg-white/[0.03] border border-white/[0.04] cursor-not-allowed'
+                            : isInstalling
+                              ? 'text-white/40 bg-white/[0.04] border border-white/[0.06]'
+                              : 'text-white bg-white/[0.08] border border-white/[0.12] hover:bg-white/[0.14] hover:border-white/[0.2]'
+                        }`}
+                      >
+                        {isInstalling ? (
+                          <><Loader2 className="h-3 w-3 animate-spin" /> Installing...</>
+                        ) : (
+                          <><Download className="h-3 w-3" /> Install</>
+                        )}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Agent Preview Modal */}
+      <Modal open={!!previewAgent} onClose={() => setPreviewAgent(null)}
+        title={previewAgent?.name || ''} className="max-w-lg">
+        {previewAgent && (
+          <div className="space-y-5">
+            <div className="flex items-center gap-4">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/[0.04] border border-white/[0.08] text-2xl">
+                {previewAgent.icon}
+              </div>
+              <div className="flex-1">
+                <h3 className="text-[17px] font-semibold text-white">{previewAgent.name}</h3>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium border ${CATEGORY_COLORS[previewAgent.category] || 'border-white/10 text-white/50'}`}>
+                    {CATEGORY_LABELS[previewAgent.category] || previewAgent.category}
+                  </span>
+                  <span className="text-[12px] text-white/25">{previewAgent.salary}</span>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-[13px] text-white/50 leading-relaxed">{previewAgent.description}</p>
+            </div>
+
+            {previewAgent.cron.length > 0 && (
+              <div>
+                <h4 className="text-[12px] font-medium text-white/30 uppercase tracking-wider mb-2">Scheduled Tasks</h4>
+                <div className="space-y-1.5">
+                  {previewAgent.cron.map((job, i) => (
+                    <div key={i} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/[0.02] border border-white/[0.04]">
+                      <div className="h-1.5 w-1.5 rounded-full bg-blue-400/50" />
+                      <span className="text-[12px] text-white/50">{job.name.replace(/-/g, ' ')}</span>
+                      <span className="text-[10px] text-white/20 font-mono ml-auto">{job.schedule}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {previewAgent.skills.length > 0 && (
+              <div>
+                <h4 className="text-[12px] font-medium text-white/30 uppercase tracking-wider mb-2">Skills ({previewAgent.skills.length})</h4>
+                <div className="flex flex-wrap gap-1.5">
+                  {previewAgent.skills.map(skill => (
+                    <span key={skill} className="px-2 py-0.5 rounded text-[10px] text-white/35 bg-white/[0.03] border border-white/[0.05]">
+                      {skill}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {previewAgent.requiredKeys.length > 0 && (
+              <div className="rounded-lg border border-amber-500/10 bg-amber-500/5 px-4 py-3">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <AlertTriangle className="h-3.5 w-3.5 text-amber-400/60" />
+                  <span className="text-[12px] font-medium text-amber-400/70">API Keys Needed</span>
+                </div>
+                <div className="space-y-1">
+                  {previewAgent.requiredKeys.map((key, i) => (
+                    <p key={i} className="text-[11px] text-amber-400/40">{key}</p>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="glass" size="sm" onClick={() => setPreviewAgent(null)}>Close</Button>
+              {installedOpenclawIds.has(previewAgent.id) ? (
+                <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] font-medium text-green-400/70 bg-green-500/5 border border-green-500/10">
+                  <Check className="h-3.5 w-3.5" /> Already Installed
+                </span>
+              ) : (
+                <Button variant="primary" size="sm"
+                  onClick={() => { handleInstall(previewAgent.id); setPreviewAgent(null); }}
+                  disabled={!canAddAgent || installingId === previewAgent.id}>
+                  <Download className="h-3.5 w-3.5" /> Install Agent
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+      </Modal>
 
       {/* Create Agent Modal */}
       <Modal open={showCreate} onClose={() => { setShowCreate(false); setCreateStep(0); setNewAgent({ name: '', purpose: '', instructions: '' }); }}
