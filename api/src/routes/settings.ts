@@ -479,14 +479,16 @@ router.get('/claude-code/status', async (req: AuthRequest, res: Response, next: 
   }
 });
 
-/** Track in-flight Claude Code auth sessions so we can feed the code back. */
-const ccAuthSessions = new Map<string, { stream: any; output: string; timer: ReturnType<typeof setTimeout> }>();
-
 router.post('/claude-code/connect', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
+    const { token } = req.body || {};
+    if (!token || typeof token !== 'string' || !token.startsWith('sk-ant-')) {
+      return res.status(400).json({ error: 'Invalid setup token. Run "claude setup-token" in your terminal to get one.' });
+    }
+
     const { serverIp, containerName } = await requireRunningContainer(req.userId!);
 
-    // Step 1: Install claude CLI if not present
+    // Install claude CLI if not present
     const versionCheck = await sshExec(serverIp,
       `docker exec ${containerName} claude --version 2>/dev/null`,
       1, 10000
@@ -499,110 +501,44 @@ router.post('/claude-code/connect', async (req: AuthRequest, res: Response, next
       );
     }
 
-    // Step 2: Check auth status
+    // Set the OAuth token as env var and write onboarding config
+    // This authenticates the CLI without interactive login
+    const tokenB64 = Buffer.from(token.trim()).toString('base64');
+    await sshExec(serverIp, [
+      // Write claude config to skip onboarding
+      `docker exec ${containerName} sh -c 'mkdir -p /root/.claude && echo "{\\"hasCompletedOnboarding\\":true}" > /root/.claude.json'`,
+      // Store token in container env by writing to a profile script
+      `docker exec ${containerName} sh -c 'echo "export CLAUDE_CODE_OAUTH_TOKEN=\\"$(echo ${tokenB64} | base64 -d)\\"" > /root/.claude/.env'`,
+    ].join(' && '));
+
+    // Verify auth works by running a quick check
     const authCheck = await sshExec(serverIp,
-      `docker exec ${containerName} claude auth status 2>/dev/null`,
-      1, 10000
+      `docker exec -e CLAUDE_CODE_OAUTH_TOKEN=$(echo '${tokenB64}' | base64 -d) ${containerName} claude auth status 2>/dev/null`,
+      1, 15000
     ).catch(() => null);
 
     const isAuthed = authCheck?.stdout?.includes('"loggedIn":true') || authCheck?.stdout?.includes('"loggedIn": true');
-    if (isAuthed) {
-      return res.json({ ok: true, authenticated: true });
-    }
 
-    // Step 3: Start auth login as interactive stream (keeps process alive for code paste)
-    // Clean up any previous session
-    const prev = ccAuthSessions.get(req.userId!);
-    if (prev) { clearTimeout(prev.timer); prev.stream.kill(); ccAuthSessions.delete(req.userId!); }
-
-    const { sshExecStream } = await import('../services/ssh');
-    const stream = sshExecStream(serverIp,
-      `docker exec -i -e BROWSER=echo ${containerName} claude auth login 2>&1`
+    // Store token in container's startup env so it persists across restarts
+    const instanceDir = `/opt/openclaw/instances/${req.userId}`;
+    await sshExec(serverIp,
+      `echo '${tokenB64}' | base64 -d > ${instanceDir}/.claude-token && chmod 600 ${instanceDir}/.claude-token`
     );
 
-    const session = { stream, output: '', timer: setTimeout(() => {
-      stream.kill();
-      ccAuthSessions.delete(req.userId!);
-    }, 5 * 60 * 1000) };
-    ccAuthSessions.set(req.userId!, session);
+    // Add CLAUDE_CODE_OAUTH_TOKEN to container env
+    // Docker doesn't support adding env vars to running containers, so we write a wrapper
+    await sshExec(serverIp, [
+      `echo '#!/bin/sh' > ${instanceDir}/claude-wrapper.sh`,
+      `echo 'export CLAUDE_CODE_OAUTH_TOKEN="$(cat /root/.openclaw/.claude-token 2>/dev/null)"' >> ${instanceDir}/claude-wrapper.sh`,
+      `echo 'exec claude "$@"' >> ${instanceDir}/claude-wrapper.sh`,
+      `chmod +x ${instanceDir}/claude-wrapper.sh`,
+    ].join(' && '));
 
-    // Wait for URL to appear in output
-    await new Promise<void>((resolve) => {
-      const urlTimeout = setTimeout(() => resolve(), 20000);
-      stream.on('data', (chunk: string) => {
-        session.output += chunk;
-        if (session.output.match(/https:\/\/[^\s\n"']+/)) {
-          clearTimeout(urlTimeout);
-          resolve();
-        }
-      });
-      stream.on('error', () => { clearTimeout(urlTimeout); resolve(); });
-      stream.on('close', () => { clearTimeout(urlTimeout); resolve(); });
-    });
-
-    const urlMatch = session.output.match(/https:\/\/[^\s\n"']+/);
-    if (urlMatch) {
-      // Keep the session alive — the CLI polls for auth completion automatically.
-      // The /complete endpoint just checks auth status; the CLI handles the rest.
-      return res.json({ ok: false, needsAuth: true, authUrl: urlMatch[0] });
-    }
-
-    return res.json({ ok: false, error: 'Could not get auth URL. Output: ' + session.output.slice(0, 200) });
-  } catch (err: any) {
-    if (err.statusCode === 409) return res.status(409).json({ error: err.message });
-    next(err);
-  }
-});
-
-router.post('/claude-code/complete', async (req: AuthRequest, res: Response, next: NextFunction) => {
-  try {
-    const { code } = req.body || {};
-    const session = ccAuthSessions.get(req.userId!);
-
-    // Feed the auth code to the running `claude auth login` process
-    if (session && code) {
-      session.stream.write(code.trim() + '\n');
-      // Wait for the CLI to process it
-      await new Promise<void>((resolve) => {
-        const prevLen = session.output.length;
-        const done = setTimeout(() => resolve(), 15000);
-        const onData = (chunk: string) => {
-          session.output += chunk;
-          const newOut = session.output.slice(prevLen).toLowerCase();
-          if (newOut.includes('success') || newOut.includes('authenticated') || newOut.includes('logged in') || newOut.includes('saved')) {
-            clearTimeout(done);
-            resolve();
-          }
-        };
-        session.stream.on('data', onData);
-        session.stream.on('close', () => { clearTimeout(done); resolve(); });
-      });
-    }
-
-    // Clean up session
-    if (session) {
-      clearTimeout(session.timer);
-      session.stream.kill();
-      ccAuthSessions.delete(req.userId!);
-    }
-
-    // Verify auth status
-    const { serverIp, containerName } = await requireRunningContainer(req.userId!);
-    const authCheck = await sshExec(serverIp,
-      `docker exec ${containerName} claude auth status 2>/dev/null`,
-      1, 10000
-    ).catch(() => null);
-
-    const isAuthed = authCheck?.stdout?.includes('"loggedIn":true') || authCheck?.stdout?.includes('"loggedIn": true');
-    if (!isAuthed) {
-      return res.json({ ok: false, error: 'Authentication failed. Click Connect to try again.' });
-    }
-
-    // Write to auth-profiles.json so OpenClaw picks it up
+    // Mark as connected in auth-profiles
     const { saveProviderApiKey } = await import('../services/providerAuth');
-    await saveProviderApiKey(req.userId!, 'claude-code', 'claude-max-subscription');
+    await saveProviderApiKey(req.userId!, 'claude-code', 'setup-token');
 
-    res.json({ ok: true });
+    res.json({ ok: true, authenticated: isAuthed });
   } catch (err: any) {
     if (err.statusCode === 409) return res.status(409).json({ error: err.message });
     next(err);

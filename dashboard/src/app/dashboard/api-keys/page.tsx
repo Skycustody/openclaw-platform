@@ -45,7 +45,8 @@ export default function ApiKeysPage() {
   const [oauthUrl, setOauthUrl] = useState<string | null>(null);
   const [ccStatus, setCcStatus] = useState<{ installed: boolean; authenticated: boolean; version: string | null } | null>(null);
   const [ccLoading, setCcLoading] = useState(false);
-  const [ccAuthUrl, setCcAuthUrl] = useState<string | null>(null);
+  const [ccShowInput, setCcShowInput] = useState(false);
+  const [ccToken, setCcToken] = useState('');
 
   const loadStatus = async () => {
     try {
@@ -62,41 +63,18 @@ export default function ApiKeysPage() {
     } catch { setCcStatus({ installed: false, authenticated: false, version: null }); }
   };
 
-  const [ccCode, setCcCode] = useState('');
-
   const handleCcConnect = async () => {
+    if (!ccToken.trim()) { setCcShowInput(true); return; }
     setCcLoading(true);
-    setCcAuthUrl(null);
-    setCcCode('');
     try {
-      const res = await api.post<{ ok: boolean; needsAuth?: boolean; authUrl?: string; authenticated?: boolean; error?: string }>('/settings/claude-code/connect');
-      if (res.ok && res.authenticated) {
+      const res = await api.post<{ ok: boolean; authenticated?: boolean; error?: string }>('/settings/claude-code/connect', { token: ccToken.trim() });
+      if (res.ok) {
+        setCcShowInput(false);
+        setCcToken('');
         await loadCcStatus();
         await loadStatus();
-      } else if (res.needsAuth && res.authUrl) {
-        setCcAuthUrl(res.authUrl);
-        window.open(res.authUrl, '_blank', 'width=600,height=700');
       } else {
         setSaveStatus({ ok: false, msg: res.error || 'Failed to connect' });
-      }
-    } catch (err: any) {
-      setSaveStatus({ ok: false, msg: err.message || 'Failed' });
-    }
-    setCcLoading(false);
-  };
-
-  const handleCcPasteCode = async () => {
-    if (!ccCode.trim()) return;
-    setCcLoading(true);
-    try {
-      const res = await api.post<{ ok: boolean; error?: string }>('/settings/claude-code/complete', { code: ccCode.trim() });
-      if (res.ok) {
-        setCcAuthUrl(null);
-        setCcCode('');
-        await loadCcStatus();
-        await loadStatus();
-      } else {
-        setSaveStatus({ ok: false, msg: res.error || 'Failed — try again' });
       }
     } catch (err: any) {
       setSaveStatus({ ok: false, msg: err.message || 'Failed' });
@@ -237,8 +215,7 @@ export default function ApiKeysPage() {
               <p className="text-[14px] font-medium text-white/85">Claude Code</p>
               <p className="text-[12px] text-white/35">
                 {ccStatus?.authenticated ? `Connected \u2014 ${ccStatus.version || 'Claude Code'}` :
-                 ccStatus?.installed ? 'Installed \u2014 click Connect to authenticate' :
-                 'Use your Claude Max subscription as the AI model'}
+                 'Use your Claude Pro/Max subscription as the AI model'}
               </p>
             </div>
           </div>
@@ -248,36 +225,31 @@ export default function ApiKeysPage() {
               <Button variant="glass" size="sm" onClick={handleCcDisconnect} disabled={ccLoading}>
                 {ccLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Disconnect'}
               </Button>
-            ) : !ccAuthUrl ? (
-              <Button size="sm" onClick={handleCcConnect} disabled={ccLoading}>
+            ) : (
+              <Button size="sm" onClick={handleCcConnect} disabled={ccLoading || (ccShowInput && !ccToken.trim())}>
                 {ccLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : null}
                 Connect
               </Button>
-            ) : null}
+            )}
           </div>
         </div>
-        {ccAuthUrl && (
+        {ccShowInput && !ccStatus?.authenticated && (
           <div className="mt-3 space-y-3">
-            <div className="rounded-lg bg-amber-500/10 px-3 py-2.5">
-              <p className="text-[13px] text-amber-300/80">Sign in in the browser, then copy the authentication code and paste it here.</p>
-              <a href={ccAuthUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[12px] text-amber-300/60 hover:text-amber-300/80 mt-1">
-                <ExternalLink className="h-3 w-3" /> Open sign-in link again
-              </a>
+            <div className="rounded-lg bg-white/[0.03] border border-white/[0.06] px-4 py-3">
+              <p className="text-[13px] text-white/60">Run this in your terminal to get a setup token:</p>
+              <code className="block mt-2 bg-white/[0.04] rounded-lg px-3 py-2 text-[13px] text-white/70 font-mono select-all">claude setup-token</code>
+              <p className="text-[11px] text-white/30 mt-2">Signs in via browser and gives you a token (sk-ant-oat01-...). Token lasts 1 year.</p>
             </div>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={ccCode}
-                onChange={e => setCcCode(e.target.value)}
-                placeholder="Paste authentication code here..."
-                autoFocus
-                onKeyDown={e => e.key === 'Enter' && ccCode.trim() && handleCcPasteCode()}
-                className="flex-1 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[13px] text-white/80 placeholder:text-white/20 focus:border-white/[0.15] focus:outline-none transition-colors font-mono"
-              />
-              <Button size="sm" onClick={handleCcPasteCode} disabled={ccLoading || !ccCode.trim()}>
-                {ccLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Connect'}
-              </Button>
-            </div>
+            <input
+              type="password"
+              value={ccToken}
+              onChange={e => setCcToken(e.target.value)}
+              placeholder="sk-ant-oat01-..."
+              autoComplete="off"
+              autoFocus
+              onKeyDown={e => e.key === 'Enter' && ccToken.trim() && handleCcConnect()}
+              className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 text-[14px] text-white/80 placeholder:text-white/20 focus:border-white/[0.15] focus:outline-none transition-colors font-mono"
+            />
           </div>
         )}
       </div>
