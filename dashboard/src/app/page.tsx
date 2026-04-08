@@ -373,7 +373,7 @@ export default function DesktopPage() {
             className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-8 text-[14px] lg:flex"
             style={{ color: TEXT_SEC }}
           >
-            <Link href="/pricing" className="transition-colors hover:text-white">
+            <Link href="/cloud" className="transition-colors hover:text-white">
               Cloud
             </Link>
             <Link href="#pricing" className="transition-colors hover:text-white">
