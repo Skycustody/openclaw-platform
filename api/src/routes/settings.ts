@@ -507,7 +507,7 @@ router.post('/claude-code/connect', async (req: AuthRequest, res: Response, next
     const tokenB64 = Buffer.from(token.trim()).toString('base64');
     await sshExec(serverIp, [
       // Write claude config to skip onboarding
-      `docker exec ${containerName} sh -c 'mkdir -p /root/.claude && echo "{\\"hasCompletedOnboarding\\":true}" > /root/.claude.json'`,
+      `docker exec ${containerName} sh -c 'mkdir -p /root/.claude && echo eyJoYXNDb21wbGV0ZWRPbmJvYXJkaW5nIjp0cnVlfQ== | base64 -d > /root/.claude.json'`,
       // Store token in container env by writing to a profile script
       `docker exec ${containerName} sh -c 'echo "export CLAUDE_CODE_OAUTH_TOKEN=\\"$(echo ${tokenB64} | base64 -d)\\"" > /root/.claude/.env'`,
     ].join(' && '));
@@ -667,6 +667,8 @@ router.post('/claude-code/exchange', async (req: AuthRequest, res: Response, nex
     if (!code || typeof code !== 'string') {
       return res.status(400).json({ error: 'Auth code is required' });
     }
+    // Strip URL fragment (#state) that gets copied with the code from the callback page
+    const cleanCode = code.trim().split('#')[0];
 
     const userId = req.userId!;
     const pkce = pkceStore.get(userId);
@@ -680,7 +682,7 @@ router.post('/claude-code/exchange', async (req: AuthRequest, res: Response, nex
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         grant_type: 'authorization_code',
-        code: code.trim(),
+        code: cleanCode,
         redirect_uri: CLAUDE_OAUTH_REDIRECT_URI,
         client_id: CLAUDE_OAUTH_CLIENT_ID,
         code_verifier: pkce.verifier,
@@ -722,7 +724,7 @@ router.post('/claude-code/exchange', async (req: AuthRequest, res: Response, nex
 
     // Write token + config
     await sshExec(serverIp, [
-      `docker exec ${containerName} sh -c 'mkdir -p /root/.claude && echo "{\\"hasCompletedOnboarding\\":true}" > /root/.claude.json'`,
+      `docker exec ${containerName} sh -c 'mkdir -p /root/.claude && echo eyJoYXNDb21wbGV0ZWRPbmJvYXJkaW5nIjp0cnVlfQ== | base64 -d > /root/.claude.json'`,
       `echo '${tokenB64}' | base64 -d > ${instanceDir}/.claude-token && chmod 600 ${instanceDir}/.claude-token`,
     ].join(' && '));
 
@@ -818,7 +820,7 @@ export async function handleClaudeOAuthCallback(req: Request, res: Response): Pr
 
       const tokenB64 = Buffer.from(accessToken).toString('base64');
       await sshExec(serverIp, [
-        `docker exec ${containerName} sh -c 'mkdir -p /root/.claude && echo "{\\"hasCompletedOnboarding\\":true}" > /root/.claude.json'`,
+        `docker exec ${containerName} sh -c 'mkdir -p /root/.claude && echo eyJoYXNDb21wbGV0ZWRPbmJvYXJkaW5nIjp0cnVlfQ== | base64 -d > /root/.claude.json'`,
         `docker exec ${containerName} sh -c 'echo "export CLAUDE_CODE_OAUTH_TOKEN=\\"$(echo ${tokenB64} | base64 -d)\\"" > /root/.claude/.env'`,
       ].join(' && '));
 
