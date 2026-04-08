@@ -676,17 +676,17 @@ router.post('/claude-code/exchange', async (req: AuthRequest, res: Response, nex
       return res.status(400).json({ error: 'OAuth session expired. Click Connect to start again.' });
     }
 
-    // Exchange code for token
+    // Exchange code for token (must be form-urlencoded)
     const tokenRes = await fetch(CLAUDE_OAUTH_TOKEN_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
         grant_type: 'authorization_code',
         code: code.trim(),
         redirect_uri: CLAUDE_OAUTH_REDIRECT_URI,
         client_id: CLAUDE_OAUTH_CLIENT_ID,
         code_verifier: pkce.verifier,
-      }),
+      }).toString(),
     });
 
     // Clean up PKCE
