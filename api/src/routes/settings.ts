@@ -696,6 +696,7 @@ router.post('/claude-code/exchange', async (req: AuthRequest, res: Response, nex
     if (!tokenRes.ok) {
       const errBody = await tokenRes.text();
       console.error(`[claude-code] Token exchange failed: ${tokenRes.status} ${errBody}`);
+      console.error(`[claude-code] Code used (first 20 chars): "${code.trim().slice(0, 20)}..." len=${code.trim().length}`);
       return res.status(400).json({ error: 'Token exchange failed. The code may have expired — try again.' });
     }
 
