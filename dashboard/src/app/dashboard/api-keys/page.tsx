@@ -247,14 +247,12 @@ export default function ApiKeysPage() {
               <Button variant="glass" size="sm" onClick={handleCcDisconnect} disabled={ccLoading}>
                 {ccLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Disconnect'}
               </Button>
-            ) : (
-              {!ccAuthUrl && (
-                <Button size="sm" onClick={handleCcConnect} disabled={ccLoading}>
-                  {ccLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : null}
-                  Connect
-                </Button>
-              )}
-            )}
+            ) : !ccAuthUrl ? (
+              <Button size="sm" onClick={handleCcConnect} disabled={ccLoading}>
+                {ccLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : null}
+                Connect
+              </Button>
+            ) : null}
           </div>
         </div>
         {ccAuthUrl && (
