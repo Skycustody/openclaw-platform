@@ -590,7 +590,7 @@ router.post('/provider-auth/save-key', async (req: AuthRequest, res: Response, n
 const CLAUDE_OAUTH_CLIENT_ID = '9d1c250a-e61b-44d9-88ed-5944d1962f5e';
 const CLAUDE_OAUTH_AUTHORIZE_URL = 'https://claude.com/cai/oauth/authorize';
 const CLAUDE_OAUTH_TOKEN_URL = 'https://platform.claude.com/v1/oauth/token';
-const CLAUDE_OAUTH_REDIRECT_URI = 'https://api.valnaa.com/settings/claude-code/oauth-callback';
+const CLAUDE_OAUTH_REDIRECT_URI = 'https://platform.claude.com/oauth/code/callback';
 const CLAUDE_OAUTH_SCOPES = 'user:inference user:profile user:sessions:claude_code user:mcp_servers user:file_upload';
 const PKCE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
@@ -658,6 +658,81 @@ router.get('/claude-code/start-oauth', async (req: AuthRequest, res: Response, n
     const authUrl = `${CLAUDE_OAUTH_AUTHORIZE_URL}?${params.toString()}`;
     res.json({ authUrl });
   } catch (err) {
+    next(err);
+  }
+});
+
+// Exchange the auth code for a token (called from dashboard after user copies code)
+router.post('/claude-code/exchange', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { code } = req.body || {};
+    if (!code || typeof code !== 'string') {
+      return res.status(400).json({ error: 'Auth code is required' });
+    }
+
+    const userId = req.userId!;
+    const pkce = pkceStore.get(userId);
+    if (!pkce) {
+      return res.status(400).json({ error: 'OAuth session expired. Click Connect to start again.' });
+    }
+
+    // Exchange code for token
+    const tokenRes = await fetch(CLAUDE_OAUTH_TOKEN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        grant_type: 'authorization_code',
+        code: code.trim(),
+        redirect_uri: CLAUDE_OAUTH_REDIRECT_URI,
+        client_id: CLAUDE_OAUTH_CLIENT_ID,
+        code_verifier: pkce.verifier,
+      }),
+    });
+
+    // Clean up PKCE
+    clearTimeout(pkce.timer);
+    pkceStore.delete(userId);
+
+    if (!tokenRes.ok) {
+      const errBody = await tokenRes.text();
+      console.error(`[claude-code] Token exchange failed: ${tokenRes.status} ${errBody}`);
+      return res.status(400).json({ error: 'Token exchange failed. The code may have expired — try again.' });
+    }
+
+    const tokens = await tokenRes.json() as { access_token?: string; refresh_token?: string; expires_in?: number };
+    const accessToken = tokens.access_token;
+    if (!accessToken) {
+      return res.status(400).json({ error: 'No access token received' });
+    }
+
+    // Save token to container
+    const { serverIp, containerName } = await requireRunningContainer(userId);
+    const tokenB64 = Buffer.from(accessToken).toString('base64');
+    const instanceDir = `/opt/openclaw/instances/${userId}`;
+
+    // Install claude CLI if needed
+    const versionCheck = await sshExec(serverIp,
+      `docker exec ${containerName} claude --version 2>/dev/null`, 1, 10000
+    ).catch(() => null);
+    if (!versionCheck || !/\d+\.\d+/.test(versionCheck.stdout)) {
+      await sshExec(serverIp,
+        `docker exec ${containerName} npm install -g @anthropic-ai/claude-code 2>&1`, 3, 120000
+      );
+    }
+
+    // Write token + config
+    await sshExec(serverIp, [
+      `docker exec ${containerName} sh -c 'mkdir -p /root/.claude && echo "{\\"hasCompletedOnboarding\\":true}" > /root/.claude.json'`,
+      `echo '${tokenB64}' | base64 -d > ${instanceDir}/.claude-token && chmod 600 ${instanceDir}/.claude-token`,
+    ].join(' && '));
+
+    // Mark as connected
+    const { saveProviderApiKey } = await import('../services/providerAuth');
+    await saveProviderApiKey(userId, 'claude-code', 'oauth-token');
+
+    res.json({ ok: true });
+  } catch (err: any) {
+    if (err.statusCode === 409) return res.status(409).json({ error: err.message });
     next(err);
   }
 });

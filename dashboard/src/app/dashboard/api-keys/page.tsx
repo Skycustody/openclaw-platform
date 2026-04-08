@@ -64,20 +64,49 @@ export default function ApiKeysPage() {
     } catch { setCcStatus({ installed: false, authenticated: false, version: null }); }
   };
 
+  const [ccWaitingForCode, setCcWaitingForCode] = useState(false);
+
   const handleCcOAuth = async () => {
     setCcLoading(true);
     setCcError(null);
     try {
       const res = await api.get<{ authUrl: string }>('/settings/claude-code/start-oauth');
       if (res.authUrl) {
-        // Open popup for Claude OAuth
         const w = 600, h = 700;
         const left = window.screenX + (window.outerWidth - w) / 2;
         const top = window.screenY + (window.outerHeight - h) / 2;
         window.open(res.authUrl, 'claude-oauth', `width=${w},height=${h},left=${left},top=${top}`);
+        setCcWaitingForCode(true);
       }
     } catch (err: any) {
       setCcError(err.message || 'Failed to start OAuth');
+    }
+    setCcLoading(false);
+  };
+
+  const handleCcPasteAndConnect = async () => {
+    setCcLoading(true);
+    setCcError(null);
+    try {
+      // Try reading from clipboard first
+      let code = '';
+      try { code = await navigator.clipboard.readText(); } catch {}
+      if (!code) {
+        // Fallback: prompt
+        code = window.prompt('Paste the authentication code from Claude:') || '';
+      }
+      if (!code.trim()) { setCcLoading(false); return; }
+
+      const res = await api.post<{ ok: boolean; error?: string }>('/settings/claude-code/exchange', { code: code.trim() });
+      if (res.ok) {
+        setCcWaitingForCode(false);
+        await loadCcStatus();
+        await loadStatus();
+      } else {
+        setCcError(res.error || 'Failed to connect');
+      }
+    } catch (err: any) {
+      setCcError(err.message || 'Failed');
     }
     setCcLoading(false);
   };
@@ -264,39 +293,26 @@ export default function ApiKeysPage() {
               <Button variant="glass" size="sm" onClick={handleCcDisconnect} disabled={ccLoading}>
                 {ccLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Disconnect'}
               </Button>
-            ) : ccShowInput ? (
-              <Button size="sm" onClick={handleCcConnect} disabled={ccLoading || !ccToken.trim()}>
-                {ccLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : null}
-                Save
+            ) : ccWaitingForCode ? (
+              <Button size="sm" onClick={handleCcPasteAndConnect} disabled={ccLoading}>
+                {ccLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Check className="h-3.5 w-3.5 mr-1.5" />}
+                Paste & Connect
               </Button>
             ) : (
-              <Button size="sm" onClick={() => setCcShowInput(true)}>
+              <Button size="sm" onClick={handleCcOAuth} disabled={ccLoading}>
+                {ccLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <LogIn className="h-3.5 w-3.5 mr-1.5" />}
                 Connect
               </Button>
             )}
           </div>
         </div>
-        {ccShowInput && !ccStatus?.authenticated && (
-          <div className="mt-3 space-y-2">
-            <div className="rounded-lg bg-white/[0.03] border border-white/[0.06] px-4 py-3">
-              <p className="text-[13px] text-white/60">Run this in your terminal to get a setup token:</p>
-              <code className="block mt-2 bg-white/[0.04] rounded-lg px-3 py-2 text-[13px] text-white/70 font-mono select-all">claude setup-token</code>
-              <p className="text-[11px] text-white/30 mt-2">Opens your browser to sign in, then gives you a token. Lasts 1 year.</p>
-            </div>
-            <input
-              type="password"
-              value={ccToken}
-              onChange={e => setCcToken(e.target.value)}
-              placeholder="sk-ant-oat01-..."
-              autoComplete="off"
-              autoFocus
-              onKeyDown={e => e.key === 'Enter' && ccToken.trim() && handleCcConnect()}
-              className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 text-[14px] text-white/80 placeholder:text-white/20 focus:border-white/[0.15] focus:outline-none transition-colors font-mono"
-            />
-            {ccError && (
-              <div className="rounded-lg bg-red-500/10 px-3 py-2 text-[13px] text-red-400/80">{ccError}</div>
-            )}
+        {ccWaitingForCode && !ccStatus?.authenticated && (
+          <div className="mt-3 rounded-lg bg-amber-500/10 px-3 py-2.5">
+            <p className="text-[13px] text-amber-300/80">Sign in in the popup, click "Copy Code", then click "Paste & Connect" above.</p>
           </div>
+        )}
+        {ccError && (
+          <div className="mt-2 rounded-lg bg-red-500/10 px-3 py-2 text-[13px] text-red-400/80">{ccError}</div>
         )}
       </div>
 
