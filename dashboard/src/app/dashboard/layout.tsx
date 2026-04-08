@@ -47,7 +47,8 @@ function ConfigChangeToast() {
 function Sidebar() {
   const pathname = usePathname();
   const { user } = useStore();
-  const [expanded, setExpanded] = useState(true);
+  const isHome = pathname === '/dashboard' || pathname === '/dashboard/';
+  const [expanded, setExpanded] = useState(!isHome);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -230,7 +231,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <div className="h-screen overflow-hidden bg-[#30302E] text-[#e8e8e8] flex" style={{ backgroundImage: 'none' }}>
       <ConfigChangeToast />
-      {!isHome && <Sidebar />}
+      <Sidebar />
 
       <main
         className={cn(
