@@ -230,7 +230,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <div className="h-screen overflow-hidden bg-[#30302E] text-[#e8e8e8] flex" style={{ backgroundImage: 'none' }}>
       <ConfigChangeToast />
-      <Sidebar />
+      {!isHome && <Sidebar />}
 
       <main
         className={cn(
