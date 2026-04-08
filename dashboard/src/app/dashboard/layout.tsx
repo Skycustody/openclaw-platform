@@ -191,7 +191,7 @@ function Sidebar() {
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { setUser } = useStore();
+  const { setUser, agentUrl } = useStore();
   const [checking, setChecking] = useState(true);
   const isHome = pathname === '/dashboard' || pathname === '/dashboard/' || (pathname?.startsWith?.('/dashboard') && pathname.replace(/\/$/, '').split('/').length <= 2);
 
@@ -227,8 +227,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </div>
     );
   }
-
-  const { agentUrl } = useStore();
 
   return (
     <div className="h-screen overflow-hidden bg-[#30302E] text-[#e8e8e8] flex" style={{ backgroundImage: 'none' }}>
