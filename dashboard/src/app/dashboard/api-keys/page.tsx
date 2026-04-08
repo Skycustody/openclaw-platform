@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import api from '@/lib/api';
@@ -62,54 +62,47 @@ export default function ApiKeysPage() {
     } catch { setCcStatus({ installed: false, authenticated: false, version: null }); }
   };
 
-  const ccPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const stopCcPoll = () => {
-    if (ccPollRef.current) { clearInterval(ccPollRef.current); ccPollRef.current = null; }
-  };
+  const [ccCode, setCcCode] = useState('');
 
   const handleCcConnect = async () => {
     setCcLoading(true);
     setCcAuthUrl(null);
-    stopCcPoll();
+    setCcCode('');
     try {
       const res = await api.post<{ ok: boolean; needsAuth?: boolean; authUrl?: string; authenticated?: boolean; error?: string }>('/settings/claude-code/connect');
       if (res.ok && res.authenticated) {
         await loadCcStatus();
         await loadStatus();
-        setCcLoading(false);
-        return;
-      }
-      if (res.needsAuth && res.authUrl) {
+      } else if (res.needsAuth && res.authUrl) {
         setCcAuthUrl(res.authUrl);
         window.open(res.authUrl, '_blank', 'width=600,height=700');
-        // Auto-poll every 3s for up to 5 minutes
-        let attempts = 0;
-        ccPollRef.current = setInterval(async () => {
-          attempts++;
-          if (attempts > 100) { stopCcPoll(); setCcLoading(false); return; }
-          try {
-            const check = await api.post<{ ok: boolean }>('/settings/claude-code/complete');
-            if (check.ok) {
-              stopCcPoll();
-              setCcAuthUrl(null);
-              setCcLoading(false);
-              await loadCcStatus();
-              await loadStatus();
-            }
-          } catch {}
-        }, 3000);
-        return;
+      } else {
+        setSaveStatus({ ok: false, msg: res.error || 'Failed to connect' });
       }
-      setSaveStatus({ ok: false, msg: res.error || 'Failed to connect' });
     } catch (err: any) {
       setSaveStatus({ ok: false, msg: err.message || 'Failed' });
     }
     setCcLoading(false);
   };
 
-  // Cleanup poll on unmount
-  useEffect(() => () => stopCcPoll(), []);
+  const handleCcPasteCode = async () => {
+    if (!ccCode.trim()) return;
+    setCcLoading(true);
+    try {
+      const res = await api.post<{ ok: boolean; error?: string }>('/settings/claude-code/complete', { code: ccCode.trim() });
+      if (res.ok) {
+        setCcAuthUrl(null);
+        setCcCode('');
+        await loadCcStatus();
+        await loadStatus();
+      } else {
+        setSaveStatus({ ok: false, msg: res.error || 'Failed — try again' });
+      }
+    } catch (err: any) {
+      setSaveStatus({ ok: false, msg: err.message || 'Failed' });
+    }
+    setCcLoading(false);
+  };
 
   const handleCcDisconnect = async () => {
     setCcLoading(true);
@@ -264,14 +257,27 @@ export default function ApiKeysPage() {
           </div>
         </div>
         {ccAuthUrl && (
-          <div className="mt-3 rounded-lg bg-amber-500/10 px-3 py-2.5">
-            <div className="flex items-center gap-2">
-              <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-300/60" />
-              <p className="text-[13px] text-amber-300/80">Waiting for sign-in... complete it in the browser window.</p>
+          <div className="mt-3 space-y-3">
+            <div className="rounded-lg bg-amber-500/10 px-3 py-2.5">
+              <p className="text-[13px] text-amber-300/80">Sign in in the browser, then copy the authentication code and paste it here.</p>
+              <a href={ccAuthUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[12px] text-amber-300/60 hover:text-amber-300/80 mt-1">
+                <ExternalLink className="h-3 w-3" /> Open sign-in link again
+              </a>
             </div>
-            <a href={ccAuthUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[12px] text-amber-300/60 hover:text-amber-300/80 mt-1.5">
-              <ExternalLink className="h-3 w-3" /> Open sign-in link again
-            </a>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={ccCode}
+                onChange={e => setCcCode(e.target.value)}
+                placeholder="Paste authentication code here..."
+                autoFocus
+                onKeyDown={e => e.key === 'Enter' && ccCode.trim() && handleCcPasteCode()}
+                className="flex-1 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[13px] text-white/80 placeholder:text-white/20 focus:border-white/[0.15] focus:outline-none transition-colors font-mono"
+              />
+              <Button size="sm" onClick={handleCcPasteCode} disabled={ccLoading || !ccCode.trim()}>
+                {ccLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Connect'}
+              </Button>
+            </div>
           </div>
         )}
       </div>

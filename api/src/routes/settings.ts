@@ -556,8 +556,37 @@ router.post('/claude-code/connect', async (req: AuthRequest, res: Response, next
 
 router.post('/claude-code/complete', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    // The CLI polls for auth completion automatically after the user signs in via browser.
-    // We just need to check if auth succeeded.
+    const { code } = req.body || {};
+    const session = ccAuthSessions.get(req.userId!);
+
+    // Feed the auth code to the running `claude auth login` process
+    if (session && code) {
+      session.stream.write(code.trim() + '\n');
+      // Wait for the CLI to process it
+      await new Promise<void>((resolve) => {
+        const prevLen = session.output.length;
+        const done = setTimeout(() => resolve(), 15000);
+        const onData = (chunk: string) => {
+          session.output += chunk;
+          const newOut = session.output.slice(prevLen).toLowerCase();
+          if (newOut.includes('success') || newOut.includes('authenticated') || newOut.includes('logged in') || newOut.includes('saved')) {
+            clearTimeout(done);
+            resolve();
+          }
+        };
+        session.stream.on('data', onData);
+        session.stream.on('close', () => { clearTimeout(done); resolve(); });
+      });
+    }
+
+    // Clean up session
+    if (session) {
+      clearTimeout(session.timer);
+      session.stream.kill();
+      ccAuthSessions.delete(req.userId!);
+    }
+
+    // Verify auth status
     const { serverIp, containerName } = await requireRunningContainer(req.userId!);
     const authCheck = await sshExec(serverIp,
       `docker exec ${containerName} claude auth status 2>/dev/null`,
@@ -566,15 +595,7 @@ router.post('/claude-code/complete', async (req: AuthRequest, res: Response, nex
 
     const isAuthed = authCheck?.stdout?.includes('"loggedIn":true') || authCheck?.stdout?.includes('"loggedIn": true');
     if (!isAuthed) {
-      return res.json({ ok: false, error: 'Still waiting for sign-in. Complete the sign-in in your browser, then try again.' });
-    }
-
-    // Clean up the auth session
-    const session = ccAuthSessions.get(req.userId!);
-    if (session) {
-      clearTimeout(session.timer);
-      session.stream.kill();
-      ccAuthSessions.delete(req.userId!);
+      return res.json({ ok: false, error: 'Authentication failed. Click Connect to try again.' });
     }
 
     // Write to auth-profiles.json so OpenClaw picks it up
