@@ -82,12 +82,16 @@ export default function ApiKeysPage() {
     setCcLoading(false);
   };
 
+  const [ccCode, setCcCode] = useState('');
+
   const handleCcComplete = async () => {
+    if (!ccCode.trim()) return;
     setCcLoading(true);
     try {
-      const res = await api.post<{ ok: boolean; error?: string }>('/settings/claude-code/complete');
+      const res = await api.post<{ ok: boolean; error?: string }>('/settings/claude-code/complete', { code: ccCode.trim() });
       if (res.ok) {
         setCcAuthUrl(null);
+        setCcCode('');
         await loadCcStatus();
         await loadStatus();
       } else {
@@ -244,19 +248,37 @@ export default function ApiKeysPage() {
                 {ccLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Disconnect'}
               </Button>
             ) : (
-              <Button size="sm" onClick={ccAuthUrl ? handleCcComplete : handleCcConnect} disabled={ccLoading}>
-                {ccLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : null}
-                {ccAuthUrl ? 'I signed in' : 'Connect'}
-              </Button>
+              {!ccAuthUrl && (
+                <Button size="sm" onClick={handleCcConnect} disabled={ccLoading}>
+                  {ccLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : null}
+                  Connect
+                </Button>
+              )}
             )}
           </div>
         </div>
         {ccAuthUrl && (
-          <div className="mt-3 rounded-lg bg-amber-500/10 px-3 py-2.5">
-            <p className="text-[13px] text-amber-300/80">Sign in to Claude in the browser window that opened, then click "I signed in" above.</p>
-            <a href={ccAuthUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[12px] text-amber-300/60 hover:text-amber-300/80 mt-1">
-              <ExternalLink className="h-3 w-3" /> Open sign-in link again
-            </a>
+          <div className="mt-3 space-y-3">
+            <div className="rounded-lg bg-amber-500/10 px-3 py-2.5">
+              <p className="text-[13px] text-amber-300/80">Sign in via the browser window, then copy the authentication code and paste it below.</p>
+              <a href={ccAuthUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[12px] text-amber-300/60 hover:text-amber-300/80 mt-1">
+                <ExternalLink className="h-3 w-3" /> Open sign-in link again
+              </a>
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={ccCode}
+                onChange={e => setCcCode(e.target.value)}
+                placeholder="Paste authentication code here..."
+                autoFocus
+                onKeyDown={e => e.key === 'Enter' && handleCcComplete()}
+                className="flex-1 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[13px] text-white/80 placeholder:text-white/20 focus:border-white/[0.15] focus:outline-none transition-colors"
+              />
+              <Button size="sm" onClick={handleCcComplete} disabled={ccLoading || !ccCode.trim()}>
+                {ccLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Connect'}
+              </Button>
+            </div>
           </div>
         )}
       </div>

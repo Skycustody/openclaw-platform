@@ -479,6 +479,9 @@ router.get('/claude-code/status', async (req: AuthRequest, res: Response, next: 
   }
 });
 
+/** Track in-flight Claude Code auth sessions so we can feed the code back. */
+const ccAuthSessions = new Map<string, { stream: any; output: string; timer: ReturnType<typeof setTimeout> }>();
+
 router.post('/claude-code/connect', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { serverIp, containerName } = await requireRunningContainer(req.userId!);
@@ -507,20 +510,42 @@ router.post('/claude-code/connect', async (req: AuthRequest, res: Response, next
       return res.json({ ok: true, authenticated: true });
     }
 
-    // Step 3: Start auth login and capture the URL (BROWSER=echo prevents opening a browser)
-    const loginResult = await sshExec(serverIp,
-      `docker exec -e BROWSER=echo ${containerName} timeout 15 claude auth login 2>&1 || true`,
-      1, 20000
-    ).catch(() => null);
+    // Step 3: Start auth login as interactive stream (keeps process alive for code paste)
+    // Clean up any previous session
+    const prev = ccAuthSessions.get(req.userId!);
+    if (prev) { clearTimeout(prev.timer); prev.stream.kill(); ccAuthSessions.delete(req.userId!); }
 
-    const output = loginResult?.stdout || '';
-    const urlMatch = output.match(/https:\/\/[^\s\n"']+/);
+    const { sshExecStream } = await import('../services/ssh');
+    const stream = sshExecStream(serverIp,
+      `docker exec -i -e BROWSER=echo ${containerName} claude auth login 2>&1`
+    );
 
+    const session = { stream, output: '', timer: setTimeout(() => {
+      stream.kill();
+      ccAuthSessions.delete(req.userId!);
+    }, 5 * 60 * 1000) };
+    ccAuthSessions.set(req.userId!, session);
+
+    // Wait for URL to appear in output
+    await new Promise<void>((resolve) => {
+      const urlTimeout = setTimeout(() => resolve(), 20000);
+      stream.on('data', (chunk: string) => {
+        session.output += chunk;
+        if (session.output.match(/https:\/\/[^\s\n"']+/)) {
+          clearTimeout(urlTimeout);
+          resolve();
+        }
+      });
+      stream.on('error', () => { clearTimeout(urlTimeout); resolve(); });
+      stream.on('close', () => { clearTimeout(urlTimeout); resolve(); });
+    });
+
+    const urlMatch = session.output.match(/https:\/\/[^\s\n"']+/);
     if (urlMatch) {
       return res.json({ ok: false, needsAuth: true, authUrl: urlMatch[0] });
     }
 
-    return res.json({ ok: false, error: 'Could not get auth URL. Output: ' + output.slice(0, 200) });
+    return res.json({ ok: false, error: 'Could not get auth URL. Output: ' + session.output.slice(0, 200) });
   } catch (err: any) {
     if (err.statusCode === 409) return res.status(409).json({ error: err.message });
     next(err);
@@ -529,9 +554,35 @@ router.post('/claude-code/connect', async (req: AuthRequest, res: Response, next
 
 router.post('/claude-code/complete', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { serverIp, containerName } = await requireRunningContainer(req.userId!);
+    const { code } = req.body || {};
+    const session = ccAuthSessions.get(req.userId!);
 
-    // Check if auth succeeded
+    if (session && code) {
+      // Feed the auth code to the waiting `claude auth login` process
+      session.stream.write(code.trim() + '\n');
+
+      // Wait for it to process
+      await new Promise<void>((resolve) => {
+        const prevLen = session.output.length;
+        const done = setTimeout(() => resolve(), 10000);
+        session.stream.on('data', (chunk: string) => {
+          session.output += chunk;
+          const newOutput = session.output.slice(prevLen).toLowerCase();
+          if (newOutput.includes('success') || newOutput.includes('authenticated') || newOutput.includes('logged in')) {
+            clearTimeout(done);
+            resolve();
+          }
+        });
+        session.stream.on('close', () => { clearTimeout(done); resolve(); });
+      });
+
+      clearTimeout(session.timer);
+      session.stream.kill();
+      ccAuthSessions.delete(req.userId!);
+    }
+
+    // Verify auth status
+    const { serverIp, containerName } = await requireRunningContainer(req.userId!);
     const authCheck = await sshExec(serverIp,
       `docker exec ${containerName} claude auth status 2>/dev/null`,
       1, 10000
@@ -539,7 +590,7 @@ router.post('/claude-code/complete', async (req: AuthRequest, res: Response, nex
 
     const isAuthed = authCheck?.stdout?.includes('"loggedIn":true') || authCheck?.stdout?.includes('"loggedIn": true');
     if (!isAuthed) {
-      return res.json({ ok: false, error: 'Authentication not completed yet. Please sign in via the browser link.' });
+      return res.json({ ok: false, error: 'Authentication not completed. Copy the code from the browser and paste it below.' });
     }
 
     // Write to auth-profiles.json so OpenClaw picks it up
