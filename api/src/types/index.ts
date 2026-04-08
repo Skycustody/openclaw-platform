@@ -166,8 +166,8 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     maxAgents: 2,
   },
   business: {
-    ramMb: 8192,
-    cpus: '4.0',
+    ramMb: 2048,
+    cpus: '2.0',
     maxSkills: 53,
     maxCronJobs: 100,
     storageGb: 100,
