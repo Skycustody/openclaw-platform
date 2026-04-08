@@ -15,7 +15,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: 'Valnaa — Your Personal AI Agent',
+  title: 'Valnaa',
   description:
     'The most powerful open-source AI agent, hosted for you. Zero setup. Ready in 60 seconds.',
   icons: {
