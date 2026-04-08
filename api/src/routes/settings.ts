@@ -595,7 +595,7 @@ const CLAUDE_OAUTH_SCOPES = 'user:inference user:profile user:sessions:claude_co
 const PKCE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
 // In-memory PKCE verifier store (keyed by userId, auto-expires)
-const pkceStore = new Map<string, { verifier: string; timer: ReturnType<typeof setTimeout> }>();
+const pkceStore = new Map<string, { verifier: string; state: string; timer: ReturnType<typeof setTimeout> }>();
 
 function base64url(buf: Buffer): string {
   return buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -639,10 +639,8 @@ router.get('/claude-code/start-oauth', async (req: AuthRequest, res: Response, n
     const existing = pkceStore.get(userId);
     if (existing) clearTimeout(existing.timer);
     const timer = setTimeout(() => pkceStore.delete(userId), PKCE_TTL_MS);
-    pkceStore.set(userId, { verifier: codeVerifier, timer });
-
-    // Build signed state
     const state = signState(userId);
+    pkceStore.set(userId, { verifier: codeVerifier, state, timer });
 
     // Build authorization URL
     const params = new URLSearchParams({
@@ -676,17 +674,18 @@ router.post('/claude-code/exchange', async (req: AuthRequest, res: Response, nex
       return res.status(400).json({ error: 'OAuth session expired. Click Connect to start again.' });
     }
 
-    // Exchange code for token (must be form-urlencoded)
+    // Exchange code for token
     const tokenRes = await fetch(CLAUDE_OAUTH_TOKEN_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
         grant_type: 'authorization_code',
         code: code.trim(),
         redirect_uri: CLAUDE_OAUTH_REDIRECT_URI,
         client_id: CLAUDE_OAUTH_CLIENT_ID,
         code_verifier: pkce.verifier,
-      }).toString(),
+        state: pkce.state,
+      }),
     });
 
     // Clean up PKCE
