@@ -103,7 +103,9 @@ export default function ApiKeysPage() {
         await loadCcStatus();
         await loadStatus();
       } else {
-        setCcError(res.error || 'Failed to connect');
+        // Session expired — restart the flow automatically
+        setCcWaitingForCode(false);
+        setCcError((res.error || 'Failed') + ' — click Connect to try again.');
       }
     } catch (err: any) {
       setCcError(err.message || 'Failed');
