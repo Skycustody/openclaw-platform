@@ -36,6 +36,7 @@ export interface AgentStatus {
   reused: boolean;
   gatewayToken: string | null;
   runtime: RuntimeType;
+  bossRunning: boolean;
 }
 
 function readGatewayToken(): string | null {
@@ -58,6 +59,65 @@ const RESTART_BACKOFF_MS = [2000, 5000, 10000];
 const STARTUP_TIMEOUT_MS = 30000;
 
 const CLAUDE_PROXY_PORT = 3456;
+const BOSS_CHECK_INTERVAL_CLI_MS = 15 * 60 * 1000; // 15 min default (free via Max)
+const BOSS_CHECK_INTERVAL_API_MS = 30 * 60 * 1000; // 30 min default (paid per token)
+const BOSS_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes max per check
+
+interface BossConfig {
+  enabled?: boolean;
+  provider?: string;  // 'anthropic' | 'openai' | 'xai' | 'groq' | 'mistral' | 'claude-code'
+  model?: string;     // e.g. 'gpt-4o', 'claude-sonnet-4-20250514', 'grok-3'
+  intervalMinutes?: number;
+  notify?: { telegram?: { chatId?: string } };
+  lastCheckedAt?: string | null;
+  /** Agent cron schedules — run agents as Claude Code instances */
+  agents?: Record<string, { enabled: boolean; intervalMinutes: number; prompt?: string }>;
+}
+
+/** Read boss config from ~/.openclaw/boss.json */
+function readBossConfig(): BossConfig {
+  try {
+    const cfgPath = path.join(os.homedir(), '.openclaw', 'boss.json');
+    return JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
+  } catch {
+    return {};
+  }
+}
+
+/** Read agent list from openclaw.json */
+function readAgentList(): Array<{ id: string; name: string; workspace?: string }> {
+  try {
+    const cfgPath = path.join(os.homedir(), '.openclaw', 'openclaw.json');
+    const config = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
+    return config.agents?.list || [];
+  } catch {
+    return [];
+  }
+}
+
+/** Find the `claude` CLI binary. Returns the path or null. */
+function findClaudeBinary(): string | null {
+  const { execSync } = require('child_process');
+  try {
+    const out = execSync('which claude', { encoding: 'utf-8', timeout: 5000, stdio: 'pipe' }).trim();
+    if (out) return out;
+  } catch { /* not in PATH */ }
+  // Check common locations
+  for (const dir of ['/usr/local/bin', path.join(os.homedir(), '.local', 'bin'), path.join(os.homedir(), '.npm-global', 'bin')]) {
+    const bin = path.join(dir, 'claude');
+    if (fs.existsSync(bin)) return bin;
+  }
+  // Check nvm versions
+  try {
+    const nvmBase = path.join(os.homedir(), '.nvm', 'versions', 'node');
+    const versions = fs.readdirSync(nvmBase);
+    for (const v of versions.sort().reverse()) {
+      const bin = path.join(nvmBase, v, 'bin', 'claude');
+      if (fs.existsSync(bin)) return bin;
+    }
+  } catch { /* nvm not installed */ }
+  return null;
+}
 
 /** Find the Claude proxy — prefer SDK proxy, fall back to claude-max-api. */
 function findClaudeProxyBinary(): { bin: string; args: string[] } | null {
@@ -100,6 +160,10 @@ class OpenClawManager extends EventEmitter {
   /** True when connected to a gateway we didn't start — don't modify config or clear tokens */
   private externalGateway = false;
   private pairingPoll: ReturnType<typeof setInterval> | null = null;
+  private bossAgent: ChildProcess | null = null;
+  private bossTimer: ReturnType<typeof setInterval> | null = null;
+  /** Claude Code agent runners — keyed by agent ID */
+  private agentRunners: Map<string, { proc: ChildProcess | null; timer: ReturnType<typeof setInterval> }> = new Map();
 
   /** True when connected to a user's pre-existing gateway — app should not modify their config */
   isExternal(): boolean { return this.externalGateway; }
@@ -116,6 +180,7 @@ class OpenClawManager extends EventEmitter {
       reused: this.reused,
       gatewayToken: readGatewayToken(),
       runtime: pref?.runtime || 'openclaw',
+      bossRunning: this.bossTimer !== null,
     };
   }
 
@@ -270,6 +335,408 @@ class OpenClawManager extends EventEmitter {
       this.claudeProxy = null;
       logApp('info', 'Claude Code proxy stopped');
     }
+  }
+
+  // ── Boss Agent (Claude Code or API-powered manager) ─────────────────────
+
+  /**
+   * Resolve how Boss should run. Reads optional `boss` config from openclaw.json
+   * for user's model/provider/interval preferences, then picks the best mode:
+   *
+   * 1. **CLI mode** — `claude -p` (free via Max subscription)
+   * 2. **API mode** — `node boss-agent.mjs` (paid per token, any provider)
+   *
+   * User can force a provider/model via openclaw.json:
+   *   { "boss": { "provider": "openai", "model": "gpt-4o", "intervalMinutes": 20 } }
+   *   { "boss": { "provider": "claude-code" } }  // force CLI mode
+   *   { "boss": { "enabled": false } }            // disable Boss
+   */
+  private resolveBossMode(): {
+    mode: 'cli'; bin: string; cwd: string; model: string | null; interval: number;
+  } | {
+    mode: 'api'; cwd: string; apiKey: string; envVar: string; provider: string; model: string | null; interval: number;
+  } | null {
+    const bossWorkspace = path.join(os.homedir(), '.openclaw', 'workspace-manager');
+    const claudeMd = path.join(bossWorkspace, 'CLAUDE.md');
+    if (!fs.existsSync(claudeMd)) return null;
+
+    const cfg = readBossConfig();
+
+    // Explicit disable
+    if (cfg.enabled === false) return null;
+
+    // All supported API providers and their env var names
+    const providerEnvMap: Array<{ provider: string; envVar: string }> = [
+      { provider: 'anthropic', envVar: 'ANTHROPIC_API_KEY' },
+      { provider: 'openai', envVar: 'OPENAI_API_KEY' },
+      { provider: 'xai', envVar: 'XAI_API_KEY' },
+      { provider: 'groq', envVar: 'GROQ_API_KEY' },
+      { provider: 'mistral', envVar: 'MISTRAL_API_KEY' },
+    ];
+
+    // Collect all available API keys
+    const apiKeys: Record<string, string> = {};
+    try {
+      const authPath = path.join(os.homedir(), '.openclaw', 'agents', 'main', 'agent', 'auth-profiles.json');
+      const authData = JSON.parse(fs.readFileSync(authPath, 'utf-8'));
+      for (const [, profile] of Object.entries(authData.profiles || {})) {
+        const p = profile as any;
+        if (p.type === 'api_key' && p.key && p.provider) {
+          apiKeys[p.provider] = p.key;
+        }
+      }
+    } catch { /* no auth profiles */ }
+    for (const { provider: prov, envVar } of providerEnvMap) {
+      if (process.env[envVar] && !apiKeys[prov]) apiKeys[prov] = process.env[envVar]!;
+    }
+
+    // Check if Claude Code CLI is available
+    const claudeCodeEnabled = path.join(os.homedir(), '.openclaw-desktop', 'claude-code-enabled');
+    const hasCli = fs.existsSync(claudeCodeEnabled) && !!findClaudeBinary();
+    const hasScript = fs.existsSync(path.join(os.homedir(), '.openclaw', 'agent-runner.mjs')) || fs.existsSync(path.join(bossWorkspace, 'boss-agent.mjs'));
+
+    // ── If user explicitly configured a provider ──
+    if (cfg.provider) {
+      const userInterval = cfg.intervalMinutes ? cfg.intervalMinutes * 60_000 : null;
+
+      // "claude-code" = force CLI mode
+      if (cfg.provider === 'claude-code') {
+        if (!hasCli) return null;
+        return {
+          mode: 'cli', bin: findClaudeBinary()!, cwd: bossWorkspace,
+          model: cfg.model || null,
+          interval: userInterval || BOSS_CHECK_INTERVAL_CLI_MS,
+        };
+      }
+
+      // Specific API provider requested
+      const match = providerEnvMap.find(p => p.provider === cfg.provider);
+      if (match && apiKeys[cfg.provider] && hasScript) {
+        return {
+          mode: 'api', cwd: bossWorkspace, envVar: match.envVar,
+          apiKey: apiKeys[cfg.provider], provider: cfg.provider,
+          model: cfg.model || null,
+          interval: userInterval || BOSS_CHECK_INTERVAL_API_MS,
+        };
+      }
+
+      // Requested provider not available — log and fall through to auto-detect
+      logApp('warn', `Boss config: provider "${cfg.provider}" requested but no API key found — auto-detecting`);
+    }
+
+    const userInterval = cfg.intervalMinutes ? cfg.intervalMinutes * 60_000 : null;
+
+    // ── Auto-detect: prefer CLI (free), fall back to best API ──
+    if (hasCli) {
+      return {
+        mode: 'cli', bin: findClaudeBinary()!, cwd: bossWorkspace,
+        model: cfg.model || null,
+        interval: userInterval || BOSS_CHECK_INTERVAL_CLI_MS,
+      };
+    }
+
+    if (hasScript) {
+      for (const { provider: prov, envVar } of providerEnvMap) {
+        if (apiKeys[prov]) {
+          return {
+            mode: 'api', cwd: bossWorkspace, envVar,
+            apiKey: apiKeys[prov], provider: prov,
+            model: cfg.model || null,
+            interval: userInterval || BOSS_CHECK_INTERVAL_API_MS,
+          };
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Start the Boss agent — monitors all other agents, evaluates output,
+   * manages mailboxes, and dispatches tasks.
+   */
+  private startBossAgent(): void {
+    if (this.bossTimer) return;
+
+    const bossMode = this.resolveBossMode();
+    if (!bossMode) {
+      logApp('info', 'Boss agent: no Claude CLI or API key found — skipping');
+      return;
+    }
+
+    const modeLabel = bossMode.mode === 'cli' ? 'Claude Code CLI (free)' : `${bossMode.provider} API (paid)`;
+    const modelLabel = bossMode.model || 'default';
+    const intervalMin = bossMode.interval / 60_000;
+
+    logApp('info', `Boss agent started — mode: ${modeLabel}, model: ${modelLabel}, interval: ${intervalMin}min`);
+
+    // First check after 30 seconds (let gateway fully stabilize)
+    setTimeout(() => this.runBossCheck(bossMode), 30_000);
+
+    // Then on interval
+    this.bossTimer = setInterval(() => this.runBossCheck(bossMode), bossMode.interval);
+  }
+
+  /** Collect all API keys from auth profiles + env for the boss-agent script. */
+  private collectAllApiKeys(): Record<string, string> {
+    const keys: Record<string, string> = {};
+    const envMap: Record<string, string> = {
+      anthropic: 'ANTHROPIC_API_KEY',
+      openai: 'OPENAI_API_KEY',
+      xai: 'XAI_API_KEY',
+      groq: 'GROQ_API_KEY',
+      mistral: 'MISTRAL_API_KEY',
+    };
+    // From auth profiles
+    try {
+      const authPath = path.join(os.homedir(), '.openclaw', 'agents', 'main', 'agent', 'auth-profiles.json');
+      const authData = JSON.parse(fs.readFileSync(authPath, 'utf-8'));
+      for (const [, profile] of Object.entries(authData.profiles || {})) {
+        const p = profile as any;
+        if (p.type === 'api_key' && p.key && p.provider && envMap[p.provider]) {
+          keys[envMap[p.provider]] = p.key;
+        }
+      }
+    } catch { /* no auth profiles */ }
+    // From env (don't overwrite profile keys)
+    for (const envVar of Object.values(envMap)) {
+      if (process.env[envVar] && !keys[envVar]) keys[envVar] = process.env[envVar]!;
+    }
+    return keys;
+  }
+
+  /** Run a single Boss check — spawns either claude CLI or node script. */
+  private runBossCheck(mode: ReturnType<OpenClawManager['resolveBossMode']> & {}): void {
+    if (this.bossAgent) {
+      logApp('info', 'Boss agent: previous check still running — skipping');
+      return;
+    }
+
+    const prompt = [
+      'You are Boss. Run your periodic operations check.',
+      'Read CLAUDE.md for full instructions. Key steps:',
+      '1. Read boss.json for lastCheckedAt — use it for diff detection',
+      '2. Check your inbox, then audit all agent inboxes',
+      '3. Only read files modified since lastCheckedAt (skip unchanged)',
+      '4. Evaluate changes, grade agents, send mailbox messages',
+      '5. Notify user via Telegram if anything notable (D/F grades, errors, milestones)',
+      '6. Update HEARTBEAT.md (rotate: max 5 runs, archive older)',
+      '7. Update lastCheckedAt in boss.json',
+      'Be concise. Numbers first. Act, don\'t advise.',
+    ].join('\n');
+
+    logApp('info', `Boss agent: starting periodic check (${mode.mode} mode${mode.model ? ', model: ' + mode.model : ''})`);
+
+    if (mode.mode === 'cli') {
+      const args = ['-p', '--dangerously-skip-permissions'];
+      if (mode.model) args.push('--model', mode.model);
+      args.push(prompt);
+      this.bossAgent = spawn(mode.bin, args, {
+        cwd: mode.cwd,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: { ...process.env },
+        windowsHide: true,
+      });
+    } else {
+      // API mode — pass ALL available API keys so Boss can use any provider
+      const sharedScript = path.join(os.homedir(), '.openclaw', 'agent-runner.mjs');
+      const scriptPath = fs.existsSync(sharedScript) ? sharedScript : path.join(mode.cwd, 'boss-agent.mjs');
+      const allKeys = this.collectAllApiKeys();
+      const env: Record<string, string> = { ...process.env as any, ...allKeys };
+      // Override with the selected provider's key (in case of conflict)
+      env[mode.envVar] = mode.apiKey;
+      if (mode.model) env.BOSS_MODEL = mode.model;
+      if (mode.provider) env.BOSS_PROVIDER = mode.provider;
+      this.bossAgent = spawn('node', [scriptPath, prompt], {
+        cwd: mode.cwd,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env,
+        windowsHide: true,
+      });
+    }
+
+    let stdout = '';
+    let stderr = '';
+
+    this.bossAgent.stdout?.on('data', (d: Buffer) => {
+      stdout += d.toString();
+    });
+    this.bossAgent.stderr?.on('data', (d: Buffer) => {
+      stderr += d.toString();
+    });
+
+    this.bossAgent.on('close', (code) => {
+      const lines = stdout.split('\n').filter(l => l.trim()).length;
+      logApp('info', `Boss agent: check completed (exit: ${code}, output: ${lines} lines, mode: ${mode.mode})`);
+      if (code !== 0 && stderr) {
+        logApp('warn', `Boss agent stderr: ${stderr.slice(0, 500)}`);
+      }
+      // Update lastCheckedAt on successful completion
+      if (code === 0) {
+        try {
+          const cfgPath = path.join(os.homedir(), '.openclaw', 'boss.json');
+          const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
+          cfg.lastCheckedAt = new Date().toISOString();
+          fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+        } catch { /* ok */ }
+      }
+      this.bossAgent = null;
+    });
+
+    this.bossAgent.on('error', (err) => {
+      logApp('warn', `Boss agent: spawn failed: ${err.message}`);
+      this.bossAgent = null;
+    });
+
+    // Safety timeout — kill if Boss runs too long
+    setTimeout(() => {
+      if (this.bossAgent) {
+        logApp('warn', 'Boss agent: timed out — killing');
+        this.bossAgent.kill();
+        this.bossAgent = null;
+      }
+    }, BOSS_TIMEOUT_MS);
+  }
+
+  private stopBossAgent(): void {
+    if (this.bossTimer) {
+      clearInterval(this.bossTimer);
+      this.bossTimer = null;
+    }
+    if (this.bossAgent) {
+      this.bossAgent.kill();
+      this.bossAgent = null;
+    }
+    logApp('info', 'Boss agent stopped');
+  }
+
+  // ── Agent Runners (run any agent as Claude Code) ───────────────────────
+
+  /**
+   * Start full-power runners for agents configured in boss.json.
+   * Uses Claude Code CLI if available, falls back to agent-runner.mjs (works on servers too).
+   *
+   * boss.json:
+   *   { "agents": { "lead-gen": { "enabled": true, "intervalMinutes": 60 } } }
+   */
+  private startAgentRunners(): void {
+    const cfg = readBossConfig();
+    if (!cfg.agents) return;
+
+    // Resolve execution mode: Claude CLI or agent-runner.mjs
+    const claudeCodeEnabled = path.join(os.homedir(), '.openclaw-desktop', 'claude-code-enabled');
+    const claudeBin = fs.existsSync(claudeCodeEnabled) ? findClaudeBinary() : null;
+    const runnerScript = path.join(os.homedir(), '.openclaw', 'agent-runner.mjs');
+    const hasRunnerScript = fs.existsSync(runnerScript);
+
+    if (!claudeBin && !hasRunnerScript) {
+      logApp('info', 'Agent runners: no claude CLI or agent-runner.mjs — skipping');
+      return;
+    }
+
+    // Collect API keys for agent-runner.mjs mode
+    const allKeys = !claudeBin ? this.collectAllApiKeys() : {};
+    const runMode = claudeBin ? 'cli' : 'api';
+    const agentList = readAgentList();
+
+    for (const [agentId, agentCfg] of Object.entries(cfg.agents)) {
+      if (!agentCfg.enabled) continue;
+      if (this.agentRunners.has(agentId)) continue;
+
+      const agentEntry = agentList.find(a => a.id === agentId);
+      const workspace = agentEntry?.workspace || path.join(os.homedir(), '.openclaw', `workspace-${agentId}`);
+
+      // Ensure CLAUDE.md exists (auto-create from SOUL.md)
+      const claudeMd = path.join(workspace, 'CLAUDE.md');
+      if (!fs.existsSync(claudeMd)) {
+        const soulMd = path.join(workspace, 'SOUL.md');
+        if (fs.existsSync(soulMd)) {
+          fs.copyFileSync(soulMd, claudeMd);
+        } else {
+          logApp('warn', `Agent runner [${agentId}]: no CLAUDE.md or SOUL.md — skipping`);
+          continue;
+        }
+      }
+
+      const intervalMs = (agentCfg.intervalMinutes || 60) * 60_000;
+      const runner = { proc: null as ChildProcess | null, timer: null as any };
+
+      const runOnce = () => {
+        if (runner.proc) {
+          logApp('info', `Agent runner [${agentId}]: previous run still active — skipping`);
+          return;
+        }
+
+        const prompt = agentCfg.prompt || [
+          `You are ${agentEntry?.name || agentId}. Run your scheduled task.`,
+          'Read CLAUDE.md for full instructions.',
+          '1. Check your inbox at ~/.openclaw/mailbox/' + agentId + '/inbox/',
+          '2. Process any messages, then do your primary work.',
+          '3. Update HEARTBEAT.md when done.',
+          'Be concise. Act, don\'t advise.',
+        ].join('\n');
+
+        logApp('info', `Agent runner [${agentId}]: starting (${runMode})`);
+
+        if (claudeBin) {
+          // Claude Code CLI — full power, free
+          runner.proc = spawn(claudeBin, ['-p', '--dangerously-skip-permissions', prompt], {
+            cwd: workspace,
+            stdio: ['ignore', 'pipe', 'pipe'],
+            env: { ...process.env },
+            windowsHide: true,
+          });
+        } else {
+          // agent-runner.mjs — full power, any provider, works on servers
+          runner.proc = spawn('node', [runnerScript, prompt], {
+            cwd: workspace,
+            stdio: ['ignore', 'pipe', 'pipe'],
+            env: { ...process.env as any, ...allKeys },
+            windowsHide: true,
+          });
+        }
+
+        let stdout = '';
+        runner.proc.stdout?.on('data', (d: Buffer) => { stdout += d.toString(); });
+        runner.proc.stderr?.on('data', () => { /* suppress */ });
+
+        runner.proc.on('close', (code) => {
+          const lines = stdout.split('\n').filter(l => l.trim()).length;
+          logApp('info', `Agent runner [${agentId}]: completed (exit: ${code}, ${lines} lines)`);
+          runner.proc = null;
+        });
+
+        runner.proc.on('error', (err) => {
+          logApp('warn', `Agent runner [${agentId}]: spawn failed: ${err.message}`);
+          runner.proc = null;
+        });
+
+        // Safety timeout
+        setTimeout(() => {
+          if (runner.proc) {
+            logApp('warn', `Agent runner [${agentId}]: timed out — killing`);
+            runner.proc.kill();
+            runner.proc = null;
+          }
+        }, BOSS_TIMEOUT_MS);
+      };
+
+      // First run after 60 seconds (stagger after Boss)
+      setTimeout(runOnce, 60_000);
+      runner.timer = setInterval(runOnce, intervalMs);
+      this.agentRunners.set(agentId, runner);
+
+      logApp('info', `Agent runner [${agentId}]: started — interval: ${agentCfg.intervalMinutes || 60}min`);
+    }
+  }
+
+  private stopAgentRunners(): void {
+    for (const [agentId, runner] of this.agentRunners) {
+      if (runner.timer) clearInterval(runner.timer);
+      if (runner.proc) runner.proc.kill();
+      logApp('info', `Agent runner [${agentId}]: stopped`);
+    }
+    this.agentRunners.clear();
   }
 
   /**
@@ -685,6 +1152,12 @@ class OpenClawManager extends EventEmitter {
     const relayPort = (this.port || OPENCLAW_PORT) + 3;
     startRelay(relayPort);
 
+    // Start Boss agent (Claude Code manager instance)
+    this.startBossAgent();
+
+    // Start Claude Code runners for configured agents
+    this.startAgentRunners();
+
     logApp('info', `OpenClaw gateway ready on port ${this.port}`);
   }
 
@@ -710,6 +1183,8 @@ class OpenClawManager extends EventEmitter {
     stopRelay();
     this.stopPairingPoller();
     this.stopClaudeProxy();
+    this.stopBossAgent();
+    this.stopAgentRunners();
 
     // Don't kill an external gateway — we didn't start it
     if (this.externalGateway) {

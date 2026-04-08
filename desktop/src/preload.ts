@@ -172,6 +172,7 @@ contextBridge.exposeInMainWorld('openclaw', {
   ocSaveApiKey: (provider: string, key: string) => ipcRenderer.invoke('settings:oc-save-api-key', provider, key),
   ocRunOAuth: (provider: string) => ipcRenderer.invoke('settings:oc-run-oauth', provider),
   ocGetAgents: () => ipcRenderer.invoke('settings:oc-get-agents'),
+  ocSetDefaultAgent: (agentId: string) => ipcRenderer.invoke('settings:oc-set-default-agent', agentId),
   ocAddChannel: (agentId: string, channel: string, token: string) => ipcRenderer.invoke('settings:oc-add-channel', agentId, channel, token),
   ocAddChannelNoToken: (agentId: string, channel: string) => ipcRenderer.invoke('settings:oc-add-channel-no-token', agentId, channel),
   ocRemoveChannel: (agentId: string, channel: string) => ipcRenderer.invoke('settings:oc-remove-channel', agentId, channel),

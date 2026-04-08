@@ -3949,9 +3949,46 @@
             badgeContainer.innerHTML = '<span style="font-size:12px;color:rgba(255,255,255,0.3);">No channels</span>';
           }
 
-          card.innerHTML = '<div class="settings-row"><span class="settings-row-label" style="font-weight:600;">' +
-            (a.name || a.id) + (a.isDefault ? ' <span style="font-size:10px;color:rgba(255,255,255,0.3);">(default)</span>' : '') +
-            '</span><span class="settings-row-value" style="font-size:12px;">' + (a.model || 'default model') + '</span></div>';
+          var headerRow = document.createElement('div');
+          headerRow.className = 'settings-row';
+          headerRow.style.cssText = 'display:flex;justify-content:space-between;align-items:center;';
+
+          var nameSpan = document.createElement('span');
+          nameSpan.className = 'settings-row-label';
+          nameSpan.style.fontWeight = '600';
+          nameSpan.innerHTML = (a.name || a.id) + (a.isDefault ? ' <span style="font-size:10px;color:rgba(255,255,255,0.3);">(default)</span>' : '');
+
+          var rightSide = document.createElement('div');
+          rightSide.style.cssText = 'display:flex;gap:10px;align-items:center;';
+
+          if (!a.isDefault) {
+            var defBtn = document.createElement('button');
+            defBtn.style.cssText = 'padding:3px 10px;font-size:11px;border-radius:6px;border:1px solid rgba(255,255,255,0.12);background:transparent;color:rgba(255,255,255,0.5);cursor:pointer;transition:all 0.15s;';
+            defBtn.textContent = 'Set as default';
+            defBtn.addEventListener('mouseenter', function() { defBtn.style.borderColor = 'rgba(255,255,255,0.3)'; defBtn.style.color = 'rgba(255,255,255,0.8)'; });
+            defBtn.addEventListener('mouseleave', function() { defBtn.style.borderColor = 'rgba(255,255,255,0.12)'; defBtn.style.color = 'rgba(255,255,255,0.5)'; });
+            defBtn.addEventListener('click', async function(e) {
+              e.stopPropagation();
+              defBtn.disabled = true;
+              defBtn.textContent = 'Setting…';
+              try {
+                var r = await oc.ocSetDefaultAgent(a.id);
+                if (r && r.ok) { loadAgentChannels(); }
+                else { defBtn.textContent = 'Failed'; }
+              } catch { defBtn.textContent = 'Error'; }
+            });
+            rightSide.appendChild(defBtn);
+          }
+
+          var modelSpan = document.createElement('span');
+          modelSpan.className = 'settings-row-value';
+          modelSpan.style.fontSize = '12px';
+          modelSpan.textContent = a.model || 'default model';
+          rightSide.appendChild(modelSpan);
+
+          headerRow.appendChild(nameSpan);
+          headerRow.appendChild(rightSide);
+          card.appendChild(headerRow);
           card.appendChild(badgeContainer);
           list.appendChild(card);
 

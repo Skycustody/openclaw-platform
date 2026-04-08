@@ -142,10 +142,11 @@ async function agentUrlParts(subdomain: string, userId: string, server?: Server 
   if (token) {
     const gatewayWsUrl = `wss://${subdomain}.${domain}`;
     const gatewayUrl = `${gatewayWsUrl}?token=${token}`;
-    // Don't pass the token in the iframe URL — with dangerouslyDisableDeviceAuth=true
-    // the Control UI connects without auth. Sending a token that doesn't match the
-    // gateway's internal state causes "token mismatch" rejection (worse than no token).
-    return { url: baseUrl, baseUrl, gatewayUrl, gatewayToken: token, gatewayWsUrl };
+    // Pass the token in the iframe URL so the Control UI auto-connects.
+    // reapplyGatewayConfig syncs the DB token with the container's gateway,
+    // so they match. Without this, doctor --fix strips dangerouslyDisableDeviceAuth
+    // and the Control UI shows the manual connection page.
+    return { url: `${baseUrl}?token=${token}`, baseUrl, gatewayUrl, gatewayToken: token, gatewayWsUrl };
   }
 
   return { url: baseUrl, baseUrl, gatewayUrl: null, gatewayToken: null, gatewayWsUrl: null };

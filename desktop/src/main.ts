@@ -2762,10 +2762,11 @@ function setupIPC(): void {
       const home = os.homedir();
       const workspacePath = path.join(home, '.openclaw', `workspace-${id}`);
 
-      // Create workspace and write SOUL.md
+      // Create workspace and write SOUL.md + CLAUDE.md (for Claude Code runner)
       fs.mkdirSync(workspacePath, { recursive: true });
       fs.writeFileSync(path.join(workspacePath, 'SOUL.md'), soul, 'utf8');
-      logApp('info', `agents:install — wrote SOUL.md to ${workspacePath}`);
+      fs.writeFileSync(path.join(workspacePath, 'CLAUDE.md'), soul, 'utf8');
+      logApp('info', `agents:install — wrote SOUL.md + CLAUDE.md to ${workspacePath}`);
 
       // Write HEARTBEAT.md if provided in catalog
       try {
@@ -3308,6 +3309,26 @@ function setupIPC(): void {
     } catch (e: any) {
       logApp('warn', `oc-get-agents: ${e.message}`);
       return null;
+    }
+  });
+
+  ipcMain.handle('settings:oc-set-default-agent', async (_e, agentId: string) => {
+    try {
+      const cfgPath = path.join(process.env.HOME || os.homedir(), '.openclaw', 'openclaw.json');
+      const config = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
+      const agents = config.agents?.list || [];
+      const idx = agents.findIndex((a: any) => a.id === agentId);
+      if (idx < 0) return { ok: false, error: 'Agent not found' };
+      if (idx > 0) {
+        const [agent] = agents.splice(idx, 1);
+        agents.unshift(agent);
+        fs.writeFileSync(cfgPath, JSON.stringify(config, null, 2));
+        logApp('info', `Set default agent to ${agentId}`);
+      }
+      return { ok: true };
+    } catch (e: any) {
+      logApp('warn', `oc-set-default-agent: ${e.message}`);
+      return { ok: false, error: e.message };
     }
   });
 
