@@ -228,16 +228,30 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     );
   }
 
+  const { agentUrl } = useStore();
+
   return (
     <div className="h-screen overflow-hidden bg-[#30302E] text-[#e8e8e8] flex" style={{ backgroundImage: 'none' }}>
       <ConfigChangeToast />
       <Sidebar />
+
+      {/* Persistent iframe — stays mounted, shown/hidden via CSS */}
+      {agentUrl && (
+        <iframe
+          src={agentUrl}
+          className="border-0 flex-1 min-h-0"
+          style={{ display: isHome ? 'block' : 'none' }}
+          allow="clipboard-write; microphone"
+          title="OpenClaw Control UI"
+        />
+      )}
 
       <main
         className={cn(
           'flex-1 min-h-0 flex flex-col transition-all duration-300',
           isHome ? 'overflow-hidden' : 'px-4 md:px-5 pt-6 pb-4 md:pb-5 overflow-y-auto'
         )}
+        style={{ display: (isHome && agentUrl) ? 'none' : undefined }}
       >
         <div className={cn('flex-1 flex flex-col min-h-0', isHome ? 'overflow-hidden' : 'mx-auto max-w-5xl w-full')}>{children}</div>
         {!isHome && (

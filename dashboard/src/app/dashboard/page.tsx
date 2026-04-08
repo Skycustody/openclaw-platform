@@ -2,56 +2,26 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/Button';
-import { StatusBadge } from '@/components/ui/Badge';
 import api from '@/lib/api';
 import { useStore } from '@/lib/store';
-import { cn } from '@/lib/utils';
-import GatewayChat from '@/components/dashboard/GatewayChat';
 import {
   Bot, Loader2,
-  AlertTriangle, RefreshCw, ExternalLink, Globe,
+  AlertTriangle, RefreshCw, ExternalLink,
 } from 'lucide-react';
 
 type AgentDisplayStatus = 'active' | 'online' | 'sleeping' | 'paused' | 'provisioning' | 'cancelled' | 'offline' | 'grace_period';
 
-interface UserSettings {
-  brain_mode: 'auto' | 'manual';
-  manual_model: string | null;
-  has_own_openrouter_key: boolean;
-  agent_name: string;
-}
-
 type Phase = 'loading' | 'starting' | 'provisioning' | 'polling' | 'ready' | 'error';
 
 export default function DashboardHome() {
-  const { user } = useStore();
+  const { user, agentUrl, setAgentUrl } = useStore();
 
-  const [phase, setPhase] = useState<Phase>('loading');
-  const [agentUrl, setAgentUrl] = useState<string | null>(null);
-  const [gatewayWsUrl, setGatewayWsUrl] = useState<string | null>(null);
-  const [gatewayToken, setGatewayToken] = useState<string | null>(null);
+  const [phase, setPhase] = useState<Phase>(agentUrl ? 'ready' : 'loading');
   const [statusMsg, setStatusMsg] = useState('Connecting to agent...');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  const [settings, setSettings] = useState<UserSettings | null>(null);
   const [agentStatus, setAgentStatus] = useState<AgentDisplayStatus>('offline');
 
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-
   const pollAbort = useRef<AbortController | null>(null);
-
-  const fetchContext = useCallback(async () => {
-    try {
-      const [settingsRes, statusRes] = await Promise.allSettled([
-        api.get<{ settings: UserSettings }>('/settings'),
-        api.get<any>('/agent/status'),
-      ]);
-      if (settingsRes.status === 'fulfilled') setSettings(settingsRes.value.settings);
-      if (statusRes.status === 'fulfilled') {
-        setAgentStatus((statusRes.value.subscriptionStatus || statusRes.value.status || 'offline') as AgentDisplayStatus);
-      }
-    } catch {}
-  }, []);
 
   const pollUntilReady = useCallback(async () => {
     setPhase('polling');
@@ -76,29 +46,9 @@ export default function DashboardHome() {
     setErrorMsg('Agent took too long to start. Try refreshing.');
   }, []);
 
-  const storeGatewayInfo = useCallback((data: { gatewayWsUrl?: string | null; gatewayUrl?: string | null; gatewayToken?: string | null; url?: string; previewUrl?: string | null }) => {
+  const storeGatewayInfo = useCallback((data: { url?: string; [k: string]: any }) => {
     if (data.url) setAgentUrl(data.url);
-    if (data.gatewayToken) setGatewayToken(data.gatewayToken);
-    if (data.previewUrl) setPreviewUrl(data.previewUrl);
-
-    if (data.gatewayWsUrl) {
-      setGatewayWsUrl(data.gatewayWsUrl);
-    } else if (data.gatewayUrl) {
-      // Derive clean WSS URL by stripping query params
-      try {
-        const u = new URL(data.gatewayUrl.replace('wss://', 'https://'));
-        setGatewayWsUrl(`wss://${u.host}`);
-      } catch {
-        setGatewayWsUrl(data.gatewayUrl.split('?')[0]);
-      }
-    } else if (data.url) {
-      // Derive from the HTTPS URL
-      try {
-        const u = new URL(data.url);
-        setGatewayWsUrl(`wss://${u.host}`);
-      } catch {}
-    }
-  }, []);
+  }, [setAgentUrl]);
 
   const startAgent = useCallback(async () => {
     setPhase('starting');
@@ -180,8 +130,13 @@ export default function DashboardHome() {
   }, [pollUntilReady, storeGatewayInfo]);
 
   useEffect(() => {
+    // If we already have the URL from a previous visit, skip the whole flow
+    if (agentUrl) {
+      setPhase('ready');
+      return;
+    }
+
     pollAbort.current = new AbortController();
-    fetchContext();
 
     (async () => {
       try {
@@ -238,11 +193,13 @@ export default function DashboardHome() {
 
   const handleRetry = () => {
     setErrorMsg(null);
+    setAgentUrl(null);
     setPhase('loading');
     startAgent();
   };
 
-  const isOnline = agentStatus === 'active' || agentStatus === 'online';
+  // The iframe is rendered in layout.tsx (persistent). This page only shows loading/error states.
+  if (phase === 'ready') return null;
 
   return (
     <div className="flex flex-col flex-1 min-h-0 w-full overflow-hidden">
@@ -256,8 +213,6 @@ export default function DashboardHome() {
         </div>
       )}
 
-      {/* Minimal status bar */}
-      {/* Main content area — full screen, no status bar */}
       <div className="flex-1 min-h-0 overflow-hidden relative flex flex-col">
         {(phase === 'loading' || phase === 'starting' || phase === 'provisioning' || phase === 'polling') && (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-center z-10">
@@ -291,39 +246,6 @@ export default function DashboardHome() {
               {agentStatus === 'paused' && (
                 <Button variant="glass" size="sm" onClick={() => window.location.href = '/dashboard/billing'}>
                   Billing
-                </Button>
-              )}
-            </div>
-          </div>
-        )}
-
-        {phase === 'ready' && agentUrl && (
-          <iframe
-            src={agentUrl}
-            className="w-full h-full border-0"
-            allow="clipboard-write; microphone"
-            title="OpenClaw Control UI"
-          />
-        )}
-
-        {phase === 'ready' && !agentUrl && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-center z-10 px-6">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/[0.04] mb-5">
-              <Bot className="h-6 w-6 text-white/20" />
-            </div>
-            <p className="text-[14px] font-medium text-white/40">Connecting to agent gateway...</p>
-            <p className="text-[12px] text-white/20 mt-2 max-w-sm">
-              Could not establish WebSocket connection. The agent may still be starting up.
-            </p>
-            <div className="flex items-center gap-3 mt-5">
-              <Button variant="glass" size="sm" onClick={handleRetry}>
-                <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-                Retry
-              </Button>
-              {agentUrl && (
-                <Button variant="glass" size="sm" onClick={() => window.open(agentUrl, '_blank')}>
-                  <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
-                  Open Gateway
                 </Button>
               )}
             </div>

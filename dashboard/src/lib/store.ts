@@ -16,6 +16,8 @@ interface StoreState {
   toggleSidebar: () => void;
   mobileSidebarOpen: boolean;
   setMobileSidebarOpen: (open: boolean) => void;
+  agentUrl: string | null;
+  setAgentUrl: (url: string | null) => void;
 }
 
 export const useStore = create<StoreState>((set) => ({
@@ -25,4 +27,6 @@ export const useStore = create<StoreState>((set) => ({
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
   mobileSidebarOpen: false,
   setMobileSidebarOpen: (open) => set({ mobileSidebarOpen: open }),
+  agentUrl: null,
+  setAgentUrl: (url) => set({ agentUrl: url }),
 }));
