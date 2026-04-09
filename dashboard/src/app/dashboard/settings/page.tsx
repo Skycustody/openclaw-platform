@@ -8,25 +8,12 @@ import Link from 'next/link';
 import Image from 'next/image';
 import {
   Settings, Globe, Download, MousePointer, FileText, Eye,
-  Bell, Clock, Shield, Mail, FileText as FileTextIcon,
+  Bell, Shield, Mail, FileText as FileTextIcon,
   ChevronRight, Save, CheckCircle, Loader2, Database,
 } from 'lucide-react';
 
 const EXTENSION_URL = 'https://chromewebstore.google.com/detail/valnaa-browser-relay/placeholder';
 const SUPPORT_EMAIL = 'hello@valnaa.com';
-
-const TIMEZONES = [
-  { value: 'auto', label: 'Auto-detect' },
-  { value: 'America/New_York', label: 'Eastern Time (US)' },
-  { value: 'America/Chicago', label: 'Central Time (US)' },
-  { value: 'America/Denver', label: 'Mountain Time (US)' },
-  { value: 'America/Los_Angeles', label: 'Pacific Time (US)' },
-  { value: 'Europe/London', label: 'London (GMT)' },
-  { value: 'Europe/Paris', label: 'Central Europe (CET)' },
-  { value: 'Asia/Tokyo', label: 'Tokyo (JST)' },
-  { value: 'Asia/Shanghai', label: 'Shanghai (CST)' },
-  { value: 'Australia/Sydney', label: 'Sydney (AEST)' },
-];
 
 function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -48,7 +35,6 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
 export default function SettingsPage() {
   const [emailNotifs, setEmailNotifs] = useState(true);
   const [agentNotifs, setAgentNotifs] = useState(true);
-  const [timezone, setTimezone] = useState('auto');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -59,7 +45,6 @@ export default function SettingsPage() {
       await api.put('/settings', {
         email_notifications: emailNotifs,
         agent_notifications: agentNotifs,
-        timezone,
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
@@ -181,31 +166,7 @@ export default function SettingsPage() {
             </div>
             <Toggle checked={agentNotifs} onChange={setAgentNotifs} />
           </div>
-        </div>
-      </Card>
-
-      {/* Timezone */}
-      <Card className="animate-fade-up">
-        <div className="flex items-start justify-between mb-5">
-          <div>
-            <CardTitle>Timezone</CardTitle>
-            <CardDescription>Used for cron schedules and activity timestamps.</CardDescription>
-          </div>
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/[0.06] border border-white/[0.08]">
-            <Clock className="h-4 w-4 text-white/60" />
-          </div>
-        </div>
-        <div className="space-y-4">
-          <select
-            value={timezone}
-            onChange={e => setTimezone(e.target.value)}
-            className="w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-[14px] text-white focus:border-white/[0.15] focus:outline-none transition-colors appearance-none"
-          >
-            {TIMEZONES.map(tz => (
-              <option key={tz.value} value={tz.value} className="bg-[#2a2a28]">{tz.label}</option>
-            ))}
-          </select>
-          <div className="flex items-center justify-end">
+          <div className="flex items-center justify-end pt-2">
             <Button variant="primary" size="sm" onClick={handleSavePreferences} disabled={saving}>
               {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : saved ? <CheckCircle className="h-3.5 w-3.5" /> : <Save className="h-3.5 w-3.5" />}
               {saved ? 'Saved' : 'Save Preferences'}
