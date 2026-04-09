@@ -100,18 +100,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   ecommerce: 'E-Commerce',
 };
 
-const CATEGORY_COLORS: Record<string, string> = {
-  marketing: 'border-pink-500/20 text-pink-400',
-  business: 'border-amber-500/20 text-amber-400',
-  finance: 'border-green-500/20 text-green-400',
-  development: 'border-blue-500/20 text-blue-400',
-  devops: 'border-orange-500/20 text-orange-400',
-  hr: 'border-purple-500/20 text-purple-400',
-  creative: 'border-rose-500/20 text-rose-400',
-  productivity: 'border-cyan-500/20 text-cyan-400',
-  freelance: 'border-teal-500/20 text-teal-400',
-  ecommerce: 'border-indigo-500/20 text-indigo-400',
-};
+const CATEGORY_STYLE = 'border-white/[0.08] text-white/50';
 
 export default function AgentsPage() {
   const [data, setData] = useState<AgentsResponse | null>(null);
@@ -485,7 +474,7 @@ export default function AgentsPage() {
             {filteredMarketplace.map(agent => {
               const isInstalled = installedOpenclawIds.has(agent.id);
               const isInstalling = installingId === agent.id;
-              const catColor = CATEGORY_COLORS[agent.category] || 'border-white/10 text-white/50';
+              const catColor = CATEGORY_STYLE;
 
               return (
                 <div
@@ -511,9 +500,7 @@ export default function AgentsPage() {
                     {agent.role}
                   </p>
 
-                  <div className="flex items-center justify-between pt-3 border-t border-white/[0.04]">
-                    <span className="text-[11px] text-white/20 font-medium">{agent.salary}</span>
-
+                  <div className="flex items-center justify-end pt-3 border-t border-white/[0.04]">
                     {isInstalled ? (
                       <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium text-green-400/70 bg-green-500/5 border border-green-500/10">
                         <Check className="h-3 w-3" /> Installed
@@ -559,12 +546,9 @@ export default function AgentsPage() {
               </div>
               <div className="flex-1">
                 <h3 className="text-[17px] font-semibold text-white">{previewAgent.name}</h3>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium border ${CATEGORY_COLORS[previewAgent.category] || 'border-white/10 text-white/50'}`}>
-                    {CATEGORY_LABELS[previewAgent.category] || previewAgent.category}
-                  </span>
-                  <span className="text-[12px] text-white/25">{previewAgent.salary}</span>
-                </div>
+                <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium border mt-1 ${CATEGORY_STYLE}`}>
+                  {CATEGORY_LABELS[previewAgent.category] || previewAgent.category}
+                </span>
               </div>
             </div>
 
