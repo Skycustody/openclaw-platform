@@ -3,33 +3,18 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Card, CardTitle, CardDescription } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
 import api from '@/lib/api';
 import Link from 'next/link';
 import {
-  Settings, Key, Cpu, Save, Loader2,
+  Settings, Save, Loader2,
   CheckCircle, AlertTriangle, Terminal, Globe, Store, ArrowRight,
 } from 'lucide-react';
 
 interface UserSettings {
-  brain_mode: 'auto' | 'manual';
-  manual_model: string | null;
-  has_own_openrouter_key: boolean;
-  agent_name: string;
-  openrouter_key?: string;
   claude_code_enabled?: boolean;
   claude_code_path?: string;
   browser_relay_enabled?: boolean;
 }
-
-const MODEL_OPTIONS = [
-  { value: 'anthropic/claude-sonnet-4', label: 'Claude Sonnet 4' },
-  { value: 'anthropic/claude-opus-4', label: 'Claude Opus 4' },
-  { value: 'openai/gpt-4o', label: 'GPT-4o' },
-  { value: 'openai/o3', label: 'OpenAI o3' },
-  { value: 'google/gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
-  { value: 'deepseek/deepseek-r1', label: 'DeepSeek R1' },
-];
 
 function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
   return (
@@ -68,12 +53,6 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [settings, setSettings] = useState<UserSettings | null>(null);
 
-  // Model
-  const [manualModel, setManualModel] = useState('');
-
-  // API key
-  const [openrouterKey, setOpenrouterKey] = useState('');
-
   // Claude Code
   const [claudeEnabled, setClaudeEnabled] = useState(false);
   const [claudePath, setClaudePath] = useState('');
@@ -82,10 +61,6 @@ export default function SettingsPage() {
   const [browserRelayEnabled, setBrowserRelayEnabled] = useState(false);
 
   // Save states
-  const [savingModel, setSavingModel] = useState(false);
-  const [savedModel, setSavedModel] = useState(false);
-  const [savingKey, setSavingKey] = useState(false);
-  const [savedKey, setSavedKey] = useState(false);
   const [savingClaude, setSavingClaude] = useState(false);
   const [savedClaude, setSavedClaude] = useState(false);
   const [savingRelay, setSavingRelay] = useState(false);
@@ -97,7 +72,6 @@ export default function SettingsPage() {
       const settingsRes = await api.get<{ settings: UserSettings }>('/settings');
       const s = settingsRes.settings;
       setSettings(s);
-      setManualModel(s.manual_model || '');
       setClaudeEnabled(s.claude_code_enabled || false);
       setClaudePath(s.claude_code_path || '');
       setBrowserRelayEnabled(s.browser_relay_enabled || false);
@@ -109,40 +83,6 @@ export default function SettingsPage() {
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
-
-  const handleSaveModel = async () => {
-    setSavingModel(true);
-    setSavedModel(false);
-    try {
-      await api.put('/settings', {
-        brain_mode: 'manual',
-        manual_model: manualModel || null,
-      });
-      setSavedModel(true);
-      setTimeout(() => setSavedModel(false), 3000);
-    } catch (err: any) {
-      setError(err.message || 'Failed to save model settings');
-    } finally {
-      setSavingModel(false);
-    }
-  };
-
-  const handleSaveKey = async () => {
-    setSavingKey(true);
-    setSavedKey(false);
-    try {
-      await api.put('/settings', {
-        openrouter_key: openrouterKey.trim(),
-      });
-      setSavedKey(true);
-      setOpenrouterKey('');
-      setTimeout(() => setSavedKey(false), 3000);
-    } catch (err: any) {
-      setError(err.message || 'Failed to save API key');
-    } finally {
-      setSavingKey(false);
-    }
-  };
 
   const handleSaveClaude = async () => {
     setSavingClaude(true);
@@ -194,7 +134,7 @@ export default function SettingsPage() {
           <h1 className="text-[26px] font-bold text-white tracking-tight">Settings</h1>
         </div>
         <p className="text-[15px] text-white/60">
-          Configure your model, API keys, and integrations.
+          Configure integrations and tools.
         </p>
       </div>
 
@@ -205,85 +145,6 @@ export default function SettingsPage() {
           <p className="text-[13px] text-red-400">{error}</p>
         </div>
       )}
-
-      {/* Model Selection */}
-      <Card className="animate-fade-up">
-        <div className="flex items-start justify-between mb-5">
-          <div>
-            <CardTitle>Model</CardTitle>
-            <CardDescription>
-              Choose which AI model powers your agent.
-            </CardDescription>
-          </div>
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/[0.06] border border-white/[0.08]">
-            <Cpu className="h-4 w-4 text-white/60" />
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          <div>
-            <label className="text-[12px] text-white/80 block mb-1.5">Default Model</label>
-            <select
-              value={manualModel}
-              onChange={e => setManualModel(e.target.value)}
-              className="w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-[14px] text-white focus:border-white/25 focus:outline-none transition-colors appearance-none"
-            >
-              <option value="" className="bg-[#2a2a28]">Choose a model...</option>
-              {MODEL_OPTIONS.map(m => (
-                <option key={m.value} value={m.value} className="bg-[#2a2a28]">{m.label}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex items-center justify-end pt-1">
-            <Button variant="primary" size="sm" onClick={handleSaveModel} loading={savingModel} disabled={savingModel}>
-              {savedModel ? <CheckCircle className="h-3.5 w-3.5" /> : <Save className="h-3.5 w-3.5" />}
-              {savedModel ? 'Saved' : 'Save Model'}
-            </Button>
-          </div>
-        </div>
-      </Card>
-
-      {/* API Keys */}
-      <Card className="animate-fade-up">
-        <div className="flex items-start justify-between mb-5">
-          <div>
-            <CardTitle>API Key</CardTitle>
-            <CardDescription>
-              {settings?.has_own_openrouter_key
-                ? 'You have a custom API key configured. Enter a new one to replace it.'
-                : 'Bring your own OpenRouter API key for model access.'}
-            </CardDescription>
-          </div>
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/[0.06] border border-white/[0.08]">
-            <Key className="h-4 w-4 text-white/60" />
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          <Input
-            label="OpenRouter API Key"
-            type="password"
-            placeholder={settings?.has_own_openrouter_key ? 'sk-or-...  (key configured)' : 'sk-or-...'}
-            value={openrouterKey}
-            onChange={e => setOpenrouterKey(e.target.value)}
-            hint="Your key is encrypted at rest. Leave blank to keep the existing key."
-          />
-
-          <div className="flex items-center justify-end pt-1">
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={handleSaveKey}
-              loading={savingKey}
-              disabled={savingKey || !openrouterKey.trim()}
-            >
-              {savedKey ? <CheckCircle className="h-3.5 w-3.5" /> : <Save className="h-3.5 w-3.5" />}
-              {savedKey ? 'Saved' : 'Save Key'}
-            </Button>
-          </div>
-        </div>
-      </Card>
 
       {/* Claude Code Connection */}
       <Card className="animate-fade-up">

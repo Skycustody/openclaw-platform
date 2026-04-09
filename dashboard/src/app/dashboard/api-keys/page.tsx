@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import api from '@/lib/api';
-import { KeyRound, Plus, Trash2, Check, Loader2, ExternalLink, LogIn, Zap, Terminal } from 'lucide-react';
+import { KeyRound, Plus, Trash2, Check, Loader2, ExternalLink, LogIn, Zap, Terminal, Cpu, Save, CheckCircle } from 'lucide-react';
 
 // Provider brand logos with real brand colors
 function OpenAILogo({ className }: { className?: string }) {
@@ -85,6 +85,15 @@ interface ProviderDef {
   desc?: string;
 }
 
+const MODEL_OPTIONS = [
+  { value: 'anthropic/claude-sonnet-4', label: 'Claude Sonnet 4' },
+  { value: 'anthropic/claude-opus-4', label: 'Claude Opus 4' },
+  { value: 'openai/gpt-4o', label: 'GPT-4o' },
+  { value: 'openai/o3', label: 'OpenAI o3' },
+  { value: 'google/gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
+  { value: 'deepseek/deepseek-r1', label: 'DeepSeek R1' },
+];
+
 const PROVIDERS: ProviderDef[] = [
   { id: 'anthropic', name: 'Claude Pro / Max', mode: 'setup_token', desc: 'Use your Anthropic subscription. Run "claude setup-token" in terminal to get your token.', placeholder: 'Paste setup token...' },
   { id: 'openai-codex', name: 'ChatGPT Plus', mode: 'oauth', desc: 'Connect your ChatGPT Plus subscription via browser login.' },
@@ -116,6 +125,41 @@ export default function ApiKeysPage() {
   const [ccShowInput, setCcShowInput] = useState(false);
   const [ccToken, setCcToken] = useState('');
   const [ccError, setCcError] = useState<string | null>(null);
+
+  // Model + OpenRouter
+  const [manualModel, setManualModel] = useState('');
+  const [savingModel, setSavingModel] = useState(false);
+  const [savedModel, setSavedModel] = useState(false);
+  const [openrouterKey, setOpenrouterKey] = useState('');
+  const [savingOrKey, setSavingOrKey] = useState(false);
+  const [savedOrKey, setSavedOrKey] = useState(false);
+  const [hasOrKey, setHasOrKey] = useState(false);
+
+  const loadSettings = async () => {
+    try {
+      const res = await api.get<{ settings: { manual_model: string | null; has_own_openrouter_key: boolean } }>('/settings');
+      setManualModel(res.settings.manual_model || '');
+      setHasOrKey(res.settings.has_own_openrouter_key || false);
+    } catch {}
+  };
+
+  const handleSaveModel = async () => {
+    setSavingModel(true); setSavedModel(false);
+    try {
+      await api.put('/settings', { brain_mode: 'manual', manual_model: manualModel || null });
+      setSavedModel(true); setTimeout(() => setSavedModel(false), 3000);
+    } catch {} finally { setSavingModel(false); }
+  };
+
+  const handleSaveOrKey = async () => {
+    if (!openrouterKey.trim()) return;
+    setSavingOrKey(true); setSavedOrKey(false);
+    try {
+      await api.put('/settings', { openrouter_key: openrouterKey.trim() });
+      setSavedOrKey(true); setOpenrouterKey(''); setHasOrKey(true);
+      setTimeout(() => setSavedOrKey(false), 3000);
+    } catch {} finally { setSavingOrKey(false); }
+  };
 
   const loadStatus = async () => {
     try {
@@ -230,7 +274,7 @@ export default function ApiKeysPage() {
     setCcLoading(false);
   };
 
-  useEffect(() => { loadStatus(); loadCcStatus(); }, []);
+  useEffect(() => { loadStatus(); loadCcStatus(); loadSettings(); }, []);
 
   const handleSaveKey = async () => {
     if (!modalProvider || !keyInput.trim()) return;
@@ -340,6 +384,64 @@ export default function ApiKeysPage() {
       <div>
         <h1 className="text-[20px] font-semibold text-white/90">API Keys</h1>
         <p className="text-[13px] text-white/40 mt-1">Connect AI providers to your agent. Keys are stored securely in your container.</p>
+      </div>
+
+      {/* Default Model */}
+      <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 space-y-3">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/[0.04]">
+            <Cpu className="h-5 w-5 text-white/50" />
+          </div>
+          <div>
+            <p className="text-[14px] font-medium text-white/90">Default Model</p>
+            <p className="text-[12px] text-white/50">Choose which AI model powers your agent</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <select
+            value={manualModel}
+            onChange={e => setManualModel(e.target.value)}
+            className="flex-1 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 text-[14px] text-white focus:border-white/[0.15] focus:outline-none transition-colors appearance-none"
+          >
+            <option value="" className="bg-[#2a2a28]">Choose a model...</option>
+            {MODEL_OPTIONS.map(m => (
+              <option key={m.value} value={m.value} className="bg-[#2a2a28]">{m.label}</option>
+            ))}
+          </select>
+          <Button size="sm" onClick={handleSaveModel} disabled={savingModel}>
+            {savingModel ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : savedModel ? <CheckCircle className="h-3.5 w-3.5" /> : <Save className="h-3.5 w-3.5" />}
+            {savedModel ? 'Saved' : 'Save'}
+          </Button>
+        </div>
+      </div>
+
+      {/* OpenRouter Key */}
+      <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 space-y-3">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/[0.04]">
+            <KeyRound className="h-5 w-5 text-white/50" />
+          </div>
+          <div>
+            <p className="text-[14px] font-medium text-white/90">OpenRouter</p>
+            <p className="text-[12px] text-white/50">
+              {hasOrKey ? 'Custom key configured. Enter a new one to replace it.' : 'Bring your own OpenRouter API key for model routing'}
+            </p>
+          </div>
+          {hasOrKey && <Badge variant="green" dot>Connected</Badge>}
+        </div>
+        <div className="flex items-center gap-3">
+          <input
+            type="password"
+            value={openrouterKey}
+            onChange={e => setOpenrouterKey(e.target.value)}
+            placeholder={hasOrKey ? 'sk-or-...  (key configured)' : 'sk-or-...'}
+            className="flex-1 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 text-[14px] text-white/80 placeholder:text-white/20 focus:border-white/[0.15] focus:outline-none transition-colors"
+          />
+          <Button size="sm" onClick={handleSaveOrKey} disabled={savingOrKey || !openrouterKey.trim()}>
+            {savingOrKey ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : savedOrKey ? <CheckCircle className="h-3.5 w-3.5" /> : <Save className="h-3.5 w-3.5" />}
+            {savedOrKey ? 'Saved' : 'Save'}
+          </Button>
+        </div>
       </div>
 
       {/* Claude Code */}
