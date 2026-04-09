@@ -29,7 +29,7 @@ export default function SettingsPage() {
           <div>
             <CardTitle>Valnaa Browser Relay</CardTitle>
             <CardDescription>
-              Give your Valnaa agent the ability to browse the web, interact with pages, and extract data — all from your browser.
+              Give your Valnaa agent the ability to browse the web, interact with pages, and extract data from your browser.
             </CardDescription>
           </div>
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/[0.06] border border-white/[0.08]">
@@ -74,7 +74,7 @@ export default function SettingsPage() {
                 </div>
                 <div>
                   <p className="text-[13px] text-white/80">Extension controls your browser</p>
-                  <p className="text-[12px] text-white/40">Navigate pages, click buttons, fill forms, and scroll — hands-free</p>
+                  <p className="text-[12px] text-white/40">Navigate pages, click buttons, fill forms, and scroll automatically</p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
@@ -92,7 +92,7 @@ export default function SettingsPage() {
                 </div>
                 <div>
                   <p className="text-[13px] text-white/80">Get results back in chat</p>
-                  <p className="text-[12px] text-white/40">Summaries, scraped data, or completed actions — delivered right to your Valnaa conversation</p>
+                  <p className="text-[12px] text-white/40">Summaries, scraped data, or completed actions delivered right to your Valnaa conversation</p>
                 </div>
               </div>
             </div>
