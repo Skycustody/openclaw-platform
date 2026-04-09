@@ -222,7 +222,7 @@ export default function SettingsPage() {
 
         <div className="space-y-4">
           <div>
-            <label className="text-[12px] text-white/50 block mb-1.5">Default Model</label>
+            <label className="text-[12px] text-white/80 block mb-1.5">Default Model</label>
             <select
               value={manualModel}
               onChange={e => setManualModel(e.target.value)}
@@ -310,7 +310,7 @@ export default function SettingsPage() {
 
           {claudeEnabled && (
             <div>
-              <label className="text-[12px] text-white/50 block mb-1.5">Claude Code Path</label>
+              <label className="text-[12px] text-white/80 block mb-1.5">Claude Code Path</label>
               <input
                 type="text"
                 value={claudePath}

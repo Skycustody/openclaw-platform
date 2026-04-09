@@ -13,7 +13,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     return (
       <div className="space-y-2">
         {label && (
-          <label htmlFor={id} className="block text-[13px] font-medium text-white/50">
+          <label htmlFor={id} className="block text-[13px] font-medium text-white/80">
             {label}
           </label>
         )}
@@ -27,7 +27,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           )}
           {...props}
         />
-        {hint && <p className="text-[12px] text-white/30">{hint}</p>}
+        {hint && <p className="text-[12px] text-white/50">{hint}</p>}
         {error && <p className="text-[12px] text-red-400">{error}</p>}
       </div>
     );
@@ -55,7 +55,7 @@ export function Textarea({
 }) {
   return (
     <div className="space-y-2">
-      {label && <label className="block text-[13px] font-medium text-white/50">{label}</label>}
+      {label && <label className="block text-[13px] font-medium text-white/80">{label}</label>}
       <textarea
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -66,7 +66,7 @@ export function Textarea({
           className
         )}
       />
-      {hint && <p className="text-[12px] text-white/30">{hint}</p>}
+      {hint && <p className="text-[12px] text-white/50">{hint}</p>}
     </div>
   );
 }

@@ -100,8 +100,8 @@ function Sidebar() {
                 'flex items-center gap-3 rounded-lg transition-colors',
                 expanded ? 'px-3 py-2' : 'justify-center px-0 py-2.5',
                 isActive
-                  ? 'bg-white/[0.06] text-white/85'
-                  : 'text-white/40 hover:text-white/60 hover:bg-white/[0.04]'
+                  ? 'bg-white/[0.06] text-white'
+                  : 'text-white/60 hover:text-white/80 hover:bg-white/[0.04]'
               )}
             >
               <item.icon className={cn('shrink-0', expanded ? 'h-[18px] w-[18px]' : 'h-5 w-5')} />
@@ -117,7 +117,7 @@ function Sidebar() {
           href="/help"
           title={!expanded ? 'Help' : undefined}
           className={cn(
-            'flex items-center gap-3 rounded-lg text-white/30 hover:text-white/50 hover:bg-white/[0.04] transition-colors',
+            'flex items-center gap-3 rounded-lg text-white/50 hover:text-white/70 hover:bg-white/[0.04] transition-colors',
             expanded ? 'px-3 py-2' : 'justify-center px-0 py-2.5'
           )}
         >
@@ -140,8 +140,8 @@ function Sidebar() {
             </div>
             {expanded && (
               <div className="flex-1 text-left overflow-hidden">
-                <p className="text-[13px] font-medium text-white/60 truncate">{displayName}</p>
-                <p className="text-[11px] text-white/25 truncate">{user?.plan || 'Free'}</p>
+                <p className="text-[13px] font-medium text-white/80 truncate">{displayName}</p>
+                <p className="text-[11px] text-white/50 truncate">{user?.plan || 'Free'}</p>
               </div>
             )}
           </button>
@@ -153,7 +153,7 @@ function Sidebar() {
             )}>
               {user?.email && (
                 <div className="px-3 py-2 border-b border-white/[0.06] mb-1">
-                  <p className="text-[12px] text-white/30 truncate">{user.email}</p>
+                  <p className="text-[12px] text-white/50 truncate">{user.email}</p>
                 </div>
               )}
               <Link
@@ -254,7 +254,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className={cn('flex-1 flex flex-col min-h-0', isHome ? 'overflow-hidden' : 'mx-auto max-w-5xl w-full')}>{children}</div>
         {!isHome && (
           <div className="mx-auto max-w-5xl w-full py-4 flex items-center justify-center">
-            <a href={`mailto:${SUPPORT_EMAIL}`} className="inline-flex items-center gap-1.5 text-[12px] text-white/25 hover:text-white/50 transition-colors">
+            <a href={`mailto:${SUPPORT_EMAIL}`} className="inline-flex items-center gap-1.5 text-[12px] text-white/40 hover:text-white/60 transition-colors">
               <Mail className="h-3 w-3" />
               Need help? {SUPPORT_EMAIL}
             </a>

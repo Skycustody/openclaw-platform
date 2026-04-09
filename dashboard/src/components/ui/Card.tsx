@@ -23,11 +23,11 @@ export function CardHeader({ children, className }: { children: ReactNode; class
 }
 
 export function CardTitle({ children, className }: { children: ReactNode; className?: string }) {
-  return <h3 className={cn('text-[16px] font-semibold text-[#e8e8e8] tracking-tight', className)}>{children}</h3>;
+  return <h3 className={cn('text-[16px] font-semibold text-white tracking-tight', className)}>{children}</h3>;
 }
 
 export function CardDescription({ children, className }: { children: ReactNode; className?: string }) {
-  return <p className={cn('mt-1.5 text-[13px] leading-relaxed text-white/40', className)}>{children}</p>;
+  return <p className={cn('mt-1.5 text-[13px] leading-relaxed text-white/70', className)}>{children}</p>;
 }
 
 export function GlassPanel({ children, className }: { children: ReactNode; className?: string }) {
