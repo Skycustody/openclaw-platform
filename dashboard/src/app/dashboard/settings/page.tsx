@@ -7,17 +7,9 @@ import { Input } from '@/components/ui/Input';
 import api from '@/lib/api';
 import Link from 'next/link';
 import {
-  Settings, Key, Bot, Cpu, Save, Loader2,
+  Settings, Key, Cpu, Save, Loader2,
   CheckCircle, AlertTriangle, Terminal, Globe, Store, ArrowRight,
 } from 'lucide-react';
-
-interface Agent {
-  id: string;
-  name: string;
-  purpose: string | null;
-  instructions: string | null;
-  is_primary: boolean;
-}
 
 interface UserSettings {
   brain_mode: 'auto' | 'manual';
@@ -31,7 +23,6 @@ interface UserSettings {
 }
 
 const MODEL_OPTIONS = [
-  { value: 'auto', label: 'Auto (recommended)' },
   { value: 'anthropic/claude-sonnet-4', label: 'Claude Sonnet 4' },
   { value: 'anthropic/claude-opus-4', label: 'Claude Opus 4' },
   { value: 'openai/gpt-4o', label: 'GPT-4o' },
@@ -68,7 +59,7 @@ function StatusDot({ active, label }: { active: boolean; label: string }) {
   return (
     <span className="inline-flex items-center gap-1.5 text-[12px]">
       <span className={`inline-block h-2 w-2 rounded-full ${active ? 'bg-emerald-400' : 'bg-white/20'}`} />
-      <span className={active ? 'text-emerald-400/80' : 'text-white/30'}>{label}</span>
+      <span className={active ? 'text-emerald-400/80' : 'text-white/50'}>{label}</span>
     </span>
   );
 }
@@ -76,16 +67,8 @@ function StatusDot({ active, label }: { active: boolean; label: string }) {
 export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [settings, setSettings] = useState<UserSettings | null>(null);
-  const [agents, setAgents] = useState<Agent[]>([]);
-  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
-
-  // Persona fields
-  const [agentName, setAgentName] = useState('');
-  const [purpose, setPurpose] = useState('');
-  const [instructions, setInstructions] = useState('');
 
   // Model
-  const [brainMode, setBrainMode] = useState<'auto' | 'manual'>('auto');
   const [manualModel, setManualModel] = useState('');
 
   // API key
@@ -99,8 +82,6 @@ export default function SettingsPage() {
   const [browserRelayEnabled, setBrowserRelayEnabled] = useState(false);
 
   // Save states
-  const [savingPersona, setSavingPersona] = useState(false);
-  const [savedPersona, setSavedPersona] = useState(false);
   const [savingModel, setSavingModel] = useState(false);
   const [savedModel, setSavedModel] = useState(false);
   const [savingKey, setSavingKey] = useState(false);
@@ -113,32 +94,13 @@ export default function SettingsPage() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [settingsRes, agentsRes] = await Promise.allSettled([
-        api.get<{ settings: UserSettings }>('/settings'),
-        api.get<{ agents: Agent[] }>('/agents'),
-      ]);
-
-      if (settingsRes.status === 'fulfilled') {
-        const s = settingsRes.value.settings;
-        setSettings(s);
-        setBrainMode(s.brain_mode || 'auto');
-        setManualModel(s.manual_model || '');
-        setClaudeEnabled(s.claude_code_enabled || false);
-        setClaudePath(s.claude_code_path || '');
-        setBrowserRelayEnabled(s.browser_relay_enabled || false);
-      }
-
-      if (agentsRes.status === 'fulfilled') {
-        const list = agentsRes.value.agents || [];
-        setAgents(list);
-        const primary = list.find(a => a.is_primary) || list[0];
-        if (primary) {
-          setSelectedAgent(primary);
-          setAgentName(primary.name || '');
-          setPurpose(primary.purpose || '');
-          setInstructions(primary.instructions || '');
-        }
-      }
+      const settingsRes = await api.get<{ settings: UserSettings }>('/settings');
+      const s = settingsRes.settings;
+      setSettings(s);
+      setManualModel(s.manual_model || '');
+      setClaudeEnabled(s.claude_code_enabled || false);
+      setClaudePath(s.claude_code_path || '');
+      setBrowserRelayEnabled(s.browser_relay_enabled || false);
     } catch (err: any) {
       setError(err.message || 'Failed to load settings');
     } finally {
@@ -148,44 +110,13 @@ export default function SettingsPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const selectAgent = (agent: Agent) => {
-    setSelectedAgent(agent);
-    setAgentName(agent.name || '');
-    setPurpose(agent.purpose || '');
-    setInstructions(agent.instructions || '');
-    setSavedPersona(false);
-    setError(null);
-  };
-
-  const handleSavePersona = async () => {
-    if (!selectedAgent) return;
-    setSavingPersona(true);
-    setError(null);
-    setSavedPersona(false);
-    try {
-      await api.put(`/agents/${selectedAgent.id}`, {
-        name: agentName.trim() || selectedAgent.name,
-        purpose: purpose.trim() || null,
-        instructions: instructions.trim() || null,
-      });
-      setSavedPersona(true);
-      setTimeout(() => setSavedPersona(false), 3000);
-      const data = await api.get<{ agents: Agent[] }>('/agents');
-      setAgents(data.agents || []);
-    } catch (err: any) {
-      setError(err.message || 'Failed to save persona');
-    } finally {
-      setSavingPersona(false);
-    }
-  };
-
   const handleSaveModel = async () => {
     setSavingModel(true);
     setSavedModel(false);
     try {
       await api.put('/settings', {
-        brain_mode: brainMode,
-        manual_model: brainMode === 'manual' ? manualModel : null,
+        brain_mode: 'manual',
+        manual_model: manualModel || null,
       });
       setSavedModel(true);
       setTimeout(() => setSavedModel(false), 3000);
@@ -259,11 +190,11 @@ export default function SettingsPage() {
       {/* Header */}
       <div className="animate-fade-up">
         <div className="flex items-center gap-3 mb-1">
-          <Settings className="h-6 w-6 text-white/40" />
+          <Settings className="h-6 w-6 text-white/60" />
           <h1 className="text-[26px] font-bold text-white tracking-tight">Settings</h1>
         </div>
-        <p className="text-[15px] text-white/40">
-          Configure your agent, model, and API keys in one place.
+        <p className="text-[15px] text-white/60">
+          Configure your model, API keys, and integrations.
         </p>
       </div>
 
@@ -275,83 +206,6 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* Agent Persona */}
-      <Card className="animate-fade-up">
-        <div className="flex items-start justify-between mb-5">
-          <div>
-            <CardTitle>Agent Persona</CardTitle>
-            <CardDescription>
-              Name, role, and personality of your agent. Writes to the agent&apos;s SOUL.md.
-            </CardDescription>
-          </div>
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/[0.06] border border-white/[0.08]">
-            <Bot className="h-4 w-4 text-white/50" />
-          </div>
-        </div>
-
-        {/* Agent selector tabs */}
-        {agents.length > 1 && (
-          <div className="flex gap-2 mb-5 overflow-x-auto pb-1">
-            {agents.map(agent => (
-              <button
-                key={agent.id}
-                onClick={() => selectAgent(agent)}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all text-[13px] shrink-0 ${
-                  selectedAgent?.id === agent.id
-                    ? 'border-white/20 bg-white/[0.06] text-white'
-                    : 'border-white/[0.06] bg-white/[0.02] text-white/40 hover:text-white/60 hover:border-white/10'
-                }`}
-              >
-                <Bot className="h-3.5 w-3.5" />
-                {agent.name}
-              </button>
-            ))}
-          </div>
-        )}
-
-        <div className="space-y-4">
-          <div>
-            <label className="text-[12px] text-white/30 block mb-1.5">Agent Name</label>
-            <input
-              type="text"
-              value={agentName}
-              onChange={e => setAgentName(e.target.value)}
-              placeholder="e.g. Atlas, Aria, Research Bot"
-              className="w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-[14px] text-white placeholder:text-white/20 focus:border-white/25 focus:outline-none transition-colors"
-            />
-          </div>
-
-          <div>
-            <label className="text-[12px] text-white/30 block mb-1.5">Purpose / Role</label>
-            <textarea
-              value={purpose}
-              onChange={e => setPurpose(e.target.value)}
-              placeholder="What is this agent's primary role?"
-              rows={2}
-              className="w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-[14px] text-white placeholder:text-white/20 focus:border-white/25 focus:outline-none resize-none transition-colors"
-            />
-          </div>
-
-          <div>
-            <label className="text-[12px] text-white/30 block mb-1.5">Instructions / Rules</label>
-            <textarea
-              value={instructions}
-              onChange={e => setInstructions(e.target.value)}
-              placeholder="Tone, rules, context. e.g. Always be concise. Prefer bullet points..."
-              rows={4}
-              className="w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-[14px] text-white placeholder:text-white/20 focus:border-white/25 focus:outline-none resize-none transition-colors font-mono text-[13px]"
-            />
-          </div>
-
-          <div className="flex items-center justify-end pt-1">
-            <Button variant="primary" size="sm" onClick={handleSavePersona} loading={savingPersona} disabled={savingPersona}>
-              {savedPersona ? <CheckCircle className="h-3.5 w-3.5" /> : <Save className="h-3.5 w-3.5" />}
-              {savedPersona ? 'Saved' : 'Save Persona'}
-            </Button>
-          </div>
-        </div>
-      </Card>
-
       {/* Model Selection */}
       <Card className="animate-fade-up">
         <div className="flex items-start justify-between mb-5">
@@ -362,49 +216,24 @@ export default function SettingsPage() {
             </CardDescription>
           </div>
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/[0.06] border border-white/[0.08]">
-            <Cpu className="h-4 w-4 text-white/50" />
+            <Cpu className="h-4 w-4 text-white/60" />
           </div>
         </div>
 
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              onClick={() => setBrainMode('auto')}
-              className={`px-4 py-2.5 rounded-xl border text-[13px] font-medium transition-all ${
-                brainMode === 'auto'
-                  ? 'border-white/20 bg-white/[0.08] text-white'
-                  : 'border-white/[0.06] bg-white/[0.02] text-white/40 hover:text-white/60 hover:border-white/10'
-              }`}
+          <div>
+            <label className="text-[12px] text-white/50 block mb-1.5">Default Model</label>
+            <select
+              value={manualModel}
+              onChange={e => setManualModel(e.target.value)}
+              className="w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-[14px] text-white focus:border-white/25 focus:outline-none transition-colors appearance-none"
             >
-              Auto (recommended)
-            </button>
-            <button
-              onClick={() => setBrainMode('manual')}
-              className={`px-4 py-2.5 rounded-xl border text-[13px] font-medium transition-all ${
-                brainMode === 'manual'
-                  ? 'border-white/20 bg-white/[0.08] text-white'
-                  : 'border-white/[0.06] bg-white/[0.02] text-white/40 hover:text-white/60 hover:border-white/10'
-              }`}
-            >
-              Manual
-            </button>
+              <option value="" className="bg-[#2a2a28]">Choose a model...</option>
+              {MODEL_OPTIONS.map(m => (
+                <option key={m.value} value={m.value} className="bg-[#2a2a28]">{m.label}</option>
+              ))}
+            </select>
           </div>
-
-          {brainMode === 'manual' && (
-            <div>
-              <label className="text-[12px] text-white/30 block mb-1.5">Select Model</label>
-              <select
-                value={manualModel}
-                onChange={e => setManualModel(e.target.value)}
-                className="w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-[14px] text-white focus:border-white/25 focus:outline-none transition-colors appearance-none"
-              >
-                <option value="" className="bg-[#2a2a28]">Choose a model...</option>
-                {MODEL_OPTIONS.filter(m => m.value !== 'auto').map(m => (
-                  <option key={m.value} value={m.value} className="bg-[#2a2a28]">{m.label}</option>
-                ))}
-              </select>
-            </div>
-          )}
 
           <div className="flex items-center justify-end pt-1">
             <Button variant="primary" size="sm" onClick={handleSaveModel} loading={savingModel} disabled={savingModel}>
@@ -423,11 +252,11 @@ export default function SettingsPage() {
             <CardDescription>
               {settings?.has_own_openrouter_key
                 ? 'You have a custom API key configured. Enter a new one to replace it.'
-                : 'Optionally bring your own OpenRouter API key for model access.'}
+                : 'Bring your own OpenRouter API key for model access.'}
             </CardDescription>
           </div>
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/[0.06] border border-white/[0.08]">
-            <Key className="h-4 w-4 text-white/50" />
+            <Key className="h-4 w-4 text-white/60" />
           </div>
         </div>
 
@@ -466,7 +295,7 @@ export default function SettingsPage() {
             </CardDescription>
           </div>
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/[0.06] border border-white/[0.08]">
-            <Terminal className="h-4 w-4 text-white/50" />
+            <Terminal className="h-4 w-4 text-white/60" />
           </div>
         </div>
 
@@ -474,14 +303,14 @@ export default function SettingsPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Toggle checked={claudeEnabled} onChange={setClaudeEnabled} />
-              <span className="text-[13px] text-white/70">Enable Claude Code proxy</span>
+              <span className="text-[13px] text-white/80">Enable Claude Code proxy</span>
             </div>
             <StatusDot active={claudeEnabled} label={claudeEnabled ? 'Connected' : 'Not connected'} />
           </div>
 
           {claudeEnabled && (
             <div>
-              <label className="text-[12px] text-white/30 block mb-1.5">Claude Code Path</label>
+              <label className="text-[12px] text-white/50 block mb-1.5">Claude Code Path</label>
               <input
                 type="text"
                 value={claudePath}
@@ -489,7 +318,7 @@ export default function SettingsPage() {
                 placeholder="auto-detect"
                 className="w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-[14px] text-white placeholder:text-white/20 focus:border-white/25 focus:outline-none transition-colors font-mono text-[13px]"
               />
-              <p className="mt-1.5 text-[12px] text-white/25">Leave blank to auto-detect the Claude Code binary.</p>
+              <p className="mt-1.5 text-[12px] text-white/40">Leave blank to auto-detect the Claude Code binary.</p>
             </div>
           )}
 
@@ -512,7 +341,7 @@ export default function SettingsPage() {
             </CardDescription>
           </div>
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/[0.06] border border-white/[0.08]">
-            <Globe className="h-4 w-4 text-white/50" />
+            <Globe className="h-4 w-4 text-white/60" />
           </div>
         </div>
 
@@ -520,14 +349,14 @@ export default function SettingsPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Toggle checked={browserRelayEnabled} onChange={setBrowserRelayEnabled} />
-              <span className="text-[13px] text-white/70">Enable browser automation</span>
+              <span className="text-[13px] text-white/80">Enable browser automation</span>
             </div>
             <StatusDot active={browserRelayEnabled} label={browserRelayEnabled ? 'Running' : 'Stopped'} />
           </div>
 
           <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-4 py-3">
-            <p className="text-[12px] text-white/30">
-              Requires the Chrome extension installed. The relay allows your agent to navigate pages, fill forms, and extract data from websites on your behalf.
+            <p className="text-[12px] text-white/40">
+              Requires the Chrome extension. Allows your agent to navigate pages, fill forms, and extract data from websites.
             </p>
           </div>
 
@@ -550,7 +379,7 @@ export default function SettingsPage() {
             </CardDescription>
           </div>
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/[0.06] border border-white/[0.08]">
-            <Store className="h-4 w-4 text-white/50" />
+            <Store className="h-4 w-4 text-white/60" />
           </div>
         </div>
 
