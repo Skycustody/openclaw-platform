@@ -55,7 +55,7 @@ function GroqLogo({ className }: { className?: string }) {
   return <svg className={className} viewBox="0 0 24 24" fill="#F55036"><path d="M12 1.5C6.21 1.5 1.5 6.21 1.5 12S6.21 22.5 12 22.5 22.5 17.79 22.5 12 17.79 1.5 12 1.5zm0 3.938a6.563 6.563 0 1 1 0 13.124 6.563 6.563 0 0 1 0-13.124zm0 2.624a3.938 3.938 0 1 0 0 7.876 3.938 3.938 0 0 0 0-7.876zm3.938 3.938h3.28v2.625a6.563 6.563 0 0 1-3.28 5.688V12z"/></svg>;
 }
 function ClaudeCodeLogo({ className }: { className?: string }) {
-  return <AnthropicLogo className={className} />;
+  return <img src="https://claude.ai/favicon.ico" alt="Claude" className={className || 'h-5 w-5'} />;
 }
 
 const PROVIDER_LOGOS: Record<string, (props: { className?: string }) => React.ReactElement> = {
