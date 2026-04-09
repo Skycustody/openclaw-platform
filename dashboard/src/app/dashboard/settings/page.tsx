@@ -73,7 +73,7 @@ export default function SettingsPage() {
                   <MousePointer className="h-3.5 w-3.5 text-white/50" />
                 </div>
                 <div>
-                  <p className="text-[13px] text-white/80">Valnaa controls your browser</p>
+                  <p className="text-[13px] text-white/80">Extension controls your browser</p>
                   <p className="text-[12px] text-white/40">Navigate pages, click buttons, fill forms, and scroll — hands-free</p>
                 </div>
               </div>
@@ -82,8 +82,8 @@ export default function SettingsPage() {
                   <Eye className="h-3.5 w-3.5 text-white/50" />
                 </div>
                 <div>
-                  <p className="text-[13px] text-white/80">See what Valnaa sees</p>
-                  <p className="text-[12px] text-white/40">Your agent reads page content, extracts data, and takes screenshots to complete tasks</p>
+                  <p className="text-[13px] text-white/80">See what the extension sees</p>
+                  <p className="text-[12px] text-white/40">The extension reads page content, extracts data, and takes screenshots to complete tasks</p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
