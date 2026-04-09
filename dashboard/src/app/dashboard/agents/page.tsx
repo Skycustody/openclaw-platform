@@ -102,47 +102,64 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 const CATEGORY_STYLE = 'border-white/[0.08] text-white/50';
 
-// Map skill names to recognizable brand icons
-const SKILL_ICONS: Record<string, { src: string; alt: string }> = {
-  'web-pilot':              { src: 'https://www.google.com/s2/favicons?domain=google.com&sz=32', alt: 'Web' },
-  'agent-browser-clawdbot': { src: 'https://www.google.com/s2/favicons?domain=chrome.google.com&sz=32', alt: 'Browser' },
-  'google-search':          { src: 'https://www.google.com/s2/favicons?domain=google.com&sz=32', alt: 'Google' },
-  'x-api':                  { src: 'https://abs.twimg.com/favicons/twitter.3.ico', alt: 'X' },
-  'x-research':             { src: 'https://abs.twimg.com/favicons/twitter.3.ico', alt: 'X' },
-  'github':                 { src: 'https://github.githubassets.com/favicons/favicon-dark.svg', alt: 'GitHub' },
-  'gh-issues':              { src: 'https://github.githubassets.com/favicons/favicon-dark.svg', alt: 'GitHub' },
-  'notion-skill':           { src: 'https://www.google.com/s2/favicons?domain=notion.so&sz=32', alt: 'Notion' },
-  'slack':                  { src: 'https://www.google.com/s2/favicons?domain=slack.com&sz=32', alt: 'Slack' },
-  'slack-personal':         { src: 'https://www.google.com/s2/favicons?domain=slack.com&sz=32', alt: 'Slack' },
-  'discord':                { src: 'https://www.google.com/s2/favicons?domain=discord.com&sz=32', alt: 'Discord' },
-  'exa-web-search-free':    { src: 'https://www.google.com/s2/favicons?domain=exa.ai&sz=32', alt: 'Exa' },
-  'coding-agent':           { src: 'https://github.githubassets.com/favicons/favicon-dark.svg', alt: 'Code' },
-  'stripe-api':             { src: 'https://www.google.com/s2/favicons?domain=stripe.com&sz=32', alt: 'Stripe' },
-  'trello':                 { src: 'https://www.google.com/s2/favicons?domain=trello.com&sz=32', alt: 'Trello' },
-  'obsidian':               { src: 'https://www.google.com/s2/favicons?domain=obsidian.md&sz=32', alt: 'Obsidian' },
-  'resend-email-sender':    { src: 'https://www.google.com/s2/favicons?domain=resend.com&sz=32', alt: 'Email' },
-  'porteden-email':         { src: 'https://www.google.com/s2/favicons?domain=gmail.com&sz=32', alt: 'Email' },
-  'calendly-api':           { src: 'https://www.google.com/s2/favicons?domain=calendly.com&sz=32', alt: 'Calendly' },
-  'canvas':                 { src: 'https://www.google.com/s2/favicons?domain=canva.com&sz=32', alt: 'Canvas' },
+// Map skill names to recognizable brand icons — one entry per brand
+const SKILL_ICONS: Record<string, string> = {
+  'web-pilot':              'google',
+  'agent-browser-clawdbot': 'chrome',
+  'google-search':          'google',
+  'x-api':                  'x',
+  'x-research':             'x',
+  'github':                 'github',
+  'gh-issues':              'github',
+  'coding-agent':           'github',
+  'notion-skill':           'notion',
+  'slack':                  'slack',
+  'slack-personal':         'slack',
+  'discord':                'discord',
+  'exa-web-search-free':    'exa',
+  'stripe-api':             'stripe',
+  'trello':                 'trello',
+  'obsidian':               'obsidian',
+  'resend-email-sender':    'email',
+  'porteden-email':         'email',
+  'calendly-api':           'calendly',
+  'canvas':                 'canva',
+};
+
+const BRAND_LOGOS: Record<string, { src: string; alt: string }> = {
+  'google':   { src: 'https://www.google.com/s2/favicons?domain=google.com&sz=32', alt: 'Google' },
+  'chrome':   { src: 'https://www.google.com/s2/favicons?domain=chrome.google.com&sz=32', alt: 'Chrome' },
+  'x':        { src: 'https://abs.twimg.com/favicons/twitter.3.ico', alt: 'X' },
+  'github':   { src: 'https://github.githubassets.com/favicons/favicon-dark.svg', alt: 'GitHub' },
+  'notion':   { src: 'https://www.google.com/s2/favicons?domain=notion.so&sz=32', alt: 'Notion' },
+  'slack':    { src: 'https://www.google.com/s2/favicons?domain=slack.com&sz=32', alt: 'Slack' },
+  'discord':  { src: 'https://www.google.com/s2/favicons?domain=discord.com&sz=32', alt: 'Discord' },
+  'exa':      { src: 'https://www.google.com/s2/favicons?domain=exa.ai&sz=32', alt: 'Exa' },
+  'stripe':   { src: 'https://www.google.com/s2/favicons?domain=stripe.com&sz=32', alt: 'Stripe' },
+  'trello':   { src: 'https://www.google.com/s2/favicons?domain=trello.com&sz=32', alt: 'Trello' },
+  'obsidian': { src: 'https://www.google.com/s2/favicons?domain=obsidian.md&sz=32', alt: 'Obsidian' },
+  'email':    { src: 'https://www.google.com/s2/favicons?domain=gmail.com&sz=32', alt: 'Email' },
+  'calendly': { src: 'https://www.google.com/s2/favicons?domain=calendly.com&sz=32', alt: 'Calendly' },
+  'canva':    { src: 'https://www.google.com/s2/favicons?domain=canva.com&sz=32', alt: 'Canva' },
 };
 
 function SkillLogos({ skills }: { skills: string[] }) {
-  // Deduplicate by alt text (e.g. two X skills -> one X icon)
   const seen = new Set<string>();
-  const icons: { src: string; alt: string }[] = [];
+  const logos: { src: string; alt: string }[] = [];
   for (const s of skills) {
-    const icon = SKILL_ICONS[s];
-    if (icon && !seen.has(icon.alt)) {
-      seen.add(icon.alt);
-      icons.push(icon);
+    const brand = SKILL_ICONS[s];
+    if (brand && !seen.has(brand)) {
+      seen.add(brand);
+      const logo = BRAND_LOGOS[brand];
+      if (logo) logos.push(logo);
     }
-    if (icons.length >= 5) break;
+    if (logos.length >= 5) break;
   }
-  if (icons.length === 0) return null;
+  if (logos.length === 0) return null;
   return (
     <div className="flex items-center -space-x-1">
-      {icons.map((icon, i) => (
-        <img key={i} src={icon.src} alt={icon.alt} title={icon.alt}
+      {logos.map((logo, i) => (
+        <img key={i} src={logo.src} alt={logo.alt} title={logo.alt}
           className="h-6 w-6 rounded-full border-2 border-[#2a2a28] bg-white/10 object-contain"
         />
       ))}
