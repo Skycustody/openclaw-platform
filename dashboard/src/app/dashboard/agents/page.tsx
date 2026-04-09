@@ -102,6 +102,54 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 const CATEGORY_STYLE = 'border-white/[0.08] text-white/50';
 
+// Map skill names to recognizable brand icons
+const SKILL_ICONS: Record<string, { src: string; alt: string }> = {
+  'web-pilot':              { src: 'https://www.google.com/s2/favicons?domain=google.com&sz=32', alt: 'Web' },
+  'agent-browser-clawdbot': { src: 'https://www.google.com/s2/favicons?domain=chrome.google.com&sz=32', alt: 'Browser' },
+  'google-search':          { src: 'https://www.google.com/s2/favicons?domain=google.com&sz=32', alt: 'Google' },
+  'x-api':                  { src: 'https://abs.twimg.com/favicons/twitter.3.ico', alt: 'X' },
+  'x-research':             { src: 'https://abs.twimg.com/favicons/twitter.3.ico', alt: 'X' },
+  'github':                 { src: 'https://github.githubassets.com/favicons/favicon-dark.svg', alt: 'GitHub' },
+  'gh-issues':              { src: 'https://github.githubassets.com/favicons/favicon-dark.svg', alt: 'GitHub' },
+  'notion-skill':           { src: 'https://www.google.com/s2/favicons?domain=notion.so&sz=32', alt: 'Notion' },
+  'slack':                  { src: 'https://www.google.com/s2/favicons?domain=slack.com&sz=32', alt: 'Slack' },
+  'slack-personal':         { src: 'https://www.google.com/s2/favicons?domain=slack.com&sz=32', alt: 'Slack' },
+  'discord':                { src: 'https://www.google.com/s2/favicons?domain=discord.com&sz=32', alt: 'Discord' },
+  'exa-web-search-free':    { src: 'https://www.google.com/s2/favicons?domain=exa.ai&sz=32', alt: 'Exa' },
+  'coding-agent':           { src: 'https://github.githubassets.com/favicons/favicon-dark.svg', alt: 'Code' },
+  'stripe-api':             { src: 'https://www.google.com/s2/favicons?domain=stripe.com&sz=32', alt: 'Stripe' },
+  'trello':                 { src: 'https://www.google.com/s2/favicons?domain=trello.com&sz=32', alt: 'Trello' },
+  'obsidian':               { src: 'https://www.google.com/s2/favicons?domain=obsidian.md&sz=32', alt: 'Obsidian' },
+  'resend-email-sender':    { src: 'https://www.google.com/s2/favicons?domain=resend.com&sz=32', alt: 'Email' },
+  'porteden-email':         { src: 'https://www.google.com/s2/favicons?domain=gmail.com&sz=32', alt: 'Email' },
+  'calendly-api':           { src: 'https://www.google.com/s2/favicons?domain=calendly.com&sz=32', alt: 'Calendly' },
+  'canvas':                 { src: 'https://www.google.com/s2/favicons?domain=canva.com&sz=32', alt: 'Canvas' },
+};
+
+function SkillLogos({ skills }: { skills: string[] }) {
+  // Deduplicate by alt text (e.g. two X skills -> one X icon)
+  const seen = new Set<string>();
+  const icons: { src: string; alt: string }[] = [];
+  for (const s of skills) {
+    const icon = SKILL_ICONS[s];
+    if (icon && !seen.has(icon.alt)) {
+      seen.add(icon.alt);
+      icons.push(icon);
+    }
+    if (icons.length >= 5) break;
+  }
+  if (icons.length === 0) return null;
+  return (
+    <div className="flex items-center -space-x-1">
+      {icons.map((icon, i) => (
+        <img key={i} src={icon.src} alt={icon.alt} title={icon.alt}
+          className="h-6 w-6 rounded-full border-2 border-[#2a2a28] bg-white/10 object-contain"
+        />
+      ))}
+    </div>
+  );
+}
+
 export default function AgentsPage() {
   const [data, setData] = useState<AgentsResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -482,29 +530,19 @@ export default function AgentsPage() {
                   className="group rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 hover:border-white/[0.12] hover:bg-white/[0.04] transition-all cursor-pointer"
                   onClick={() => setPreviewAgent(agent)}
                 >
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/[0.04] border border-white/[0.06] text-xl">
-                        {agent.icon}
-                      </div>
-                      <div>
-                        <h3 className="text-[14px] font-semibold text-white leading-tight">{agent.name}</h3>
-                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border mt-1 ${catColor}`}>
-                          {CATEGORY_LABELS[agent.category] || agent.category}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
+                  <h3 className="text-[15px] font-semibold text-white leading-tight mb-2">{agent.name}</h3>
 
-                  <p className="text-[12px] text-white/35 leading-relaxed line-clamp-2 mb-3 min-h-[2.5rem]">
+                  <p className="text-[13px] text-white/40 leading-relaxed line-clamp-3 mb-4 min-h-[3.5rem]">
                     {agent.role}
                   </p>
 
-                  <div className="flex items-center justify-end pt-3 border-t border-white/[0.04]">
+                  <div className="flex items-center gap-2 pt-3 border-t border-white/[0.06]">
+                    <SkillLogos skills={agent.skills} />
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium border ml-auto ${catColor}`}>
+                      {CATEGORY_LABELS[agent.category] || agent.category}
+                    </span>
                     {isInstalled ? (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium text-green-400/70 bg-green-500/5 border border-green-500/10">
-                        <Check className="h-3 w-3" /> Installed
-                      </span>
+                      <span className="text-[12px] text-white/30 font-medium">Installed</span>
                     ) : (
                       <button
                         onClick={(e) => {
@@ -512,18 +550,18 @@ export default function AgentsPage() {
                           if (!isInstalling && canAddAgent) handleInstall(agent.id);
                         }}
                         disabled={isInstalling || !canAddAgent}
-                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all ${
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all ${
                           !canAddAgent
-                            ? 'text-white/20 bg-white/[0.03] border border-white/[0.04] cursor-not-allowed'
+                            ? 'text-white/20 cursor-not-allowed'
                             : isInstalling
-                              ? 'text-white/40 bg-white/[0.04] border border-white/[0.06]'
+                              ? 'text-white/40'
                               : 'text-white bg-white/[0.08] border border-white/[0.12] hover:bg-white/[0.14] hover:border-white/[0.2]'
                         }`}
                       >
                         {isInstalling ? (
                           <><Loader2 className="h-3 w-3 animate-spin" /> Installing...</>
                         ) : (
-                          <><Download className="h-3 w-3" /> Install</>
+                          'Install'
                         )}
                       </button>
                     )}
@@ -540,15 +578,15 @@ export default function AgentsPage() {
         title={previewAgent?.name || ''} className="max-w-lg">
         {previewAgent && (
           <div className="space-y-5">
-            <div className="flex items-center gap-4">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/[0.04] border border-white/[0.08] text-2xl">
-                {previewAgent.icon}
-              </div>
-              <div className="flex-1">
+            <div className="flex items-center justify-between">
+              <div>
                 <h3 className="text-[17px] font-semibold text-white">{previewAgent.name}</h3>
-                <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium border mt-1 ${CATEGORY_STYLE}`}>
-                  {CATEGORY_LABELS[previewAgent.category] || previewAgent.category}
-                </span>
+                <div className="flex items-center gap-2 mt-1.5">
+                  <SkillLogos skills={previewAgent.skills} />
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium border ${CATEGORY_STYLE}`}>
+                    {CATEGORY_LABELS[previewAgent.category] || previewAgent.category}
+                  </span>
+                </div>
               </div>
             </div>
 
