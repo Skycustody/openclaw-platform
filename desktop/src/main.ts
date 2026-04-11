@@ -8,12 +8,14 @@ import { promisify } from 'util';
 const execAsync = promisify(execCb);
 import * as pty from 'node-pty';
 import { autoUpdater } from 'electron-updater';
-import { manager, AgentStatus } from './openclaw/manager';
+import { manager, AgentStatus, findClaudeBinary } from './openclaw/manager';
 import { installOpenClaw, findOpenClawBinary, isNodeInstalled, getInstallScriptCommand, findNemoClawBinary, getNemoClawInstallScriptCommand, getNemoClawSetupScriptCommand } from './openclaw/installer';
 import { readRecentLogs, getLogFilePath, getAppLogPath, logApp, closeStreams } from './openclaw/logger';
 import { loadSession, saveSession, clearSession, checkSubscription, fetchDesktopGatewayToken, startDesktopTrial, getStripePortalUrl, getDesktopCheckoutUrl, parseDeepLinkToken, parseDeepLinkEmail, isOfflineGraceValid, markLocalTrialClaimed, isLocalTrialClaimed, startHeartbeat, stopHeartbeat } from './lib/session';
 import { loadRuntime, saveRuntime, clearRuntime, isNemoClawSupported, isDockerInstalled, isDockerRunning, canInstallDocker, getDockerInstallCommand, launchDockerDesktop, RuntimeType, isIntelMac, isOpenShellInstalled, isSidecarReady, setupOpenShellSidecar, ensureSidecarNetworking, isOnboardComplete, isGatewayDeployed, isGatewayClusterContainerRunning, getNemoClawOnboardCommand, ensurePortForward, OPENCLAW_PORT, EXTENSION_RELAY_PORT, getActiveGatewayPort, getActiveRelayPort, readSandboxGatewayToken, readSandboxGatewayTokenFresh, getCachedSandboxToken, readHostOpenclawGatewayToken, writeHostOpenclawGatewayToken, clearHostOpenclawGatewayToken, writeSandboxGatewayToken, clearSandboxGatewayToken, getSandboxShellCommand, isSandboxReady, applySandboxSettings, findNemoClawPackageRoot, getDockerInfoError, ensureWslReady, isWslHealthy, hasUsableWslDistro, isDockerWslMountHealthy, repairDockerWslMount, getNemoClawSandboxName, getOpenShellTermCommand, clearSandboxNameCache, isHomebrewInstalled, getHomebrewInstallCommand, ensureDockerSocketDir, isDockerSocketBroken, killDockerDesktop, applyFailedPolicyPresets, ensureSandboxGatewayRunning } from './lib/runtime';
 import { freePort, freePorts } from './lib/ports';
+import { hub } from './lib/hub';
+import { getPendingApprovals, respondToApproval } from './lib/approvals';
 import { getAppDataDir, getOpenClawDir, getLogsDir } from './lib/platform';
 import {
   getChromeExtensionDir,
@@ -1730,6 +1732,12 @@ async function runSetupFlow(runtime: RuntimeType): Promise<void> {
                 throw new Error('Docker is not running. Start Docker Desktop, then tap Retry.');
               }
             }
+            // Stop any launchd-managed gateway daemon that onboard may have installed
+            try {
+              const { execSync: execS } = require('child_process');
+              const uid = process.getuid?.() ?? '';
+              if (uid) execS(`launchctl bootout gui/${uid}/ai.openclaw.gateway 2>/dev/null`, { stdio: 'ignore' });
+            } catch { /* may not exist */ }
             // On Intel Mac the sidecar owns the ports — don't stop it.
             if (!(isIntelMac() && isSidecarReady())) {
               freePorts(OPENCLAW_PORT, EXTENSION_RELAY_PORT);
@@ -1811,8 +1819,6 @@ function handleDeepLink(url: string): void {
   mainWindow?.show();
   mainWindow?.focus();
   mainWindow?.webContents.send('app:auth-result', { success: true, email: email || '' });
-
-  autoStart();
 }
 
 /** Standard app menu for Windows when the menu bar is hidden (in-window menubar triggers these submenus). */
@@ -2325,6 +2331,121 @@ function setupIPC(): void {
     ptyMap.get(sessionId)?.write(data);
   });
 
+  // ── Builder Chat (agent creator LLM via gateway WebSocket) ──
+  let builderWs: import('ws').WebSocket | null = null;
+  let builderReady = false;
+  let builderReqId = 0;
+  let builderStreamBuf = '';
+  let builderPing: ReturnType<typeof setInterval> | null = null;
+
+  function builderConnect(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (builderWs && builderReady) { resolve(); return; }
+      if (builderWs) { try { builderWs.close(); } catch {} }
+
+      const token = readHostOpenclawGatewayToken()?.trim();
+      const port = getActiveGatewayPort();
+      if (!token || !port) { reject(new Error('No gateway token')); return; }
+
+      const WebSocket = require('ws');
+      builderWs = new WebSocket(`ws://localhost:${port}`, { origin: `http://localhost:${port}` }) as import('ws').WebSocket;
+      const ws = builderWs!;
+
+      const timeout = setTimeout(() => { reject(new Error('Connection timeout')); ws.close(); }, 10000);
+
+      ws.on('message', (raw: Buffer) => {
+        let msg: any;
+        try { msg = JSON.parse(raw.toString()); } catch { return; }
+
+        if (msg.type === 'event' && msg.event === 'connect.challenge') {
+          ws.send(JSON.stringify({
+            type: 'req', id: `br_${++builderReqId}_${Date.now()}`, method: 'connect',
+            params: {
+              minProtocol: 3, maxProtocol: 3,
+              client: { id: 'openclaw-control-ui', version: '1.0.0', platform: 'web', mode: 'ui' },
+              role: 'operator',
+              scopes: ['operator.read', 'operator.write', 'operator.admin', 'operator.pairing', 'operator.approvals'],
+              caps: [], commands: [], permissions: {},
+              auth: { token },
+              locale: 'en-US', userAgent: 'openclaw-cli/1.0.0',
+            },
+          }));
+        } else if (msg.type === 'res' && msg.payload?.type === 'hello-ok') {
+          builderReady = true;
+          clearTimeout(timeout);
+          builderPing = setInterval(() => { if (ws.readyState === 1) ws.ping(); }, 25000);
+          resolve();
+        } else if (msg.type === 'res' && msg.ok === false) {
+          // Error response — might be scope error, try to resolve
+          clearTimeout(timeout);
+          const errMsg = msg.error?.message || 'Unknown error';
+          logApp('warn', `Builder WS error: ${errMsg}`);
+          reject(new Error(errMsg));
+        } else if (msg.type === 'event') {
+          const p = msg.payload || {};
+          const ev = msg.event || '';
+
+          // Extract text delta from various event formats
+          let chunk = '';
+          if (ev === 'agent' && p.stream === 'assistant' && p.data?.delta) {
+            chunk = p.data.delta;
+          } else if (ev === 'chat' && p.state === 'delta' && p.message?.content) {
+            // chat delta events — skip, we use agent stream instead to avoid duplicates
+          } else {
+            chunk = p.text ?? p.content ?? p.chunk ?? (typeof p.delta === 'string' ? p.delta : '') ?? '';
+          }
+
+          if (chunk) {
+            builderStreamBuf += chunk;
+            mainWindow?.webContents.send('builder:chat-chunk', chunk);
+          }
+
+          // Done: agent lifecycle end or chat final
+          const isDone = (ev === 'agent' && p.stream === 'lifecycle' && p.data?.phase === 'end') ||
+                         (ev === 'chat' && p.state === 'final') ||
+                         ev === 'chat.done' || ev === 'run.done' || p.type === 'done';
+          if (isDone && builderStreamBuf) {
+            mainWindow?.webContents.send('builder:chat-done', builderStreamBuf);
+            builderStreamBuf = '';
+          }
+
+          // Errors
+          const isError = ev === 'chat.error' || ev === 'run.error' || p.type === 'error';
+          if (isError) {
+            mainWindow?.webContents.send('builder:chat-error', p.message || p.error || 'LLM error');
+            builderStreamBuf = '';
+          }
+        }
+      });
+
+      ws.on('close', () => { builderReady = false; builderWs = null; if (builderPing) clearInterval(builderPing); });
+      ws.on('error', () => { builderReady = false; clearTimeout(timeout); });
+    });
+  }
+
+  ipcMain.handle('builder:chat-send', async (_e, message: string, systemPrompt: string) => {
+    try {
+      await builderConnect();
+    } catch (err: any) {
+      return { ok: false, error: err.message };
+    }
+    if (!builderWs || !builderReady) return { ok: false, error: 'Not connected' };
+
+    builderStreamBuf = '';
+    const fullMessage = systemPrompt
+      ? `[SYSTEM INSTRUCTIONS — follow these exactly for this conversation]\n\n${systemPrompt}\n\n[END SYSTEM INSTRUCTIONS]\n\nUser message: ${message}`
+      : message;
+
+    builderWs.send(JSON.stringify({
+      type: 'req',
+      id: `br_${++builderReqId}_${Date.now()}`,
+      method: 'chat.send',
+      params: { sessionKey: 'builder-session', message: fullMessage, idempotencyKey: `builder_${Date.now()}` },
+    }));
+
+    return { ok: true };
+  });
+
   ipcMain.on('setup:terminal-input', (_e, data: string) => {
     setupPtyProc?.write(data);
   });
@@ -2743,13 +2864,68 @@ function setupIPC(): void {
     }
   });
 
+  // ── Hub & Approval IPC handlers ──────────────────────────────────────
+
+  ipcMain.handle('hub:pending-approvals', () => {
+    return { ok: true, approvals: getPendingApprovals() };
+  });
+
+  ipcMain.handle('hub:respond-approval', async (_e, requestId: string, decision: string, reason?: string) => {
+    const moved = respondToApproval(requestId, decision as 'approve' | 'deny', reason);
+    return { ok: moved };
+  });
+
+  ipcMain.handle('hub:status', () => {
+    return hub.getStatus();
+  });
+
+  // Forward hub events to renderer
+  hub.on('event', (msg: any) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('hub:event', msg);
+    }
+  });
+
+  // ── Agent catalog ──────────────────────────────────────────────────
+
   ipcMain.handle('agents:catalog', async () => {
-    // Use our vetted, encrypted agent store (20 employee agents)
+    const API_BASE = process.env.VALNAA_API_URL || 'https://api.valnaa.com';
+
+    // Try cloud marketplace first
+    try {
+      const response = await fetch(`${API_BASE}/agents/marketplace/public`, { signal: AbortSignal.timeout(5000) });
+      if (response.ok) {
+        const data = await response.json() as any;
+        if (data.agents?.length > 0) {
+          logApp('info', `agents:catalog loaded ${data.agents.length} agents from cloud marketplace`);
+          // Cache locally for offline use
+          try {
+            const cachePath = path.join(os.homedir(), '.openclaw-desktop', 'marketplace-cache.json');
+            fs.writeFileSync(cachePath, JSON.stringify(data.agents));
+          } catch { /* ok */ }
+          return { ok: true, catalog: data.agents };
+        }
+      }
+    } catch {
+      logApp('info', 'agents:catalog cloud marketplace unavailable — falling back to local');
+    }
+
+    // Try local cache
+    try {
+      const cachePath = path.join(os.homedir(), '.openclaw-desktop', 'marketplace-cache.json');
+      if (fs.existsSync(cachePath)) {
+        const agents = JSON.parse(fs.readFileSync(cachePath, 'utf-8'));
+        logApp('info', `agents:catalog loaded ${agents.length} agents from local cache`);
+        return { ok: true, catalog: agents };
+      }
+    } catch { /* ok */ }
+
+    // Fall back to encrypted local store
     try {
       const { loadAgentStore } = require('./data/agent-store-crypto');
       const store = loadAgentStore();
-      const agents = store.agents || [];
-      logApp('info', `agents:catalog loaded ${agents.length} agents from encrypted store`);
+      const agents = Array.isArray(store) ? store : (store.agents || []);
+      logApp('info', `agents:catalog loaded ${agents.length} agents from encrypted store (offline fallback)`);
       return { ok: true, catalog: agents };
     } catch (err: any) {
       logApp('warn', `agents:catalog failed: ${err.message}`);
@@ -2760,26 +2936,160 @@ function setupIPC(): void {
   ipcMain.handle('agents:install', async (_e, id: string, soul: string, name: string) => {
     try {
       const home = os.homedir();
-      const workspacePath = path.join(home, '.openclaw', `workspace-${id}`);
+      const openclawDir = path.join(home, '.openclaw');
+      const workspacePath = path.join(openclawDir, `workspace-${id}`);
 
-      // Create workspace and write SOUL.md + CLAUDE.md (for Claude Code runner)
-      fs.mkdirSync(workspacePath, { recursive: true });
-      fs.writeFileSync(path.join(workspacePath, 'SOUL.md'), soul, 'utf8');
-      fs.writeFileSync(path.join(workspacePath, 'CLAUDE.md'), soul, 'utf8');
-      logApp('info', `agents:install — wrote SOUL.md + CLAUDE.md to ${workspacePath}`);
-
-      // Write HEARTBEAT.md if provided in catalog
+      // Load catalog data once (used for heartbeat, cron, category)
+      let agentData: any = null;
       try {
         const { loadAgentStore } = require('./data/agent-store-crypto');
-        const store = loadAgentStore();
-        const agentData = (store.agents || []).find((a: any) => a.id === id);
-        if (agentData?.heartbeat) {
-          fs.writeFileSync(path.join(workspacePath, 'HEARTBEAT.md'), agentData.heartbeat, 'utf8');
-        }
+        const storeData = loadAgentStore();
+        agentData = (storeData.agents || []).find((a: any) => a.id === id);
       } catch { /* ok */ }
 
-      // Copy skills from main workspace
-      const mainSkills = path.join(home, '.openclaw', 'workspace', 'skills');
+      // ── 1. Create workspace ──
+      fs.mkdirSync(workspacePath, { recursive: true });
+
+      // ── 2. Build enriched SOUL.md (soul + delegation + mailbox + agent directory) ──
+      const delegationSection = [
+        '\n\n---\n\n## Claude Code Delegation -- IMPORTANT\n\n',
+        'You are running inside an OpenClaw gateway session with basic tools (exec, read, write). ',
+        'For complex tasks, you can spawn a full Claude Code instance that has unrestricted access and better tools.\n\n',
+        '### When to delegate:\n',
+        '- Multi-file operations, deep research, complex analysis\n',
+        '- Anything requiring Glob, Grep, Edit tools (you only have exec/read/write)\n',
+        '- Tasks that need multiple tool calls in sequence\n\n',
+        '### How:\n```bash\n',
+        `cd ${workspacePath} && node ~/.openclaw/agent-runner.mjs "YOUR TASK"\n`,
+        '```\n\n',
+        '### Rules:\n',
+        '- For simple questions → answer directly (no delegation needed)\n',
+        '- For real work → delegate, capture output, relay to user\n',
+        '- Keep delegated tasks focused (5-minute timeout)\n',
+      ].join('');
+
+      // Create mailbox directories
+      const mailboxBase = path.join(openclawDir, 'mailbox', id);
+      fs.mkdirSync(path.join(mailboxBase, 'inbox'), { recursive: true });
+      fs.mkdirSync(path.join(mailboxBase, 'read'), { recursive: true });
+
+      const mailboxSection = [
+        '\n\n---\n\n## Agent Mailbox -- Inter-Agent Communication\n\n',
+        'You can send and receive messages to/from other agents using the file-based mailbox at `~/.openclaw/mailbox/`.\n\n',
+        '### Your Mailbox\n',
+        `- **Inbox:** \`~/.openclaw/mailbox/${id}/inbox/\`\n`,
+        `- **Read:** \`~/.openclaw/mailbox/${id}/read/\`\n\n`,
+        '### Check Inbox (EVERY RUN -- before doing anything else)\n',
+        `1. List files in your inbox: \`ls ~/.openclaw/mailbox/${id}/inbox/\`\n`,
+        '2. If messages exist, read each JSON file and act on it\n',
+        `3. After handling, move to read: \`mv ~/.openclaw/mailbox/${id}/inbox/<file> ~/.openclaw/mailbox/${id}/read/\`\n`,
+        '4. Then proceed with your normal cron task\n\n',
+        '### Sending Messages\n',
+        'Write a JSON file to the target agent\'s inbox:\n\n',
+        '**Filename:** `{timestamp}_{your-id}_{slug}.json`\n\n',
+        '```json\n',
+        '{\n',
+        '  "id": "unique-id",\n',
+        `  "from": "${id}",\n`,
+        `  "from_name": "${name || id}",\n`,
+        '  "to": "<agent-id>",\n',
+        '  "to_name": "<Agent Name>",\n',
+        '  "subject": "Short description",\n',
+        '  "body": "Full message with context.",\n',
+        '  "priority": "normal",\n',
+        '  "timestamp": "2026-01-01T00:00:00Z",\n',
+        '  "data": {}\n',
+        '}\n',
+        '```\n',
+      ].join('');
+
+      // Build dynamic agent directory from currently installed agents
+      let directorySection = '\n### Agent Directory\n\n| Name | ID | When to message them |\n|------|-----|---------------------|\n';
+      try {
+        const cfgPath = path.join(openclawDir, 'openclaw.json');
+        const config = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
+        const agentList = config.agents?.list || [];
+        for (const a of agentList) {
+          if (a.id === id || a.id === 'main') continue;
+          const displayName = a.name || a.id;
+          directorySection += `| ${displayName} | ${a.id} | Send relevant updates or requests |\n`;
+        }
+      } catch { /* ok */ }
+      directorySection += '| Boss | manager | Escalations, status updates, pipeline problems |\n';
+
+      // ── Approval protocol — agents must request approval before external actions ──
+      const approvalSection = [
+        '\n\n---\n\n## Approval Required — MANDATORY\n\n',
+        '<!-- approval-protocol-v1 -->\n\n',
+        'Before performing ANY external action (sending email, making phone call, posting to social media, sending WhatsApp), you MUST:\n\n',
+        '1. Write an approval request:\n',
+        '```bash\n',
+        `REQID="${id}-$(date +%s)"\n`,
+        `cat > ~/.openclaw/approvals/pending/$REQID.json << APPROVAL_EOF\n`,
+        '{\n',
+        `  "id": "$REQID",\n`,
+        `  "agentId": "${id}",\n`,
+        `  "agentName": "${name || id}",\n`,
+        '  "action": "ACTION_TYPE",\n',
+        '  "target": "recipient@example.com",\n',
+        '  "summary": "What you want to do and why",\n',
+        '  "details": {},\n',
+        `  "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",\n`,
+        '  "status": "pending",\n',
+        `  "timeoutAt": "$(date -u -v+5M +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d '+5 minutes' +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo '2099-01-01T00:00:00Z')"\n`,
+        '}\n',
+        'APPROVAL_EOF\n',
+        '```\n\n',
+        '2. Wait for Boss to respond (max 5 minutes):\n',
+        '```bash\n',
+        'for i in $(seq 1 10); do\n',
+        '  [ -f ~/.openclaw/approvals/approved/$REQID.json ] && echo "APPROVED" && break\n',
+        '  [ -f ~/.openclaw/approvals/denied/$REQID.json ] && echo "DENIED" && break\n',
+        '  sleep 30\n',
+        'done\n',
+        '```\n\n',
+        '3. If APPROVED: execute the action.\n',
+        '4. If DENIED or TIMEOUT: do NOT execute. Log in HEARTBEAT.md and move on.\n\n',
+        '**Actions that do NOT need approval (proceed immediately):**\n',
+        '- File reads/writes within your workspace\n',
+        '- Web searches and web fetches\n',
+        '- Reading HEARTBEAT.md or mailboxes\n',
+        '- Writing to agent mailboxes\n',
+        '- Writing learnings\n',
+      ].join('');
+
+      // ── Learnings protocol — agents report what they learned ──
+      const learningsSection = [
+        '\n\n---\n\n## Learnings — Write After Every Run\n\n',
+        '<!-- learnings-protocol-v1 -->\n\n',
+        'Before writing HEARTBEAT.md at the end of your run, write a learnings file:\n\n',
+        '```bash\n',
+        `cat > ~/.openclaw/learnings/raw/${id}-$(date +%s).json << LEARN_EOF\n`,
+        '{\n',
+        `  "agentId": "${id}",\n`,
+        `  "agentName": "${name || id}",\n`,
+        '  "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",\n',
+        '  "worked": ["what produced good results this run"],\n',
+        '  "failed": ["what did not work and why"],\n',
+        '  "improvements": ["what to do differently next run"]\n',
+        '}\n',
+        'LEARN_EOF\n',
+        '```\n\n',
+        'Be specific. "Sent 5 emails" is not a learning. "LinkedIn search found 3x more valid emails than Google for B2B SaaS" IS a learning.\n',
+      ].join('');
+
+      const enrichedSoul = soul + delegationSection + mailboxSection + directorySection + approvalSection + learningsSection;
+      fs.writeFileSync(path.join(workspacePath, 'SOUL.md'), enrichedSoul, 'utf8');
+      fs.writeFileSync(path.join(workspacePath, 'CLAUDE.md'), enrichedSoul, 'utf8');
+      logApp('info', `agents:install — wrote enriched SOUL.md + CLAUDE.md to ${workspacePath}`);
+
+      // ── 3. Write HEARTBEAT.md if provided in catalog ──
+      if (agentData?.heartbeat) {
+        fs.writeFileSync(path.join(workspacePath, 'HEARTBEAT.md'), agentData.heartbeat, 'utf8');
+      }
+
+      // ── 4. Copy skills from main workspace ──
+      const mainSkills = path.join(openclawDir, 'workspace', 'skills');
       const agentSkills = path.join(workspacePath, 'skills');
       if (fs.existsSync(mainSkills)) {
         try {
@@ -2788,45 +3098,134 @@ function setupIPC(): void {
         } catch { /* ok */ }
       }
 
-      // Register the agent via CLI (creates agent dir and updates config)
+      // ── 5. Register the agent via CLI ──
       const bin = findOpenClawBinary();
       if (bin) {
         await execAsync(`"${bin}" agents add ${id} --workspace "${workspacePath}"`, { timeout: 60000, windowsHide: true });
         logApp('info', `agents:install — registered agent ${id} via CLI`);
       }
 
-      // Set display name to nickname (e.g. "Atlas (Research)") so Control UI shows it
+      // ── 6. Set display name ──
       if (name) {
         try {
-          const cfgPath = path.join(home, '.openclaw', 'openclaw.json');
+          const cfgPath = path.join(openclawDir, 'openclaw.json');
           const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
           const entry = (cfg.agents?.list || []).find((a: any) => a.id === id);
           if (entry) {
             entry.name = name;
             fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
-            logApp('info', `agents:install — set display name to "${name}"`);
           }
         } catch { /* non-fatal */ }
       }
 
-      // Bootstrap sessions.json so agent appears in Control UI chat dropdown
-      const agentSessionsDir = path.join(home, '.openclaw', 'agents', id, 'sessions');
+      // ── 7. Bootstrap sessions.json ──
+      const agentSessionsDir = path.join(openclawDir, 'agents', id, 'sessions');
       fs.mkdirSync(agentSessionsDir, { recursive: true });
       const sessionsIndex = path.join(agentSessionsDir, 'sessions.json');
       if (!fs.existsSync(sessionsIndex)) {
         const sessionId = require('crypto').randomUUID();
         const sessionFile = path.join(agentSessionsDir, `${sessionId}.jsonl`);
-        const store: Record<string, any> = {};
-        store[`agent:${id}:${id}`] = { sessionId, updatedAt: Date.now(), sessionFile };
-        fs.writeFileSync(sessionsIndex, JSON.stringify(store), 'utf-8');
+        const sessStore: Record<string, any> = {};
+        sessStore[`agent:${id}:${id}`] = { sessionId, updatedAt: Date.now(), sessionFile };
+        fs.writeFileSync(sessionsIndex, JSON.stringify(sessStore), 'utf-8');
         fs.writeFileSync(sessionFile, '', 'utf-8');
-        logApp('info', `agents:install — created sessions.json for ${id}`);
       }
 
-      // Restart gateway so it picks up the new agent and sessions
+      // ── 8. Auto-wire to boss.json ──
+      const categoryIntervals: Record<string, number> = {
+        marketing: 180, business: 120, finance: 240, development: 120,
+        devops: 60, hr: 180, creative: 180, productivity: 120,
+        freelance: 120, ecommerce: 120,
+      };
+      try {
+        const bossCfgPath = path.join(openclawDir, 'boss.json');
+        let bossCfg: any = {};
+        try { bossCfg = JSON.parse(fs.readFileSync(bossCfgPath, 'utf-8')); } catch { /* no boss.json yet */ }
+        if (!bossCfg.agents) bossCfg.agents = {};
+        const category = agentData?.category || 'other';
+        const interval = categoryIntervals[category] || 120;
+        bossCfg.agents[id] = {
+          enabled: true,
+          intervalMinutes: interval,
+          prompt: [
+            `You are ${name || id}. Run your scheduled task.`,
+            'Read CLAUDE.md for full instructions.',
+            `1. Check your inbox at ~/.openclaw/mailbox/${id}/inbox/`,
+            '2. Process any messages, then do your primary work.',
+            '3. Update HEARTBEAT.md when done.',
+            'Be concise. Act, don\'t advise.',
+          ].join('\n'),
+        };
+        fs.writeFileSync(bossCfgPath, JSON.stringify(bossCfg, null, 2));
+        logApp('info', `agents:install — wired ${id} to boss.json (interval: ${interval}min, category: ${category})`);
+      } catch (err: any) {
+        logApp('warn', `agents:install — boss.json wiring failed: ${err.message}`);
+      }
+
+      // ── 9. Auto-register cron jobs from catalog ──
+      const crons = agentData?.cron || [];
+      if (bin && crons.length > 0) {
+        for (const cronJob of crons) {
+          try {
+            const cronExpr = cronJob.schedule || cronJob.cron_expr || cronJob.cron;
+            if (!cronExpr) continue;
+            const cronName = (cronJob.name || `${id}-task`).replace(/"/g, '');
+            const cronDesc = (cronJob.description || '').replace(/"/g, "'").slice(0, 200);
+            const cmd = `"${bin}" cron add --agent ${id} --name "${cronName}" --cron "${cronExpr}" --timeout-seconds 300 --message "${cronDesc}"`;
+            await execAsync(cmd, { timeout: 15000, windowsHide: true });
+            logApp('info', `agents:install — registered cron: ${cronName} for ${id}`);
+          } catch (cronErr: any) {
+            logApp('warn', `agents:install — cron failed: ${cronErr.message}`);
+          }
+        }
+      }
+
+      // ── 10. Restart gateway ──
       await manager.restart();
-      logApp('info', `agents:install — agent ${id} installed, gateway restarted`);
-      return { ok: true };
+
+      // ── 11. Check BRIEF.md ──
+      const needsBrief = !fs.existsSync(path.join(openclawDir, 'BRIEF.md'));
+
+      // ── 12. First-run: trigger agent immediately (fire-and-forget) ──
+      try {
+        const claudeCodeEnabled = path.join(home, '.openclaw-desktop', 'claude-code-enabled');
+        const claudeBin = fs.existsSync(claudeCodeEnabled) ? findClaudeBinary() : null;
+        const runnerScript = path.join(openclawDir, 'agent-runner.mjs');
+
+        if (claudeBin || fs.existsSync(runnerScript)) {
+          const introPrompt = [
+            `You are ${name || id}. This is your FIRST RUN after installation.`,
+            'Read CLAUDE.md for your full instructions.',
+            '1. Check if ~/.openclaw/BRIEF.md exists. If it does, read it to understand the business.',
+            '2. Check your inbox for any messages.',
+            '3. Create your data directory if your CLAUDE.md references one (e.g. ~/.openclaw/data/{your-id}/).',
+            '4. Check for required dependencies: run `which gh`, `which ffmpeg`, `which bun` etc.',
+            '   If any are missing and your CLAUDE.md lists install commands, install them now.',
+            '5. Write your first HEARTBEAT.md entry confirming you are online and listing any missing dependencies.',
+            'Be concise. This is initialization, not a full work cycle.',
+          ].join('\n');
+
+          const { spawn: spawnChild } = require('child_process');
+          let proc: any;
+          if (claudeBin) {
+            proc = spawnChild(claudeBin, ['-p', '--dangerously-skip-permissions', introPrompt], {
+              cwd: workspacePath, stdio: 'ignore', detached: true, windowsHide: true,
+            });
+          } else {
+            proc = spawnChild('node', [runnerScript, introPrompt], {
+              cwd: workspacePath, stdio: 'ignore', detached: true,
+              env: { ...process.env }, windowsHide: true,
+            });
+          }
+          proc.unref();
+          logApp('info', `agents:install — triggered first-run for ${id}`);
+        }
+      } catch (err: any) {
+        logApp('warn', `agents:install — first-run trigger failed: ${err.message}`);
+      }
+
+      logApp('info', `agents:install — agent ${id} fully installed`);
+      return { ok: true, needsBrief };
     } catch (err: any) {
       logApp('error', `agents:install failed: ${err.message}`);
       return { ok: false, error: err.message };
@@ -2836,7 +3235,8 @@ function setupIPC(): void {
   ipcMain.handle('agents:delete', async (_e, id: string) => {
     try {
       const home = os.homedir();
-      const cfgPath = path.join(home, '.openclaw', 'openclaw.json');
+      const openclawDir = path.join(home, '.openclaw');
+      const cfgPath = path.join(openclawDir, 'openclaw.json');
       const config = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
 
       // Remove agent from config
@@ -2845,17 +3245,78 @@ function setupIPC(): void {
       config.bindings = (config.bindings || []).filter((b: any) => b.agentId !== id);
       fs.writeFileSync(cfgPath, JSON.stringify(config, null, 2));
 
-      // Remove workspace and agent dir
-      const workspacePath = path.join(home, '.openclaw', `workspace-${id}`);
-      const agentDir = path.join(home, '.openclaw', 'agents', id);
+      // Remove agent from boss.json
+      try {
+        const bossCfgPath = path.join(openclawDir, 'boss.json');
+        const bossCfg = JSON.parse(fs.readFileSync(bossCfgPath, 'utf-8'));
+        if (bossCfg.agents && bossCfg.agents[id]) {
+          delete bossCfg.agents[id];
+          fs.writeFileSync(bossCfgPath, JSON.stringify(bossCfg, null, 2));
+        }
+      } catch { /* non-fatal */ }
+
+      // Remove cron jobs for this agent
+      const bin = findOpenClawBinary();
+      if (bin) {
+        try {
+          const result = await execAsync(`"${bin}" cron list --json`, { timeout: 10000, windowsHide: true });
+          const cronList = JSON.parse(result.stdout);
+          const jobs = (cronList.jobs || cronList || []).filter((j: any) => j.agent === id || j.agentId === id);
+          for (const job of jobs) {
+            try { await execAsync(`"${bin}" cron rm ${job.id || job.uuid}`, { timeout: 10000, windowsHide: true }); } catch { /* ok */ }
+          }
+        } catch { /* ok */ }
+      }
+
+      // Remove workspace, agent dir, and mailbox
+      const workspacePath = path.join(openclawDir, `workspace-${id}`);
+      const agentDir = path.join(openclawDir, 'agents', id);
+      const mailboxDir = path.join(openclawDir, 'mailbox', id);
       try { fs.rmSync(workspacePath, { recursive: true, force: true }); } catch { /* ok */ }
       try { fs.rmSync(agentDir, { recursive: true, force: true }); } catch { /* ok */ }
+      try { fs.rmSync(mailboxDir, { recursive: true, force: true }); } catch { /* ok */ }
 
       await manager.restart();
-      logApp('info', `agents:delete — removed agent ${id}, gateway restarted`);
+      logApp('info', `agents:delete — removed agent ${id} (config + boss + crons + workspace + mailbox)`);
       return { ok: true };
     } catch (err: any) {
       logApp('error', `agents:delete failed: ${err.message}`);
+      return { ok: false, error: err.message };
+    }
+  });
+
+  // ── Kill agent — stops any running Claude Code process for this agent ──
+  ipcMain.handle('agents:kill', async (_e, id: string) => {
+    try {
+      const { execSync } = require('child_process');
+      // Kill any claude -p process running from this agent's workspace
+      const workspace = path.join(os.homedir(), '.openclaw', `workspace-${id}`);
+      try {
+        execSync(`pkill -f "claude.*${workspace.replace(/\//g, '\\/')}"`, { timeout: 5000 });
+      } catch { /* no process found — ok */ }
+      // Also kill by agent-runner if running
+      try {
+        execSync(`pkill -f "agent-runner.*${id}"`, { timeout: 5000 });
+      } catch { /* ok */ }
+      // If it's Boss, also stop the boss agent via manager
+      if (id === 'manager') {
+        try {
+          execSync(`pkill -f "claude -p.*Boss"`, { timeout: 5000 });
+        } catch { /* ok */ }
+      }
+      // Disable in boss.json so it doesn't restart
+      try {
+        const bossCfgPath = path.join(os.homedir(), '.openclaw', 'boss.json');
+        const bossCfg = JSON.parse(fs.readFileSync(bossCfgPath, 'utf-8'));
+        if (bossCfg.agents && bossCfg.agents[id]) {
+          bossCfg.agents[id].enabled = false;
+        }
+        fs.writeFileSync(bossCfgPath, JSON.stringify(bossCfg, null, 2));
+      } catch { /* ok */ }
+      logApp('info', `agents:kill — killed agent ${id} and disabled in boss.json`);
+      return { ok: true };
+    } catch (err: any) {
+      logApp('error', `agents:kill failed: ${err.message}`);
       return { ok: false, error: err.message };
     }
   });
