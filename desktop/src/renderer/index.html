@@ -2096,9 +2096,22 @@
         /* Old catalog grid/detail CSS removed — replaced by agent creator */
       </style>
       <div style="display:flex;flex-direction:column;flex:1;min-height:0;background:#1a1a1a;overflow:hidden;">
+
+        <!-- ═══ AGENTS LIST VIEW (default) ═══ -->
+        <div id="agents-list-view" style="flex:1;overflow-y:auto;padding:20px 28px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+            <h2 style="font-size:20px;font-weight:600;color:#f0f0f0;margin:0;">Agents</h2>
+          </div>
+          <div id="agents-installed-list" class="ag-installed-grid" style="margin-bottom:20px;"></div>
+        </div>
+
+        <!-- ═══ AGENT CREATOR (hidden, triggered from Commands) ═══ -->
+        <div id="agent-creator-view" style="display:none;flex-direction:column;flex:1;min-height:0;">
         <!-- Step indicator -->
         <div id="ac-steps" class="ac-steps">
-          <div style="flex:1;"></div>
+          <div style="flex:1;display:flex;align-items:center;">
+            <button class="ac-btn-ghost" onclick="acHideCreator()" style="padding:4px 8px;font-size:11px;">← Agents</button>
+          </div>
           <div style="display:flex;align-items:center;gap:0;">
             <div class="ac-step active" data-step="1"><span class="ac-step-circle">1</span><span class="ac-step-label">Templates</span></div>
             <div class="ac-step-line"></div>
@@ -2116,11 +2129,8 @@
           </div>
         </div>
 
-        <!-- STEP 1: Templates + installed agents -->
+        <!-- STEP 1: Templates -->
         <div id="ac-step-1" class="ac-content" style="overflow-y:auto;padding:0 28px 80px;">
-          <!-- Installed agents section -->
-          <div id="agents-installed-list" class="ag-installed-grid" style="display:none;margin-bottom:20px;"></div>
-
           <div style="text-align:center;margin:8px 0 20px;">
             <h2 style="font-size:22px;font-weight:600;color:#f0f0f0;margin:0;">Create an agent</h2>
             <p style="font-size:13px;color:rgba(255,255,255,0.35);margin:6px 0 0;">Pick a template or describe what you need</p>
@@ -2237,6 +2247,8 @@
             <div id="ac-install-config" class="ac-config-code"></div>
           </div>
         </div>
+
+        </div><!-- /agent-creator-view -->
 
         <!-- hidden refresh + browser relay -->
         <button type="button" id="agents-refresh-btn" style="display:none;">Refresh</button>
@@ -2401,6 +2413,15 @@
 
         <!-- OpenClaw commands -->
         <div id="commands-openclaw">
+          <div class="cmd-section-title">Agent Builder</div>
+          <div class="cmd-entry">
+            <div class="cmd-top">
+              <code class="cmd-code" style="cursor:pointer;color:#22c55e;" onclick="acShowCreator()">Create Agent</code>
+              <button class="cmd-copy-btn" style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);color:#22c55e;padding:4px 12px;border-radius:6px;" onclick="acShowCreator()">Open</button>
+            </div>
+            <div class="cmd-desc">Build a custom AI agent with templates, AI builder chat, and real tool configuration</div>
+          </div>
+
           <div class="cmd-section-title">Gateway &amp; Running Tasks</div>
           <div class="cmd-entry">
             <div class="cmd-top">
@@ -6560,6 +6581,22 @@
 
     // ── Install ──
 
+    // Show/hide creator view
+    window.acShowCreator = function() {
+      document.getElementById('agents-list-view').style.display = 'none';
+      document.getElementById('agent-creator-view').style.display = 'flex';
+      // Switch to agents tab if not already there
+      document.querySelector('.tab[data-tab="agents"]').click();
+      acRenderTemplates();
+      acLoadModels();
+    };
+
+    window.acHideCreator = function() {
+      document.getElementById('agent-creator-view').style.display = 'none';
+      document.getElementById('agents-list-view').style.display = '';
+      refreshAgentsPanel();
+    };
+
     window.acResetCreator = function() {
       _acStep = 1;
       _acConfig = _acDefaultConfig();
@@ -6569,6 +6606,7 @@
       acGoStep(1);
       acRenderTemplates();
       document.getElementById('ac-test-chat').innerHTML = '';
+      acHideCreator();
     };
 
     // ── Refresh panel (fetch installed + render templates) ──
