@@ -2093,72 +2093,183 @@
         .ag-remove-btn { padding: 4px 12px; border-radius: 5px; border: 1px solid rgba(248,113,113,0.15); background: transparent; color: rgba(248,113,113,0.6); font-size: 11px; font-weight: 500; cursor: pointer; transition: all 0.12s; font-family: inherit; opacity: 0; }
         .ag-installed-item:hover .ag-remove-btn { opacity: 1; }
         .ag-remove-btn:hover { background: rgba(248,113,113,0.08); color: #f87171; }
-        /* Card grid — masonry */
-        .ag-grid { column-count: 3; column-gap: 10px; }
-        .ag-card {
-          background: #1a1a1a; border: 1px solid rgba(255,255,255,0.08);
-          border-radius: 12px; padding: 18px 20px; cursor: pointer;
-          transition: border-color 0.15s;
-          display: inline-flex; flex-direction: column; width: 100%;
-          break-inside: avoid; margin-bottom: 10px;
-        }
-        .ag-card:hover { border-color: rgba(255,255,255,0.18); }
-        .ag-card-name { font-size: 15px; font-weight: 500; color: #e8e8e8; margin-bottom: 8px; line-height: 1.35; }
-        .ag-card-desc { font-size: 12px; color: rgba(255,255,255,0.3); line-height: 1.5; margin-bottom: 14px; }
-        .ag-card-footer { display: flex; align-items: center; justify-content: space-between; margin-top: auto; }
-        .ag-card-cat { font-size: 11px; color: rgba(255,255,255,0.6); background: #000; padding: 4px 10px; border-radius: 5px; text-transform: capitalize; }
-        .ag-card-action { padding: 5px 14px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); background: transparent; color: rgba(255,255,255,0.5); font-size: 11px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.12s; }
-        .ag-card-action:hover { background: rgba(255,255,255,0.06); color: #e0e0e0; }
-        .ag-card-action.installed { color: rgba(255,255,255,0.2); cursor: default; border-color: transparent; }
-        /* Detail page */
-        .ag-dp-back { background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.08); color:rgba(255,255,255,0.5); font-size:12px; cursor:pointer; font-family:inherit; padding:6px 12px; margin-bottom:24px; display:inline-flex; align-items:center; gap:6px; border-radius:8px; }
-        .ag-dp-back:hover { background:rgba(255,255,255,0.1); color:#e0e0e0; }
-        .ag-dp-back svg { width:14px; height:14px; }
-        .ag-dp-name { font-size:24px; font-weight:600; color:#f0f0f0; margin-bottom:6px; }
-        .ag-dp-desc { font-size:13px; color:rgba(255,255,255,0.4); line-height:1.6; margin-bottom:24px; max-width:600px; }
-        .ag-dp-section { margin-bottom:22px; }
-        .ag-dp-label { font-size:10px; font-weight:600; color:rgba(255,255,255,0.25); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:10px; }
-        .ag-dp-integrations { display:flex; flex-wrap:wrap; gap:8px; }
-        .ag-dp-integ { display:flex; align-items:center; gap:8px; padding:8px 14px; background:#222; border:1px solid rgba(255,255,255,0.06); border-radius:10px; font-size:13px; color:rgba(255,255,255,0.6); }
-        .ag-dp-integ-icon { display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; background:#222; border:1px solid rgba(255,255,255,0.08); border-radius:8px; }
-        .ag-dp-integ-icon img { width:18px; height:18px; }
-        .ag-dp-tasks { display:flex; flex-direction:column; border-radius:10px; overflow:hidden; border:1px solid rgba(255,255,255,0.06); }
-        .ag-dp-task { padding:12px 16px; background:#222; border-bottom:1px solid rgba(255,255,255,0.04); }
-        .ag-dp-task:last-child { border-bottom:none; }
-        .ag-dp-task-name { font-size:13px; color:#ccc; font-weight:600; margin-bottom:3px; }
-        .ag-dp-task-meta { font-size:11px; color:rgba(255,255,255,0.3); }
-        .ag-dp-skills { display:flex; flex-wrap:wrap; gap:6px; }
-        .ag-dp-skill { font-size:11px; padding:4px 10px; background:#222; border:1px solid rgba(255,255,255,0.06); color:rgba(255,255,255,0.45); border-radius:6px; }
-        .ag-dp-footer { margin-top:24px; padding-top:18px; border-top:1px solid rgba(255,255,255,0.06); }
-        .ag-dp-install { padding:10px 28px; border-radius:8px; border:none; background:#fff; color:#111; font-size:14px; font-weight:600; cursor:pointer; font-family:inherit; }
-        .ag-dp-install:hover { background:#e0e0e0; }
-        .ag-dp-install.installed { background:#333; color:rgba(255,255,255,0.3); cursor:default; }
-        .ag-detail-section { margin-bottom: 14px; }
-        .ag-detail-section:last-child { margin-bottom: 0; }
-        .ag-detail-label { font-size: 10px; font-weight: 600; color: rgba(255,255,255,0.25); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
-        .ag-detail-tasks { display: flex; flex-direction: column; border-radius: 8px; overflow: hidden; border: 1px solid rgba(255,255,255,0.06); }
-        .ag-detail-task { padding: 10px 14px; background: #1c1c1c; border-bottom: 1px solid rgba(255,255,255,0.04); }
-        .ag-detail-task:last-child { border-bottom: none; }
-        .ag-detail-task-name { font-size: 12px; color: #ccc; font-weight: 600; margin-bottom: 3px; }
-        .ag-detail-task-desc { font-size: 11px; color: rgba(255,255,255,0.35); line-height: 1.4; }
-        .ag-detail-skills { display: flex; flex-wrap: wrap; gap: 5px; }
-        .ag-skill-tag { font-size: 10px; padding: 3px 8px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); color: rgba(255,255,255,0.4); border-radius: 4px; }
+        /* Old catalog grid/detail CSS removed — replaced by agent creator */
       </style>
-      <div style="padding: 24px 28px; overflow-y: auto; flex: 1; min-height: 0; background: #1a1a1a;">
-        <div class="ag-top">
-          <h2>Agents</h2>
-          <input type="text" id="agents-search" placeholder="Search" class="ag-search" />
+      <div style="display:flex;flex-direction:column;flex:1;min-height:0;background:#1a1a1a;overflow:hidden;">
+        <!-- Step indicator -->
+        <div id="ac-steps" class="ac-steps">
+          <div style="flex:1;"></div>
+          <div style="display:flex;align-items:center;gap:0;">
+            <div class="ac-step active" data-step="1"><span class="ac-step-circle">1</span><span class="ac-step-label">Templates</span></div>
+            <div class="ac-step-line"></div>
+            <div class="ac-step" data-step="2"><span class="ac-step-circle">2</span><span class="ac-step-label">Configure</span></div>
+            <div class="ac-step-line"></div>
+            <div class="ac-step" data-step="3"><span class="ac-step-circle">3</span><span class="ac-step-label">Test</span></div>
+            <div class="ac-step-line"></div>
+            <div class="ac-step" data-step="4"><span class="ac-step-circle">4</span><span class="ac-step-label">Install</span></div>
+          </div>
+          <div id="ac-topbar-actions" style="flex:1;display:flex;justify-content:flex-end;align-items:center;gap:8px;">
+            <select id="ac-model-select" class="ac-model-select" title="Builder model">
+              <option value="">Loading...</option>
+            </select>
+            <button class="ac-restart-btn" onclick="acResetCreator()" title="Start over">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+            </button>
+          </div>
         </div>
 
-        <div id="agents-categories" class="ag-tabs"></div>
+        <!-- STEP 1: Templates + installed agents -->
+        <div id="ac-step-1" class="ac-content" style="overflow-y:auto;padding:0 28px 80px;">
+          <!-- Installed agents section -->
+          <div id="agents-installed-list" class="ag-installed-grid" style="display:none;margin-bottom:20px;"></div>
 
-        <div id="agents-installed-list" class="ag-installed-grid" style="display:none;"></div>
+          <div style="text-align:center;margin:8px 0 20px;">
+            <h2 style="font-size:22px;font-weight:600;color:#f0f0f0;margin:0;">Create an agent</h2>
+            <p style="font-size:13px;color:rgba(255,255,255,0.35);margin:6px 0 0;">Pick a template or describe what you need</p>
+          </div>
 
-        <div id="agents-catalog-list"></div>
-        <div id="agents-catalog-loading" style="text-align: center; padding: 40px; color: rgba(255,255,255,0.2); font-size: 13px; display:none;">Loading agents...</div>
+          <div style="max-width:680px;margin:0 auto;">
+            <input type="text" id="agents-search" placeholder="Search templates..." class="ag-search" style="width:100%;margin-bottom:16px;box-sizing:border-box;" />
+            <div id="ac-template-grid" class="ac-tpl-grid"></div>
+          </div>
 
-        <!-- Agent detail page (replaces grid when card is clicked) -->
-        <div id="ag-detail-page" style="display:none;background:#1a1a1a;margin:-24px -28px;padding:24px 28px;min-height:calc(100% + 48px);"></div>
+          <!-- Describe input (sticky bottom) -->
+          <div class="ac-describe-bar">
+            <div class="ac-describe-inner">
+              <svg class="ac-describe-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l1.912 5.813a2 2 0 001.275 1.275L21 12l-5.813 1.912a2 2 0 00-1.275 1.275L12 21l-1.912-5.813a2 2 0 00-1.275-1.275L3 12l5.813-1.912a2 2 0 001.275-1.275L12 3z"/></svg>
+              <input type="text" id="ac-describe-input" placeholder="Describe your agent..." class="ac-describe-field" />
+              <button id="ac-describe-send" class="ac-describe-btn" disabled>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Template detail (inline, replaces grid) -->
+          <div id="ac-tpl-detail" style="display:none;max-width:780px;margin:0 auto;padding-top:8px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <button class="ac-btn-ghost" onclick="acCloseTemplateDetail()" style="padding:5px 8px;">← </button>
+              <span id="ac-tpl-detail-name" style="font-size:15px;font-weight:600;color:#e8e8e8;"></span>
+              <span style="font-size:11px;color:rgba(255,255,255,0.3);background:rgba(255,255,255,0.04);padding:2px 8px;border-radius:4px;border:1px solid rgba(255,255,255,0.06);">Template</span>
+            </div>
+            <button id="ac-tpl-use-btn" class="ac-btn-primary">Use this template</button>
+          </div>
+          <div style="display:flex;gap:0;margin-bottom:12px;">
+            <button id="ac-tpl-fmt-yaml" class="ac-fmt-btn active" style="border:1px solid rgba(255,255,255,0.15);border-radius:4px;padding:4px 12px;" onclick="acSetTplFormat('yaml')">YAML</button>
+            <button id="ac-tpl-fmt-json" class="ac-fmt-btn" style="padding:4px 12px;" onclick="acSetTplFormat('json')">JSON</button>
+            <button class="ac-copy-btn" style="margin-left:auto;" onclick="acCopyTplConfig()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+            </button>
+          </div>
+          <div id="ac-tpl-detail-config" class="ac-config-code" style="background:#1e1e1e;border:1px solid rgba(255,255,255,0.04);border-radius:8px;padding:16px;min-height:200px;"></div>
+          </div>
+        </div>
+
+        <!-- STEP 2: Configure (split screen) -->
+        <div id="ac-step-2" class="ac-content ac-split" style="display:none;">
+          <div class="ac-chat-panel">
+            <div id="ac-chat-messages" class="ac-chat-messages"></div>
+            <div class="ac-chat-input-bar">
+              <input type="text" id="ac-chat-input" placeholder="Reply..." class="ac-chat-field" />
+              <button id="ac-chat-send" class="ac-chat-send-btn" disabled>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="ac-config-panel">
+            <div class="ac-panel-header" style="display:flex;justify-content:space-between;">
+              <div style="display:flex;align-items:center;gap:0;">
+                <button id="ac-tab-config" class="ac-tab-btn active" onclick="acSetRightTab('config')">Config</button>
+                <button id="ac-tab-tools" class="ac-tab-btn" onclick="acSetRightTab('tools')">Tools</button>
+                <button id="ac-tab-preview" class="ac-tab-btn" onclick="acSetRightTab('preview')">Preview</button>
+              </div>
+              <div id="ac-config-format-btns" style="display:flex;align-items:center;gap:8px;">
+                <button id="ac-fmt-yaml" class="ac-fmt-btn active" onclick="acSetFormat('yaml')">YAML</button>
+                <button id="ac-fmt-json" class="ac-fmt-btn" onclick="acSetFormat('json')">JSON</button>
+                <button id="ac-copy-config" class="ac-copy-btn" title="Copy">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                </button>
+              </div>
+            </div>
+            <div id="ac-config-display" class="ac-config-code" style="display:none;"></div>
+            <textarea id="ac-config-editor" class="ac-config-editor" spellcheck="false"></textarea>
+            <button id="ac-config-reset" class="ac-config-reset" title="Reset to last generated config" onclick="acResetConfig()" style="display:none;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="12" height="12"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+            </button>
+            <!-- Tools & Channels Picker -->
+            <div id="ac-tools-panel" style="display:none;overflow-y:auto;padding:12px 16px;flex:1;">
+              <div style="margin-bottom:16px;">
+                <div style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;">Skills</div>
+                <div id="ac-tools-grid" style="display:flex;flex-direction:column;gap:4px;"></div>
+              </div>
+              <div style="margin-bottom:16px;">
+                <div style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;">Channels</div>
+                <div id="ac-channels-grid" style="display:flex;flex-direction:column;gap:4px;"></div>
+              </div>
+              <div>
+                <div style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;">Model</div>
+                <select id="ac-agent-model-select" onchange="acSetAgentModel(this.value)" style="width:100%;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:8px 10px;font-size:12px;color:#e8e8e8;font-family:inherit;outline:none;cursor:pointer;">
+                  <option value="claude-sonnet-4-6" class="bg-[#1e1e1e]">Claude Sonnet 4.6</option>
+                  <option value="claude-opus-4-6">Claude Opus 4.6</option>
+                  <option value="gpt-4.1">GPT 4.1</option>
+                  <option value="gpt-4.1-mini">GPT 4.1 Mini</option>
+                  <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                  <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                  <option value="deepseek-r1">DeepSeek R1</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- STEP 3: Test Run (split screen) -->
+        <div id="ac-step-3" class="ac-content ac-split" style="display:none;">
+          <div class="ac-chat-panel">
+            <div class="ac-panel-header">Chat</div>
+            <div id="ac-test-chat" class="ac-chat-messages">
+              <div class="ac-msg-assistant">Your agent is configured and ready to test. Click <strong>Test run</strong> to see how it responds.</div>
+            </div>
+            <div id="ac-test-actions" style="padding:12px 16px;display:flex;gap:8px;">
+              <button class="ac-btn-primary" onclick="acStartTest()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polygon points="5 3 19 12 5 21 5 3"/></svg> Test run</button>
+              <button class="ac-btn-ghost" onclick="acGoStep(4)">Skip to install</button>
+            </div>
+          </div>
+          <div class="ac-config-panel" style="background:#1e1e1e;">
+            <div class="ac-panel-header" style="display:flex;justify-content:space-between;">
+              <div style="display:flex;align-items:center;gap:12px;">
+                <span>Preview</span>
+                <button id="ac-prev-debug" class="ac-fmt-btn active" onclick="acSetPreviewTab('debug')">Debug</button>
+                <button id="ac-prev-transcript" class="ac-fmt-btn" onclick="acSetPreviewTab('transcript')">Transcript</button>
+              </div>
+              <button id="ac-test-stop" class="ac-stop-btn" style="display:none;" onclick="acStopTest()">
+                <svg viewBox="0 0 24 24" fill="currentColor" width="10" height="10"><rect x="6" y="6" width="12" height="12" rx="1"/></svg> Stop
+              </button>
+            </div>
+            <div id="ac-test-events" class="ac-test-events">
+              <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:rgba(255,255,255,0.15);font-size:13px;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="32" height="32" style="margin-bottom:8px;opacity:0.3;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                Click "Test run" to see events
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- STEP 4: Install -->
+        <div id="ac-step-4" class="ac-content ac-split" style="display:none;">
+          <div class="ac-chat-panel">
+            <div class="ac-panel-header">Install</div>
+            <div id="ac-install-content" class="ac-chat-messages"></div>
+          </div>
+          <div class="ac-config-panel">
+            <div class="ac-panel-header" style="display:flex;justify-content:space-between;">
+              <div style="display:flex;align-items:center;gap:12px;">
+                <span>Config</span>
+                <button class="ac-fmt-btn active">YAML</button>
+              </div>
+            </div>
+            <div id="ac-install-config" class="ac-config-code"></div>
+          </div>
+        </div>
 
         <!-- hidden refresh + browser relay -->
         <button type="button" id="agents-refresh-btn" style="display:none;">Refresh</button>
@@ -2173,8 +2284,146 @@
         <div id="ag-overlay-label" style="font-size:13px;font-weight:500;color:rgba(255,255,255,0.6);letter-spacing:-0.01em;"></div>
       </div>
       <style>
-        /* keep absolute from .panel but also be a positioning context for the overlay */
         @keyframes ag-spin { to { transform: rotate(360deg); } }
+
+        /* ── Agent Creator styles ── */
+        .ac-steps { display:flex; align-items:center; justify-content:center; gap:0; padding:12px 24px; border-bottom:1px solid rgba(255,255,255,0.06); flex-shrink:0; }
+        .ac-step { display:flex; align-items:center; gap:6px; }
+        .ac-step-circle { display:flex; align-items:center; justify-content:center; width:26px; height:26px; border-radius:50%; font-size:11px; font-weight:600; border:1px dashed rgba(255,255,255,0.12); color:rgba(255,255,255,0.2); transition:all 0.2s; }
+        .ac-step.active .ac-step-circle { background:#fff; color:#1a1a1a; border:none; }
+        .ac-step.done .ac-step-circle { background:rgba(255,255,255,0.12); color:#fff; border:none; }
+        .ac-step-label { font-size:12px; color:rgba(255,255,255,0.2); font-weight:500; }
+        .ac-step.active .ac-step-label { color:#fff; }
+        .ac-step.done .ac-step-label { color:rgba(255,255,255,0.45); }
+        .ac-step-line { width:40px; height:1px; border-top:1px dashed rgba(255,255,255,0.08); margin:0 8px; }
+        .ac-step.done + .ac-step-line, .ac-step-line.done { border-top-style:solid; border-top-color:rgba(255,255,255,0.2); }
+        .ac-content { flex:1; min-height:0; position:relative; }
+        .ac-split { display:flex; gap:0; }
+
+        /* Template grid */
+        .ac-tpl-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+        .ac-tpl-card { text-align:left; background:#242424; border:1px solid rgba(255,255,255,0.06); border-radius:10px; padding:14px 16px; cursor:pointer; transition:all 0.15s; display:flex; align-items:flex-start; gap:10px; }
+        .ac-tpl-card:hover { border-color:rgba(255,255,255,0.14); background:#282828; }
+        .ac-tpl-icon { font-size:20px; flex-shrink:0; margin-top:1px; }
+        .ac-tpl-name { font-size:13px; font-weight:600; color:#e8e8e8; margin-bottom:3px; }
+        .ac-tpl-desc { font-size:11px; color:rgba(255,255,255,0.3); line-height:1.45; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+        .ac-tpl-logos { display:flex; margin-top:6px; }
+        .ac-tpl-logos img { width:18px; height:18px; border-radius:50%; border:2px solid #242424; background:rgba(255,255,255,0.08); object-fit:contain; }
+        .ac-tpl-logos img + img { margin-left:-4px; }
+        .ac-tpl-arrow { color:rgba(255,255,255,0.08); flex-shrink:0; margin-top:2px; font-size:16px; }
+        .ac-tpl-card:hover .ac-tpl-arrow { color:rgba(255,255,255,0.25); }
+
+        /* Describe bar */
+        .ac-describe-bar { position:sticky; bottom:0; padding:32px 28px 12px; background:linear-gradient(to top, #1a1a1a 60%, transparent); pointer-events:none; }
+        .ac-describe-inner { max-width:680px; margin:0 auto; position:relative; pointer-events:all; }
+        .ac-describe-icon { position:absolute; left:14px; top:50%; transform:translateY(-50%); width:16px; height:16px; color:rgba(255,255,255,0.2); }
+        .ac-describe-field { width:100%; box-sizing:border-box; background:#242424; border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:12px 44px 12px 40px; font-size:13px; color:#e8e8e8; font-family:inherit; outline:none; }
+        .ac-describe-field:focus { border-color:rgba(255,255,255,0.15); }
+        .ac-describe-field::placeholder { color:rgba(255,255,255,0.25); }
+        .ac-describe-btn { position:absolute; right:8px; top:50%; transform:translateY(-50%); width:30px; height:30px; border-radius:6px; border:none; background:rgba(255,255,255,0.06); color:rgba(255,255,255,0.4); cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all 0.12s; }
+        .ac-describe-btn:hover:not(:disabled) { background:rgba(255,255,255,0.1); color:#fff; }
+        .ac-describe-btn:disabled { opacity:0.2; cursor:default; }
+        .ac-describe-btn svg { width:14px; height:14px; }
+
+        /* Modal */
+        .ac-modal { position:fixed; inset:0; z-index:200; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.55); backdrop-filter:blur(4px); }
+        .ac-modal-box { background:#242424; border:1px solid rgba(255,255,255,0.08); border-radius:14px; width:520px; max-width:90vw; max-height:80vh; display:flex; flex-direction:column; box-shadow:0 20px 60px rgba(0,0,0,0.5); }
+        .ac-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid rgba(255,255,255,0.06); }
+        .ac-modal-close { background:none; border:none; color:rgba(255,255,255,0.3); font-size:20px; cursor:pointer; padding:4px 8px; border-radius:6px; }
+        .ac-modal-close:hover { color:rgba(255,255,255,0.6); background:rgba(255,255,255,0.06); }
+        .ac-modal-body { flex:1; overflow-y:auto; padding:16px 20px; }
+        .ac-modal-footer { display:flex; justify-content:flex-end; gap:8px; padding:14px 20px; border-top:1px solid rgba(255,255,255,0.06); }
+
+        /* Split panels */
+        .ac-chat-panel { width:45%; display:flex; flex-direction:column; border-right:1px solid rgba(255,255,255,0.06); min-height:0; }
+        .ac-config-panel { width:55%; display:flex; flex-direction:column; min-height:0; background:#1e1e1e; }
+        .ac-panel-header { padding:0 16px; height:40px; display:flex; align-items:center; border-bottom:1px solid rgba(255,255,255,0.06); font-size:12px; font-weight:500; color:rgba(255,255,255,0.5); flex-shrink:0; }
+        .ac-chat-messages { flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:12px; min-height:0; }
+        .ac-chat-input-bar { padding:10px 12px; border-top:1px solid rgba(255,255,255,0.06); flex-shrink:0; display:flex; gap:6px; }
+        .ac-chat-field { flex:1; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); border-radius:8px; padding:8px 12px; font-size:12px; color:#e8e8e8; font-family:inherit; outline:none; }
+        .ac-chat-field:focus { border-color:rgba(255,255,255,0.12); }
+        .ac-chat-field::placeholder { color:rgba(255,255,255,0.2); }
+        .ac-chat-send-btn { width:30px; height:30px; border-radius:6px; border:none; background:rgba(255,255,255,0.06); color:rgba(255,255,255,0.35); cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+        .ac-chat-send-btn:hover:not(:disabled) { background:rgba(255,255,255,0.1); color:#fff; }
+        .ac-chat-send-btn:disabled { opacity:0.2; }
+
+        /* Chat messages */
+        .ac-msg-user { align-self:flex-end; max-width:85%; background:rgba(255,255,255,0.06); border-radius:10px 10px 2px 10px; padding:8px 12px; font-size:12px; color:rgba(255,255,255,0.75); line-height:1.5; }
+        .ac-msg-assistant { max-width:90%; font-size:12px; color:rgba(255,255,255,0.6); line-height:1.6; }
+        .ac-msg-success { display:flex; align-items:flex-start; gap:8px; max-width:90%; }
+        .ac-msg-success-dot { width:18px; height:18px; border-radius:50%; background:rgba(34,197,94,0.12); display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:1px; }
+        .ac-msg-success-dot svg { width:10px; height:10px; stroke:#22c55e; fill:none; stroke-width:3; }
+
+        /* Model selector + restart */
+        .ac-model-select { min-width:120px; background:#242424; border:1px solid rgba(255,255,255,0.1); border-radius:6px; color:rgba(255,255,255,0.6); font-size:11px; font-family:inherit; padding:4px 22px 4px 8px; outline:none; cursor:pointer; appearance:none; -webkit-appearance:none; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.3)' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 6px center; }
+        .ac-model-select:hover { border-color:rgba(255,255,255,0.18); }
+        .ac-model-select option { background:#242424; color:#e0e0e0; }
+        .ac-restart-btn { background:none; border:none; color:rgba(255,255,255,0.25); cursor:pointer; padding:4px; border-radius:5px; display:flex; align-items:center; transition:all 0.12s; }
+        .ac-restart-btn:hover { color:rgba(255,255,255,0.6); background:rgba(255,255,255,0.06); }
+
+        /* LLM-generated interactive cards */
+        .ac-choice-card { background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06); border-radius:10px; padding:6px; }
+        .ac-choice-item { display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:6px; cursor:pointer; transition:background 0.1s; }
+        .ac-choice-item:hover { background:rgba(255,255,255,0.04); }
+        .ac-choice-num { width:20px; height:20px; border-radius:5px; background:rgba(255,255,255,0.04); display:flex; align-items:center; justify-content:center; font-size:10px; font-family:monospace; color:rgba(255,255,255,0.3); flex-shrink:0; }
+        .ac-choice-label { font-size:12px; color:rgba(255,255,255,0.55); }
+        .ac-choice-item:hover .ac-choice-label { color:rgba(255,255,255,0.75); }
+        .ac-skip-link { font-size:11px; color:rgba(255,255,255,0.25); background:none; border:none; cursor:pointer; font-family:inherit; padding:4px 2px; }
+        .ac-skip-link:hover { color:rgba(255,255,255,0.45); }
+
+        /* Editable config */
+        .ac-config-editor { flex:1; min-height:0; width:100%; box-sizing:border-box; background:transparent; border:none; color:#b5bd68; font-family:'SF Mono','Fira Code',monospace; font-size:12px; line-height:1.7; padding:14px 16px; resize:none; outline:none; overflow-y:auto; }
+        .ac-config-editor::placeholder { color:rgba(255,255,255,0.15); }
+        .ac-config-reset { position:absolute; bottom:12px; right:12px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.08); border-radius:5px; color:rgba(255,255,255,0.3); cursor:pointer; padding:5px; display:flex; align-items:center; transition:all 0.12s; }
+        .ac-config-reset:hover { background:rgba(255,255,255,0.1); color:rgba(255,255,255,0.6); }
+        .ac-config-panel { position:relative; }
+
+        /* Config/Preview tabs */
+        .ac-tab-btn { padding:6px 14px; border:none; background:transparent; color:rgba(255,255,255,0.35); font-size:12px; font-weight:500; cursor:pointer; font-family:inherit; border-bottom:2px solid transparent; transition:color 0.1s; }
+        .ac-tab-btn:hover { color:rgba(255,255,255,0.6); }
+        .ac-tab-btn.active { color:#e0e0e0; border-bottom-color:#e0e0e0; }
+
+        /* Config display */
+        .ac-config-code { flex:1; overflow-y:auto; padding:14px 16px; font-family:'SF Mono','Fira Code',monospace; font-size:12px; line-height:1.7; min-height:0; }
+        .ac-config-line { display:flex; }
+        .ac-config-ln { width:28px; text-align:right; color:rgba(255,255,255,0.12); user-select:none; padding-right:12px; flex-shrink:0; }
+        .ac-fmt-btn { padding:3px 8px; border-radius:4px; border:none; background:transparent; color:rgba(255,255,255,0.3); font-size:11px; font-weight:500; cursor:pointer; font-family:inherit; }
+        .ac-fmt-btn.active { background:rgba(255,255,255,0.08); color:#fff; }
+        .ac-fmt-btn:hover:not(.active) { color:rgba(255,255,255,0.5); }
+        .ac-copy-btn { background:none; border:none; color:rgba(255,255,255,0.2); cursor:pointer; padding:4px; border-radius:4px; display:flex; align-items:center; }
+        .ac-copy-btn:hover { color:rgba(255,255,255,0.5); }
+
+        /* Tools picker */
+        .ac-tool-item { display:flex; align-items:center; gap:8px; width:100%; text-align:left; padding:8px 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.06); background:rgba(255,255,255,0.02); cursor:pointer; font-family:inherit; transition:all 0.12s; }
+        .ac-tool-item:hover { border-color:rgba(255,255,255,0.12); background:rgba(255,255,255,0.04); }
+        .ac-tool-item.active { border-color:rgba(255,255,255,0.18); background:rgba(255,255,255,0.06); }
+        .ac-tool-check { width:16px; height:16px; border-radius:4px; border:1px solid rgba(255,255,255,0.1); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+        .ac-tool-check.on { background:rgba(255,255,255,0.2); border-color:rgba(255,255,255,0.3); }
+
+        /* Buttons */
+        .ac-btn-primary { display:inline-flex; align-items:center; gap:5px; padding:7px 16px; border-radius:7px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.08); color:#e0e0e0; font-size:12px; font-weight:500; cursor:pointer; font-family:inherit; transition:all 0.12s; }
+        .ac-btn-primary:hover { background:rgba(255,255,255,0.14); }
+        .ac-btn-primary:disabled { opacity:0.4; cursor:default; }
+        .ac-btn-ghost { display:inline-flex; align-items:center; gap:5px; padding:7px 14px; border-radius:7px; border:none; background:transparent; color:rgba(255,255,255,0.4); font-size:12px; font-weight:500; cursor:pointer; font-family:inherit; transition:all 0.12s; }
+        .ac-btn-ghost:hover { color:rgba(255,255,255,0.7); background:rgba(255,255,255,0.04); }
+        .ac-skip-link { font-size:11px; color:rgba(255,255,255,0.25); background:none; border:none; cursor:pointer; font-family:inherit; padding:4px 8px; }
+        .ac-skip-link:hover { color:rgba(255,255,255,0.45); }
+
+        /* Test events */
+        .ac-test-events { flex:1; overflow-y:auto; padding:12px 16px; min-height:0; }
+        .ac-test-row { display:flex; align-items:flex-start; gap:10px; padding:5px 0; }
+        .ac-test-badge { display:inline-flex; align-items:center; justify-content:center; min-width:60px; padding:2px 8px; border-radius:4px; font-size:10px; font-weight:500; color:#fff; flex-shrink:0; text-align:center; }
+        .ac-test-content { flex:1; font-size:11px; color:rgba(255,255,255,0.5); line-height:1.5; overflow:hidden; text-overflow:ellipsis; }
+        .ac-test-time { font-size:10px; font-family:monospace; color:rgba(255,255,255,0.15); flex-shrink:0; }
+        .ac-stop-btn { display:flex; align-items:center; gap:4px; padding:3px 10px; border-radius:5px; border:none; background:transparent; color:#f87171; font-size:11px; font-weight:500; cursor:pointer; font-family:inherit; }
+        .ac-stop-btn:hover { background:rgba(248,113,113,0.08); }
+
+        /* Install step items */
+        .ac-install-item { display:flex; align-items:flex-start; gap:10px; margin-bottom:10px; }
+        .ac-install-dot { width:18px; height:18px; border-radius:50%; border:1px solid rgba(255,255,255,0.08); display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:1px; }
+        .ac-install-dot-inner { width:5px; height:5px; border-radius:50%; background:rgba(255,255,255,0.15); }
+        .ac-install-label { font-size:12px; color:rgba(255,255,255,0.6); font-weight:500; }
+        .ac-install-desc { font-size:10px; color:rgba(255,255,255,0.25); margin-top:1px; }
       </style>
     </div>
 
@@ -3116,7 +3365,7 @@
     const _osLabelEl = document.getElementById('term-local-os-label');
     if (_osLabelEl) _osLabelEl.textContent = _osLabel;
 
-    // macOS: in native fullscreen, traffic lights leave the title bar — reduce left inset so tabs align to edge
+    // macOS: in native fullscreen, traffic lights leave the title bar - reduce left inset so tabs align to edge
     function applyMacFullscreenTabs(fullScreen) {
       if (!document.documentElement.classList.contains('platform-darwin')) return;
       document.documentElement.classList.toggle('macos-edge-tabs', !!fullScreen);
@@ -5436,17 +5685,954 @@
       void spawnOpenshellTui();
     });
 
-    // ── Agents Panel ──
+    // ── Agents Panel (Creator + Installed) ──
     let _agentsCatalog = [];
     let _agentsInstalled = [];
-    let _agentsSelectedCategory = '';
+
+    // Agent Creator state
+    var _acStep = 1;
+    function _acDefaultConfig() { return { name:'', displayName:'', description:'', icon:'🤖', category:'custom', model:'claude-sonnet-4-6', tools:[], channels:[], cron:[], requiredKeys:[], system:'' }; }
+    var _acConfig = _acDefaultConfig();
+    var _acFormat = 'yaml';
+    var _acMessages = [];
+    var _acTestRunning = false;
+    var _acTestEvents = [];
+    var _acTestTimers = [];
+
+    var _acTemplates = [
+      { id:'blank', name:'Blank', icon:'📝', desc:'Start with a clean slate — full creative freedom', cat:'custom', tools:[], model:'claude-sonnet-4-6', system:'', cron:[], keys:[] },
+      { id:'deep-researcher', name:'Deep Researcher', icon:'🔬', desc:'Multi-step web research with citations and source verification', cat:'productivity', tools:['web-pilot','exa-web-search-free','elite-longterm-memory'], model:'claude-sonnet-4-6', system:'You are a deep research agent. When given a topic:\n\n1. Break it into 3-5 specific sub-questions\n2. Search the web for each using multiple queries\n3. Cross-reference at least 3 sources per claim\n4. Flag any conflicting information explicitly\n5. Compile findings into a structured report with:\n   - Executive summary (3 sentences)\n   - Key findings (numbered)\n   - Sources (URL + reliability note)\n   - Open questions (what you couldn\'t verify)\n6. Store key findings in long-term memory for follow-up research\n\nAlways cite sources with URLs. Prefer primary sources (company pages, official docs, academic papers) over secondary (blogs, forums). If a claim has no reliable source, say so.', cron:[], keys:[] },
+      { id:'sales-prospector', name:'Sales Prospector', icon:'💼', desc:'Finds leads, researches companies, drafts personalized outreach', cat:'business', tools:['web-pilot','exa-web-search-free','porteden-email','elite-longterm-memory'], model:'claude-sonnet-4-6', system:'You are a B2B sales prospecting agent.\n\n1. When given a target market or ICP (ideal customer profile):\n   - Search for companies matching the criteria\n   - Visit their websites to understand their product, size, and tech stack\n   - Find decision-maker names and titles via LinkedIn/About pages\n2. For each prospect, research:\n   - Recent news, funding rounds, or product launches\n   - Pain points your product could solve\n   - Competitors they use (check job postings, tech stack tools)\n3. Draft personalized outreach emails that:\n   - Reference something specific about their company (not generic)\n   - Connect their pain point to your value prop\n   - Include a clear, low-friction CTA\n   - Keep under 150 words\n4. Track all prospects in memory with status (researched / emailed / replied / meeting)\n5. Follow up on non-responders after 3 business days with a different angle\n\nTone: Professional but warm. Never pushy. Lead with value, not features.', cron:[{name:'daily-prospecting',schedule:'0 8 * * 1-5'}], keys:[] },
+      { id:'competitor-monitor', name:'Competitor Monitor', icon:'📊', desc:'Tracks competitor pricing, features, and announcements daily', cat:'business', tools:['web-pilot','exa-web-search-free','slack-personal','elite-longterm-memory'], model:'claude-sonnet-4-6', system:'You are a competitive intelligence agent.\n\n## Daily monitoring (weekdays at 9 AM):\n1. Visit each competitor URL in your watchlist\n2. Check their pricing page, changelog/blog, and social accounts\n3. Extract: pricing changes, new features, messaging shifts, hiring patterns\n4. Compare against your stored previous snapshot\n5. If significant changes detected: send Slack alert with summary + screenshot URL\n6. Update your memory with new snapshot\n\n## Weekly report (Mondays at 10 AM):\nCompile a structured report with:\n- Competitor moves this week (table format)\n- Pricing comparison matrix\n- New features vs our product\n- Recommended actions for our team\n\nBe factual. Don\'t speculate. If you can\'t verify something, say "unverified".', cron:[{name:'daily-check',schedule:'0 9 * * 1-5'},{name:'weekly-report',schedule:'0 10 * * 1'}], keys:['SLACK_WEBHOOK_URL'] },
+      { id:'content-creator', name:'Content Creator', icon:'✍️', desc:'Researches topics, writes SEO blog posts, creates social snippets', cat:'marketing', tools:['web-pilot','exa-web-search-free','x-api','elite-longterm-memory'], model:'claude-sonnet-4-6', system:'You are a content creation agent for a business blog.\n\n## When asked to write content:\n1. Research the topic thoroughly — read at least 5 sources\n2. Identify the target keyword and 3-5 related keywords\n3. Write a blog post (800-1500 words) with:\n   - Compelling headline with keyword\n   - Hook intro (personal story, surprising stat, or bold claim)\n   - Scannable structure (H2s, short paragraphs, bullet points)\n   - Practical takeaways the reader can act on\n   - CTA at the end\n4. Create 3 social media snippets:\n   - Twitter/X: punchy, under 280 chars, with hook\n   - LinkedIn: professional, 3-4 short paragraphs, insight-led\n   - Newsletter teaser: 2 sentences + link CTA\n\n## Weekly content (Monday 9 AM):\nResearch trending topics in the niche, draft one blog post, create social snippets.\n\nTone: Knowledgeable but approachable. Write like a smart friend, not a textbook.', cron:[{name:'weekly-content',schedule:'0 9 * * 1'}], keys:[] },
+      { id:'customer-support', name:'Support Agent', icon:'🎧', desc:'Handles customer queries, searches docs, escalates complex issues', cat:'business', tools:['web-pilot','porteden-email','slack-personal','elite-longterm-memory'], model:'claude-sonnet-4-6', system:'You are a tier-1 customer support agent.\n\n## When you receive a customer query:\n1. Identify the issue type: bug report, how-to question, billing, feature request, or complaint\n2. Search your knowledge base (memory) for known solutions\n3. If not in memory, search the product docs/website\n4. Respond with:\n   - Acknowledge their frustration (if applicable)\n   - Clear, step-by-step solution\n   - Links to relevant docs\n   - "Is there anything else I can help with?"\n\n## Escalation rules:\n- Billing disputes → forward to billing team via Slack\n- Bugs with data loss → escalate immediately via Slack with full details\n- Feature requests → log in memory, respond with "I\'ve noted this"\n- Angry customers (3+ messages of frustration) → escalate to human\n\n## Tone:\n- Empathetic but efficient\n- Never blame the customer\n- Never say "I\'m just an AI" — respond as the support team\n- Use the customer\'s name when possible', cron:[], keys:['SLACK_WEBHOOK_URL'] },
+      { id:'devops-monitor', name:'DevOps Monitor', icon:'🖥️', desc:'Checks service health, monitors deploys, alerts on incidents', cat:'development', tools:['web-pilot','github','coding-agent','slack-personal','elite-longterm-memory'], model:'claude-sonnet-4-6', system:'You are a DevOps monitoring and incident response agent.\n\n## Health checks (every 15 min):\n1. Hit each endpoint in your watchlist (GET request)\n2. Check: HTTP status code, response time, response body for error markers\n3. If degraded (5xx, timeout > 5s, error in body):\n   - Send Slack alert with: service name, error type, timestamp\n   - Check GitHub for recent deploys in the last 2 hours\n   - If recent deploy found, include commit hash and author in alert\n4. Store health data in memory for trend analysis\n\n## Daily report (weekdays 8 AM):\n- Uptime percentage per service\n- P95 response times\n- Any incidents in the last 24h\n- Deploy count and authors\n\n## Incident response:\nWhen alerted to an incident:\n1. Gather logs and recent changes\n2. Draft an incident summary\n3. Suggest likely root cause based on recent deploys\n4. Post to Slack incident channel', cron:[{name:'health-check',schedule:'*/15 * * * *'},{name:'daily-report',schedule:'0 8 * * 1-5'}], keys:['SLACK_WEBHOOK_URL'] },
+      { id:'data-analyst', name:'Data Analyst', icon:'📈', desc:'Writes analysis code, generates reports, surfaces anomalies', cat:'productivity', tools:['coding-agent','web-pilot','elite-longterm-memory'], model:'claude-sonnet-4-6', system:'You are a data analysis agent. You write and execute code to analyze data.\n\n## When given an analysis request:\n1. Clarify the question if ambiguous (what metric, what timeframe, what comparison)\n2. Write Python/JS code to process the data\n3. Execute the code and verify results\n4. Present findings as:\n   - One-sentence headline finding\n   - Key numbers in a table\n   - Trend description (up/down/stable, by how much)\n   - Anomalies or outliers worth investigating\n   - Recommended next steps\n\n## Daily report (weekdays 8 AM):\nPull key metrics, compare to previous day and week-over-week.\nFlag anything that changed by more than 10%.\n\nRules:\n- Always show your methodology\n- Round numbers appropriately (don\'t say 42.847291%)\n- If the data is insufficient, say so instead of guessing\n- Store recurring metrics in memory for trend tracking', cron:[{name:'daily-report',schedule:'0 8 * * 1-5'}], keys:[] },
+      { id:'hr-recruiter', name:'HR Recruiter', icon:'👥', desc:'Sources candidates, screens resumes, drafts personalized outreach', cat:'business', tools:['web-pilot','exa-web-search-free','porteden-email','elite-longterm-memory'], model:'claude-sonnet-4-6', system:'You are an HR recruiting agent.\n\n## Sourcing (daily, weekdays 9 AM):\n1. Search for candidates matching the active job requirements\n2. Check LinkedIn profiles, GitHub (for engineering), portfolio sites\n3. Evaluate against must-have and nice-to-have criteria\n4. Score each candidate: Strong Match / Possible Match / Not a Fit\n\n## Outreach:\nFor Strong Match candidates, draft a personalized email that:\n- Mentions something specific from their profile (project, talk, article)\n- Explains why this role is relevant to their career trajectory\n- Keeps it under 120 words\n- Has a clear CTA (15-min intro call)\n\n## Pipeline tracking:\nStore all candidates in memory with:\n- Name, source, score, status (sourced / contacted / responded / interviewing / passed)\n- Follow up after 5 business days if no response (max 2 follow-ups)\n\nPrinciples: Be inclusive. Focus on skills and potential, not pedigree. Never disqualify based on gaps in employment.', cron:[{name:'daily-sourcing',schedule:'0 9 * * 1-5'}], keys:[] },
+      { id:'social-media', name:'Social Media Manager', icon:'📱', desc:'Creates platform-native posts, monitors engagement, tracks trends', cat:'marketing', tools:['web-pilot','exa-web-search-free','x-api','elite-longterm-memory'], model:'claude-sonnet-4-6', system:'You are a social media management agent.\n\n## Daily posting (every day, 8 AM):\n1. Check trending topics in your niche via web search\n2. Review your content calendar in memory\n3. Draft today\'s posts:\n   - Twitter/X: 1-2 tweets (punchy, opinionated, < 280 chars)\n   - Thread potential: if the topic is deep, draft a 5-tweet thread\n4. Post via X API at optimal times (9 AM, 12 PM, 5 PM)\n\n## Engagement monitoring:\nWhen asked, check:\n- Mentions and replies → respond to genuine questions\n- Competitor posts → note what\'s working for them\n- Viral content in niche → analyze why it worked\n\n## Weekly report (Monday 9 AM):\n- Top performing posts (by engagement)\n- Follower growth\n- Content themes that resonated\n- Suggested topics for next week\n\nVoice: Authentic, slightly opinionated, never corporate-speak. Match the brand\'s personality.', cron:[{name:'daily-posting',schedule:'0 8 * * *'},{name:'weekly-analytics',schedule:'0 9 * * 1'}], keys:[] },
+    ];
+
+    // ── Builder LLM chat via main process IPC ──
+    var _acStreaming = false;
+    var _acStreamBuffer = '';
+    var _acBuilderListenersSet = false;
+
+    var _yamlFence = String.fromCharCode(96,96,96) + 'yaml';
+    var _acBuilderPrompt = [
+      'You are the OpenClaw Agent Builder — an expert that helps users create AI agents through focused conversation.',
+      '',
+      '## HOW IT WORKS',
+      'You generate agent configs as ' + _yamlFence + ' code blocks. The app parses these and displays them in the Config panel on the right. The user NEVER sees the YAML in the chat. Do NOT explain config fields.',
+      '',
+      '## UI TOOLS',
+      'Output these markers — the app renders them as interactive UI:',
+      '- [[BUTTONS: Label A | Label B]] — side-by-side action buttons',
+      '- [[CHOICE: Option A | Option B | Option C]] — numbered choice cards',
+      '- [[CHECK: Item A | Item B | Item C]] — checkboxes with Continue button',
+      '- [[NEXT: Label]] — step navigation button',
+      '',
+      '## AVAILABLE SKILLS (only suggest from this list)',
+      '',
+      '**Browser & Web:**',
+      '- web-pilot — Browse the web, search, read pages, extract data',
+      '- exa-web-search-free — Semantic web search (better for research)',
+      '- google-search — Google search results',
+      '',
+      '**Communication & Email:**',
+      '- porteden-email — Read/send email via IMAP/SMTP',
+      '- slack-personal — Send messages and alerts to Slack channels',
+      '- discord — Interact with Discord servers',
+      '',
+      '**Development & Code:**',
+      '- coding-agent — Write, review, debug, test code (any language)',
+      '- github — Clone, commit, push, manage GitHub repos',
+      '',
+      '**Memory & Knowledge:**',
+      '- elite-longterm-memory — Persistent memory across sessions (remembers past conversations, facts, preferences)',
+      '- notion-skill — Read/write Notion pages and databases',
+      '',
+      '**Social Media:**',
+      '- x-api — Post, monitor, engage on Twitter/X',
+      '',
+      '## AVAILABLE CHANNELS (where agents can listen for messages)',
+      '- Telegram — connect a bot token',
+      '- Discord — add to a server via bot token',
+      '- Slack — connect via OAuth token',
+      '- WhatsApp — pair via QR code',
+      '',
+      '## CONFIG FORMAT',
+      _yamlFence + ' fences with: name (lowercase-hyphens), displayName, description (one sentence), icon (emoji), category (custom|business|productivity|marketing|development), model (claude-sonnet-4-6), tools (from skills list above), cron (array of {name, schedule} — standard cron format), requiredKeys (env vars needed), system (the agent\'s system prompt: 5-20 lines defining personality, behavior, step-by-step process).',
+      '',
+      '## YOUR CONVERSATION FLOW',
+      '',
+      '1. **First response:** Generate a ' + _yamlFence + ' config IMMEDIATELY based on the user\'s description. Include:',
+      '   - A fitting name and icon',
+      '   - The most relevant skills for their use case',
+      '   - A well-written system prompt with step-by-step behavior',
+      '   - Cron schedule if the use case implies recurring work',
+      '   Then show: [[BUTTONS: Create this agent | Keep refining]]',
+      '',
+      '2. **If "Create this agent":** show [[NEXT: Test run]]',
+      '',
+      '3. **If "Keep refining":** Ask ONE smart, specific question. Priority:',
+      '   a) **Credentials** — if tools need API keys, ask first. Explain how to get them.',
+      '   b) **Specifics** — which competitor URLs to watch, which email accounts, which repos, etc.',
+      '   c) **Channels** — should this agent be reachable via Telegram, Discord, etc.?',
+      '   d) **Schedule** — should it run on a cron (daily reports, monitoring, etc.)?',
+      '   e) **Tone/style** — personality preferences (last priority, ask only if relevant)',
+      '',
+      '   Examples of GOOD questions:',
+      '   - Research agent: "What specific topics or industries should it focus on?"',
+      '   - Sales agent: "Where do you track leads — HubSpot, Google Sheets, Notion?"',
+      '   - Monitor agent: "Which competitor URLs should it check?"',
+      '   - Support agent: "Where should it escalate complex issues — Slack channel or email?"',
+      '   NEVER ask generic questions like "Want to add Slack?" or "Want a schedule?"',
+      '',
+      '4. After each refinement: silently update the ' + _yamlFence + ' config, then [[BUTTONS: Create this agent | Keep refining]]',
+      '',
+      '## RULES',
+      '- Keep chat SHORT — 1-2 sentences max before UI markers',
+      '- Be opinionated — suggest specific skills and configs, don\'t just ask what they want',
+      '- Write GOOD system prompts — specific, step-by-step, with clear behavior rules',
+      '- Do NOT invent tools outside the skills list above',
+      '- Do NOT assume specific third-party services — ask the user',
+      '- If unsure about something, search the web for current options and present as [[CHOICE:]]',
+    ].join('\n');
+
+    function acSetupBuilderListeners() {
+      if (_acBuilderListenersSet) return;
+      _acBuilderListenersSet = true;
+
+      oc.onBuilderChatChunk(function(chunk) {
+        _acStreamBuffer += chunk;
+        var last = _acMessages[_acMessages.length - 1];
+        if (last && last.type === 'streaming') {
+          last.content = _acStreamBuffer;
+          acRenderChat();
+        }
+      });
+
+      oc.onBuilderChatDone(function(fullText) {
+        _acStreaming = false;
+        var last = _acMessages[_acMessages.length - 1];
+        if (last && last.type === 'streaming') {
+          last.type = 'text';
+          last.content = fullText;
+        }
+        acExtractConfig(fullText);
+        acRenderChat();
+      });
+
+      oc.onBuilderChatError(function(error) {
+        _acStreaming = false;
+        _acStreamBuffer = '';
+        var last = _acMessages[_acMessages.length - 1];
+        if (last && last.type === 'streaming') {
+          last.type = 'text';
+          last.content = 'Error: ' + error;
+        }
+        acRenderChat();
+      });
+    }
+
+    function acGetUserContext() {
+      // Gather user's OpenClaw config to give the builder LLM context
+      return Promise.all([
+        oc.ocGetModelStatus().catch(function() { return null; }),
+        oc.ocGetAgents().catch(function() { return { agents: [] }; }),
+      ]).then(function(results) {
+        var models = results[0];
+        var agents = results[1];
+        var ctx = '\n\n## USER CONTEXT (their current OpenClaw setup)';
+        if (models) {
+          ctx += '\nConfigured model: ' + (models.defaultModel || 'none');
+          ctx += '\nAvailable models: ' + (models.configuredModels || []).join(', ');
+          var providers = (models.auth && models.auth.providers || []).map(function(p) { return p.provider; });
+          ctx += '\nAuth providers: ' + (providers.length ? providers.join(', ') : 'none');
+        }
+        if (agents && agents.agents) {
+          var names = agents.agents.map(function(a) { return a.name || a.id; });
+          ctx += '\nInstalled agents: ' + (names.length ? names.join(', ') : 'none');
+        }
+        ctx += '\nNote: Only suggest tools/skills the user can actually use. If they have no API keys configured, mention they will need to set them up.';
+        return ctx;
+      });
+    }
+
+    function acSendToLLM(userMessage) {
+      acSetupBuilderListeners();
+      _acStreaming = true;
+      _acStreamBuffer = '';
+      _acMessages.push({role:'assistant', type:'streaming', content:''});
+      acRenderChat();
+
+      var isFirst = _acMessages.filter(function(m){return m.role==='user';}).length <= 1;
+
+      var sendIt = function(prompt) {
+        oc.builderChatSend(userMessage, prompt).then(function(res) {
+          if (!res.ok) {
+            _acStreaming = false;
+            var last = _acMessages[_acMessages.length - 1];
+            if (last && last.type === 'streaming') { last.type = 'text'; last.content = 'Failed to connect: ' + (res.error || 'Gateway not running'); }
+            acRenderChat();
+          }
+        });
+      };
+
+      if (isFirst) {
+        acGetUserContext().then(function(ctx) { sendIt(_acBuilderPrompt + ctx); });
+      } else {
+        sendIt('');
+      }
+      return;
+
+      // Dead code below kept for reference removal
+      var prompt = isFirst ? _acBuilderPrompt : '';
+
+      oc.builderChatSend(userMessage, prompt).then(function(res) {
+        if (!res.ok) {
+          _acStreaming = false;
+          var last = _acMessages[_acMessages.length - 1];
+          if (last && last.type === 'streaming') {
+            last.type = 'text';
+            last.content = 'Failed to connect: ' + (res.error || 'Gateway not running');
+          }
+          acRenderChat();
+        }
+      });
+    }
+
+    function acExtractConfig(text) {
+      var match = text.match(/```yaml\n([\s\S]*?)\n```/);
+      if (!match) return;
+      try {
+        var c = acParseYaml(match[1]);
+        if (c.name) { _acConfig = c; acRenderConfig(); }
+      } catch(e) { /* ignore parse errors */ }
+    }
+
+    function acParseYaml(yaml) {
+      // Simple YAML parser for our flat config format
+      var c = _acDefaultConfig();
+      var lines = yaml.split('\n');
+      var currentKey = '';
+      var systemLines = [];
+      var inSystem = false;
+      var inTools = false, inCron = false, inKeys = false;
+      var cronItem = null;
+
+      for (var i = 0; i < lines.length; i++) {
+        var line = lines[i];
+        var trimmed = line.trim();
+
+        if (inSystem) {
+          if (/^[\w][\w-]*:/.test(trimmed) && !line.startsWith('  ')) {
+            inSystem = false;
+            c.system = systemLines.join('\n');
+            // fall through to process this line
+          } else {
+            systemLines.push(line.replace(/^  /, ''));
+            continue;
+          }
+        }
+
+        if (trimmed.startsWith('- ') && inTools) {
+          c.tools.push(trimmed.slice(2).trim().replace(/^["']|["']$/g,''));
+          continue;
+        }
+        if (trimmed.startsWith('- ') && inKeys) {
+          c.requiredKeys.push(trimmed.slice(2).trim().replace(/^["']|["']$/g,''));
+          continue;
+        }
+        if (trimmed.startsWith('- name:') && inCron) {
+          if (cronItem) c.cron.push(cronItem);
+          cronItem = {name:trimmed.split(':').slice(1).join(':').trim().replace(/^["']|["']$/g,''), schedule:''};
+          continue;
+        }
+        if (trimmed.startsWith('schedule:') && inCron && cronItem) {
+          cronItem.schedule = trimmed.split(':').slice(1).join(':').trim().replace(/^["']|["']$/g,'');
+          continue;
+        }
+
+        var colonIdx = trimmed.indexOf(':');
+        if (colonIdx > 0 && /^[\w-]+$/.test(trimmed.slice(0, colonIdx))) {
+          var key = trimmed.slice(0, colonIdx);
+          var val = trimmed.slice(colonIdx + 1).trim().replace(/^["']|["']$/g,'');
+          inTools = false; inCron = false; inKeys = false;
+
+          if (key === 'name') c.name = val;
+          else if (key === 'displayName') c.displayName = val;
+          else if (key === 'description') c.description = val;
+          else if (key === 'icon') c.icon = val;
+          else if (key === 'category') c.category = val;
+          else if (key === 'model') c.model = val;
+          else if (key === 'tools') { inTools = true; c.tools = []; if (val === '[]') inTools = false; }
+          else if (key === 'cron') { inCron = true; c.cron = []; cronItem = null; }
+          else if (key === 'requiredKeys') { inKeys = true; c.requiredKeys = []; }
+          else if (key === 'system') {
+            if (val === '|-' || val === '|') { inSystem = true; systemLines = []; }
+            else c.system = val;
+          }
+        }
+      }
+      if (inSystem) c.system = systemLines.join('\n');
+      if (cronItem) c.cron.push(cronItem);
+      return c;
+    }
+
+    var _acSkillFavicons = {
+      'web-pilot':'https://www.google.com/s2/favicons?domain=google.com&sz=32',
+      'exa-web-search-free':'https://www.google.com/s2/favicons?domain=exa.ai&sz=32',
+      'porteden-email':'https://www.google.com/s2/favicons?domain=gmail.com&sz=32',
+      'slack-personal':'https://www.google.com/s2/favicons?domain=slack.com&sz=32',
+      'discord':'https://www.google.com/s2/favicons?domain=discord.com&sz=32',
+      'github':'https://github.githubassets.com/favicons/favicon-dark.svg',
+      'coding-agent':'https://github.githubassets.com/favicons/favicon-dark.svg',
+      'elite-longterm-memory':'https://www.google.com/s2/favicons?domain=notion.so&sz=32',
+      'notion-skill':'https://www.google.com/s2/favicons?domain=notion.so&sz=32',
+      'x-api':'https://abs.twimg.com/favicons/twitter.3.ico',
+    };
+
+    // ── Creator helpers ──
+
+    function acConfigToYaml(c) {
+      var l = [];
+      l.push('name: ' + (c.name || 'my-agent'));
+      l.push('displayName: ' + (c.displayName || 'My Agent'));
+      l.push('description: ' + (c.description || 'A custom AI agent'));
+      if (c.icon) l.push('icon: ' + c.icon);
+      l.push('category: ' + (c.category || 'custom'));
+      l.push('model: ' + c.model);
+      if (c.tools.length) { l.push('tools:'); c.tools.forEach(function(t){l.push('  - '+t);}); } else l.push('tools: []');
+      if (c.channels && c.channels.length) { l.push('channels:'); c.channels.forEach(function(ch){l.push('  - '+ch);}); }
+      if (c.cron.length) { l.push('cron:'); c.cron.forEach(function(cr){l.push('  - name: '+cr.name); l.push('    schedule: "'+cr.schedule+'"');}); }
+      if (c.requiredKeys.length) { l.push('requiredKeys:'); c.requiredKeys.forEach(function(k){l.push('  - '+k);}); }
+      if (c.system) { l.push('system: |-'); c.system.split('\n').forEach(function(line){l.push('  '+line);}); }
+      return l.join('\n');
+    }
+
+    function acHighlightYaml(yaml) {
+      return yaml.split('\n').map(function(line, i) {
+        var num = '<span class="ac-config-ln">' + (i+1) + '</span>';
+        var trimmed = line.trimStart();
+        var indent = line.length - trimmed.length;
+        var sp = '&nbsp;'.repeat(indent);
+        if (trimmed.startsWith('- ')) {
+          return '<div class="ac-config-line">' + num + sp + '<span style="color:#cc6666">- </span><span style="color:#8abeb7">' + escapeHtml(trimmed.slice(2)) + '</span></div>';
+        }
+        var ci = trimmed.indexOf(':');
+        if (ci > 0 && /^[\w-]+$/.test(trimmed.slice(0, ci))) {
+          var key = trimmed.slice(0, ci);
+          var rest = trimmed.slice(ci + 1);
+          var vc = '#b5bd68';
+          if (rest.trim().startsWith('"')) vc = '#8abeb7';
+          if (rest.trim() === '|-' || rest.trim() === '[]') vc = '#636363';
+          return '<div class="ac-config-line">' + num + sp + '<span style="color:#c4894d">' + escapeHtml(key) + '</span><span style="color:#e8e8e8">:</span><span style="color:' + vc + '">' + escapeHtml(rest) + '</span></div>';
+        }
+        return '<div class="ac-config-line">' + num + sp + '<span style="color:#b5bd68">' + escapeHtml(line) + '</span></div>';
+      }).join('');
+    }
+
+    var _acLastGeneratedConfig = null;
+
+    function acRenderConfig() {
+      var editor = document.getElementById('ac-config-editor');
+      var el2 = document.getElementById('ac-install-config');
+      var text = _acFormat === 'yaml' ? acConfigToYaml(_acConfig) : JSON.stringify(_acConfig, null, 2);
+      if (editor) {
+        editor.value = text;
+        _acLastGeneratedConfig = text;
+        document.getElementById('ac-config-reset').style.display = 'none';
+      }
+      // Install panel still uses highlighted display
+      if (el2) {
+        if (_acFormat === 'yaml') {
+          el2.innerHTML = acHighlightYaml(text);
+        } else {
+          el2.innerHTML = text.split('\n').map(function(line, i) {
+            return '<div class="ac-config-line"><span class="ac-config-ln">' + (i+1) + '</span><span style="color:#b5bd68">' + escapeHtml(line) + '</span></div>';
+          }).join('');
+        }
+      }
+    }
+
+    window.acResetConfig = function() {
+      if (_acLastGeneratedConfig) {
+        document.getElementById('ac-config-editor').value = _acLastGeneratedConfig;
+        document.getElementById('ac-config-reset').style.display = 'none';
+      }
+    };
+
+    window.acSetFormat = function(fmt) {
+      _acFormat = fmt;
+      document.getElementById('ac-fmt-yaml').classList.toggle('active', fmt === 'yaml');
+      document.getElementById('ac-fmt-json').classList.toggle('active', fmt === 'json');
+      acRenderConfig();
+    };
+
+    // ── Step navigation ──
+
+    function acGoStep(n) {
+      _acStep = n;
+      for (var i = 1; i <= 4; i++) {
+        var el = document.getElementById('ac-step-' + i);
+        if (el) el.style.display = i === n ? (i === 1 ? '' : 'flex') : 'none';
+      }
+      // Update step indicators
+      document.querySelectorAll('.ac-step').forEach(function(s) {
+        var sn = parseInt(s.dataset.step);
+        s.classList.toggle('active', sn === n);
+        s.classList.toggle('done', sn < n);
+        var circle = s.querySelector('.ac-step-circle');
+        circle.innerHTML = sn < n ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" width="12" height="12"><polyline points="20 6 9 17 4 12"/></svg>' : sn;
+      });
+      document.querySelectorAll('.ac-step-line').forEach(function(l, i) {
+        l.classList.toggle('done', (i + 1) < n);
+      });
+      // Show/hide top bar actions (Test run button) for steps 2+
+      document.getElementById('ac-topbar-actions').style.visibility = n >= 2 ? 'visible' : 'hidden';
+      if (n >= 2) acRenderConfig();
+      if (n === 4) acRenderInstallPage();
+    }
+    window.acGoStep = acGoStep;
+
+    // ── Templates rendering ──
+
+    // ── Model selector ──
+    function acLoadModels() {
+      oc.ocGetModelStatus().then(function(status) {
+        var sel = document.getElementById('ac-model-select');
+        if (!status || !sel) return;
+        var models = (status.configuredModels || []).filter(function(m) { return m && m.length > 0; });
+        var defaultModel = status.defaultModel || '';
+        if (models.length === 0 && defaultModel) models = [defaultModel];
+        if (models.length === 0) { sel.innerHTML = '<option value="">No models</option>'; return; }
+        sel.innerHTML = models.map(function(m) {
+          var label = m.replace(/^claude-code-local\//, '').replace(/^openai-codex\//, '');
+          return '<option value="' + escapeHtml(m) + '"' + (m === defaultModel ? ' selected' : '') + '>' + escapeHtml(label) + '</option>';
+        }).join('');
+      });
+    }
+    acLoadModels();
+
+    function acRenderTemplates() {
+      var search = (document.getElementById('agents-search').value || '').toLowerCase();
+      var grid = document.getElementById('ac-template-grid');
+      var filtered = _acTemplates.filter(function(t) {
+        if (!search) return true;
+        return t.name.toLowerCase().includes(search) || t.desc.toLowerCase().includes(search) || t.cat.toLowerCase().includes(search);
+      });
+      grid.innerHTML = filtered.map(function(t) {
+        var logos = '';
+        var seen = {};
+        (t.tools || []).forEach(function(s) {
+          var src = _acSkillFavicons[s];
+          if (src && !seen[src]) { seen[src] = 1; logos += '<img src="' + src + '" alt="" />'; }
+        });
+        return '<div class="ac-tpl-card" onclick="acPreviewTemplate(\'' + t.id + '\')">' +
+          '<span class="ac-tpl-icon">' + t.icon + '</span>' +
+          '<div style="flex:1;min-width:0;">' +
+            '<div class="ac-tpl-name">' + escapeHtml(t.name) + '</div>' +
+            '<div class="ac-tpl-desc">' + escapeHtml(t.desc) + '</div>' +
+            (logos ? '<div class="ac-tpl-logos">' + logos + '</div>' : '') +
+          '</div>' +
+          '<span class="ac-tpl-arrow">›</span>' +
+        '</div>';
+      }).join('');
+    }
+
+    var _acPreviewingTemplate = null;
+    var _acTplFormat = 'yaml';
+
+    window.acPreviewTemplate = function(id) {
+      var t = _acTemplates.find(function(x){return x.id===id;});
+      if (!t) return;
+      _acPreviewingTemplate = t;
+      _acTplFormat = 'yaml';
+      // Hide grid + describe bar, show detail
+      document.getElementById('ac-template-grid').parentElement.style.display = 'none';
+      document.querySelector('.ac-describe-bar').style.display = 'none';
+      document.querySelector('#ac-step-1 > div:first-child').style.display = 'none'; // installed agents
+      var heading = document.querySelector('#ac-step-1 > div:nth-child(2)');
+      if (heading) heading.style.display = 'none';
+
+      document.getElementById('ac-tpl-detail').style.display = '';
+      document.getElementById('ac-tpl-detail-name').textContent = t.name;
+      document.getElementById('ac-tpl-use-btn').onclick = function() { acStartFromTemplate(t); };
+      document.getElementById('ac-tpl-fmt-yaml').classList.add('active');
+      document.getElementById('ac-tpl-fmt-yaml').style.border = '1px solid rgba(255,255,255,0.15)';
+      document.getElementById('ac-tpl-fmt-json').classList.remove('active');
+      document.getElementById('ac-tpl-fmt-json').style.border = '';
+      acRenderTplConfig();
+    };
+
+    function acRenderTplConfig() {
+      var t = _acPreviewingTemplate;
+      if (!t) return;
+      var cfg = {name:t.id==='blank'?'Untitled agent':t.id, displayName:t.name, description:t.desc, icon:t.icon, category:t.cat, model:t.model, tools:t.tools, cron:t.cron, requiredKeys:t.keys, system:t.system};
+      if (_acTplFormat === 'yaml') {
+        document.getElementById('ac-tpl-detail-config').innerHTML = acHighlightYaml(acConfigToYaml(cfg));
+      } else {
+        var json = JSON.stringify(cfg, null, 2);
+        document.getElementById('ac-tpl-detail-config').innerHTML = json.split('\n').map(function(line, i) {
+          return '<div class="ac-config-line"><span class="ac-config-ln">' + (i+1) + '</span><span style="color:#b5bd68">' + escapeHtml(line) + '</span></div>';
+        }).join('');
+      }
+    }
+
+    window.acSetTplFormat = function(fmt) {
+      _acTplFormat = fmt;
+      document.getElementById('ac-tpl-fmt-yaml').classList.toggle('active', fmt === 'yaml');
+      document.getElementById('ac-tpl-fmt-yaml').style.border = fmt === 'yaml' ? '1px solid rgba(255,255,255,0.15)' : '';
+      document.getElementById('ac-tpl-fmt-json').classList.toggle('active', fmt === 'json');
+      document.getElementById('ac-tpl-fmt-json').style.border = fmt === 'json' ? '1px solid rgba(255,255,255,0.15)' : '';
+      acRenderTplConfig();
+    };
+
+    window.acCopyTplConfig = function() {
+      var t = _acPreviewingTemplate;
+      if (!t) return;
+      var cfg = {name:t.id, displayName:t.name, description:t.desc, icon:t.icon, category:t.cat, model:t.model, tools:t.tools, cron:t.cron, requiredKeys:t.keys, system:t.system};
+      navigator.clipboard.writeText(_acTplFormat === 'yaml' ? acConfigToYaml(cfg) : JSON.stringify(cfg, null, 2));
+    };
+
+    window.acCloseTemplateDetail = function() {
+      _acPreviewingTemplate = null;
+      document.getElementById('ac-tpl-detail').style.display = 'none';
+      document.getElementById('ac-template-grid').parentElement.style.display = '';
+      document.querySelector('.ac-describe-bar').style.display = '';
+      var heading = document.querySelector('#ac-step-1 > div:nth-child(2)');
+      if (heading) heading.style.display = '';
+    };
+
+    window.acSetRightTab = function(tab) {
+      document.getElementById('ac-tab-config').classList.toggle('active', tab === 'config');
+      document.getElementById('ac-tab-tools').classList.toggle('active', tab === 'tools');
+      document.getElementById('ac-tab-preview').classList.toggle('active', tab === 'preview');
+      // Show/hide panels
+      document.getElementById('ac-config-editor').style.display = tab === 'config' ? '' : 'none';
+      document.getElementById('ac-config-reset').style.display = 'none';
+      document.getElementById('ac-tools-panel').style.display = tab === 'tools' ? '' : 'none';
+      // Show format buttons only on config tab
+      document.getElementById('ac-config-format-btns').style.display = tab === 'config' ? 'flex' : 'none';
+      if (tab === 'tools') acRenderToolsPicker();
+    };
+
+    // ── Tools & Channels Picker ──
+
+    var _acAvailableTools = [
+      { id:'web-pilot', name:'Web Browsing', desc:'Search and read web pages', cat:'web' },
+      { id:'exa-web-search-free', name:'Semantic Search', desc:'AI-powered web search (Exa)', cat:'web' },
+      { id:'google-search', name:'Google Search', desc:'Google search results', cat:'web' },
+      { id:'porteden-email', name:'Email', desc:'Read/send via IMAP/SMTP', cat:'comms' },
+      { id:'slack-personal', name:'Slack', desc:'Send alerts and messages', cat:'comms' },
+      { id:'discord', name:'Discord', desc:'Interact with servers', cat:'comms' },
+      { id:'coding-agent', name:'Code Agent', desc:'Write, debug, test code', cat:'dev' },
+      { id:'github', name:'GitHub', desc:'Repos, commits, PRs', cat:'dev' },
+      { id:'elite-longterm-memory', name:'Long-term Memory', desc:'Remember across sessions', cat:'data' },
+      { id:'notion-skill', name:'Notion', desc:'Read/write pages and DBs', cat:'data' },
+      { id:'x-api', name:'Twitter/X', desc:'Post and monitor tweets', cat:'social' },
+    ];
+
+    var _acAvailableChannels = [
+      { id:'telegram', name:'Telegram', emoji:'\u2708\uFE0F' },
+      { id:'discord', name:'Discord', emoji:'\uD83C\uDFAE' },
+      { id:'slack', name:'Slack', emoji:'\u26A1' },
+      { id:'whatsapp', name:'WhatsApp', emoji:'\uD83D\uDCAC' },
+    ];
+
+    function acRenderToolsPicker() {
+      var grid = document.getElementById('ac-tools-grid');
+      grid.innerHTML = _acAvailableTools.map(function(t) {
+        var active = _acConfig.tools.indexOf(t.id) >= 0;
+        return '<button class="ac-tool-item' + (active ? ' active' : '') + '" onclick="acToggleTool(\'' + t.id + '\')">' +
+          '<div style="flex:1;min-width:0;"><div style="font-size:12px;font-weight:500;color:' + (active ? '#e8e8e8' : 'rgba(255,255,255,0.5)') + ';">' + escapeHtml(t.name) + '</div>' +
+          '<div style="font-size:10px;color:rgba(255,255,255,0.25);margin-top:1px;">' + escapeHtml(t.desc) + '</div></div>' +
+          '<div class="ac-tool-check' + (active ? ' on' : '') + '">' + (active ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" width="10" height="10"><polyline points="20 6 9 17 4 12"/></svg>' : '') + '</div>' +
+        '</button>';
+      }).join('');
+
+      var chGrid = document.getElementById('ac-channels-grid');
+      chGrid.innerHTML = _acAvailableChannels.map(function(ch) {
+        var active = (_acConfig.channels || []).indexOf(ch.id) >= 0;
+        return '<button class="ac-tool-item' + (active ? ' active' : '') + '" onclick="acToggleChannel(\'' + ch.id + '\')">' +
+          '<span style="font-size:14px;">' + ch.emoji + '</span>' +
+          '<div style="flex:1;min-width:0;"><div style="font-size:12px;font-weight:500;color:' + (active ? '#e8e8e8' : 'rgba(255,255,255,0.5)') + ';">' + escapeHtml(ch.name) + '</div></div>' +
+          '<div class="ac-tool-check' + (active ? ' on' : '') + '">' + (active ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" width="10" height="10"><polyline points="20 6 9 17 4 12"/></svg>' : '') + '</div>' +
+        '</button>';
+      }).join('');
+
+      var modelSel = document.getElementById('ac-agent-model-select');
+      if (modelSel) modelSel.value = _acConfig.model || 'claude-sonnet-4-6';
+    }
+
+    window.acToggleTool = function(id) {
+      var idx = _acConfig.tools.indexOf(id);
+      if (idx >= 0) _acConfig.tools.splice(idx, 1);
+      else _acConfig.tools.push(id);
+      acRenderToolsPicker();
+      acRenderConfig();
+    };
+
+    window.acToggleChannel = function(id) {
+      if (!_acConfig.channels) _acConfig.channels = [];
+      var idx = _acConfig.channels.indexOf(id);
+      if (idx >= 0) _acConfig.channels.splice(idx, 1);
+      else _acConfig.channels.push(id);
+      acRenderToolsPicker();
+      acRenderConfig();
+    };
+
+    window.acSetAgentModel = function(model) {
+      _acConfig.model = model;
+      acRenderConfig();
+    };
+
+    // ── Start creation flows ──
+
+    function acTemplateToConfig(t) {
+      return { name:t.id, displayName:t.name, description:t.desc, icon:t.icon, category:t.cat, model:t.model, tools:t.tools.slice(), cron:t.cron.slice(), requiredKeys:t.keys.slice(), system:t.system };
+    }
+
+    function acGenerateFromDescription(desc) {
+      var lower = desc.toLowerCase();
+      var tools = [], cron = [], keys = [];
+      if (/research|search|web|browse|find|look\s*up|scrape/i.test(lower)) { tools.push('web-pilot','exa-web-search-free'); }
+      if (/email|send|outreach|newsletter|contact/i.test(lower)) { tools.push('porteden-email'); }
+      if (/slack|notify|alert|notification/i.test(lower)) { tools.push('slack-personal'); keys.push('SLACK_WEBHOOK_URL'); }
+      if (/twitter|x\b|social|post|tweet/i.test(lower)) { tools.push('x-api'); }
+      if (/github|code|pr|pull\s*request|repo/i.test(lower)) { tools.push('github','coding-agent'); }
+      if (/remember|memory|store|track|log|history/i.test(lower)) { tools.push('elite-longterm-memory'); }
+      if (!tools.length) tools.push('web-pilot','elite-longterm-memory');
+      if (/daily|every\s*day|morning/i.test(lower)) cron.push({name:'daily-run',schedule:'0 9 * * *'});
+      else if (/weekly|every\s*week|monday/i.test(lower)) cron.push({name:'weekly-run',schedule:'0 9 * * 1'});
+      else if (/hourly|every\s*hour/i.test(lower)) cron.push({name:'hourly-run',schedule:'0 * * * *'});
+      else if (/monitor|watch|continuous/i.test(lower)) cron.push({name:'monitor',schedule:'*/15 * * * *'});
+      var words = desc.split(/\s+/).slice(0,3).map(function(w){return w.toLowerCase().replace(/[^a-z0-9]/g,'');}).filter(Boolean).join('-');
+      return { name:words||'custom-agent', displayName:desc.split(/[.!?\n]/)[0].trim().slice(0,60)||'Custom Agent', description:desc.slice(0,200), icon:'🤖', category:'custom', model:'claude-sonnet-4-6', tools:tools, cron:cron, requiredKeys:keys, system:'You are an AI agent. Your purpose:\n\n'+desc+'\n\nGuidelines:\n1. Be thorough and accurate\n2. Provide clear, actionable results\n3. Store important findings in memory\n4. Report errors clearly' };
+    }
+
+    function acBuildApiCall(c) {
+      return 'openclaw agents add ' + (c.name || 'my-agent') + ' \\\n  --name "' + (c.displayName || c.name) + '" \\\n  --soul "' + (c.system || c.description || '').slice(0, 80).replace(/\n/g, ' ') + '..."';
+    }
+
+    function acStartFromTemplate(t) {
+      _acConfig = acTemplateToConfig(t);
+      var apiCall = acBuildApiCall(_acConfig);
+      _acMessages = [
+        { role:'user', type:'text', content:t.desc },
+        { role:'assistant', type:'success', content:'Agent created' },
+        { role:'assistant', type:'text', content:'Your agent is created! Here\'s the call that made it:\n\n```\n' + apiCall + '\n```\n' },
+        { role:'assistant', type:'action', content:'You can refine the config by chatting below, or move on to test it.', actionLabel:'Next: Test run', actionStep:3 },
+      ];
+      acCloseTemplateDetail();
+      acGoStep(2);
+      acRenderChat();
+      acSetupBuilderListeners();
+    }
+
+    function acStartFromDescription() {
+      var input = document.getElementById('ac-describe-input');
+      var desc = input.value.trim();
+      if (!desc) return;
+      input.value = '';
+      _acMessages = [{ role:'user', type:'text', content:desc }];
+      acGoStep(2);
+      acSetupBuilderListeners();
+      acSendToLLM(desc);
+    }
+
+    // ── Chat rendering ──
+
+    function acFormatMarkdown(text) {
+      var html = escapeHtml(text);
+
+      // YAML code blocks → hidden (config panel shows it)
+      html = html.replace(/```yaml\n[\s\S]*?\n```/g, '');
+      // Incomplete YAML during streaming
+      html = html.replace(/```yaml[\s\S]*$/, '');
+
+      // Choice cards: [[CHOICE: opt1 | opt2 | opt3]]
+      html = html.replace(/\[\[CHOICE:\s*(.*?)\]\]/g, function(_, opts) {
+        var items = opts.split('|').map(function(o) { return o.trim(); });
+        return '<div class="ac-choice-card" style="margin:8px 0;">' +
+          items.map(function(item, i) {
+            return '<div class="ac-choice-item" onclick="acChoiceClicked(\'' + escapeHtml(item).replace(/'/g, "\\'") + '\')">' +
+              '<span class="ac-choice-num">' + (i + 1) + '</span>' +
+              '<span class="ac-choice-label">' + item + '</span></div>';
+          }).join('') +
+          '<div class="ac-choice-item" onclick="acShowCustomInput(this.parentElement)">' +
+            '<span class="ac-choice-num" style="font-style:normal;">✏️</span>' +
+            '<span class="ac-choice-label">Something else</span></div>' +
+          '<div class="ac-custom-input" style="display:none;padding:6px 8px;">' +
+            '<input type="text" placeholder="Type your preference..." style="width:100%;box-sizing:border-box;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:8px 10px;font-size:12px;color:#e8e8e8;font-family:inherit;outline:none;" onkeydown="if(event.key===\'Enter\'&&this.value.trim())acChoiceClicked(this.value.trim())" />' +
+          '</div>' +
+          '<div style="padding:4px 8px;"><button class="ac-skip-link" onclick="acChoiceClicked(\'skip\')">Skip</button></div>' +
+        '</div>';
+      });
+
+      // Buttons (side by side): [[BUTTONS: Label1 | Label2]]
+      html = html.replace(/\[\[BUTTONS:\s*(.*?)\]\]/g, function(_, opts) {
+        var items = opts.split('|').map(function(o) { return o.trim(); });
+        return '<div style="display:flex;gap:8px;margin:8px 0;">' +
+          items.map(function(item) {
+            return '<button class="ac-btn-primary" onclick="acChoiceClicked(\'' + escapeHtml(item).replace(/'/g, "\\'") + '\')">' + item + '</button>';
+          }).join('') + '</div>';
+      });
+
+      // Checkboxes: [[CHECK: item1 | item2 | item3]]
+      html = html.replace(/\[\[CHECK:\s*(.*?)\]\]/g, function(_, opts) {
+        var items = opts.split('|').map(function(o) { return o.trim(); });
+        var id = 'chk_' + Date.now() + '_' + Math.random().toString(36).slice(2,6);
+        return '<div class="ac-choice-card" style="margin:8px 0;" id="' + id + '">' +
+          items.map(function(item) {
+            return '<label class="ac-cb-item" style="cursor:pointer;"><input type="checkbox" style="margin-right:8px;" value="' + escapeHtml(item) + '" /><span class="ac-choice-label">' + item + '</span></label>';
+          }).join('') +
+          '<div style="padding:6px 8px;display:flex;justify-content:flex-end;"><button class="ac-btn-primary" onclick="acSubmitChecks(\'' + id + '\')">Continue →</button></div></div>';
+      });
+
+      // Next step button: [[NEXT: Label]]
+      html = html.replace(/\[\[NEXT:\s*(.*?)\]\]/g, function(_, label) {
+        var nextStep = _acStep + 1;
+        return '<div style="margin:8px 0;"><button class="ac-btn-primary" onclick="acGoStep(' + nextStep + ')">' +
+          label.trim() + ' →</button></div>';
+      });
+
+      // Other code blocks
+      html = html.replace(/```(\w*)\n([\s\S]*?)\n```/g, '<pre style="background:rgba(255,255,255,0.04);border-radius:6px;padding:8px 10px;margin:6px 0;font-size:11px;overflow-x:auto;">$2</pre>');
+      html = html.replace(/\*\*(.*?)\*\*/g, '<strong style="color:rgba(255,255,255,0.8);">$1</strong>');
+      html = html.replace(/`([^`]+)`/g, '<code style="background:rgba(255,255,255,0.06);padding:1px 4px;border-radius:3px;font-size:11px;">$1</code>');
+      html = html.replace(/\n/g, '<br>');
+      return html;
+    }
+
+    window.acShowCustomInput = function(card) {
+      var inp = card.querySelector('.ac-custom-input');
+      if (inp) { inp.style.display = ''; inp.querySelector('input').focus(); }
+    };
+
+    window.acSubmitChecks = function(id) {
+      var card = document.getElementById(id);
+      if (!card) return;
+      var checked = [];
+      card.querySelectorAll('input[type=checkbox]:checked').forEach(function(cb) { checked.push(cb.value); });
+      var text = checked.length ? 'Selected: ' + checked.join(', ') : 'None selected';
+      _acMessages.push({ role:'user', type:'text', content:text });
+      acRenderChat();
+      acSendToLLM(text);
+    };
+
+    window.acChoiceClicked = function(choice) {
+      // Send the choice as a user message
+      _acMessages.push({ role:'user', type:'text', content: choice });
+      acRenderChat();
+      acSendToLLM(choice);
+    };
+
+    function acRenderChat() {
+      var el = document.getElementById('ac-chat-messages');
+      el.innerHTML = _acMessages.map(function(m) {
+        if (m.role === 'user') return '<div class="ac-msg-user">' + escapeHtml(m.content) + '</div>';
+        if (m.type === 'success') return '<div class="ac-msg-success"><div class="ac-msg-success-dot"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div><div style="font-size:12px;color:rgba(255,255,255,0.6);line-height:1.6;">' + escapeHtml(m.content) + '</div></div>';
+        if (m.type === 'streaming') return '<div class="ac-msg-assistant">' + (m.content ? acFormatMarkdown(m.content) : '<span style="color:rgba(255,255,255,0.25);">Thinking...</span>') + '</div>';
+        if (m.type === 'action') return '<div class="ac-msg-assistant">' + escapeHtml(m.content) + '</div><div style="margin-top:8px;"><button class="ac-btn-primary" onclick="acGoStep(' + (m.actionStep||3) + ')">' + escapeHtml(m.actionLabel||'Next') + ' →</button></div>';
+        return '<div class="ac-msg-assistant">' + acFormatMarkdown(m.content) + '</div>';
+      }).join('');
+      el.scrollTop = el.scrollHeight;
+    }
+
+    // ── Chat input handling ──
+
+    function acHandleChatSend() {
+      var input = document.getElementById('ac-chat-input');
+      var val = input.value.trim();
+      if (!val || _acStreaming) return;
+      input.value = '';
+      document.getElementById('ac-chat-send').disabled = true;
+      _acMessages.push({ role:'user', type:'text', content:val });
+      acRenderChat();
+      acSendToLLM(val);
+    }
+
+    // ── Test run ──
+
+    var _acTestStreamBuffer = '';
+    var _acTestListenersSet = false;
+
+    function acSetupTestListeners() {
+      if (_acTestListenersSet) return;
+      _acTestListenersSet = true;
+
+      oc.onBuilderChatChunk(function(chunk) {
+        if (!_acTestRunning) return;
+        _acTestStreamBuffer += chunk;
+        // Update chat with streaming response
+        var chat = document.getElementById('ac-test-chat');
+        var streamEl = document.getElementById('ac-test-stream');
+        if (streamEl) {
+          streamEl.innerHTML = '<div class="ac-msg-assistant">' + acFormatMarkdown(_acTestStreamBuffer) + '<span style="display:inline-block;width:6px;height:14px;background:rgba(255,255,255,0.4);animation:ac-blink 0.8s infinite;margin-left:2px;vertical-align:middle;"></span></div>';
+          chat.scrollTop = chat.scrollHeight;
+        }
+        // Log to events panel
+        var eventsEl = document.getElementById('ac-test-events');
+        var lastRow = eventsEl.querySelector('.ac-test-streaming-row');
+        var preview = _acTestStreamBuffer.slice(0, 80).replace(/\n/g, ' ');
+        if (lastRow) {
+          lastRow.querySelector('.ac-test-content').textContent = preview + (_acTestStreamBuffer.length > 80 ? '...' : '');
+        } else {
+          eventsEl.innerHTML += '<div class="ac-test-row ac-test-streaming-row"><span class="ac-test-badge" style="background:#16a34a">Agent</span><span class="ac-test-content">' + escapeHtml(preview) + '</span><span class="ac-test-time">streaming</span></div>';
+        }
+        eventsEl.scrollTop = eventsEl.scrollHeight;
+      });
+
+      oc.onBuilderChatDone(function(fullText) {
+        if (!_acTestRunning) return;
+        _acTestRunning = false;
+        _acTestStreamBuffer = '';
+        document.getElementById('ac-test-stop').style.display = 'none';
+        var chat = document.getElementById('ac-test-chat');
+        var streamEl = document.getElementById('ac-test-stream');
+        if (streamEl) streamEl.innerHTML = '<div class="ac-msg-assistant">' + acFormatMarkdown(fullText) + '</div>';
+        chat.innerHTML += '<div class="ac-msg-success"><div class="ac-msg-success-dot"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div><div style="font-size:12px;color:rgba(255,255,255,0.6);">Test complete — the agent responded with your configured personality.</div></div>';
+        chat.innerHTML += '<div style="margin-top:8px;"><button class="ac-btn-primary" onclick="acGoStep(4)">Next: Install →</button></div>';
+        chat.scrollTop = chat.scrollHeight;
+        // Finalize events panel
+        var eventsEl = document.getElementById('ac-test-events');
+        eventsEl.innerHTML += '<div class="ac-test-row"><span class="ac-test-badge" style="background:#6b6b6b">Done</span><span class="ac-test-content">Response complete</span><span class="ac-test-time">' + new Date().toLocaleTimeString() + '</span></div>';
+        _acTestEvents = Array.from(eventsEl.querySelectorAll('.ac-test-row')).map(function(r) {
+          return { badge: r.querySelector('.ac-test-badge').textContent, content: r.querySelector('.ac-test-content').textContent };
+        });
+      });
+
+      oc.onBuilderChatError(function(error) {
+        if (!_acTestRunning) return;
+        _acTestRunning = false;
+        _acTestStreamBuffer = '';
+        document.getElementById('ac-test-stop').style.display = 'none';
+        var chat = document.getElementById('ac-test-chat');
+        chat.innerHTML += '<div style="font-size:12px;color:#f87171;margin-top:8px;">Test failed: ' + escapeHtml(error) + '</div>';
+        chat.innerHTML += '<div style="margin-top:8px;display:flex;gap:8px;"><button class="ac-btn-primary" onclick="acStartTest()">Retry</button><button class="ac-btn-ghost" onclick="acGoStep(4)">Skip to install</button></div>';
+      });
+    }
+
+    window.acStartTest = function() {
+      _acTestRunning = true;
+      _acTestEvents = [];
+      _acTestStreamBuffer = '';
+      _acTestTimers.forEach(clearTimeout);
+      _acTestTimers = [];
+      acSetupTestListeners();
+
+      document.getElementById('ac-test-stop').style.display = '';
+      document.getElementById('ac-test-actions').style.display = 'none';
+      var eventsEl = document.getElementById('ac-test-events');
+      eventsEl.innerHTML = '';
+
+      var c = _acConfig;
+      var testPrompt = c.system || ('You are ' + (c.displayName || c.name || 'an AI agent') + '. ' + (c.description || ''));
+
+      // Show test message in chat
+      var chat = document.getElementById('ac-test-chat');
+      chat.innerHTML = '<div class="ac-msg-user">What can you do?</div><div id="ac-test-stream"><div class="ac-msg-assistant"><span style="color:rgba(255,255,255,0.25);">Thinking...</span></div></div>';
+
+      // Log events
+      eventsEl.innerHTML = '<div class="ac-test-row"><span class="ac-test-badge" style="background:#6b6b6b">Start</span><span class="ac-test-content">Sending test prompt to gateway</span><span class="ac-test-time">' + new Date().toLocaleTimeString() + '</span></div>';
+      eventsEl.innerHTML += '<div class="ac-test-row"><span class="ac-test-badge" style="background:#dc2626">User</span><span class="ac-test-content">"What can you do?"</span><span class="ac-test-time">' + new Date().toLocaleTimeString() + '</span></div>';
+      eventsEl.innerHTML += '<div class="ac-test-row"><span class="ac-test-badge" style="background:#d97706">Model</span><span class="ac-test-content">Waiting for response...</span><span class="ac-test-time">' + new Date().toLocaleTimeString() + '</span></div>';
+
+      // Send real message through gateway
+      oc.builderChatSend('What can you do? Introduce yourself and list your main capabilities.', testPrompt).then(function(res) {
+        if (!res.ok) {
+          _acTestRunning = false;
+          document.getElementById('ac-test-stop').style.display = 'none';
+          chat.innerHTML += '<div style="font-size:12px;color:#f87171;margin-top:8px;">Failed to connect to gateway: ' + escapeHtml(res.error || 'Not running') + '</div>';
+          chat.innerHTML += '<div style="margin-top:8px;display:flex;gap:8px;"><button class="ac-btn-primary" onclick="acStartTest()">Retry</button><button class="ac-btn-ghost" onclick="acGoStep(4)">Skip to install</button></div>';
+        }
+      });
+    };
+
+    window.acStopTest = function() {
+      _acTestRunning = false;
+      _acTestTimers.forEach(clearTimeout);
+      _acTestTimers = [];
+      _acTestStreamBuffer = '';
+      document.getElementById('ac-test-stop').style.display = 'none';
+    };
+
+    window.acSetPreviewTab = function(tab) {
+      document.getElementById('ac-prev-debug').classList.toggle('active', tab === 'debug');
+      document.getElementById('ac-prev-transcript').classList.toggle('active', tab === 'transcript');
+      var eventsEl = document.getElementById('ac-test-events');
+      if (tab === 'transcript') {
+        var transcript = _acTestEvents.filter(function(e){return e.badge==='User'||e.badge==='Agent';});
+        eventsEl.innerHTML = transcript.map(function(ev) {
+          var isUser = ev.badge === 'User';
+          return '<div style="max-width:85%;margin-bottom:8px;' + (isUser?'margin-left:auto;':'') + '"><div style="font-size:10px;color:rgba(255,255,255,0.2);margin-bottom:3px;">' + ev.badge + '</div><div style="border-radius:10px;padding:8px 12px;font-size:12px;' + (isUser?'background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.75);':'background:rgba(34,197,94,0.05);border:1px solid rgba(34,197,94,0.1);color:rgba(255,255,255,0.6);') + '">' + escapeHtml(ev.content) + '</div></div>';
+        }).join('');
+      } else {
+        eventsEl.innerHTML = _acTestEvents.map(function(ev) {
+          return '<div class="ac-test-row"><span class="ac-test-badge" style="background:' + ev.color + '">' + escapeHtml(ev.badge) + '</span><span class="ac-test-content">' + escapeHtml(ev.content) + '</span><span class="ac-test-time">' + ev.time + '</span></div>';
+        }).join('');
+      }
+    };
+
+    // ── Install ──
+
+    function acRenderInstallPage() {
+      var el = document.getElementById('ac-install-content');
+      var c = _acConfig;
+      var items = '<div class="ac-install-item"><div class="ac-install-dot"><div class="ac-install-dot-inner"></div></div><div><div class="ac-install-label">Create agent workspace</div><div class="ac-install-desc">Dedicated folder inside your container</div></div></div>';
+      items += '<div class="ac-install-item"><div class="ac-install-dot"><div class="ac-install-dot-inner"></div></div><div><div class="ac-install-label">Write SOUL.md</div><div class="ac-install-desc">Agent personality and instructions</div></div></div>';
+      if (c.tools.length) items += '<div class="ac-install-item"><div class="ac-install-dot"><div class="ac-install-dot-inner"></div></div><div><div class="ac-install-label">Enable ' + c.tools.length + ' skill' + (c.tools.length>1?'s':'') + '</div><div class="ac-install-desc">' + escapeHtml(c.tools.slice(0,3).join(', ')) + (c.tools.length>3?'...':'') + '</div></div></div>';
+      if (c.cron.length) items += '<div class="ac-install-item"><div class="ac-install-dot"><div class="ac-install-dot-inner"></div></div><div><div class="ac-install-label">Wire Boss cron</div><div class="ac-install-desc">' + escapeHtml(c.cron.map(function(cr){return cr.schedule;}).join(', ')) + '</div></div></div>';
+      el.innerHTML =
+        '<div class="ac-msg-assistant">Ready to install <strong style="color:#e8e8e8;">' + escapeHtml(c.displayName||c.name) + '</strong> to your OpenClaw instance.</div>' +
+        '<div style="margin:12px 0;">' + items + '</div>' +
+        '<div id="ac-install-actions" style="display:flex;gap:8px;"><button class="ac-btn-primary" onclick="acDoInstall()">Install agent</button><button class="ac-btn-ghost" onclick="acGoStep(3)">Back to test</button></div>';
+      acRenderConfig();
+    }
+
+    window.acDoInstall = async function() {
+      var btn = document.querySelector('#ac-install-actions .ac-btn-primary');
+      btn.textContent = 'Installing...';
+      btn.disabled = true;
+      try {
+        var c = _acConfig;
+        var soul = (c.system ? '# ' + (c.displayName||c.name) + '\n\n' + c.system : '# ' + (c.displayName||c.name) + '\n\n' + c.description);
+        var displayName = c.displayName || c.name;
+        var res = await oc.agentsInstall(c.name, soul, displayName);
+        if (res.ok) {
+          document.getElementById('ac-install-content').innerHTML =
+            '<div class="ac-msg-success"><div class="ac-msg-success-dot" style="width:28px;height:28px;"><svg viewBox="0 0 24 24" style="width:14px;height:14px;"><polyline points="20 6 9 17 4 12"/></svg></div><div><div style="font-size:14px;font-weight:600;color:#e8e8e8;">Agent installed!</div><div style="font-size:12px;color:rgba(255,255,255,0.45);margin-top:4px;"><strong style="color:rgba(255,255,255,0.6);">' + escapeHtml(displayName) + '</strong> is live in your OpenClaw instance.</div></div></div>' +
+            '<div style="margin-top:12px;"><button class="ac-btn-primary" onclick="acResetCreator()">Back to Agents</button></div>';
+          refreshAgentsPanel();
+        }
+      } catch(e) {
+        btn.textContent = 'Install agent';
+        btn.disabled = false;
+        document.getElementById('ac-install-content').innerHTML += '<div style="margin-top:8px;font-size:12px;color:#f87171;">Installation failed: ' + escapeHtml(e.message||'Unknown error') + '</div>';
+      }
+    };
+
+    window.acResetCreator = function() {
+      _acStep = 1;
+      _acConfig = _acDefaultConfig();
+      _acMessages = [];
+      _acTestTimers.forEach(clearTimeout);
+      _acTestTimers = [];
+      _acTestEvents = [];
+      _acTestRunning = false;
+      acGoStep(1);
+      acRenderTemplates();
+      // Reset test chat
+      document.getElementById('ac-test-chat').innerHTML = '<div class="ac-msg-assistant">Your agent is configured and ready to test. Click <strong>Test run</strong> to see how it responds.</div>';
+      document.getElementById('ac-test-events').innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:rgba(255,255,255,0.15);font-size:13px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="32" height="32" style="margin-bottom:8px;opacity:0.3;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>Click "Test run" to see events</div>';
+      document.getElementById('ac-test-actions').style.display = 'flex';
+    };
+
+    // ── Refresh panel (fetch installed + render templates) ──
 
     async function refreshAgentsPanel() {
-      const installedEl = document.getElementById('agents-installed-list');
-      const catalogEl = document.getElementById('agents-catalog-list');
-      const loadingEl = document.getElementById('agents-catalog-loading');
-      const categoriesEl = document.getElementById('agents-categories');
-
       // Fetch installed agents
       try {
         const res = await oc.agentsList();
@@ -5454,18 +6640,16 @@
         renderInstalledAgents();
       } catch { _agentsInstalled = []; }
 
-      // Fetch catalog
+      // Fetch catalog (needed for installed agent skill info / setup)
       if (_agentsCatalog.length === 0) {
-        loadingEl.style.display = 'block';
         try {
           const res = await oc.agentsCatalog();
           _agentsCatalog = res.ok ? res.catalog : [];
         } catch { _agentsCatalog = []; }
-        loadingEl.style.display = 'none';
       }
-      renderCategories();
-      renderCatalogAgents();
-      renderInstalledAgents();
+
+      // Render template grid
+      acRenderTemplates();
     }
 
     // Skill setup requirements per skill
@@ -5530,8 +6714,8 @@
                 <span style="color:rgba(255,255,255,0.2);">active ${timeAgo(active)}</span>
               </div>
             </div>
-            ${needsSetup ? '<button class="ag-setup-btn" onclick="toggleAgentSetup(\'' + a.id + '\')">Setup</button>' : ''}
-            <button class="ag-remove-btn" onclick="deleteAgent('${a.id}')">Remove</button>
+            <button class="ag-setup-btn" onclick="toggleAgentSetup('${a.id}')">Setup</button>
+            <button class="ag-remove-btn" style="background:#dc2626;color:#fff;" onclick="killAgent('${a.id}')">Kill</button>
           </div>
           ${needsSetup ? '<div id="ag-setup-' + a.id + '" class="ag-setup-panel" style="display:none;"></div>' : ''}
         </div>`;
@@ -5675,161 +6859,7 @@
       }
     };
 
-    function renderCategories() {
-      const el = document.getElementById('agents-categories');
-      const cats = [...new Set(_agentsCatalog.map(a => a.category || 'other'))].sort();
-      el.innerHTML = '<button class="ag-tab' + (!_agentsSelectedCategory ? ' active' : '') + '" onclick="filterCategory(\'\')">All</button>' +
-        '<button class="ag-tab' + (_agentsSelectedCategory === '_installed' ? ' active' : '') + '" onclick="filterCategory(\'_installed\')">Installed</button>' +
-        cats.map(c => '<button class="ag-tab' + (_agentsSelectedCategory === c ? ' active' : '') + '" onclick="filterCategory(\'' + c + '\')">' + c + '</button>').join('');
-    }
-
-    function renderCatalogAgents() {
-      const el = document.getElementById('agents-catalog-list');
-      const search = (document.getElementById('agents-search')).value.toLowerCase();
-      const installedIds = _agentsInstalled.map(a => a.id);
-      const installedList = document.getElementById('agents-installed-list');
-
-      // Show/hide installed section based on tab
-      if (_agentsSelectedCategory === '_installed') {
-        installedList.style.display = '';
-        renderInstalledAgents();
-        el.innerHTML = '';
-        return;
-      } else {
-        installedList.style.display = 'none';
-      }
-
-      let filtered = _agentsCatalog.filter(a => {
-        if (_agentsSelectedCategory && _agentsSelectedCategory !== '_installed' && (a.category || 'other') !== _agentsSelectedCategory) return false;
-        if (search && !(a.name || '').toLowerCase().includes(search) && !(a.description || '').toLowerCase().includes(search) && !(a.category || '').toLowerCase().includes(search)) return false;
-        return true;
-      });
-      if (filtered.length === 0) {
-        el.innerHTML = '<p style="color: rgba(255,255,255,0.15); font-size: 13px; text-align: center; padding: 32px;">No agents found.</p>';
-        return;
-      }
-      // Tool logos mapped to SVG files in branding/ (must be accessible globally for openAgentModal)
-      window._toolLogos = window._toolLogos || {
-        'porteden-email': 'email', 'gog': 'google', 'brainz-calendar': 'google',
-        'notion-skill': 'notion', 'slack-personal': 'slack', 'discord': 'discord',
-        'github': 'github', 'gh-issues': 'github', 'web-pilot': 'browser',
-        'google-search': 'google', 'exa-web-search-free': 'search', 'x-research': 'x-twitter',
-        'agent-browser-clawdbot': 'browser', 'trello': 'trello',
-        'figma-design-toolkit': 'figma', 'canva-connect': 'canva',
-        'remotion-best-practices': 'remotion', 'video-frames': 'remotion',
-      };
-      function getAgentLogos(skills) {
-        var seen = new Set();
-        var result = [];
-        (skills || []).forEach(function(s) {
-          if (!_toolLogos[s]) return;
-          var logo = _toolLogos[s];
-          if (seen.has(logo)) return;
-          seen.add(logo);
-          var i = result.length;
-          if (i >= 4) return;
-          result.push('<span style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;background:#2a2a2a;border:1px solid rgba(255,255,255,0.1);border-radius:8px;' + (i > 0 ? 'margin-left:-5px;' : '') + 'position:relative;z-index:' + (10 - i) + ';"><img src="branding/' + logo + '.svg" width="18" height="18" /></span>');
-        });
-        return result;
-      }
-
-      el.innerHTML = '<div class="ag-grid">' + filtered.slice(0, 50).map(a => {
-        const installed = installedIds.includes(a.id);
-        const cat = (a.category || 'other');
-        const desc = (a.description || a.role || '').slice(0, 100).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-        const logos = getAgentLogos(a.skills || []);
-        return `
-          <div class="ag-card" onclick="openAgentModal('${a.id}')">
-            <div class="ag-card-name">${a.name || a.id}</div>
-            ${desc ? '<div class="ag-card-desc">' + desc + '</div>' : ''}
-            <div class="ag-card-footer">
-              <div style="display:flex;align-items:center;gap:8px;">
-                ${logos.length ? '<span style="display:flex;align-items:center;">' + logos.join('') + '</span>' : ''}
-                <span class="ag-card-cat">${cat}</span>
-              </div>
-              <button class="ag-card-action${installed ? ' installed' : ''}" ${installed ? 'disabled' : ''} onclick="event.stopPropagation(); installAgent('${a.id}')">
-                ${installed ? 'Installed' : 'Install'}
-              </button>
-            </div>
-          </div>`;
-      }).join('') + '</div>';
-    }
-
-    var _skillLabels = {
-      'porteden-email': 'Email', 'gog': 'Google Workspace', 'brainz-calendar': 'Google Calendar',
-      'notion-skill': 'Notion', 'slack-personal': 'Slack', 'discord': 'Discord',
-      'github': 'GitHub', 'gh-issues': 'GitHub Issues', 'web-pilot': 'Web Browser',
-      'google-search': 'Google Search', 'exa-web-search-free': 'Exa Search', 'x-research': 'X Research',
-      'agent-browser-clawdbot': 'Browser Agent', 'trello': 'Trello',
-      'coding-agent': 'Code Agent', 'deep-research-pro': 'Deep Research',
-      'summarize-pro': 'Summarizer', 'nano-pdf': 'PDF Reader',
-      'healthcheck': 'Security Audit', 'file-manager-secure': 'File Manager',
-      'byterover': 'Knowledge Base', 'capability-evolver': 'Self Evolution',
-      'canvas': 'Canvas',
-      'figma-design-toolkit': 'Figma', 'canva-connect': 'Canva',
-      'remotion-best-practices': 'Remotion', 'video-frames': 'Video/ffmpeg',
-    };
-
-    window.openAgentModal = function(id) {
-      console.log('openAgentModal called with:', id);
-      var a = _agentsCatalog.find(function(c) { return c.id === id; });
-      if (!a) { console.log('Agent not found in catalog!', id, _agentsCatalog.length); return; }
-      var installed = _agentsInstalled.some(function(i) { return i.id === id; });
-      var skills = a.skills || [];
-      var crons = a.cron || [];
-      var requires = skills.filter(function(s) { return _toolLogos[s]; });
-      var builtIn = skills.filter(function(s) { return !_toolLogos[s]; });
-
-      // Hide grid, show detail page
-      document.getElementById('agents-catalog-list').style.display = 'none';
-      document.getElementById('agents-installed-list').style.display = 'none';
-      document.getElementById('agents-categories').style.display = 'none';
-      document.querySelector('.ag-top').style.display = 'none';
-
-      var dp = document.getElementById('ag-detail-page');
-      dp.style.display = 'block';
-      dp.innerHTML =
-        '<button class="ag-dp-back" onclick="closeAgentDetail()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>Back</button>' +
-        '<div class="ag-dp-name">' + (a.name || a.id) + '</div>' +
-        '<div class="ag-dp-desc">' + (a.description || a.role || '') + '</div>' +
-
-        (requires.length ? '<div class="ag-dp-section"><div class="ag-dp-label">Integrations</div><div class="ag-dp-integrations">' +
-          requires.map(function(s) {
-            var logo = _toolLogos[s];
-            return '<div class="ag-dp-integ"><span class="ag-dp-integ-icon"><img src="branding/' + logo + '.svg" /></span>' + (_skillLabels[s] || s) + '</div>';
-          }).join('') + '</div></div>' : '') +
-
-        (crons.length ? '<div class="ag-dp-section"><div class="ag-dp-label">Scheduled Tasks</div><div class="ag-dp-tasks">' +
-          crons.map(function(c) {
-            return '<div class="ag-dp-task"><div class="ag-dp-task-name">' + (c.name || 'task') + '</div>' +
-              (c.schedule_label ? '<div class="ag-dp-task-meta">' + c.schedule_label + '</div>' : '') +
-              (c.description ? '<div class="ag-dp-task-meta">' + c.description + '</div>' : '') + '</div>';
-          }).join('') + '</div></div>' : '') +
-
-        (builtIn.length ? '<div class="ag-dp-section"><div class="ag-dp-label">Skills</div><div class="ag-dp-skills">' +
-          builtIn.map(function(s) { return '<span class="ag-dp-skill">' + (_skillLabels[s] || s) + '</span>'; }).join('') + '</div></div>' : '') +
-
-        '<div class="ag-dp-footer">' +
-          '<button class="ag-dp-install' + (installed ? ' installed' : '') + '" ' + (installed ? 'disabled' : '') + ' onclick="closeAgentDetail(); installAgent(\'' + a.id + '\')">' +
-            (installed ? 'Installed' : 'Install Agent') +
-          '</button>' +
-        '</div>';
-    };
-
-    window.closeAgentDetail = function() {
-      document.getElementById('ag-detail-page').style.display = 'none';
-      document.getElementById('agents-catalog-list').style.display = '';
-      document.getElementById('agents-installed-list').style.display = '';
-      document.getElementById('agents-categories').style.display = '';
-      document.querySelector('.ag-top').style.display = '';
-      renderInstalledAgents();
-    };
-
-    window.filterCategory = function(cat) {
-      _agentsSelectedCategory = cat;
-      renderCategories();
-      renderCatalogAgents();
-    };
+    /* Old catalog functions removed — replaced by agent creator */
 
     function agOverlay(label) {
       var o = document.getElementById('ag-overlay');
@@ -5851,7 +6881,25 @@
         const res = await oc.agentsInstall(id, soul, displayName);
         if (res.ok) {
           await refreshAgentsPanel();
+          if (res.needsBrief) {
+            // Show a non-blocking hint about BRIEF.md
+            const hint = document.createElement('div');
+            hint.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#2a2a2a;border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:14px 20px;font-size:13px;color:rgba(255,255,255,0.7);z-index:9999;max-width:420px;text-align:center;';
+            hint.innerHTML = 'Tell your agents about your business — send a message to Boss describing what you sell and who your customers are.';
+            document.body.appendChild(hint);
+            setTimeout(() => hint.remove(), 8000);
+          }
         }
+      } finally {
+        agOverlayHide();
+      }
+    };
+
+    window.killAgent = async function(id) {
+      agOverlay('Killing ' + id + '…');
+      try {
+        await oc.agentKill(id);
+        await refreshAgentsPanel();
       } finally {
         agOverlayHide();
       }
@@ -5868,6 +6916,7 @@
       }
     };
 
+    try { // Wrap agent creator event listeners to prevent blocking signalReady
     document.getElementById('agents-browser-relay-btn').addEventListener('click', async () => {
       const btn = document.getElementById('agents-browser-relay-btn');
       btn.textContent = 'Preparing...';
@@ -5882,11 +6931,52 @@
       }
     });
 
-    document.getElementById('agents-search').addEventListener('input', () => renderCatalogAgents());
-    document.getElementById('agents-refresh-btn').addEventListener('click', () => {
-      _agentsCatalog = [];
-      refreshAgentsPanel();
+    // Template search
+    document.getElementById('agents-search').addEventListener('input', () => acRenderTemplates());
+    document.getElementById('agents-refresh-btn').addEventListener('click', () => refreshAgentsPanel());
+
+    // Describe input
+    document.getElementById('ac-describe-input').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && this.value.trim()) acStartFromDescription();
     });
+    document.getElementById('ac-describe-input').addEventListener('input', function() {
+      document.getElementById('ac-describe-send').disabled = !this.value.trim();
+    });
+    document.getElementById('ac-describe-send').addEventListener('click', acStartFromDescription);
+
+    // Chat input
+    document.getElementById('ac-chat-input').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') acHandleChatSend();
+    });
+    document.getElementById('ac-chat-input').addEventListener('input', function() {
+      document.getElementById('ac-chat-send').disabled = !this.value.trim();
+    });
+    document.getElementById('ac-chat-send').addEventListener('click', acHandleChatSend);
+
+    // Copy config button
+    document.getElementById('ac-model-select').addEventListener('change', function() {
+      if (this.value) oc.ocSetModel(this.value);
+    });
+
+    // Show reset button when user edits the config
+    document.getElementById('ac-config-editor').addEventListener('input', function() {
+      var reset = document.getElementById('ac-config-reset');
+      if (this.value !== _acLastGeneratedConfig) {
+        reset.style.display = '';
+      } else {
+        reset.style.display = 'none';
+      }
+    });
+
+    document.getElementById('ac-copy-config').addEventListener('click', function() {
+      var text = document.getElementById('ac-config-editor').value || '';
+      navigator.clipboard.writeText(text);
+      this.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>';
+      var btn = this;
+      setTimeout(function() { btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>'; }, 2000);
+    });
+
+    } catch(e) { console.error('Agent creator init error:', e); }
 
     // Signal main process that renderer is ready to receive messages
     oc.signalReady();

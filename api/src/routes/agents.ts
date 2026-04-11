@@ -15,6 +15,8 @@
  *   - Inter-agent communication permissions (directed graph)
  */
 import { Router, Response, NextFunction } from 'express';
+import https from 'https';
+import { URL } from 'url';
 import { AuthRequest, authenticate, requireActiveSubscription } from '../middleware/auth';
 import db from '../lib/db';
 import { User, Server, PLAN_LIMITS, Plan } from '../types';
@@ -1087,6 +1089,220 @@ router.post('/:agentId/stop', async (req: AuthRequest, res: Response, next: Next
     );
 
     res.json({ ok: true, status: 'sleeping' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── AI Builder Chat (SSE streaming) ───
+
+const BUILDER_MODEL = 'anthropic/claude-sonnet-4-6';
+const OPENROUTER_COMPLETIONS = 'https://openrouter.ai/api/v1/chat/completions';
+
+const BUILDER_SYSTEM_PROMPT = `You are the OpenClaw Agent Builder — a focused assistant that helps users design custom AI agents through conversation.
+
+## What You're Building
+
+Each agent you create will run inside an OpenClaw container with:
+- **Name**: Short identity (e.g., "Sales Assistant")
+- **Purpose**: Core directive — what the agent does
+- **Instructions**: Behavioral rules, tone, boundaries, preferences
+- **Skills**: Tools the agent can use (selected from the catalog below)
+- **Model**: Which AI model powers the agent
+- **Channels**: Where the agent communicates (Telegram, Discord, Slack, WhatsApp)
+- **Scheduled Tasks**: Recurring cron actions
+
+## Available Skills Catalog
+
+**Browser & Web**
+- \`web-search\` — Search the web for current information
+- \`web-reader\` — Read and extract content from web pages
+- \`agent-browser\` — Full browser automation (click, type, navigate, screenshot)
+
+**Communication & Email**
+- \`himalaya\` — Read and send email (IMAP/SMTP)
+- \`clawflow\` — Workflow automation engine
+- \`clawflow-inbox-triage\` — Smart email inbox management and categorization
+
+**Development**
+- \`coding-agent\` — Write, review, debug, and test code
+- \`github\` — Interact with GitHub repositories (clone, commit, push)
+- \`gh-issues\` — Manage GitHub issues, PRs, and code reviews
+
+**Creative & Media**
+- \`image-tools\` — Generate and edit images
+- \`svg-tools\` — Create and manipulate SVG graphics
+- \`video-frames\` — Video processing, frame extraction, ffmpeg
+
+**Productivity**
+- \`tasks\` — Task management and tracking
+- \`notes\` — Note-taking and organization
+- \`apple-notes\` — Sync with Apple Notes
+- \`weather\` — Weather forecasts and conditions
+- \`healthcheck\` — Monitor uptime and service health
+
+**Data & Research**
+- \`pdf-tools\` — Read and process PDF documents
+- \`json-tools\` — Parse, transform, and validate JSON data
+- \`deep-research\` — Multi-source deep research with citations
+
+**Social Media**
+- \`twitter-tools\` — Post, monitor, and engage on Twitter/X
+- \`reddit-tools\` — Browse, post, and monitor Reddit
+- \`linkedin-tools\` — LinkedIn profile and post automation
+
+## Available Channels
+- **Telegram** — Connect a bot token to receive/send messages
+- **Discord** — Add agent to a Discord server via bot token
+- **Slack** — Connect via OAuth token to a Slack workspace
+- **WhatsApp** — Pair via QR code to message on user's behalf
+
+## Your Conversation Flow
+
+1. Start by understanding WHAT the user wants the agent to do — ask about specific use cases, not abstract capabilities
+2. Suggest a fitting name based on their description
+3. Ask about behavioral preferences: tone, languages, boundaries, what it should always/never do
+4. Recommend the most relevant skills and explain WHY each is useful for their use case
+5. Ask if they want the agent reachable via messaging channels
+6. Ask about scheduled/recurring tasks (daily reports, monitoring, etc.)
+7. Generate the final config
+
+## Config Output
+
+After each meaningful exchange, output an updated YAML config block reflecting the current state. Always wrap in \`\`\`yaml fences:
+
+\`\`\`yaml
+name: Agent Name
+purpose: |
+  What this agent does...
+instructions: |
+  Behavioral rules and context...
+model: anthropic/claude-sonnet-4
+skills:
+  - web-search
+  - coding-agent
+channels: []
+cron: []
+\`\`\`
+
+## Rules
+- Ask ONE focused question at a time — never overwhelm
+- Be opinionated — recommend specific skills and configs, don't just ask "what do you want?"
+- If a template was selected, use its skills and purpose as a starting point and ask clarifying questions
+- Keep each response to 2-4 sentences plus the config block
+- Always explain WHY you're recommending something
+- When the user says they're happy or ready, output the final config with \`<!-- FINAL -->\` above it
+- Never suggest skills not in the catalog above`;
+
+router.post('/builder-chat', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.userId;
+    const { messages, config, templateId } = req.body as {
+      messages: Array<{ role: string; content: string }>;
+      config?: Record<string, unknown>;
+      templateId?: string;
+    };
+
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({ error: 'messages array required' });
+    }
+
+    // Get user's OpenRouter key or platform key
+    const settings = await db.getOne<{ own_openrouter_key: string | null }>(
+      'SELECT own_openrouter_key FROM user_settings WHERE user_id = $1',
+      [userId]
+    );
+    const apiKey = settings?.own_openrouter_key || process.env.OPENROUTER_API_KEY || '';
+    if (!apiKey) {
+      return res.status(400).json({ error: 'No API key configured. Add your OpenRouter key in Settings.' });
+    }
+
+    // Build system context
+    let systemContent = BUILDER_SYSTEM_PROMPT;
+    if (templateId) {
+      const tpl = (catalogData as Array<{ id: string; name: string; role: string; skills: string[] }>)
+        .find(a => a.id === templateId);
+      if (tpl) {
+        systemContent += `\n\n## Selected Template\nThe user selected the "${tpl.name}" template.\nDefault purpose: ${tpl.role}\nDefault skills: ${tpl.skills.join(', ')}\n\nUse this as a starting point. Ask what they'd like to customize.`;
+      }
+    }
+    if (config && Object.keys(config).length > 0) {
+      systemContent += `\n\n## Current Config State\n\`\`\`yaml\n${Object.entries(config).map(([k,v]) => `${k}: ${JSON.stringify(v)}`).join('\n')}\n\`\`\``;
+    }
+
+    const fullMessages = [
+      { role: 'system', content: systemContent },
+      ...messages.map(m => ({ role: m.role, content: m.content })),
+    ];
+
+    const payload = JSON.stringify({
+      model: BUILDER_MODEL,
+      messages: fullMessages,
+      stream: true,
+      max_tokens: 2048,
+      temperature: 0.7,
+    });
+
+    const url = new URL(OPENROUTER_COMPLETIONS);
+
+    // Set SSE headers
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    });
+
+    const proxyReq = https.request(
+      {
+        hostname: url.hostname,
+        port: 443,
+        path: url.pathname,
+        method: 'POST',
+        timeout: 120_000,
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(payload),
+          Authorization: `Bearer ${apiKey}`,
+          'HTTP-Referer': 'https://valnaa.com',
+          'X-Title': 'OpenClaw Agent Builder',
+        },
+      },
+      (proxyRes) => {
+        proxyRes.on('data', (chunk: Buffer) => {
+          if (!res.writableEnded) res.write(chunk);
+        });
+        proxyRes.on('end', () => {
+          if (!res.writableEnded) res.end();
+        });
+        proxyRes.on('error', (err) => {
+          console.error('[builder-chat] upstream error:', err.message);
+          if (!res.writableEnded) {
+            res.write(`data: {"error":"Upstream connection lost"}\n\ndata: [DONE]\n\n`);
+            res.end();
+          }
+        });
+      }
+    );
+
+    proxyReq.on('timeout', () => {
+      proxyReq.destroy(new Error('Builder chat timeout'));
+    });
+
+    proxyReq.on('error', (err) => {
+      console.error('[builder-chat] request error:', err.message);
+      if (!res.writableEnded) {
+        res.write(`data: ${JSON.stringify({ error: err.message })}\n\ndata: [DONE]\n\n`);
+        res.end();
+      }
+    });
+
+    req.on('close', () => {
+      proxyReq.destroy();
+    });
+
+    proxyReq.write(payload);
+    proxyReq.end();
   } catch (err) {
     next(err);
   }
