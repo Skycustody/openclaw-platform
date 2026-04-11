@@ -1914,8 +1914,8 @@
       <div class="tab" data-tab="terminal" title="Terminal" aria-label="Terminal">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
       </div>
-      <div class="tab" data-tab="commands" title="Commands" aria-label="Commands">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      <div class="tab" data-tab="commands" title="Agent Builder" aria-label="Agent Builder">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.912 5.813a2 2 0 001.275 1.275L21 12l-5.813 1.912a2 2 0 00-1.275 1.275L12 21l-1.912-5.813a2 2 0 00-1.275-1.275L3 12l5.813-1.912a2 2 0 001.275-1.275L12 3z"/></svg>
       </div>
       <div class="tab" data-tab="logs" title="Logs" aria-label="Logs">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
@@ -2110,7 +2110,7 @@
         <!-- Step indicator -->
         <div id="ac-steps" class="ac-steps">
           <div style="flex:1;display:flex;align-items:center;">
-            <button class="ac-btn-ghost" onclick="acHideCreator()" style="padding:4px 8px;font-size:11px;">← Agents</button>
+            <button class="ac-btn-ghost" onclick="document.querySelector('.tab[data-tab=&quot;agents&quot;]').click()" style="padding:4px 8px;font-size:11px;">← Agents</button>
           </div>
           <div style="display:flex;align-items:center;gap:0;">
             <div class="ac-step active" data-step="1"><span class="ac-step-circle">1</span><span class="ac-step-label">Templates</span></div>
@@ -2406,8 +2406,9 @@
       </style>
     </div>
 
-    <div id="commands-panel" class="panel">
-      <div class="commands-panel-content">
+    <div id="commands-panel" class="panel" style="overflow:hidden;display:none;">
+      <div id="commands-creator-host" style="display:flex;flex-direction:column;flex:1;min-height:0;"></div>
+      <div class="commands-panel-content" style="display:none;">
         <h3>Command Reference</h3>
         <p class="commands-subtitle">Essential CLI commands for <strong id="commands-runtime-label">OpenClaw</strong></p>
 
@@ -3394,7 +3395,22 @@
         if (id === 'browser') void refreshChromeSetupPanel();
         if (id === 'agents') void refreshAgentsPanel();
         if (id === 'terminal') initTerminal();
-        if (id === 'commands') { updateDashboard(); updateCommandsPanel(); }
+        if (id === 'commands') {
+          // Move creator into commands panel
+          var creator = document.getElementById('agent-creator-view');
+          var host = document.getElementById('commands-creator-host');
+          if (creator && host && creator.parentNode !== host) {
+            host.appendChild(creator);
+          }
+          if (creator) creator.style.display = 'flex';
+          acRenderTemplates();
+          acLoadModels();
+        }
+        if (id === 'agents') {
+          // Ensure creator is hidden when viewing agents list
+          var creator2 = document.getElementById('agent-creator-view');
+          if (creator2) creator2.style.display = 'none';
+        }
         if (id === 'settings') void refreshSettingsPanel();
         if (id === 'openshell') {
           if (!oshAlive && lastAppliedRuntime === 'nemoclaw') void spawnOpenshellTui();
@@ -6606,7 +6622,8 @@
       acGoStep(1);
       acRenderTemplates();
       document.getElementById('ac-test-chat').innerHTML = '';
-      acHideCreator();
+      // Switch to agents tab to see the installed agents
+      document.querySelector('.tab[data-tab="agents"]').click();
     };
 
     // ── Refresh panel (fetch installed + render templates) ──
