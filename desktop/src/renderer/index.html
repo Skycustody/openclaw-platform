@@ -6506,7 +6506,7 @@
       try {
         var soul = (c.system ? '# ' + (c.displayName||c.name) + '\n\n' + c.system : '# ' + (c.displayName||c.name) + '\n\n' + c.description);
         var displayName = c.displayName || c.name;
-        var res = await oc.agentsInstall(c.name, soul, displayName);
+        var res = await oc.agentsInstall(c.name, soul, displayName, c.tools || []);
         if (res.ok) {
           refreshAgentsPanel();
           header.textContent = escapeHtml(displayName) + ' — installed';

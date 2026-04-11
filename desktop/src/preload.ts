@@ -224,7 +224,7 @@ contextBridge.exposeInMainWorld('openclaw', {
   // Agents
   agentsList: () => ipcRenderer.invoke('agents:list'),
   agentsCatalog: () => ipcRenderer.invoke('agents:catalog'),
-  agentsInstall: (id: string, soul: string, name: string) => ipcRenderer.invoke('agents:install', id, soul, name),
+  agentsInstall: (id: string, soul: string, name: string, tools?: string[]) => ipcRenderer.invoke('agents:install', id, soul, name, tools),
   agentsDelete: (id: string) => ipcRenderer.invoke('agents:delete', id),
   agentKill: (id: string) => ipcRenderer.invoke('agents:kill', id),
   agentGetEnv: (id: string) => ipcRenderer.invoke('agents:get-env', id),

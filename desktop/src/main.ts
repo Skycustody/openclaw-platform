@@ -2933,7 +2933,7 @@ function setupIPC(): void {
     }
   });
 
-  ipcMain.handle('agents:install', async (_e, id: string, soul: string, name: string) => {
+  ipcMain.handle('agents:install', async (_e, id: string, soul: string, name: string, tools?: string[]) => {
     try {
       const home = os.homedir();
       const openclawDir = path.join(home, '.openclaw');
@@ -3116,6 +3116,38 @@ function setupIPC(): void {
             fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
           }
         } catch { /* non-fatal */ }
+      }
+
+      // ── 6b. Enable tools and browser from builder config ──
+      if (tools && tools.length > 0) {
+        try {
+          const cfgPath = path.join(openclawDir, 'openclaw.json');
+          const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+
+          // Enable full tools profile if agent needs browser/coding tools
+          const needsBrowser = tools.some(t => ['web-pilot', 'agent-browser', 'agent-browser-clawdbot'].includes(t));
+          const needsCoding = tools.some(t => ['coding-agent'].includes(t));
+
+          if (needsBrowser || needsCoding) {
+            cfg.tools = cfg.tools || {};
+            cfg.tools.profile = 'full';
+          }
+
+          if (needsBrowser) {
+            cfg.browser = {
+              defaultProfile: 'openclaw',
+              headless: false,
+              noSandbox: true,
+              ...(cfg.browser || {}),
+              enabled: true,
+            };
+          }
+
+          fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+          logApp('info', `agents:install — configured tools (browser=${needsBrowser}, coding=${needsCoding}, profile=${cfg.tools?.profile})`);
+        } catch (err: any) {
+          logApp('warn', `agents:install — tools config failed: ${err.message}`);
+        }
       }
 
       // ── 7. Bootstrap sessions.json ──
