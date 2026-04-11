@@ -6624,11 +6624,11 @@
 
     async function renderInstalledAgents() {
       const el = document.getElementById('agents-installed-list');
-      if (_agentsInstalled.length <= 1) { el.style.display = 'none'; return; }
       el.style.display = '';
+      if (_agentsInstalled.length === 0) { el.innerHTML = '<div style="padding:16px;text-align:center;color:rgba(255,255,255,0.2);font-size:13px;">No agents installed yet</div>'; return; }
 
-      // Fetch health for all agents in parallel
-      var agents = _agentsInstalled.filter(a => a.id !== 'main');
+      // Show all agents including main
+      var agents = _agentsInstalled;
       var healths = {};
       try {
         var results = await Promise.all(agents.map(a => oc.agentHealth(a.id).catch(() => ({sessions:0,lastActive:null,cronRuns:0}))));
@@ -6647,16 +6647,17 @@
           <div class="ag-installed-item">
             <div class="ag-installed-dot" style="background:${dotColor};"></div>
             <div class="ag-installed-info">
-              <div class="ag-installed-name">${a.name || a.id}${catAgent ? '<span style="color:rgba(255,255,255,0.3);font-weight:400;font-size:12px;margin-left:8px;">' + (catAgent.name || '') + '</span>' : ''}</div>
+              <div class="ag-installed-name">${escapeHtml(a.name || a.id)}</div>
               <div class="ag-installed-model" style="display:flex;gap:12px;">
-                <span>${a.model || 'default model'}</span>
+                <span>${escapeHtml(a.model || 'default model')}</span>
                 <span style="color:rgba(255,255,255,0.2);">${h.sessions || 0} sessions</span>
-                <span style="color:rgba(255,255,255,0.2);">${h.cronRuns || 0} cron runs</span>
                 <span style="color:rgba(255,255,255,0.2);">active ${timeAgo(active)}</span>
               </div>
             </div>
-            <button class="ag-setup-btn" onclick="toggleAgentSetup('${a.id}')">Setup</button>
-            <button class="ag-remove-btn" style="background:#dc2626;color:#fff;" onclick="killAgent('${a.id}')">Kill</button>
+            <button class="ag-setup-btn" onclick="acChatWithAgent('${escapeHtml(a.id)}')">Chat</button>
+            <button class="ag-setup-btn" onclick="toggleAgentSetup('${escapeHtml(a.id)}')">Setup</button>
+            ${a.id !== 'main' ? '<button class="ag-remove-btn" onclick="killAgent(\'' + escapeHtml(a.id) + '\')" title="Kill running sessions">Kill</button>' : ''}
+            ${a.id !== 'main' ? '<button class="ag-remove-btn" onclick="deleteAgent(\'' + escapeHtml(a.id) + '\', \'' + escapeHtml(a.name || a.id) + '\')" title="Delete agent permanently" style="border-color:rgba(248,113,113,0.3);">Delete</button>' : '<span class="ag-installed-badge">Primary</span>'}
           </div>
           ${needsSetup ? '<div id="ag-setup-' + a.id + '" class="ag-setup-panel" style="display:none;"></div>' : ''}
         </div>`;
@@ -6836,6 +6837,11 @@
       }
     };
 
+    window.acChatWithAgent = function(id) {
+      // Switch to main chat tab and select this agent
+      document.querySelector('.tab[data-tab="agent"]').click();
+    };
+
     window.killAgent = async function(id) {
       agOverlay('Killing ' + id + '…');
       try {
@@ -6846,8 +6852,8 @@
       }
     };
 
-    window.deleteAgent = async function(id) {
-      if (!await oc.showConfirm('Remove agent "' + id + '"? This will delete its workspace.')) return;
+    window.deleteAgent = async function(id, displayName) {
+      if (!await oc.showConfirm('Delete "' + (displayName || id) + '"? This removes the agent and its workspace permanently.')) return;
       agOverlay('Removing ' + id + '…');
       try {
         await oc.agentsDelete(id);
