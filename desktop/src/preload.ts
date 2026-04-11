@@ -161,6 +161,24 @@ contextBridge.exposeInMainWorld('openclaw', {
     return () => ipcRenderer.removeListener('app:setup-steps', handler);
   },
 
+  // Builder chat (agent creator LLM)
+  builderChatSend: (message: string, systemPrompt: string, sessionKey?: string) => ipcRenderer.invoke('builder:chat-send', message, systemPrompt, sessionKey),
+  onBuilderChatChunk: (cb: (chunk: string) => void) => {
+    const handler = (_: any, chunk: string) => cb(chunk);
+    ipcRenderer.on('builder:chat-chunk', handler);
+    return () => ipcRenderer.removeListener('builder:chat-chunk', handler);
+  },
+  onBuilderChatDone: (cb: (fullText: string) => void) => {
+    const handler = (_: any, fullText: string) => cb(fullText);
+    ipcRenderer.on('builder:chat-done', handler);
+    return () => ipcRenderer.removeListener('builder:chat-done', handler);
+  },
+  onBuilderChatError: (cb: (error: string) => void) => {
+    const handler = (_: any, error: string) => cb(error);
+    ipcRenderer.on('builder:chat-error', handler);
+    return () => ipcRenderer.removeListener('builder:chat-error', handler);
+  },
+
   // Inference API key
   submitApiKey: (provider: string, key: string) => ipcRenderer.invoke('setup:submit-api-key', provider, key),
   setOptionalModelKeys: (body: { openai?: string; anthropic?: string; activeProvider?: string; activeModel?: string }) =>
@@ -208,9 +226,22 @@ contextBridge.exposeInMainWorld('openclaw', {
   agentsCatalog: () => ipcRenderer.invoke('agents:catalog'),
   agentsInstall: (id: string, soul: string, name: string) => ipcRenderer.invoke('agents:install', id, soul, name),
   agentsDelete: (id: string) => ipcRenderer.invoke('agents:delete', id),
+  agentKill: (id: string) => ipcRenderer.invoke('agents:kill', id),
   agentGetEnv: (id: string) => ipcRenderer.invoke('agents:get-env', id),
   agentSaveEnv: (id: string, env: Record<string, string>) => ipcRenderer.invoke('agents:save-env', id, env),
   agentHealth: (id: string) => ipcRenderer.invoke('agents:health', id),
+
+  // Hub & Approvals
+  getPendingApprovals: () => ipcRenderer.invoke('hub:pending-approvals'),
+  respondToApproval: (requestId: string, decision: string, reason?: string) =>
+    ipcRenderer.invoke('hub:respond-approval', requestId, decision, reason),
+  getHubStatus: () => ipcRenderer.invoke('hub:status'),
+  onHubEvent: (cb: (event: any) => void) => {
+    const handler = (_: any, event: any) => cb(event);
+    ipcRenderer.on('hub:event', handler);
+    return () => ipcRenderer.removeListener('hub:event', handler);
+  },
+
   showConfirm: (message: string) => ipcRenderer.invoke('dialog:confirm', message),
 
   // Error reporting

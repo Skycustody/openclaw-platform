@@ -2104,9 +2104,7 @@
             <div class="ac-step-line"></div>
             <div class="ac-step" data-step="2"><span class="ac-step-circle">2</span><span class="ac-step-label">Configure</span></div>
             <div class="ac-step-line"></div>
-            <div class="ac-step" data-step="3"><span class="ac-step-circle">3</span><span class="ac-step-label">Test</span></div>
-            <div class="ac-step-line"></div>
-            <div class="ac-step" data-step="4"><span class="ac-step-circle">4</span><span class="ac-step-label">Install</span></div>
+            <div class="ac-step" data-step="3"><span class="ac-step-circle">3</span><span class="ac-step-label">Test & Deploy</span></div>
           </div>
           <div id="ac-topbar-actions" style="flex:1;display:flex;justify-content:flex-end;align-items:center;gap:8px;">
             <select id="ac-model-select" class="ac-model-select" title="Builder model">
@@ -2222,51 +2220,20 @@
           </div>
         </div>
 
-        <!-- STEP 3: Test Run (split screen) -->
+        <!-- STEP 3: Test & Deploy (auto-installs, real chat, keep/delete) -->
         <div id="ac-step-3" class="ac-content ac-split" style="display:none;">
           <div class="ac-chat-panel">
-            <div class="ac-panel-header">Chat</div>
-            <div id="ac-test-chat" class="ac-chat-messages">
-              <div class="ac-msg-assistant">Your agent is configured and ready to test. Click <strong>Test run</strong> to see how it responds.</div>
+            <div class="ac-panel-header" style="display:flex;justify-content:space-between;align-items:center;">
+              <span id="ac-test-header">Setting up...</span>
+              <div id="ac-test-header-actions" style="display:none;gap:8px;">
+                <button class="ac-btn-ghost" style="padding:4px 10px;font-size:11px;color:#f87171;" onclick="acDeleteAndReconfigure()">Reconfigure</button>
+                <button class="ac-btn-primary" style="padding:4px 12px;font-size:11px;" onclick="acKeepAgent()">Keep agent</button>
+              </div>
             </div>
-            <div id="ac-test-actions" style="padding:12px 16px;display:flex;gap:8px;">
-              <button class="ac-btn-primary" onclick="acStartTest()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polygon points="5 3 19 12 5 21 5 3"/></svg> Test run</button>
-              <button class="ac-btn-ghost" onclick="acGoStep(4)">Skip to install</button>
-            </div>
+            <div id="ac-test-chat" class="ac-chat-messages"></div>
           </div>
           <div class="ac-config-panel" style="background:#1e1e1e;">
-            <div class="ac-panel-header" style="display:flex;justify-content:space-between;">
-              <div style="display:flex;align-items:center;gap:12px;">
-                <span>Preview</span>
-                <button id="ac-prev-debug" class="ac-fmt-btn active" onclick="acSetPreviewTab('debug')">Debug</button>
-                <button id="ac-prev-transcript" class="ac-fmt-btn" onclick="acSetPreviewTab('transcript')">Transcript</button>
-              </div>
-              <button id="ac-test-stop" class="ac-stop-btn" style="display:none;" onclick="acStopTest()">
-                <svg viewBox="0 0 24 24" fill="currentColor" width="10" height="10"><rect x="6" y="6" width="12" height="12" rx="1"/></svg> Stop
-              </button>
-            </div>
-            <div id="ac-test-events" class="ac-test-events">
-              <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:rgba(255,255,255,0.15);font-size:13px;">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="32" height="32" style="margin-bottom:8px;opacity:0.3;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                Click "Test run" to see events
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- STEP 4: Install -->
-        <div id="ac-step-4" class="ac-content ac-split" style="display:none;">
-          <div class="ac-chat-panel">
-            <div class="ac-panel-header">Install</div>
-            <div id="ac-install-content" class="ac-chat-messages"></div>
-          </div>
-          <div class="ac-config-panel">
-            <div class="ac-panel-header" style="display:flex;justify-content:space-between;">
-              <div style="display:flex;align-items:center;gap:12px;">
-                <span>Config</span>
-                <button class="ac-fmt-btn active">YAML</button>
-              </div>
-            </div>
+            <div class="ac-panel-header"><span>Config</span></div>
             <div id="ac-install-config" class="ac-config-code"></div>
           </div>
         </div>
@@ -6070,7 +6037,7 @@
 
     function acGoStep(n) {
       _acStep = n;
-      for (var i = 1; i <= 4; i++) {
+      for (var i = 1; i <= 3; i++) {
         var el = document.getElementById('ac-step-' + i);
         if (el) el.style.display = i === n ? (i === 1 ? '' : 'flex') : 'none';
       }
@@ -6088,7 +6055,7 @@
       // Show/hide top bar actions (Test run button) for steps 2+
       document.getElementById('ac-topbar-actions').style.visibility = n >= 2 ? 'visible' : 'hidden';
       if (n >= 2) acRenderConfig();
-      if (n === 4) acRenderInstallPage();
+      if (n === 3) acStartTestAndDeploy();
     }
     window.acGoStep = acGoStep;
 
@@ -6454,6 +6421,7 @@
 
     var _acTestStreamBuffer = '';
     var _acTestListenersSet = false;
+    var _acTestSystemPrompt = '';
 
     function acSetupTestListeners() {
       if (_acTestListenersSet) return;
@@ -6462,97 +6430,115 @@
       oc.onBuilderChatChunk(function(chunk) {
         if (!_acTestRunning) return;
         _acTestStreamBuffer += chunk;
-        // Update chat with streaming response
         var chat = document.getElementById('ac-test-chat');
         var streamEl = document.getElementById('ac-test-stream');
         if (streamEl) {
           streamEl.innerHTML = '<div class="ac-msg-assistant">' + acFormatMarkdown(_acTestStreamBuffer) + '<span style="display:inline-block;width:6px;height:14px;background:rgba(255,255,255,0.4);animation:ac-blink 0.8s infinite;margin-left:2px;vertical-align:middle;"></span></div>';
           chat.scrollTop = chat.scrollHeight;
         }
-        // Log to events panel
-        var eventsEl = document.getElementById('ac-test-events');
-        var lastRow = eventsEl.querySelector('.ac-test-streaming-row');
-        var preview = _acTestStreamBuffer.slice(0, 80).replace(/\n/g, ' ');
-        if (lastRow) {
-          lastRow.querySelector('.ac-test-content').textContent = preview + (_acTestStreamBuffer.length > 80 ? '...' : '');
-        } else {
-          eventsEl.innerHTML += '<div class="ac-test-row ac-test-streaming-row"><span class="ac-test-badge" style="background:#16a34a">Agent</span><span class="ac-test-content">' + escapeHtml(preview) + '</span><span class="ac-test-time">streaming</span></div>';
-        }
-        eventsEl.scrollTop = eventsEl.scrollHeight;
       });
 
       oc.onBuilderChatDone(function(fullText) {
         if (!_acTestRunning) return;
         _acTestRunning = false;
         _acTestStreamBuffer = '';
-        document.getElementById('ac-test-stop').style.display = 'none';
         var chat = document.getElementById('ac-test-chat');
         var streamEl = document.getElementById('ac-test-stream');
-        if (streamEl) streamEl.innerHTML = '<div class="ac-msg-assistant">' + acFormatMarkdown(fullText) + '</div>';
-        chat.innerHTML += '<div class="ac-msg-success"><div class="ac-msg-success-dot"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div><div style="font-size:12px;color:rgba(255,255,255,0.6);">Test complete — the agent responded with your configured personality.</div></div>';
-        chat.innerHTML += '<div style="margin-top:8px;"><button class="ac-btn-primary" onclick="acGoStep(4)">Next: Install →</button></div>';
+        if (streamEl) streamEl.outerHTML = '<div class="ac-msg-assistant">' + acFormatMarkdown(fullText) + '</div>';
         chat.scrollTop = chat.scrollHeight;
-        // Finalize events panel
-        var eventsEl = document.getElementById('ac-test-events');
-        eventsEl.innerHTML += '<div class="ac-test-row"><span class="ac-test-badge" style="background:#6b6b6b">Done</span><span class="ac-test-content">Response complete</span><span class="ac-test-time">' + new Date().toLocaleTimeString() + '</span></div>';
-        _acTestEvents = Array.from(eventsEl.querySelectorAll('.ac-test-row')).map(function(r) {
-          return { badge: r.querySelector('.ac-test-badge').textContent, content: r.querySelector('.ac-test-content').textContent };
-        });
+        document.getElementById('ac-test-input').disabled = false;
+        document.getElementById('ac-test-send').disabled = false;
+        document.getElementById('ac-test-input').focus();
       });
 
       oc.onBuilderChatError(function(error) {
         if (!_acTestRunning) return;
         _acTestRunning = false;
         _acTestStreamBuffer = '';
-        document.getElementById('ac-test-stop').style.display = 'none';
         var chat = document.getElementById('ac-test-chat');
-        chat.innerHTML += '<div style="font-size:12px;color:#f87171;margin-top:8px;">Test failed: ' + escapeHtml(error) + '</div>';
-        chat.innerHTML += '<div style="margin-top:8px;display:flex;gap:8px;"><button class="ac-btn-primary" onclick="acStartTest()">Retry</button><button class="ac-btn-ghost" onclick="acGoStep(4)">Skip to install</button></div>';
+        chat.innerHTML += '<div style="font-size:12px;color:#f87171;padding:8px 0;">Error: ' + escapeHtml(error) + '</div>';
+        document.getElementById('ac-test-input').disabled = false;
+        document.getElementById('ac-test-send').disabled = false;
       });
     }
 
-    window.acStartTest = function() {
+    function acTestSendMessage(message) {
+      if (!message || _acTestRunning) return;
       _acTestRunning = true;
-      _acTestEvents = [];
       _acTestStreamBuffer = '';
-      _acTestTimers.forEach(clearTimeout);
-      _acTestTimers = [];
       acSetupTestListeners();
 
-      document.getElementById('ac-test-stop').style.display = '';
-      document.getElementById('ac-test-actions').style.display = 'none';
-      var eventsEl = document.getElementById('ac-test-events');
-      eventsEl.innerHTML = '';
-
-      var c = _acConfig;
-      var testPrompt = c.system || ('You are ' + (c.displayName || c.name || 'an AI agent') + '. ' + (c.description || ''));
-
-      // Show test message in chat
       var chat = document.getElementById('ac-test-chat');
-      chat.innerHTML = '<div class="ac-msg-user">What can you do?</div><div id="ac-test-stream"><div class="ac-msg-assistant"><span style="color:rgba(255,255,255,0.25);">Thinking...</span></div></div>';
+      chat.innerHTML += '<div class="ac-msg-user">' + escapeHtml(message) + '</div>';
+      chat.innerHTML += '<div id="ac-test-stream"><div class="ac-msg-assistant"><span style="color:rgba(255,255,255,0.25);">Thinking...</span></div></div>';
+      chat.scrollTop = chat.scrollHeight;
 
-      // Log events
-      eventsEl.innerHTML = '<div class="ac-test-row"><span class="ac-test-badge" style="background:#6b6b6b">Start</span><span class="ac-test-content">Sending test prompt to gateway</span><span class="ac-test-time">' + new Date().toLocaleTimeString() + '</span></div>';
-      eventsEl.innerHTML += '<div class="ac-test-row"><span class="ac-test-badge" style="background:#dc2626">User</span><span class="ac-test-content">"What can you do?"</span><span class="ac-test-time">' + new Date().toLocaleTimeString() + '</span></div>';
-      eventsEl.innerHTML += '<div class="ac-test-row"><span class="ac-test-badge" style="background:#d97706">Model</span><span class="ac-test-content">Waiting for response...</span><span class="ac-test-time">' + new Date().toLocaleTimeString() + '</span></div>';
+      document.getElementById('ac-test-input').disabled = true;
+      document.getElementById('ac-test-send').disabled = true;
+      document.getElementById('ac-test-input').value = '';
 
-      // Send real message through gateway
-      oc.builderChatSend('What can you do? Introduce yourself and list your main capabilities.', testPrompt).then(function(res) {
+      // Use the agent's real session key (its openclaw ID) so it runs as the installed agent
+      var agentSessionKey = _acConfig.name || 'main';
+
+      oc.builderChatSend(message, '', agentSessionKey).then(function(res) {
         if (!res.ok) {
           _acTestRunning = false;
-          document.getElementById('ac-test-stop').style.display = 'none';
-          chat.innerHTML += '<div style="font-size:12px;color:#f87171;margin-top:8px;">Failed to connect to gateway: ' + escapeHtml(res.error || 'Not running') + '</div>';
-          chat.innerHTML += '<div style="margin-top:8px;display:flex;gap:8px;"><button class="ac-btn-primary" onclick="acStartTest()">Retry</button><button class="ac-btn-ghost" onclick="acGoStep(4)">Skip to install</button></div>';
+          chat.innerHTML += '<div style="font-size:12px;color:#f87171;padding:8px 0;">Failed: ' + escapeHtml(res.error || 'Gateway not running') + '</div>';
+          document.getElementById('ac-test-input').disabled = false;
+          document.getElementById('ac-test-send').disabled = false;
         }
       });
+    }
+
+    // Step 3: auto-install then enable real chat
+    window.acStartTestAndDeploy = async function() {
+      var c = _acConfig;
+      var chat = document.getElementById('ac-test-chat');
+      var header = document.getElementById('ac-test-header');
+      var actions = document.getElementById('ac-test-header-actions');
+
+      // Show installing state
+      header.textContent = 'Installing...';
+      actions.style.display = 'none';
+      chat.innerHTML = '<div style="padding:24px 0;text-align:center;color:rgba(255,255,255,0.25);font-size:13px;">Setting up <strong style="color:rgba(255,255,255,0.5);">' + escapeHtml(c.displayName || c.name) + '</strong>...</div>';
+      acRenderConfig();
+
+      try {
+        var soul = (c.system ? '# ' + (c.displayName||c.name) + '\n\n' + c.system : '# ' + (c.displayName||c.name) + '\n\n' + c.description);
+        var displayName = c.displayName || c.name;
+        var res = await oc.agentsInstall(c.name, soul, displayName);
+        if (res.ok) {
+          refreshAgentsPanel();
+          header.textContent = escapeHtml(displayName) + ' — installed';
+          actions.style.display = 'flex';
+          chat.innerHTML =
+            '<div class="ac-msg-success"><div class="ac-msg-success-dot" style="width:28px;height:28px;"><svg viewBox="0 0 24 24" style="width:14px;height:14px;"><polyline points="20 6 9 17 4 12"/></svg></div><div><div style="font-size:14px;font-weight:600;color:#e8e8e8;">Agent installed!</div><div style="font-size:12px;color:rgba(255,255,255,0.45);margin-top:4px;"><strong style="color:rgba(255,255,255,0.6);">' + escapeHtml(displayName) + '</strong> is live in your OpenClaw instance with real tools.</div></div></div>';
+        }
+      } catch(e) {
+        header.textContent = 'Install failed';
+        chat.innerHTML = '<div style="padding:16px;color:#f87171;font-size:13px;">Failed to install: ' + escapeHtml(e.message||'Unknown error') + '</div><div style="padding:0 16px;"><button class="ac-btn-ghost" onclick="acGoStep(2)">Back to configure</button></div>';
+      }
+    };
+
+    // Switch to main chat panel with real tools
+    window.acKeepAgent = function() {
+      acResetCreator();
+      // Switch to the main agent chat tab (real Control UI with tools)
+      document.querySelector('.tab[data-tab="agent"]').click();
+    };
+
+    window.acDeleteAndReconfigure = async function() {
+      var c = _acConfig;
+      try {
+        await oc.agentsDelete(c.name);
+        refreshAgentsPanel();
+      } catch(e) { /* ok — might not exist */ }
+      acGoStep(2);
     };
 
     window.acStopTest = function() {
       _acTestRunning = false;
-      _acTestTimers.forEach(clearTimeout);
-      _acTestTimers = [];
       _acTestStreamBuffer = '';
-      document.getElementById('ac-test-stop').style.display = 'none';
     };
 
     window.acSetPreviewTab = function(tab) {
@@ -6574,56 +6560,15 @@
 
     // ── Install ──
 
-    function acRenderInstallPage() {
-      var el = document.getElementById('ac-install-content');
-      var c = _acConfig;
-      var items = '<div class="ac-install-item"><div class="ac-install-dot"><div class="ac-install-dot-inner"></div></div><div><div class="ac-install-label">Create agent workspace</div><div class="ac-install-desc">Dedicated folder inside your container</div></div></div>';
-      items += '<div class="ac-install-item"><div class="ac-install-dot"><div class="ac-install-dot-inner"></div></div><div><div class="ac-install-label">Write SOUL.md</div><div class="ac-install-desc">Agent personality and instructions</div></div></div>';
-      if (c.tools.length) items += '<div class="ac-install-item"><div class="ac-install-dot"><div class="ac-install-dot-inner"></div></div><div><div class="ac-install-label">Enable ' + c.tools.length + ' skill' + (c.tools.length>1?'s':'') + '</div><div class="ac-install-desc">' + escapeHtml(c.tools.slice(0,3).join(', ')) + (c.tools.length>3?'...':'') + '</div></div></div>';
-      if (c.cron.length) items += '<div class="ac-install-item"><div class="ac-install-dot"><div class="ac-install-dot-inner"></div></div><div><div class="ac-install-label">Wire Boss cron</div><div class="ac-install-desc">' + escapeHtml(c.cron.map(function(cr){return cr.schedule;}).join(', ')) + '</div></div></div>';
-      el.innerHTML =
-        '<div class="ac-msg-assistant">Ready to install <strong style="color:#e8e8e8;">' + escapeHtml(c.displayName||c.name) + '</strong> to your OpenClaw instance.</div>' +
-        '<div style="margin:12px 0;">' + items + '</div>' +
-        '<div id="ac-install-actions" style="display:flex;gap:8px;"><button class="ac-btn-primary" onclick="acDoInstall()">Install agent</button><button class="ac-btn-ghost" onclick="acGoStep(3)">Back to test</button></div>';
-      acRenderConfig();
-    }
-
-    window.acDoInstall = async function() {
-      var btn = document.querySelector('#ac-install-actions .ac-btn-primary');
-      btn.textContent = 'Installing...';
-      btn.disabled = true;
-      try {
-        var c = _acConfig;
-        var soul = (c.system ? '# ' + (c.displayName||c.name) + '\n\n' + c.system : '# ' + (c.displayName||c.name) + '\n\n' + c.description);
-        var displayName = c.displayName || c.name;
-        var res = await oc.agentsInstall(c.name, soul, displayName);
-        if (res.ok) {
-          document.getElementById('ac-install-content').innerHTML =
-            '<div class="ac-msg-success"><div class="ac-msg-success-dot" style="width:28px;height:28px;"><svg viewBox="0 0 24 24" style="width:14px;height:14px;"><polyline points="20 6 9 17 4 12"/></svg></div><div><div style="font-size:14px;font-weight:600;color:#e8e8e8;">Agent installed!</div><div style="font-size:12px;color:rgba(255,255,255,0.45);margin-top:4px;"><strong style="color:rgba(255,255,255,0.6);">' + escapeHtml(displayName) + '</strong> is live in your OpenClaw instance.</div></div></div>' +
-            '<div style="margin-top:12px;"><button class="ac-btn-primary" onclick="acResetCreator()">Back to Agents</button></div>';
-          refreshAgentsPanel();
-        }
-      } catch(e) {
-        btn.textContent = 'Install agent';
-        btn.disabled = false;
-        document.getElementById('ac-install-content').innerHTML += '<div style="margin-top:8px;font-size:12px;color:#f87171;">Installation failed: ' + escapeHtml(e.message||'Unknown error') + '</div>';
-      }
-    };
-
     window.acResetCreator = function() {
       _acStep = 1;
       _acConfig = _acDefaultConfig();
       _acMessages = [];
-      _acTestTimers.forEach(clearTimeout);
-      _acTestTimers = [];
-      _acTestEvents = [];
       _acTestRunning = false;
+      _acTestStreamBuffer = '';
       acGoStep(1);
       acRenderTemplates();
-      // Reset test chat
-      document.getElementById('ac-test-chat').innerHTML = '<div class="ac-msg-assistant">Your agent is configured and ready to test. Click <strong>Test run</strong> to see how it responds.</div>';
-      document.getElementById('ac-test-events').innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:rgba(255,255,255,0.15);font-size:13px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="32" height="32" style="margin-bottom:8px;opacity:0.3;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>Click "Test run" to see events</div>';
-      document.getElementById('ac-test-actions').style.display = 'flex';
+      document.getElementById('ac-test-chat').innerHTML = '';
     };
 
     // ── Refresh panel (fetch installed + render templates) ──
@@ -6948,6 +6893,15 @@
       document.getElementById('ac-chat-send').disabled = !this.value.trim();
     });
     document.getElementById('ac-chat-send').addEventListener('click', acHandleChatSend);
+
+    // Test chat input
+    document.getElementById('ac-test-input').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') { var v = this.value.trim(); if (v) acTestSendMessage(v); }
+    });
+    document.getElementById('ac-test-send').addEventListener('click', function() {
+      var v = document.getElementById('ac-test-input').value.trim();
+      if (v) acTestSendMessage(v);
+    });
 
     // Copy config button
     document.getElementById('ac-model-select').addEventListener('change', function() {

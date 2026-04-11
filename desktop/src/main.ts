@@ -2423,7 +2423,7 @@ function setupIPC(): void {
     });
   }
 
-  ipcMain.handle('builder:chat-send', async (_e, message: string, systemPrompt: string) => {
+  ipcMain.handle('builder:chat-send', async (_e, message: string, systemPrompt: string, sessionKey?: string) => {
     try {
       await builderConnect();
     } catch (err: any) {
@@ -2440,7 +2440,7 @@ function setupIPC(): void {
       type: 'req',
       id: `br_${++builderReqId}_${Date.now()}`,
       method: 'chat.send',
-      params: { sessionKey: 'builder-session', message: fullMessage, idempotencyKey: `builder_${Date.now()}` },
+      params: { sessionKey: sessionKey || 'builder-session', message: fullMessage, idempotencyKey: `builder_${Date.now()}` },
     }));
 
     return { ok: true };
