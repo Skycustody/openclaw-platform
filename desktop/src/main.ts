@@ -3403,6 +3403,17 @@ function setupIPC(): void {
 
   const globalEnvPath = () => path.join(os.homedir(), '.openclaw', '.env');
 
+  ipcMain.handle('agents:read-soul', async (_e, id: string) => {
+    const home = os.homedir();
+    const wsDir = id === 'main' ? 'workspace' : `workspace-${id}`;
+    const soulPath = path.join(home, '.openclaw', wsDir, 'SOUL.md');
+    try {
+      return fs.readFileSync(soulPath, 'utf8');
+    } catch {
+      return null;
+    }
+  });
+
   ipcMain.handle('agents:get-env', async (_e, _id: string) => {
     // All keys live in the shared global .env — every agent reads from the same place
     return parseEnvFile(globalEnvPath());
