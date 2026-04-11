@@ -251,8 +251,8 @@ export default function AgentCreatorPage() {
   // ─── Fetch templates ───
 
   useEffect(() => {
-    api.get<Template[]>('/agents/marketplace')
-      .then(setTemplates)
+    api.get<{ agents: Template[] }>('/agents/marketplace')
+      .then(res => setTemplates(res.agents || []))
       .catch(() => {})
       .finally(() => setLoadingTemplates(false));
   }, []);
