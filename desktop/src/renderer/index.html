@@ -5757,10 +5757,9 @@
       '',
       '## Key knowledge',
       '',
-      '- coding-agent is the most powerful tool. It can write scripts that call ANY external API — Twilio, Stripe, Bland.ai, TikTok, Facebook, LinkedIn, anything with a REST API. If a platform has an API, coding-agent can use it.',
-      '- web-pilot + coding-agent together enable browser automation — the agent can write Playwright scripts and web-pilot executes them. This lets agents log into websites, fill forms, upload files, scrape data — anything a human can do in a browser.',
-      '- For any external service (calling, payments, social posting, CRM), the user needs to specify WHICH service they use because each has different API keys, endpoints, and auth methods.',
-      '- requiredKeys should contain the exact env var names for the chosen service. Examples: TWILIO_ACCOUNT_SID + TWILIO_AUTH_TOKEN (Twilio), BLAND_API_KEY (Bland.ai), VAPI_API_KEY (Vapi), STRIPE_SECRET_KEY (Stripe), SENDGRID_API_KEY (SendGrid).',
+      '- coding-agent can write scripts that call any REST API and write Playwright scripts for headless browser automation.',
+      '- For external services, ask WHICH provider — each has different API keys. Use real key names (TWILIO_ACCOUNT_SID, not CALL_API_KEY).',
+      '- Three ways to integrate with external platforms: (1) Direct API — if the platform has an accessible API and user has keys. (2) Browser Relay — the Valnaa Chrome Extension connects the agent to the user\'s real Chrome browser (already logged in, no captchas). Install from the Valnaa desktop app Settings → Browser tab. Best for social media and any site where the user is already logged in. (3) Headless Playwright — coding-agent writes and runs Playwright scripts in a headless browser. Has to log in fresh each time, may hit captchas/2FA. The user\'s instance context below shows whether Browser Relay is active or not.',
       '',
       '## Interactive UI',
       '',
@@ -5817,25 +5816,41 @@
     }
 
     function acGetUserContext() {
-      // Gather user's OpenClaw config to give the builder LLM context
       return Promise.all([
         oc.ocGetModelStatus().catch(function() { return null; }),
-        oc.ocGetAgents().catch(function() { return { agents: [] }; }),
+        oc.ocGetAgents().catch(function() { return null; }),
+        oc.getChromeExtensionInfo().catch(function() { return null; }),
       ]).then(function(results) {
         var models = results[0];
-        var agents = results[1];
-        var ctx = '\n\n## USER CONTEXT (their current OpenClaw setup)';
+        var agentsData = results[1];
+        var browserExt = results[2];
+        var ctx = '\n\n## THIS USER\'S INSTANCE';
         if (models) {
-          ctx += '\nConfigured model: ' + (models.defaultModel || 'none');
-          ctx += '\nAvailable models: ' + (models.configuredModels || []).join(', ');
+          ctx += '\nModels: ' + (models.configuredModels || []).join(', ');
+          ctx += '\nDefault model: ' + (models.defaultModel || 'none');
           var providers = (models.auth && models.auth.providers || []).map(function(p) { return p.provider; });
-          ctx += '\nAuth providers: ' + (providers.length ? providers.join(', ') : 'none');
+          if (providers.length) ctx += '\nAuth providers: ' + providers.join(', ');
         }
-        if (agents && agents.agents) {
-          var names = agents.agents.map(function(a) { return a.name || a.id; });
-          ctx += '\nInstalled agents: ' + (names.length ? names.join(', ') : 'none');
+        if (agentsData) {
+          if (agentsData.agents && agentsData.agents.length) {
+            ctx += '\nInstalled agents: ' + agentsData.agents.map(function(a) {
+              var skills = (a.skills || []);
+              return (a.name || a.id) + (skills.length ? ' [' + skills.join(', ') + ']' : '');
+            }).join('; ');
+          }
+          if (agentsData.channels) {
+            var chans = Object.keys(agentsData.channels).filter(function(k) { return agentsData.channels[k] && typeof agentsData.channels[k] === 'object'; });
+            if (chans.length) ctx += '\nConnected channels: ' + chans.join(', ');
+          }
+          if (agentsData.bindings && agentsData.bindings.length) {
+            ctx += '\nChannel bindings: ' + agentsData.bindings.map(function(b) { return (b.agentId || '?') + ' → ' + (b.match && b.match.channel || '?'); }).join(', ');
+          }
         }
-        ctx += '\nNote: Only suggest tools/skills the user can actually use. If they have no API keys configured, mention they will need to set them up.';
+        if (browserExt && browserExt.extensionReady) {
+          ctx += '\nBrowser relay: ACTIVE (Chrome extension installed, relay port ' + (browserExt.relayPort || '?') + '). Agents can control the user\'s real Chrome browser — log into any website, click, type, fill forms, upload files, take screenshots. This works with Facebook, TikTok, LinkedIn, Instagram, any website. No API keys needed, just the user\'s login credentials.';
+        } else {
+          ctx += '\nBrowser relay: not installed. Agents can still do headless browser automation via coding-agent (Playwright scripts) — same capabilities but runs in a headless browser, not the user\'s Chrome.';
+        }
         return ctx;
       });
     }
